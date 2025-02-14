@@ -27,10 +27,10 @@ app.use((req, res) => {
 });
 
 // Schedule the job to run every minute
-cron.schedule("* * * * *", () => {
-  console.log("Running scheduled job...");
-  statusUpdater();
-});
+// cron.schedule("* * * * *", () => {
+//   console.log("Running scheduled job...");
+//   statusUpdater();
+// });
 
 // Start server
 const PORT = ENV_VARS.PORT;

@@ -3,6 +3,8 @@ const User = require("../models/user-controller");
 const userValidation = require("../validations/userValidation");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
+const { ENV_VARS } = require("../config/envVars");
 
 // Set up the email transporter
 const transporter = nodemailer.createTransport({
@@ -118,6 +120,7 @@ const loginUser = async (req, res) => {
   console.log("asdnlkasjdlkjasldjlkasjdlkjasl");
   try {
     let user = await User.findOne({ email });
+    console.log("123",user);
     if (!user) {
       return res
         .status(400)
@@ -125,6 +128,7 @@ const loginUser = async (req, res) => {
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log(isMatch);
     if (!isMatch) {
       return res
         .status(400)
@@ -160,6 +164,7 @@ const loginUser = async (req, res) => {
           : user.permissions || [],
     });
   } catch (err) {
+    console.log(err);
     res.status(500).json({
       success: false,
       message: "Server error",
