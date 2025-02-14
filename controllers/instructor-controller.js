@@ -1,0 +1,173 @@
+const User = require("../models/user-controller");
+const nodemailer = require("nodemailer");
+const bcrypt = require("bcryptjs");
+
+// Set up the email transporter
+const transporter = nodemailer.createTransport({
+  service: "Gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+// Create Instructor
+const createInstructor = async (req, res) => {
+  const { full_name, email, phone_number, password, domain, meta } = req.body;
+
+  if (!full_name || !email || !phone_number || !password) {
+    return res
+      .status(400)
+      .json({ success: false, message: "All fields are required" });
+  }
+
+  try {
+    let user = await User.findOne({ $or: [{ email }, { phone_number }] });
+    if (user) {
+      return res.status(400).json({
+        success: false,
+        message: "User with this email or phone number already exists",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create a new instructor instance
+    const instructor = new User({
+      full_name,
+      email,
+      phone_number,
+      password: hashedPassword,
+      role: ["instructor"],
+      domain,
+      meta,
+    });
+    await instructor.save();
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Welcome to Medh Learning Platform",
+      html: `
+        <h2>Welcome, ${full_name}!</h2>
+        <p>Thank you for joining as an instructor on Medh Learning Platform. Below are your login credentials:</p>
+        <ul>
+          <li><strong>Email:</strong> ${email}</li>
+          <li><strong>Password:</strong> ${password}</li>
+        </ul>
+        <p>Make sure to change your password after logging in for the first time. If you did not register, please contact support immediately.</p>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(201).json({
+      success: true,
+      message:
+        "Instructor created successfully, and email sent to the instructor.",
+      instructor,
+    });
+  } catch (error) {
+    console.error("Error creating instructor:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Error creating instructor",
+      error: error.message,
+    });
+  }
+};
+
+const getAllInstructors = async (req, res) => {
+  try {
+    const instructors = await User.find({ role: "instructor" });
+    res.status(200).json({ success: true, data: instructors });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching instructors", error });
+  }
+};
+
+const getInstructorById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const instructor = await User.findOne({ _id: id, role: "instructor" });
+
+    if (!instructor) {
+      return res.status(404).json({ message: "Instructor not found" });
+    }
+
+    res.status(200).json({ success: true, data: instructor });
+  } catch (error) {
+    res.status(500).json({ message: "Error fetching instructor", error });
+  }
+};
+
+const updateInstructor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    const updatedInstructor = await User.findOneAndUpdate(
+      { _id: id, role: "instructor" },
+      updates,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedInstructor) {
+      return res.status(404).json({ message: "Instructor not found" });
+    }
+
+    res.status(200).json({ success: true, data: updatedInstructor });
+  } catch (error) {
+    res.status(500).json({ message: "Error updating instructor", error });
+  }
+};
+
+const deleteInstructor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deletedInstructor = await User.findOneAndDelete({
+      _id: id,
+      role: "instructor",
+    });
+
+    if (!deletedInstructor) {
+      return res.status(404).json({ message: "Instructor not found" });
+    }
+
+    res.status(200).json({ message: "Instructor deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ message: "Error deleting instructor", error });
+  }
+};
+
+const toggleInstructorStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const instructor = await User.findOne({ _id: id, role: "instructor" });
+
+    if (!instructor) {
+      return res.status(404).json({ message: "Instructor not found" });
+    }
+
+    instructor.status = instructor.status === "Active" ? "Inactive" : "Active";
+    await instructor.save();
+
+    res.status(200).json({
+      message: `Instructor status updated to ${instructor.status}`,
+      data: instructor,
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error toggling instructor status", error });
+  }
+};
+
+module.exports = {
+  createInstructor,
+  getAllInstructors,
+  getInstructorById,
+  updateInstructor,
+  deleteInstructor,
+  toggleInstructorStatus,
+};
