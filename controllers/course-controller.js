@@ -73,9 +73,16 @@ const createCourse = async (req, res) => {
 const getAllCourses = async (req, res) => {
   try {
     const courses = await Course.find();
-    res.status(200).json(courses);
+    res.status(200).json({
+      success: true,
+      data: courses
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching courses", error });
+    res.status(500).json({ 
+      success: false,
+      message: "Error fetching courses", 
+      error 
+    });
   }
 };
 

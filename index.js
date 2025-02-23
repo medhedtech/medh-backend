@@ -4,6 +4,10 @@ const cors = require("cors");
 const { ENV_VARS } = require("./config/envVars");
 const fileUpload = require("express-fileupload");
 const cron = require("node-cron");
+const helmet = require('helmet');
+const compression = require('compression');
+const mongoSanitize = require('express-mongo-sanitize');
+const logger = require('./utils/logger');
 
 // Import routes
 const router = require("./routes");
@@ -12,13 +16,34 @@ const { statusUpdater } = require("./cronjob/inactive-meetings");
 
 const app = express();
 
+// Security Middleware
+app.use(helmet());
+app.use(mongoSanitize());
+app.use(compression());
+
+// Basic Middleware
 app.use(express.static("public"));
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' ? process.env.ALLOWED_ORIGINS?.split(',') : '*',
+  credentials: true
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(bodyParser.json({ limit: "128mb", extended: true }));
 app.use(express.json());
-app.use(fileUpload());
-connectDB();
+app.use(fileUpload({
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max file size
+  useTempFiles: true,
+  tempFileDir: '/tmp/'
+}));
+
+// Request logging
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.url}`, {
+    ip: req.ip,
+    userAgent: req.get('user-agent')
+  });
+  next();
+});
 
 // Routes
 app.use("/api/v1", router);
@@ -32,10 +57,57 @@ app.use((req, res) => {
 //   statusUpdater();
 // });
 
+// Global error handler
+app.use((err, req, res, next) => {
+  logger.error('Unhandled error:', err);
+  res.status(err.status || 500).json({
+    status: 'error',
+    message: process.env.NODE_ENV === 'production' 
+      ? 'Internal server error' 
+      : err.message
+  });
+});
+
+// Initialize DB connection
+connectDB();
+
 // Start server
 const PORT = ENV_VARS.PORT;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const server = app.listen(PORT, () => {
+  logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
+});
+
+// Graceful shutdown handling
+const gracefulShutdown = () => {
+  logger.info('Received shutdown signal. Starting graceful shutdown...');
+  server.close(async () => {
+    logger.info('Closed express server');
+    try {
+      await mongoose.connection.close();
+      logger.info('Closed MongoDB connection');
+      process.exit(0);
+    } catch (err) {
+      logger.error('Error during shutdown:', err);
+      process.exit(1);
+    }
+  });
+
+  // Force shutdown after 30 seconds
+  setTimeout(() => {
+    logger.error('Could not close connections in time, forcefully shutting down');
+    process.exit(1);
+  }, 30000);
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception:', err);
+  gracefulShutdown();
+});
+process.on('unhandledRejection', (err) => {
+  logger.error('Unhandled Rejection:', err);
+  gracefulShutdown();
 });
 
 module.exports = app;

@@ -20,6 +20,8 @@ const registerUser = async (req, res) => {
   const { error, value } = userValidation.validate(req.body);
 
   if (error) {
+    console.log('Validation Error:', error.details);
+    console.log('Request Body:', req.body);
     return res
       .status(400)
       .json({ success: false, message: error.details[0].message });
@@ -31,7 +33,7 @@ const registerUser = async (req, res) => {
     phone_number,
     password = "",
     agree_terms,
-    role,
+    role = ["student"],
     role_description,
     assign_department,
     permissions,
@@ -41,6 +43,7 @@ const registerUser = async (req, res) => {
     linkedin_link,
     user_image,
     admin_role,
+    meta
   } = value;
 
   try {
@@ -51,9 +54,9 @@ const registerUser = async (req, res) => {
         .json({ success: false, message: "User already exists" });
     }
 
-    let role = {};
+    let roleOverride = {};
     if (admin_role === "admin") {
-      role = {
+      roleOverride = {
         role: ["admin"],
       };
     }
@@ -74,7 +77,9 @@ const registerUser = async (req, res) => {
       linkedin_link,
       user_image,
       admin_role,
-      ...role,
+      role,
+      meta,
+      ...roleOverride,
     });
 
     // Hash the password before saving
@@ -98,7 +103,12 @@ const registerUser = async (req, res) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    try {
+      await transporter.sendMail(mailOptions);
+    } catch (emailError) {
+      console.error('Email sending failed:', emailError);
+      // Continue registration even if email sending fails
+    }
 
     res.status(200).json({
       success: true,

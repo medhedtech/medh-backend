@@ -1,9 +1,27 @@
-const SubscriptionCourse = require("../models/subscription-modal");
-const { uploadFile } = require("../utils/uploadFile");
-const { generatePdfContentForSubscription } = require("../utils/htmlTemplate");
-const html_to_pdf = require("html-pdf-node");
+const Subscription = require('../models/subscription-model');
+const logger = require('../utils/logger');
+const { AppError } = require('../utils/errorHandler');
+const PDF = require('html-pdf-chrome');
+const chromeService = require('../utils/chromeService');
+const { uploadFile } = require('../utils/uploadFile');
+const { generateSubscriptionPdfContent } = require('../utils/htmlTemplate');
 const nodemailer = require("nodemailer");
 const CoorporateEnrolledModule = require("../models/coorporate-enrolled-modules.model");
+
+const pdfOptions = {
+  port: 9222, // Chrome debug port
+  printOptions: {
+    landscape: false,
+    format: 'A4',
+    printBackground: true,
+    margin: {
+      top: '1cm',
+      bottom: '1cm',
+      left: '1cm',
+      right: '1cm'
+    }
+  }
+};
 
 // Create a new subscription
 const transporter = nodemailer.createTransport({
@@ -14,160 +32,252 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// Create a new subscription
 const createSubscription = async (req, res) => {
   try {
-    // Step 1: Save subscription data to the database
-    const { student_id, course_id, amount, status } = req.body;
-
-    // Creating a new subscription instance
-    const subscription = new SubscriptionCourse({
-      student_id,
-      course_id,
+    const {
+      user_id,
+      plan_name,
       amount,
-      status,
+      duration_months,
+      start_date,
+      payment_status,
+      payment_id
+    } = req.body;
+
+    const subscription = new Subscription({
+      user_id,
+      plan_name,
+      amount,
+      duration_months,
+      start_date: new Date(start_date),
+      end_date: new Date(new Date(start_date).setMonth(new Date(start_date).getMonth() + duration_months)),
+      payment_status,
+      payment_id
     });
 
-    // Step 2: Save the subscription and then populate course and student data
     await subscription.save();
 
-    // Populate student and course details
-    const populatedSubscription = await SubscriptionCourse.findById(
-      subscription._id
-    )
-      .populate("student_id", "full_name email phone_number")
-      .populate("course_id", "course_title course_category course_fee");
+    // Generate PDF receipt
+    try {
+      await chromeService.ensureRunning();
 
-    // Step 3: Generate PDF Content using populated data
-    const htmlContent = generatePdfContentForSubscription({
-      student_name: populatedSubscription.student_id.full_name,
-      student_email: populatedSubscription.student_id.email,
-      student_mobile: populatedSubscription.student_id.phone_number,
-      course_name: populatedSubscription.course_id.course_title,
-      amount: populatedSubscription.amount,
-      date: new Date(),
-      course_fee: populatedSubscription.course_id.course_fee,
+      const htmlContent = generateSubscriptionPdfContent({
+        subscription_id: subscription._id,
+        plan_name,
+        amount,
+        duration_months,
+        start_date: new Date(start_date).toLocaleDateString(),
+        payment_id,
+        payment_date: new Date().toLocaleDateString()
+      });
+
+      const pdf = await PDF.create(htmlContent, pdfOptions);
+      const pdfBuffer = await pdf.toBuffer();
+
+      const pdfKey = `subscriptions/receipts/${subscription._id}_${Date.now()}.pdf`;
+      
+      // Upload PDF to storage
+      await new Promise((resolve, reject) => {
+        uploadFile(
+          {
+            key: pdfKey,
+            file: pdfBuffer,
+            contentType: 'application/pdf'
+          },
+          (url) => {
+            subscription.receipt_url = url;
+            resolve();
+          },
+          (error) => reject(error)
+        );
+      });
+
+      await subscription.save();
+
+      logger.info('Subscription created with receipt', {
+        subscriptionId: subscription._id,
+        userId: user_id,
+        planName: plan_name
+      });
+
+    } catch (pdfError) {
+      logger.error('Error generating subscription receipt', {
+        error: {
+          message: pdfError.message,
+          stack: pdfError.stack
+        },
+        subscriptionId: subscription._id
+      });
+      // Continue even if PDF generation fails
+    }
+
+    res.status(201).json({
+      status: 'success',
+      data: subscription
     });
 
-    const file = { content: htmlContent };
-    const options = { format: "A4", timeout: 60000 };
-
-    // Step 4: Convert HTML to PDF
-    const pdfBuffer = await html_to_pdf.generatePdf(file, options);
-
-    // Step 5: Upload PDF to AWS S3
-    const pdfKey = `${
-      populatedSubscription.student_id.email
-    }/${Date.now().toString()}.pdf`;
-    const uploadParams = {
-      key: pdfKey,
-      file: pdfBuffer,
-      contentType: "application/pdf",
-    };
-
-    // Upload PDF and handle callbacks
-    uploadFile(
-      uploadParams,
-      async (url) => {
-        // Log the URL received from S3
-        console.log("PDF uploaded to S3, URL:", url);
-
-        // Save the URL in the subscription
-        populatedSubscription.pdfUrl = url;
-        await populatedSubscription.save();
-
-        // Step 6: Send an email with the PDF invoice attachment
-        const mailOptions = {
-          from: process.env.EMAIL_USER,
-          to: populatedSubscription.student_id.email,
-          subject: `Subscription Invoice for ${populatedSubscription.course_id.course_title}`,
-          text: `Hello ${
-            populatedSubscription.student_id.full_name
-          },\n\nThank you for subscribing to the course "${
-            populatedSubscription.course_id.course_title
-          }". Please find your subscription invoice attached.\n\nAmount: ₹${
-            populatedSubscription.amount
-          }\nCourse Fee: ₹${
-            populatedSubscription.course_id.course_fee
-          }\nSubscription Date: ${new Date().toLocaleDateString()}\n\nBest regards,\nYour Team`,
-          attachments: [
-            {
-              filename: `Invoice_${populatedSubscription.student_id.email}.pdf`,
-              path: url,
-            },
-          ],
-        };
-
-        // Send the email with the PDF attachment
-        transporter.sendMail(mailOptions, (err, info) => {
-          if (err) {
-            console.error("Error sending email:", err);
-            return res.status(500).json({
-              success: false,
-              message: "Error sending email",
-              error: err.message,
-            });
-          }
-
-          console.log("Email sent:", info.response);
-          res.status(201).json({
-            success: true,
-            message:
-              "Subscription created successfully, PDF uploaded, and email sent.",
-            data: populatedSubscription,
-            pdfUrl: url,
-          });
-        });
-      },
-      (err) => {
-        console.error("Error uploading PDF to S3:", err);
-        res
-          .status(500)
-          .json({ success: false, message: "Error uploading PDF to S3" });
-      }
-    );
   } catch (error) {
-    console.error("Error creating subscription:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Error creating subscription" });
+    logger.error('Error creating subscription', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+    res.status(400).json({
+      status: 'error',
+      message: error.message
+    });
+  }
+};
+
+const getSubscriptionById = async (req, res) => {
+  try {
+    const subscription = await Subscription.findById(req.params.id)
+      .populate('user_id', 'full_name email');
+
+    if (!subscription) {
+      throw new AppError('Subscription not found', 404);
+    }
+
+    logger.info('Subscription fetched', {
+      subscriptionId: subscription._id,
+      userId: subscription.user_id
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: subscription
+    });
+  } catch (error) {
+    logger.error('Error fetching subscription', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      },
+      subscriptionId: req.params.id
+    });
+    res.status(error.statusCode || 500).json({
+      status: 'error',
+      message: error.message
+    });
+  }
+};
+
+const getUserSubscriptions = async (req, res) => {
+  try {
+    const subscriptions = await Subscription.find({ user_id: req.params.userId })
+      .sort('-createdAt')
+      .populate('user_id', 'full_name email');
+
+    logger.info('User subscriptions fetched', {
+      userId: req.params.userId,
+      count: subscriptions.length
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: subscriptions
+    });
+  } catch (error) {
+    logger.error('Error fetching user subscriptions', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      },
+      userId: req.params.userId
+    });
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    });
+  }
+};
+
+const updateSubscriptionStatus = async (req, res) => {
+  try {
+    const { payment_status, payment_id } = req.body;
+
+    const subscription = await Subscription.findById(req.params.id);
+    if (!subscription) {
+      throw new AppError('Subscription not found', 404);
+    }
+
+    subscription.payment_status = payment_status;
+    if (payment_id) subscription.payment_id = payment_id;
+
+    await subscription.save();
+
+    logger.info('Subscription status updated', {
+      subscriptionId: subscription._id,
+      status: payment_status,
+      paymentId: payment_id
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: subscription
+    });
+  } catch (error) {
+    logger.error('Error updating subscription status', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      },
+      subscriptionId: req.params.id
+    });
+    res.status(error.statusCode || 500).json({
+      status: 'error',
+      message: error.message
+    });
+  }
+};
+
+const cancelSubscription = async (req, res) => {
+  try {
+    const subscription = await Subscription.findById(req.params.id);
+    if (!subscription) {
+      throw new AppError('Subscription not found', 404);
+    }
+
+    subscription.status = 'cancelled';
+    subscription.cancelled_at = new Date();
+    await subscription.save();
+
+    logger.info('Subscription cancelled', {
+      subscriptionId: subscription._id,
+      userId: subscription.user_id
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: subscription
+    });
+  } catch (error) {
+    logger.error('Error cancelling subscription', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      },
+      subscriptionId: req.params.id
+    });
+    res.status(error.statusCode || 500).json({
+      status: 'error',
+      message: error.message
+    });
   }
 };
 
 // Retrieve all subscriptions
 const getAllSubscriptions = async (req, res) => {
   try {
-    const subscriptions = await SubscriptionCourse.find()
-      .populate("student_id", "full_name email phone_number role status age")
+    const subscriptions = await Subscription.find()
+      .populate("user_id", "full_name email")
       .populate(
-        "course_id",
-        "course_title course_category course_description course_fee course_image status course_grade"
+        "plan_id",
+        "plan_name plan_category plan_description plan_fee plan_image status plan_grade"
       );
 
     res.status(200).json({ success: true, data: subscriptions });
-  } catch (err) {
-    res
-      .status(500)
-      .json({ success: false, message: "Server error", error: err.message });
-  }
-};
-
-// Retrieve a single subscription by ID
-const getSubscriptionById = async (req, res) => {
-  try {
-    const subscription = await SubscriptionCourse.findById(req.params.id)
-      .populate("student_id", "full_name email phone_number role status age")
-      .populate(
-        "course_id",
-        "course_title course_category course_description course_fee course_image status course_grade"
-      );
-
-    if (!subscription)
-      return res
-        .status(404)
-        .json({ success: false, message: "Subscription not found" });
-
-    res.status(200).json({ success: true, data: subscription });
   } catch (err) {
     res
       .status(500)
@@ -188,14 +298,14 @@ const getEnrollmentStatus = async (req, res) => {
     }
 
     // Check if a subscription exists with the given studentId and courseId
-    const subscription = await SubscriptionCourse.findOne({
-      student_id: studentId,
-      course_id: courseId,
+    const subscription = await Subscription.findOne({
+      user_id: studentId,
+      plan_id: courseId,
     })
-      .populate("student_id", "full_name email phone_number role status age")
+      .populate("user_id", "full_name email")
       .populate(
-        "course_id",
-        "course_title course_category course_description course_fee course_image status course_grade"
+        "plan_id",
+        "plan_name plan_category plan_description plan_fee plan_image status plan_grade"
       );
 
     // If subscription exists, return true and the record
@@ -235,14 +345,14 @@ const getCoorporateEnrollmentStatus = async (req, res) => {
     }
 
     // Check if a subscription exists with the given studentId and courseId
-    const subscription = await SubscriptionCourse.findOne({
-      student_id: coorporateId,
-      course_id: courseId,
+    const subscription = await Subscription.findOne({
+      user_id: coorporateId,
+      plan_id: courseId,
     })
-      .populate("student_id", "full_name email phone_number role status age")
+      .populate("user_id", "full_name email")
       .populate(
-        "course_id",
-        "course_title course_category course_description course_fee course_image status course_grade"
+        "plan_id",
+        "plan_name plan_category plan_description plan_fee plan_image status plan_grade"
       );
 
     // If subscription exists, return true and the record
@@ -292,7 +402,7 @@ const getCoorporateEmployeeEnrollmentStatus = async (req, res) => {
       )
       .populate(
         "course_id",
-        "course_title course_category course_description course_fee course_image status course_grade"
+        "plan_title plan_category plan_description plan_fee plan_image status plan_grade"
       )
       .populate("enrollment_id", "course_assigned_by status");
 
@@ -331,7 +441,7 @@ const getCoorporateEmployeeEnrollmentStatus = async (req, res) => {
 // Update a subscription by ID
 const updateSubscription = async (req, res) => {
   try {
-    const updatedSubscription = await SubscriptionCourse.findByIdAndUpdate(
+    const updatedSubscription = await Subscription.findByIdAndUpdate(
       req.params.id,
       req.body,
       { new: true, runValidators: true }
@@ -343,13 +453,13 @@ const updateSubscription = async (req, res) => {
         .json({ success: false, message: "Subscription not found" });
 
     // Populate the updated subscription with student and course details
-    const populatedUpdatedSubscription = await SubscriptionCourse.findById(
+    const populatedUpdatedSubscription = await Subscription.findById(
       updatedSubscription._id
     )
-      .populate("student_id", "full_name email phone_number role status age")
+      .populate("user_id", "full_name email")
       .populate(
-        "course_id",
-        "course_title course_category course_description course_fee course_image status course_grade"
+        "plan_id",
+        "plan_name plan_category plan_description plan_fee plan_image status plan_grade"
       );
 
     res.status(200).json({ success: true, data: populatedUpdatedSubscription });
@@ -363,7 +473,7 @@ const updateSubscription = async (req, res) => {
 // Delete a subscription by ID
 const deleteSubscription = async (req, res) => {
   try {
-    const deletedSubscription = await SubscriptionCourse.findByIdAndDelete(
+    const deletedSubscription = await Subscription.findByIdAndDelete(
       req.params.id
     );
 
@@ -394,11 +504,11 @@ const getSubscriptionsByStudentId = async (req, res) => {
       });
     }
 
-    const subscriptions = await SubscriptionCourse.find({ student_id })
-      .populate("student_id", "full_name email phone_number role status age")
+    const subscriptions = await Subscription.find({ user_id: student_id })
+      .populate("user_id", "full_name email")
       .populate(
-        "course_id",
-        "course_title course_category course_description course_fee course_image status course_grade"
+        "plan_id",
+        "plan_name plan_category plan_description plan_fee plan_image status plan_grade"
       )
       .sort({ createdAt: -1 });
 
@@ -420,8 +530,11 @@ const getSubscriptionsByStudentId = async (req, res) => {
 
 module.exports = {
   createSubscription,
-  getAllSubscriptions,
   getSubscriptionById,
+  getUserSubscriptions,
+  updateSubscriptionStatus,
+  cancelSubscription,
+  getAllSubscriptions,
   getEnrollmentStatus,
   getCoorporateEnrollmentStatus,
   updateSubscription,

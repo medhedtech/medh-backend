@@ -1,0 +1,133 @@
+const { getAPIMetrics } = require('../middleware/apiMonitor');
+const errorTracker = require('../services/errorTracker');
+const logger = require('../utils/logger');
+
+exports.getMetrics = (req, res) => {
+  try {
+    const metrics = getAPIMetrics();
+    res.json(metrics);
+  } catch (error) {
+    logger.error('Error fetching API metrics', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+    res.status(500).json({
+      status: 'error',
+      message: 'Error fetching API metrics'
+    });
+  }
+};
+
+exports.getErrorStats = (req, res) => {
+  try {
+    const stats = errorTracker.getErrorStats();
+    res.json({
+      timestamp: new Date(),
+      stats
+    });
+  } catch (error) {
+    logger.error('Error fetching error statistics', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+    res.status(500).json({
+      status: 'error',
+      message: 'Error fetching error statistics'
+    });
+  }
+};
+
+exports.getErrorSummary = (req, res) => {
+  try {
+    const summary = errorTracker.getErrorSummary();
+    res.json({
+      timestamp: new Date(),
+      totalErrors: summary.length,
+      errors: summary
+    });
+  } catch (error) {
+    logger.error('Error fetching error summary', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+    res.status(500).json({
+      status: 'error',
+      message: 'Error fetching error summary'
+    });
+  }
+};
+
+exports.getSystemHealth = (req, res) => {
+  try {
+    const metrics = getAPIMetrics();
+    const errorStats = errorTracker.getErrorStats();
+    
+    // Calculate error rate and average response time
+    let totalRequests = 0;
+    let totalErrors = 0;
+    let totalDuration = 0;
+    
+    metrics.metrics.forEach(metric => {
+      totalRequests += metric.totalCalls;
+      totalErrors += metric.errorRate * metric.totalCalls / 100;
+      totalDuration += metric.averageDuration * metric.totalCalls;
+    });
+
+    const health = {
+      timestamp: new Date(),
+      status: 'healthy', // Will be updated based on checks
+      checks: {
+        errorRate: {
+          status: 'healthy',
+          value: totalRequests ? (totalErrors / totalRequests) * 100 : 0,
+          threshold: 5 // 5% error rate threshold
+        },
+        responseTime: {
+          status: 'healthy',
+          value: totalRequests ? totalDuration / totalRequests : 0,
+          threshold: 1000 // 1 second threshold
+        },
+        recentErrors: {
+          status: 'healthy',
+          value: errorStats.lastHour,
+          threshold: 50 // 50 errors per hour threshold
+        }
+      }
+    };
+
+    // Update check statuses
+    if (health.checks.errorRate.value > health.checks.errorRate.threshold) {
+      health.checks.errorRate.status = 'unhealthy';
+      health.status = 'unhealthy';
+    }
+    
+    if (health.checks.responseTime.value > health.checks.responseTime.threshold) {
+      health.checks.responseTime.status = 'degraded';
+      if (health.status === 'healthy') health.status = 'degraded';
+    }
+    
+    if (health.checks.recentErrors.value > health.checks.recentErrors.threshold) {
+      health.checks.recentErrors.status = 'unhealthy';
+      health.status = 'unhealthy';
+    }
+
+    res.json(health);
+  } catch (error) {
+    logger.error('Error fetching system health', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+    res.status(500).json({
+      status: 'error',
+      message: 'Error fetching system health'
+    });
+  }
+}; 

@@ -1,0 +1,35 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "/Users/abhishekjha/Documents/MEDH/medh-backend/logs/audit.json",
+    "files": [
+        {
+            "date": 1740215998494,
+            "name": "/Users/abhishekjha/Documents/MEDH/medh-backend/logs/error-2025-02-22.log",
+            "hash": "0d81619aa5d484a6de1e098e5a6a2346da7878277dff8b88c2062a15e516336b"
+        },
+        {
+            "date": 1740215998494,
+            "name": "/Users/abhishekjha/Documents/MEDH/medh-backend/logs/combined-2025-02-22.log",
+            "hash": "3fbc90661a55f0ae69cbafedd3bec149acef6f68a22418b14ba2e908cdc6d5db"
+        },
+        {
+            "date": 1740215998495,
+            "name": "/Users/abhishekjha/Documents/MEDH/medh-backend/logs/debug-2025-02-22.log",
+            "hash": "c731bc62b3da28b524afc32b876032ece0704b6bc5ebf25f3966e7319ac295af"
+        },
+        {
+            "date": 1740215998495,
+            "name": "/Users/abhishekjha/Documents/MEDH/medh-backend/logs/exceptions-2025-02-22.log",
+            "hash": "3efa906590c8c71b68a6c0326aedb386ad5a1b346845423b295886d7b51cb740"
+        },
+        {
+            "date": 1740215998495,
+            "name": "/Users/abhishekjha/Documents/MEDH/medh-backend/logs/rejections-2025-02-22.log",
+            "hash": "3fef556eec1c66a480c26672eddb3eb75755c2281ce61a2241000406d726b5c4"
+        }
+    ],
+    "hashType": "sha256"
+}
