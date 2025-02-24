@@ -5,7 +5,6 @@ const courseSchema = new mongoose.Schema(
   {
     course_category: {
       type: String,
-      enum: ["Live Courses", "Blended Courses", "Corporate Training Courses"],
     },
     course_title: {
       type: String,
