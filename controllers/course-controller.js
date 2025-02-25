@@ -6,8 +6,8 @@ const createCourse = async (req, res) => {
   try {
     const {
       course_category,
+      category_type,
       course_title,
-      course_tag,
       no_of_Sessions,
       course_duration,
       session_duration,
@@ -17,11 +17,14 @@ const createCourse = async (req, res) => {
       brochures,
       course_image,
       course_grade,
-      category,
       resource_videos,
       resource_pdfs,
       curriculum,
-      recorded_videos,
+      tools_technologies,
+      bonus_modules,
+      faqs,
+      min_hours_per_week,
+      max_hours_per_week,
       efforts_per_Week,
       class_type,
       is_Certification,
@@ -29,43 +32,123 @@ const createCourse = async (req, res) => {
       is_Projects,
       is_Quizes,
       related_courses,
+      prices,
     } = req.body;
 
-    const isFree = course_tag === "Free" && course_fee === 0;
+    // Validate required fields
+    if (!course_title || !course_category || !category_type) {
+      return res.status(400).json({
+        message: "Missing required fields",
+        error: {
+          course_title: !course_title ? "Course title is required" : undefined,
+          course_category: !course_category ? "Course category is required" : undefined,
+          category_type: !category_type ? "Category type is required" : undefined,
+        },
+      });
+    }
+
+    // Validate course fee for free courses
+    if (category_type === "Free" && course_fee !== 0) {
+      return res.status(400).json({
+        message: "Course fee must be 0 for free courses",
+        error: { course_fee: "Course fee must be 0 for free courses" },
+      });
+    }
+
+    // Format efforts per week if not already formatted
+    const formattedEffortsPerWeek = efforts_per_Week || 
+      `${min_hours_per_week} - ${max_hours_per_week} hours / week`;
+
+    // Process curriculum if provided
+    const processedCurriculum = curriculum?.map(week => ({
+      weekTitle: week.weekTitle,
+      weekDescription: week.weekDescription,
+      topics: week.topics || [],
+      resources: week.resources || []
+    })) || [];
+
+    // Process tools and technologies if provided
+    const processedTools = tools_technologies?.map(tool => ({
+      name: tool.name,
+      category: tool.category || 'other',
+      description: tool.description || '',
+      logo_url: tool.logo_url || ''
+    })) || [];
+
+    // Process bonus modules if provided
+    const processedBonusModules = bonus_modules?.map(module => ({
+      title: module.title,
+      description: module.description || '',
+      resources: module.resources || []
+    })) || [];
+
+    // Process FAQs if provided
+    const processedFaqs = faqs?.map(faq => ({
+      question: faq.question,
+      answer: faq.answer
+    })) || [];
 
     const newCourse = new Course({
       course_category,
+      category_type,
       course_title,
-      course_tag,
       no_of_Sessions,
       course_duration,
       session_duration,
       course_description,
       course_fee,
-      course_videos,
-      brochures,
+      course_videos: course_videos || [],
+      brochures: brochures || [],
       course_image,
       course_grade,
-      category,
-      resource_videos,
-      resource_pdfs,
-      curriculum,
-      isFree,
-      recorded_videos,
-      efforts_per_Week,
+      resource_videos: resource_videos || [],
+      resource_pdfs: resource_pdfs || [],
+      curriculum: processedCurriculum,
+      tools_technologies: processedTools,
+      bonus_modules: processedBonusModules,
+      faqs: processedFaqs,
+      min_hours_per_week,
+      max_hours_per_week,
+      efforts_per_Week: formattedEffortsPerWeek,
       class_type,
       is_Certification,
       is_Assignments,
       is_Projects,
       is_Quizes,
-      related_courses,
+      related_courses: related_courses || [],
+      prices: prices || [],
+      isFree: category_type === "Free",
     });
 
     await newCourse.save();
-    res.status(201).json({ message: "Course created successfully", newCourse });
+    res.status(201).json({ 
+      message: "Course created successfully", 
+      newCourse,
+      summary: {
+        curriculum: {
+          totalWeeks: processedCurriculum.length,
+          totalTopics: processedCurriculum.reduce((total, week) => total + (week.topics?.length || 0), 0),
+          totalResources: processedCurriculum.reduce((total, week) => total + (week.resources?.length || 0), 0)
+        },
+        tools: {
+          count: processedTools.length,
+          categories: [...new Set(processedTools.map(t => t.category))]
+        },
+        bonusModules: {
+          count: processedBonusModules.length,
+          totalResources: processedBonusModules.reduce((total, module) => total + (module.resources?.length || 0), 0)
+        },
+        faqs: {
+          count: processedFaqs.length
+        }
+      }
+    });
   } catch (error) {
     console.error("Error creating course:", error);
-    res.status(500).json({ message: "Error creating course", error });
+    res.status(500).json({ 
+      message: "Error creating course", 
+      error: error.errors || error 
+    });
   }
 };
 
@@ -337,8 +420,8 @@ const updateCourse = async (req, res) => {
     const { id } = req.params;
     const {
       course_category,
+      category_type,
       course_title,
-      course_tag,
       no_of_Sessions,
       course_duration,
       session_duration,
@@ -348,9 +431,14 @@ const updateCourse = async (req, res) => {
       brochures,
       course_image,
       course_grade,
-      category,
       resource_videos,
       resource_pdfs,
+      curriculum,
+      tools_technologies,
+      bonus_modules,
+      faqs,
+      min_hours_per_week,
+      max_hours_per_week,
       efforts_per_Week,
       class_type,
       is_Certification,
@@ -358,14 +446,48 @@ const updateCourse = async (req, res) => {
       is_Projects,
       is_Quizes,
       related_courses,
+      prices,
     } = req.body;
+
+    // Format efforts per week if not already formatted
+    const formattedEffortsPerWeek = efforts_per_Week || 
+      `${min_hours_per_week} - ${max_hours_per_week} hours / week`;
+
+    // Process curriculum if provided
+    const processedCurriculum = curriculum ? curriculum.map(week => ({
+      weekTitle: week.weekTitle,
+      weekDescription: week.weekDescription,
+      topics: week.topics || [],
+      resources: week.resources || []
+    })) : undefined;
+
+    // Process tools and technologies if provided
+    const processedTools = tools_technologies ? tools_technologies.map(tool => ({
+      name: tool.name,
+      category: tool.category || 'other',
+      description: tool.description || '',
+      logo_url: tool.logo_url || ''
+    })) : undefined;
+
+    // Process bonus modules if provided
+    const processedBonusModules = bonus_modules ? bonus_modules.map(module => ({
+      title: module.title,
+      description: module.description || '',
+      resources: module.resources || []
+    })) : undefined;
+
+    // Process FAQs if provided
+    const processedFaqs = faqs ? faqs.map(faq => ({
+      question: faq.question,
+      answer: faq.answer
+    })) : undefined;
 
     const updatedCourse = await Course.findByIdAndUpdate(
       id,
       {
         course_category,
+        category_type,
         course_title,
-        course_tag,
         no_of_Sessions,
         course_duration,
         session_duration,
@@ -375,16 +497,23 @@ const updateCourse = async (req, res) => {
         brochures,
         course_image,
         course_grade,
-        category,
         resource_videos,
         resource_pdfs,
-        efforts_per_Week,
+        curriculum: processedCurriculum,
+        tools_technologies: processedTools,
+        bonus_modules: processedBonusModules,
+        faqs: processedFaqs,
+        min_hours_per_week,
+        max_hours_per_week,
+        efforts_per_Week: formattedEffortsPerWeek,
         class_type,
         is_Certification,
         is_Assignments,
         is_Projects,
         is_Quizes,
         related_courses,
+        prices,
+        isFree: category_type === "Free",
       },
       { new: true, runValidators: true }
     );
@@ -393,9 +522,34 @@ const updateCourse = async (req, res) => {
       return res.status(404).json({ message: "Course not found" });
     }
 
-    res.status(200).json(updatedCourse);
+    res.status(200).json({
+      message: "Course updated successfully",
+      course: updatedCourse,
+      summary: {
+        curriculum: {
+          totalWeeks: updatedCourse.curriculum?.length || 0,
+          totalTopics: updatedCourse.curriculum?.reduce((total, week) => total + (week.topics?.length || 0), 0) || 0,
+          totalResources: updatedCourse.curriculum?.reduce((total, week) => total + (week.resources?.length || 0), 0) || 0
+        },
+        tools: {
+          count: updatedCourse.tools_technologies?.length || 0,
+          categories: [...new Set(updatedCourse.tools_technologies?.map(t => t.category) || [])]
+        },
+        bonusModules: {
+          count: updatedCourse.bonus_modules?.length || 0,
+          totalResources: updatedCourse.bonus_modules?.reduce((total, module) => total + (module.resources?.length || 0), 0) || 0
+        },
+        faqs: {
+          count: updatedCourse.faqs?.length || 0
+        }
+      }
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error updating course", error });
+    console.error("Error updating course:", error);
+    res.status(500).json({ 
+      message: "Error updating course", 
+      error: error.errors || error 
+    });
   }
 };
 
