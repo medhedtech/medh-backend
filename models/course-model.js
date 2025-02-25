@@ -245,7 +245,7 @@ const courseSchema = new mongoose.Schema(
       default: [],
     },
     resource_pdfs: {
-      type: [pdfResourceSchema],
+      type: [String],
       default: [],
     },
     curriculum: {
