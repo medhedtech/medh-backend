@@ -1,6 +1,48 @@
 const mongoose = require("mongoose");
 const { v4: uuidv4 } = require("uuid");
 
+// Define PDF resource schema (previously missing)
+const pdfResourceSchema = new mongoose.Schema({
+  title: { 
+    type: String, 
+    required: true, 
+    trim: true 
+  },
+  url: { 
+    type: String,
+    required: true,
+    validate: {
+      validator: function(v) {
+        return /\.pdf($|\?|#)/.test(v) || 
+               /\/pdf\//.test(v) || 
+               /documents.*\.amazonaws\.com/.test(v) ||
+               /drive\.google\.com/.test(v) ||
+               /dropbox\.com/.test(v);
+      },
+      message: props => `${props.value} is not a valid PDF URL. URL must end with .pdf or be from a supported cloud storage provider.`
+    }
+  },
+  description: { 
+    type: String, 
+    default: '' 
+  },
+  size_mb: { 
+    type: Number, 
+    min: 0,
+    max: 50,
+    default: null 
+  },
+  pages: { 
+    type: Number, 
+    min: 1,
+    default: null 
+  },
+  upload_date: { 
+    type: Date, 
+    default: Date.now 
+  }
+});
+
 // Define FAQ schema
 const faqSchema = new mongoose.Schema({
   question: {
@@ -160,6 +202,52 @@ const bonusModuleSchema = new mongoose.Schema({
   }
 });
 
+// Define price schema for individual and batch pricing
+const priceSchema = new mongoose.Schema({
+  currency: {
+    type: String,
+    required: true,
+    trim: true,
+    enum: ['USD', 'EUR', 'INR', 'GBP', 'AUD', 'CAD']
+  },
+  individual: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  batch: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  min_batch_size: {
+    type: Number,
+    min: 2,
+    default: 2
+  },
+  max_batch_size: {
+    type: Number,
+    min: 2,
+    default: 10
+  },
+  early_bird_discount: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0
+  },
+  group_discount: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0
+  },
+  is_active: {
+    type: Boolean,
+    default: true
+  }
+});
+
 const courseSchema = new mongoose.Schema(
   {
     course_category: {
@@ -189,6 +277,13 @@ const courseSchema = new mongoose.Schema(
     },
     course_fee: {
       type: Number,
+      min: 0,
+      default: 0
+    },
+    // Add prices array for multiple currencies with individual and batch pricing
+    prices: {
+      type: [priceSchema],
+      default: []
     },
     course_videos: {
       type: [String],
@@ -245,31 +340,27 @@ const courseSchema = new mongoose.Schema(
       default: [],
     },
     resource_pdfs: {
-      type: [String],
+      type: [pdfResourceSchema],
       default: [],
     },
     curriculum: {
       type: [curriculumWeekSchema],
       default: []
     },
-    // Add FAQs field
+    // FAQs field
     faqs: {
       type: [faqSchema],
       default: []
     },
-    // Add tools and technologies field
+    // Tools and technologies field
     tools_technologies: {
       type: [toolTechnologySchema],
       default: []
     },
-    // Add bonus modules field
+    // Bonus modules field
     bonus_modules: {
       type: [bonusModuleSchema],
       default: []
-    },
-    isFree: {
-      type: Boolean,
-      default: false,
     },
     recorded_videos: {
       type: [String],
@@ -301,6 +392,19 @@ const courseSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    min_hours_per_week: {
+      type: Number,
+      min: 0
+    },
+    max_hours_per_week: {
+      type: Number,
+      min: 0
+    },
+    category_type: {
+      type: String,
+      enum: ["Free", "Paid", "Live", "Hybrid", "Pre-Recorded"],
+      default: "Paid"
+    }
   },
   { timestamps: true }
 );
@@ -310,6 +414,20 @@ courseSchema.pre("save", function (next) {
   if (!this.unique_key) {
     this.unique_key = uuidv4();
   }
+  
+  // Auto-calculate isFree based on category_type
+  this.isFree = (this.category_type === "Free");
+  
+  // Format efforts_per_Week if not provided but min/max hours are
+  if (!this.efforts_per_Week && this.min_hours_per_week && this.max_hours_per_week) {
+    this.efforts_per_Week = `${this.min_hours_per_week} - ${this.max_hours_per_week} hours / week`;
+  }
+  
+  // Set course_fee based on the first batch price if available
+  if (this.prices && this.prices.length > 0 && this.prices[0].batch) {
+    this.course_fee = this.prices[0].batch;
+  }
+  
   next();
 });
 

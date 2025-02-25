@@ -88,6 +88,18 @@ const createCourse = async (req, res) => {
       answer: faq.answer
     })) || [];
 
+    // Process prices if provided
+    const processedPrices = prices?.map(price => ({
+      currency: price.currency,
+      individual: price.individual || 0,
+      batch: price.batch || 0,
+      min_batch_size: price.min_batch_size || 2,
+      max_batch_size: price.max_batch_size || 10,
+      early_bird_discount: price.early_bird_discount || 0,
+      group_discount: price.group_discount || 0,
+      is_active: price.is_active !== false
+    })) || [];
+
     const newCourse = new Course({
       course_category,
       category_type,
@@ -116,7 +128,7 @@ const createCourse = async (req, res) => {
       is_Projects,
       is_Quizes,
       related_courses: related_courses || [],
-      prices: prices || [],
+      prices: processedPrices,
       isFree: category_type === "Free",
     });
 
@@ -140,6 +152,11 @@ const createCourse = async (req, res) => {
         },
         faqs: {
           count: processedFaqs.length
+        },
+        pricing: {
+          currencies: processedPrices.map(p => p.currency),
+          hasBatchPricing: processedPrices.some(p => p.batch > 0),
+          hasIndividualPricing: processedPrices.some(p => p.individual > 0)
         }
       }
     });
@@ -482,6 +499,18 @@ const updateCourse = async (req, res) => {
       answer: faq.answer
     })) : undefined;
 
+    // Process prices if provided
+    const processedPrices = prices ? prices.map(price => ({
+      currency: price.currency,
+      individual: price.individual || 0,
+      batch: price.batch || 0,
+      min_batch_size: price.min_batch_size || 2,
+      max_batch_size: price.max_batch_size || 10,
+      early_bird_discount: price.early_bird_discount || 0,
+      group_discount: price.group_discount || 0,
+      is_active: price.is_active !== false
+    })) : undefined;
+
     const updatedCourse = await Course.findByIdAndUpdate(
       id,
       {
@@ -512,7 +541,7 @@ const updateCourse = async (req, res) => {
         is_Projects,
         is_Quizes,
         related_courses,
-        prices,
+        prices: processedPrices,
         isFree: category_type === "Free",
       },
       { new: true, runValidators: true }
@@ -541,6 +570,11 @@ const updateCourse = async (req, res) => {
         },
         faqs: {
           count: updatedCourse.faqs?.length || 0
+        },
+        pricing: {
+          currencies: updatedCourse.prices?.map(p => p.currency) || [],
+          hasBatchPricing: updatedCourse.prices?.some(p => p.batch > 0) || false,
+          hasIndividualPricing: updatedCourse.prices?.some(p => p.individual > 0) || false
         }
       }
     });
