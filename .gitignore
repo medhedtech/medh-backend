@@ -1,3 +1,12 @@
 node_modules/
 .env
 .vercel
+
+# Ignore all files in logs directory but keep the directory structure
+logs/*
+!logs/.gitkeep
+
+# Specific log file patterns to ignore
+*.log
+*.log.*
+logs/*.json
