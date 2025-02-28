@@ -2,7 +2,8 @@ const router = require("express").Router();
 const authRoutes = require("./authRoutes");
 const categoryRoutes = require("./categoryRoutes");
 const courseRoutes = require("./courseRoutes");
-const faqRoutes = require("./freqRoutes");
+const freqRoutes = require("./freqRoutes");
+const faqRoutes = require("./faqRoutes");
 const studentRoutes = require("./studentRoutes");
 const instructorRoutes = require("./instructorRoutes");
 const certificateRoutes = require("./certificateRoutes");
@@ -45,6 +46,10 @@ const moduleRoutes = [
   {
     path: "/courses",
     route: courseRoutes,
+  },
+  {
+    path: "/course-faqs",
+    route: freqRoutes,
   },
   {
     path: "/faqs",
