@@ -7,5 +7,6 @@ router.get("/get", broucherController.getAllBrouchers);
 router.get("/get/:id", broucherController.getBroucherById);
 router.post("/update/:id", broucherController.updateBroucher);
 router.delete("/delete/:id", broucherController.deleteBroucher);
+router.post("/download/:courseId", broucherController.downloadBrochure);
 
 module.exports = router;

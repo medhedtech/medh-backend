@@ -156,10 +156,57 @@ const deleteBroucher = async (req, res) => {
   }
 };
 
+// Download brochure for a specific course
+const downloadBrochure = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+
+    // Find the course
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    // Check if course has brochures
+    if (!course.brochures || course.brochures.length === 0) {
+      return res.status(404).json({
+        message: `No brochures available for the course "${course.course_title}"`,
+      });
+    }
+
+    // Get the first brochure URL (assuming it's the main brochure)
+    const brochureUrl = course.brochures[0];
+
+    // Create a record of the brochure download
+    const broucherRecord = new Broucher({
+      full_name: req.body.full_name,
+      email: req.body.email,
+      phone_number: req.body.phone_number,
+      course: courseId,
+      course_title: course.course_title,
+      selected_brochure: brochureUrl
+    });
+
+    await broucherRecord.save();
+
+    // Return the brochure URL and record
+    res.status(200).json({
+      message: "Brochure download initiated successfully",
+      brochureUrl,
+      course_title: course.course_title,
+      recordId: broucherRecord._id
+    });
+  } catch (error) {
+    console.error("Error downloading brochure:", error);
+    res.status(500).json({ message: "Error downloading brochure", error: error.message });
+  }
+};
+
 module.exports = {
   createBrouchers,
   getAllBrouchers,
   getBroucherById,
   updateBroucher,
   deleteBroucher,
+  downloadBrochure
 };
