@@ -736,6 +736,40 @@ const getAllRelatedCourses = async (req, res) => {
     res.status(500).json({ message: "Error fetching courses", error });
   }
 };
+
+const downloadBrochure = async (courseId, userDetails) => {
+  try {
+    // Validate course ID first
+    if (!courseId) {
+      toast.error("Please select a valid course");
+      return;
+    }
+
+    // Make the API call
+    const response = await axios.post(`/api/v1/broucher/download/${courseId}`, {
+      full_name: userDetails.full_name,
+      email: userDetails.email,
+      phone_number: userDetails.phone_number
+    });
+
+    if (response.data.success) {
+      // Show success message
+      toast.success(response.data.message);
+      
+      // Open the brochure in a new tab
+      window.open(response.data.data.brochureUrl, '_blank');
+    } else {
+      // Show error message
+      toast.error(response.data.message);
+    }
+  } catch (error) {
+    // Handle different types of errors
+    const errorMessage = error.response?.data?.message || 
+                        "Error downloading brochure. Please try again.";
+    toast.error(errorMessage);
+  }
+};
+
 // Export only the defined functions
 module.exports = {
   createCourse,
@@ -751,4 +785,5 @@ module.exports = {
   getRecordedVideosForUser,
   getAllRelatedCourses,
   getNewCoursesWithLimits,
+  downloadBrochure,
 };

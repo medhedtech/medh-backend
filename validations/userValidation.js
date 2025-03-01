@@ -4,11 +4,7 @@ const userValidation = joi.object({
   full_name: joi.string().required(),
   email: joi.string().email().trim(true).required(),
   password: joi.string().min(8).trim(true).required(),
-  phone_number: joi
-    .string()
-    .length(10)
-    .pattern(/[6-9]{1}[0-9]{9}/)
-    .required(),
+  phone_number: joi.string().required(),
   agree_terms: joi.boolean().valid(true).required(),
   role: joi.array().items(
     joi.string().valid(

@@ -161,16 +161,37 @@ const downloadBrochure = async (req, res) => {
   try {
     const { courseId } = req.params;
 
+    // Validate courseId format
+    if (!courseId || !courseId.match(/^[0-9a-fA-F]{24}$/)) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Please select a valid course" 
+      });
+    }
+
     // Find the course
     const course = await Course.findById(courseId);
     if (!course) {
-      return res.status(404).json({ message: "Course not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Course not found. Please select a valid course" 
+      });
     }
 
     // Check if course has brochures
     if (!course.brochures || course.brochures.length === 0) {
       return res.status(404).json({
-        message: `No brochures available for the course "${course.course_title}"`,
+        success: false,
+        message: `No brochures available for the course "${course.course_title}". Please contact support.`
+      });
+    }
+
+    // Validate required fields
+    const { full_name, email, phone_number } = req.body;
+    if (!full_name || !email || !phone_number) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide all required information (name, email, and phone number)"
       });
     }
 
@@ -179,9 +200,9 @@ const downloadBrochure = async (req, res) => {
 
     // Create a record of the brochure download
     const broucherRecord = new Broucher({
-      full_name: req.body.full_name,
-      email: req.body.email,
-      phone_number: req.body.phone_number,
+      full_name,
+      email,
+      phone_number,
       course: courseId,
       course_title: course.course_title,
       selected_brochure: brochureUrl
@@ -189,16 +210,49 @@ const downloadBrochure = async (req, res) => {
 
     await broucherRecord.save();
 
-    // Return the brochure URL and record
-    res.status(200).json({
-      message: "Brochure download initiated successfully",
-      brochureUrl,
-      course_title: course.course_title,
-      recordId: broucherRecord._id
+    // Send email with brochure
+    const attachements = [{
+      filename: `${course.course_title}-brochure.pdf`,
+      path: brochureUrl
+    }];
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: `Brochure for ${course.course_title}`,
+      text: `Hello ${full_name},\n\nThank you for your interest in our course "${course.course_title}". Please find the brochure attached.\n\nCourse Details:\nTitle: ${course.course_title}\nCategory: ${course.course_category}\nDuration: ${course.course_duration}\nFee: $${course.course_fee}\n\nBest regards,\nYour Team`,
+      attachments: attachements
+    };
+
+    // Send the email with the brochure
+    transporter.sendMail(mailOptions, (err, info) => {
+      if (err) {
+        console.error("Error sending email:", err);
+        // Still return success even if email fails, since we have the download URL
+        console.log("Email sending failed but continuing with download");
+      } else {
+        console.log("Email sent:", info.response);
+      }
     });
+
+    // Return success response with download URL
+    res.status(200).json({
+      success: true,
+      message: "Brochure download initiated successfully",
+      data: {
+        brochureUrl,
+        course_title: course.course_title,
+        recordId: broucherRecord._id
+      }
+    });
+
   } catch (error) {
     console.error("Error downloading brochure:", error);
-    res.status(500).json({ message: "Error downloading brochure", error: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: "Error processing your request. Please try again.",
+      error: error.message 
+    });
   }
 };
 

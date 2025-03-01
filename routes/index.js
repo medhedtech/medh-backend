@@ -148,7 +148,7 @@ const moduleRoutes = [
     route: subscriptionRoute,
   },
   {
-    path: "/broucher",
+    path: "/api/v1/brouchers",
     route: broucherRoute,
   },
   {

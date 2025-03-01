@@ -270,7 +270,14 @@ const courseSchema = new mongoose.Schema(
       type: String,
     },
     course_description: {
-      type: String,
+      type: {
+        program_overview: {
+          type: String
+        },
+        benefits: {
+          type: String
+        }
+      }
     },
     category: {
       type: String,
