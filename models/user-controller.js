@@ -4,7 +4,10 @@ const userSchema = new mongoose.Schema(
   {
     full_name: { type: String },
     email: { type: String },
-    phone_number: { type: String },
+    phone_numbers: [{
+      country: { type: String, required: true },
+      number: { type: String, required: true }
+    }],
     password: { type: String },
     agree_terms: { type: Boolean },
     role: {
@@ -77,7 +80,6 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["Institute", "University"],
     },
-    country: { type: String },
     company_website: {
       type: String,
     },

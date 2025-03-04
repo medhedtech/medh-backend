@@ -30,7 +30,7 @@ const registerUser = async (req, res) => {
   const {
     full_name,
     email,
-    phone_number,
+    phone_numbers,
     password = "",
     agree_terms,
     role = ["student"],
@@ -61,11 +61,11 @@ const registerUser = async (req, res) => {
       };
     }
 
-    // Create a new user instance
+    // Create a new user instance with phone_numbers array
     user = new User({
       full_name,
       email,
-      phone_number,
+      phone_numbers,
       password,
       agree_terms,
       role_description,
@@ -85,6 +85,10 @@ const registerUser = async (req, res) => {
     // Hash the password before saving
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(password, salt);
+    
+    // Log the user object before saving for debugging
+    console.log('User object before saving:', JSON.stringify(user, null, 2));
+    
     await user.save();
 
     // Send email with credentials

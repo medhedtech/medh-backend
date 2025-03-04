@@ -172,16 +172,19 @@ const createCourse = async (req, res) => {
 // Get all courses
 const getAllCourses = async (req, res) => {
   try {
-    const courses = await Course.find();
+    // Use lean() for better performance when you don't need Mongoose document methods
+    const courses = await Course.find().lean();
+    
     res.status(200).json({
       success: true,
+      count: courses.length,
       data: courses
     });
   } catch (error) {
     res.status(500).json({ 
       success: false,
       message: "Error fetching courses", 
-      error 
+      error: error.message || "An unexpected error occurred"
     });
   }
 };
@@ -198,83 +201,114 @@ const getAllCoursesWithLimits = async (req, res) => {
       course_category,
       status,
       isFree,
-      search, // Added search query
+      search,
       category,
       exclude,
+      sort_by = "createdAt",
+      sort_order = "desc",
     } = req.query;
 
+    // Parse and validate pagination parameters
     page = parseInt(page);
     limit = parseInt(limit);
 
-    if (page < 1 || limit < 1) {
+    if (isNaN(page) || page < 1 || isNaN(limit) || limit < 1) {
       return res
         .status(400)
-        .json({ message: "Page and limit must be positive numbers." });
+        .json({ 
+          success: false,
+          message: "Invalid pagination parameters. Page and limit must be positive numbers."
+        });
     }
 
     // Create a dynamic filter object
     const filter = {};
 
+    // Add text-based filters with case-insensitive search
     if (course_title) {
-      filter.course_title = { $regex: course_title, $options: "i" }; // Case-insensitive regex
+      filter.course_title = { $regex: course_title, $options: "i" };
     }
     if (course_tag) {
-      filter.course_tag = { $regex: course_tag, $options: "i" }; // Case-insensitive regex
+      filter.course_tag = { $regex: course_tag, $options: "i" };
     }
     if (course_grade) {
       filter.course_grade = { $regex: course_grade, $options: "i" };
     }
     if (category) {
-      filter.category = { $in: category.split(",") }; // Case-insensitive regex
+      filter.category = { $in: category.split(",") };
     }
-    // $regex: category, $options: "i"
+    
+    // Handle course_category (single string or array)
     if (course_category) {
-      // Convert course_category to an array if it's not already
       const categories = Array.isArray(course_category)
         ? course_category
         : [course_category];
-      filter.course_category = { $in: categories }; // Matches any category in the array
+      filter.course_category = { $in: categories };
     }
+    
+    // Add boolean filters
     if (status) {
       filter.status = status;
     }
-    if (isFree) {
-      filter.isFree = isFree;
+    if (isFree !== undefined) {
+      // Convert string 'true'/'false' to boolean if needed
+      filter.isFree = isFree === 'true' ? true : 
+                      isFree === 'false' ? false : 
+                      Boolean(isFree);
     }
 
-    // Add a dynamic search filter if the search query is provided
+    // Add full-text search across multiple fields
     if (search) {
       filter.$or = [
         { course_title: { $regex: search, $options: "i" } },
         { course_tag: { $regex: search, $options: "i" } },
         { course_category: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { instructor: { $regex: search, $options: "i" } },
+        { "course_description.program_overview": { $regex: search, $options: "i" } },
+        { "course_description.benefits": { $regex: search, $options: "i" } },
         { course_grade: { $regex: search, $options: "i" } },
       ];
     }
-    console.log(exclude, "asdsad");
-    if (exclude) {
-      filter._id = { $ne: exclude };
-    }
-    console.log(filter, "sadasdasdasdasd");
-    console.log(category, "dksjhgafsdcavbn");
 
+    // Handle exclusion of specific course IDs
+    if (exclude) {
+      filter._id = { $ne: mongoose.Types.ObjectId.isValid(exclude) ? new mongoose.Types.ObjectId(exclude) : exclude };
+    }
+
+    // Handle sorting
+    const sortOptions = {};
+    sortOptions[sort_by] = sort_order === "asc" ? 1 : -1;
+
+    // Execute query with pagination and sorting
     const courses = await Course.find(filter)
       .skip((page - 1) * limit)
       .limit(limit)
-      .sort({ createdAt: -1 });
+      .sort(sortOptions)
+      .lean(); // Use lean() for better performance when you don't need Mongoose document instances
 
+    // Get total count for pagination
     const totalCourses = await Course.countDocuments(filter);
+    const totalPages = Math.ceil(totalCourses / limit);
 
+    // Return standardized successful response
     res.status(200).json({
+      success: true,
       courses,
-      totalCourses,
-      totalPages: Math.ceil(totalCourses / limit),
-      currentPage: page,
+      pagination: {
+        totalCourses,
+        totalPages,
+        currentPage: page,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
     });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching courses", error });
+    // Return standardized error response
+    res.status(500).json({ 
+      success: false,
+      message: "Error fetching courses", 
+      error: error.message || "An unexpected error occurred"
+    });
   }
 };
 
@@ -285,22 +319,37 @@ const getNewCoursesWithLimits = async (req, res) => {
       limit = 10,
       course_tag,
       status,
-      search, //
+      search,
       user_id,
+      sort_by = "createdAt",
+      sort_order = "desc",
     } = req.query;
 
+    // Parse and validate pagination parameters
     page = parseInt(page);
     limit = parseInt(limit);
 
-    if (page < 1 || limit < 1) {
+    if (isNaN(page) || page < 1 || isNaN(limit) || limit < 1) {
       return res
         .status(400)
-        .json({ message: "Page and limit must be positive numbers." });
+        .json({ 
+          success: false,
+          message: "Invalid pagination parameters. Page and limit must be positive numbers."
+        });
+    }
+
+    // Validate user_id if provided
+    if (user_id && !mongoose.Types.ObjectId.isValid(user_id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user ID format"
+      });
     }
 
     // Create a dynamic filter object
     const filter = {};
 
+    // Add filters
     if (course_tag) {
       filter.course_tag = { $regex: course_tag, $options: "i" };
     }
@@ -308,45 +357,66 @@ const getNewCoursesWithLimits = async (req, res) => {
       filter.status = status;
     }
 
-    // Add a dynamic search filter if the search query is provided
+    // Add full-text search across multiple fields
     if (search) {
       filter.$or = [
         { course_title: { $regex: search, $options: "i" } },
         { course_tag: { $regex: search, $options: "i" } },
         { course_category: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-        { instructor: { $regex: search, $options: "i" } },
+        { "course_description.program_overview": { $regex: search, $options: "i" } },
+        { "course_description.benefits": { $regex: search, $options: "i" } },
         { course_grade: { $regex: search, $options: "i" } },
       ];
     }
 
-    const enrolledCourses = await EnrolledCourse.find({
-      student_id: user_id,
-    });
+    // If user_id is provided, exclude courses the user is already enrolled in
+    if (user_id) {
+      const enrolledCourses = await EnrolledCourse.find({
+        student_id: user_id,
+      }, "course_id");
 
-    const enrolledCourseIds = enrolledCourses.map(
-      (enrolledCourse) => enrolledCourse.course_id
-    );
-    if (enrolledCourseIds.length) {
-      filter._id = { $nin: enrolledCourseIds };
+      const enrolledCourseIds = enrolledCourses.map(
+        (enrolledCourse) => enrolledCourse.course_id
+      );
+      
+      if (enrolledCourseIds.length) {
+        filter._id = { $nin: enrolledCourseIds };
+      }
     }
 
+    // Handle sorting
+    const sortOptions = {};
+    sortOptions[sort_by] = sort_order === "asc" ? 1 : -1;
+
+    // Execute query with pagination and sorting
     const courses = await Course.find(filter)
       .skip((page - 1) * limit)
       .limit(limit)
-      .sort({ createdAt: -1 });
+      .sort(sortOptions)
+      .lean();
 
+    // Get total count for pagination
     const totalCourses = await Course.countDocuments(filter);
+    const totalPages = Math.ceil(totalCourses / limit);
 
     res.status(200).json({
+      success: true,
       courses,
-      totalCourses,
-      totalPages: Math.ceil(totalCourses / limit),
-      currentPage: page,
+      pagination: {
+        totalCourses,
+        totalPages,
+        currentPage: page,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1
+      }
     });
   } catch (error) {
-    console.log("error:", error);
-    res.status(500).json({ message: "Error fetching courses", error });
+    res.status(500).json({ 
+      success: false,
+      message: "Error fetching courses", 
+      error: error.message || "An unexpected error occurred"
+    });
   }
 };
 
@@ -355,14 +425,35 @@ const getCourseById = async (req, res) => {
   try {
     const { id } = req.params;
     const { studentId } = req.query;
-    console.log("studentId", studentId);
-    const course = await Course.aggregate([
+    
+    // Validate course ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid course ID format"
+      });
+    }
+    
+    // Validate student ID if provided
+    if (studentId && !mongoose.Types.ObjectId.isValid(studentId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid student ID format"
+      });
+    }
+    
+    // Use aggregation to look up enrollment information if studentId is provided
+    const aggregationPipeline = [
       {
         $match: {
           _id: new mongoose.Types.ObjectId(id),
         },
-      },
-      {
+      }
+    ];
+    
+    // Only add the lookup stage if studentId is provided
+    if (studentId) {
+      aggregationPipeline.push({
         $lookup: {
           from: "enrolledmodules",
           let: { course_id: "$_id" },
@@ -378,31 +469,66 @@ const getCourseById = async (req, res) => {
           ],
           as: "enrolled_module",
         },
-      },
-    ]);
+      });
+    }
+    
+    const course = await Course.aggregate(aggregationPipeline);
 
     if (!course.length) {
-      return res.status(404).json({ message: "Course not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
     }
-    res.status(200).json(course[0]);
+    
+    res.status(200).json({
+      success: true,
+      data: course[0]
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching course", error });
+    console.error("Error in getCourseById:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course", 
+      error: error.message || "An unexpected error occurred"
+    });
   }
 };
 
-// Get course by ID
+// Get course by ID for corporate users
 const getCoorporateCourseById = async (req, res) => {
   try {
     const { id } = req.params;
     const { coorporateId } = req.query;
-    console.log("coorporateId", coorporateId, id);
-    const course = await Course.aggregate([
+    
+    // Validate course ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid course ID format"
+      });
+    }
+    
+    // Validate corporate ID if provided
+    if (coorporateId && !mongoose.Types.ObjectId.isValid(coorporateId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid corporate ID format"
+      });
+    }
+    
+    // Use aggregation to look up enrollment information if coorporateId is provided
+    const aggregationPipeline = [
       {
         $match: {
           _id: new mongoose.Types.ObjectId(id),
         },
-      },
-      {
+      }
+    ];
+    
+    // Only add the lookup stage if coorporateId is provided
+    if (coorporateId) {
+      aggregationPipeline.push({
         $lookup: {
           from: "coorporateenrolledmodules",
           let: { course_id: "$_id" },
@@ -418,16 +544,29 @@ const getCoorporateCourseById = async (req, res) => {
           ],
           as: "enrolled_module",
         },
-      },
-    ]);
+      });
+    }
+    
+    const course = await Course.aggregate(aggregationPipeline);
 
     if (!course.length) {
-      return res.status(404).json({ message: "Course not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
     }
-    res.status(200).json(course[0]);
+    
+    res.status(200).json({
+      success: true,
+      data: course[0]
+    });
   } catch (error) {
-    console.log("error:", error);
-    res.status(500).json({ message: "Error fetching course", error });
+    console.error("Error in getCoorporateCourseById:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course", 
+      error: error.message || "An unexpected error occurred"
+    });
   }
 };
 
@@ -605,13 +744,39 @@ const deleteCourse = async (req, res) => {
 // Get all course titles
 const getCourseTitles = async (req, res) => {
   try {
-    const courseTitles = await Course.find().select("course_title");
-    if (!courseTitles.length) {
-      return res.status(404).json({ message: "No courses found" });
+    const { status } = req.query;
+    const filter = {};
+    
+    // Add status filter if provided
+    if (status) {
+      filter.status = status;
     }
-    res.status(200).json(courseTitles);
+    
+    // Query only necessary fields for better performance
+    const courseTitles = await Course.find(filter)
+      .select("_id course_title course_category")
+      .sort({ course_title: 1 })
+      .lean();
+      
+    if (!courseTitles.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No courses found",
+        data: []
+      });
+    }
+    
+    res.status(200).json({
+      success: true,
+      count: courseTitles.length,
+      data: courseTitles
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching course titles", error });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course titles", 
+      error: error.message || "An unexpected error occurred"
+    });
   }
 };
 
