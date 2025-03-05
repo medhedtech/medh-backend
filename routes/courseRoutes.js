@@ -4,8 +4,8 @@ const courseController = require("../controllers/course-controller");
 
 // Course listing and search routes
 router.get("/get", courseController.getAllCourses);
-router.get("/getLimitedCourses", courseController.getAllCoursesWithLimits);
-router.get("/getNewLimitedCourses", courseController.getNewCoursesWithLimits);
+router.get("/search", courseController.getAllCoursesWithLimits);
+router.get("/new", courseController.getNewCoursesWithLimits);
 router.get("/course-names", courseController.getCourseTitles);
 router.post("/related-courses", courseController.getAllRelatedCourses);
 

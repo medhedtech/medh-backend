@@ -416,6 +416,29 @@ const courseSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Add text index for better search performance
+courseSchema.index({
+  course_title: 'text',
+  course_category: 'text',
+  'course_description.program_overview': 'text',
+  'course_description.benefits': 'text',
+  course_tag: 'text'
+}, {
+  weights: {
+    course_title: 10,
+    course_category: 5,
+    'course_description.program_overview': 3,
+    'course_description.benefits': 2,
+    course_tag: 1
+  },
+  name: "CourseSearchIndex"
+});
+
+// Add compound indexes for common filter combinations
+courseSchema.index({ category_type: 1, status: 1, course_fee: 1 });
+courseSchema.index({ course_category: 1, isFree: 1 });
+courseSchema.index({ createdAt: -1 });
+
 // Automatically generate a unique key before saving the document
 courseSchema.pre("save", function (next) {
   if (!this.unique_key) {

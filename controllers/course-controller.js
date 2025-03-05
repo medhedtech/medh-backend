@@ -195,17 +195,20 @@ const getAllCoursesWithLimits = async (req, res) => {
     let {
       page = 1,
       limit = 10,
-      course_title,
-      course_tag,
-      course_grade,
-      course_category,
-      status,
-      isFree,
       search,
-      category,
-      exclude,
+      course_category,
+      category_type,
+      status,
+      price_range,
       sort_by = "createdAt",
       sort_order = "desc",
+      min_duration,
+      max_duration,
+      certification = "",
+      has_assignments = "",
+      has_projects = "",
+      has_quizzes = "",
+      exclude_ids = [],
     } = req.query;
 
     // Parse and validate pagination parameters
@@ -213,83 +216,140 @@ const getAllCoursesWithLimits = async (req, res) => {
     limit = parseInt(limit);
 
     if (isNaN(page) || page < 1 || isNaN(limit) || limit < 1) {
-      return res
-        .status(400)
-        .json({ 
-          success: false,
-          message: "Invalid pagination parameters. Page and limit must be positive numbers."
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid pagination parameters. Page and limit must be positive numbers."
+      });
     }
 
-    // Create a dynamic filter object
+    // Build the filter object
     const filter = {};
+    const textSearchFields = {};
 
-    // Add text-based filters with case-insensitive search
-    if (course_title) {
-      filter.course_title = { $regex: course_title, $options: "i" };
+    // Text search handling
+    if (search) {
+      filter.$text = { $search: search };
+      textSearchFields.score = { $meta: "textScore" };
     }
-    if (course_tag) {
-      filter.course_tag = { $regex: course_tag, $options: "i" };
-    }
-    if (course_grade) {
-      filter.course_grade = { $regex: course_grade, $options: "i" };
-    }
-    if (category) {
-      filter.category = { $in: category.split(",") };
-    }
-    
-    // Handle course_category (single string or array)
+
+    // Category filter
     if (course_category) {
-      const categories = Array.isArray(course_category)
-        ? course_category
-        : [course_category];
-      filter.course_category = { $in: categories };
+      filter.course_category = Array.isArray(course_category) 
+        ? { $in: course_category }
+        : course_category;
     }
-    
-    // Add boolean filters
+
+    // Category type filter
+    if (category_type) {
+      filter.category_type = Array.isArray(category_type)
+        ? { $in: category_type }
+        : category_type;
+    }
+
+    // Status filter
     if (status) {
       filter.status = status;
     }
-    if (isFree !== undefined) {
-      // Convert string 'true'/'false' to boolean if needed
-      filter.isFree = isFree === 'true' ? true : 
-                      isFree === 'false' ? false : 
-                      Boolean(isFree);
+
+    // Price range filter
+    if (price_range) {
+      const [min, max] = price_range.split('-').map(Number);
+      if (!isNaN(min) && !isNaN(max)) {
+        filter.course_fee = { $gte: min, $lte: max };
+      }
     }
 
-    // Add full-text search across multiple fields
-    if (search) {
-      filter.$or = [
-        { course_title: { $regex: search, $options: "i" } },
-        { course_tag: { $regex: search, $options: "i" } },
-        { course_category: { $regex: search, $options: "i" } },
-        { "course_description.program_overview": { $regex: search, $options: "i" } },
-        { "course_description.benefits": { $regex: search, $options: "i" } },
-        { course_grade: { $regex: search, $options: "i" } },
-      ];
+    // Duration filter
+    if (min_duration || max_duration) {
+      filter.course_duration = {};
+      if (min_duration) filter.course_duration.$gte = parseInt(min_duration);
+      if (max_duration) filter.course_duration.$lte = parseInt(max_duration);
     }
 
-    // Handle exclusion of specific course IDs
-    if (exclude) {
-      filter._id = { $ne: mongoose.Types.ObjectId.isValid(exclude) ? new mongoose.Types.ObjectId(exclude) : exclude };
+    // Feature filters
+    if (certification) filter.is_Certification = certification;
+    if (has_assignments) filter.is_Assignments = has_assignments;
+    if (has_projects) filter.is_Projects = has_projects;
+    if (has_quizzes) filter.is_Quizes = has_quizzes;
+
+    // Exclude specific course IDs
+    if (exclude_ids && exclude_ids.length > 0) {
+      const validIds = exclude_ids
+        .filter(id => mongoose.Types.ObjectId.isValid(id))
+        .map(id => new mongoose.Types.ObjectId(id));
+      if (validIds.length > 0) {
+        filter._id = { $nin: validIds };
+      }
     }
 
-    // Handle sorting
+    // Build sort options
     const sortOptions = {};
-    sortOptions[sort_by] = sort_order === "asc" ? 1 : -1;
+    if (search && sort_by === "relevance") {
+      sortOptions.score = { $meta: "textScore" };
+    } else {
+      sortOptions[sort_by] = sort_order === "asc" ? 1 : -1;
+    }
 
-    // Execute query with pagination and sorting
-    const courses = await Course.find(filter)
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .sort(sortOptions)
-      .lean(); // Use lean() for better performance when you don't need Mongoose document instances
+    // Execute the query with aggregation pipeline
+    const aggregationPipeline = [
+      { $match: filter },
+      {
+        $addFields: {
+          ...textSearchFields,
+          pricing_summary: {
+            min_price: { $min: "$prices.individual" },
+            max_price: { $max: "$prices.batch" }
+          }
+        }
+      },
+      { $sort: sortOptions },
+      { $skip: (page - 1) * limit },
+      { $limit: limit }
+    ];
 
-    // Get total count for pagination
-    const totalCourses = await Course.countDocuments(filter);
+    const [courses, totalCourses] = await Promise.all([
+      Course.aggregate(aggregationPipeline),
+      Course.countDocuments(filter)
+    ]);
+
+    // Calculate facets for filtering
+    const facets = await Course.aggregate([
+      { $match: filter },
+      {
+        $facet: {
+          categories: [
+            { $group: { _id: "$course_category", count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+          ],
+          categoryTypes: [
+            { $group: { _id: "$category_type", count: { $sum: 1 } } },
+            { $sort: { count: -1 } }
+          ],
+          priceRanges: [
+            {
+              $group: {
+                _id: {
+                  $switch: {
+                    branches: [
+                      { case: { $eq: ["$course_fee", 0] }, then: "Free" },
+                      { case: { $lte: ["$course_fee", 1000] }, then: "0-1000" },
+                      { case: { $lte: ["$course_fee", 5000] }, then: "1001-5000" },
+                      { case: { $lte: ["$course_fee", 10000] }, then: "5001-10000" }
+                    ],
+                    default: "10000+"
+                  }
+                },
+                count: { $sum: 1 }
+              }
+            },
+            { $sort: { "_id": 1 } }
+          ]
+        }
+      }
+    ]);
+
     const totalPages = Math.ceil(totalCourses / limit);
 
-    // Return standardized successful response
     res.status(200).json({
       success: true,
       courses,
@@ -300,13 +360,27 @@ const getAllCoursesWithLimits = async (req, res) => {
         limit,
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1
+      },
+      facets: facets[0],
+      filters: {
+        applied: {
+          search,
+          course_category,
+          category_type,
+          status,
+          price_range,
+          certification,
+          has_assignments,
+          has_projects,
+          has_quizzes
+        }
       }
     });
   } catch (error) {
-    // Return standardized error response
-    res.status(500).json({ 
+    console.error("Error in getAllCoursesWithLimits:", error);
+    res.status(500).json({
       success: false,
-      message: "Error fetching courses", 
+      message: "Error fetching courses",
       error: error.message || "An unexpected error occurred"
     });
   }
