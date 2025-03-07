@@ -1,7 +1,13 @@
 const { default: mongoose } = require("mongoose");
 const Course = require("../models/course-model");
 const EnrolledCourse = require("../models/enrolled-courses-model");
+const { validateObjectId } = require("../utils/validation-helpers");
 
+/**
+ * @desc    Create a new course
+ * @route   POST /api/courses/create
+ * @access  Private/Admin
+ */
 const createCourse = async (req, res) => {
   try {
     const {
@@ -35,15 +41,29 @@ const createCourse = async (req, res) => {
       prices,
     } = req.body;
 
-    // Validate required fields
-    if (!course_title || !course_category || !category_type) {
+    // Validate required fields with detailed error messages
+    const requiredFields = {
+      course_title,
+      course_category,
+      category_type,
+      course_image,
+      is_Certification,
+      is_Assignments,
+      is_Projects,
+      is_Quizes
+    };
+    
+    const missingFields = Object.entries(requiredFields)
+      .filter(([_, value]) => !value)
+      .map(([key]) => key);
+    
+    if (missingFields.length > 0) {
       return res.status(400).json({
         message: "Missing required fields",
-        error: {
-          course_title: !course_title ? "Course title is required" : undefined,
-          course_category: !course_category ? "Course category is required" : undefined,
-          category_type: !category_type ? "Category type is required" : undefined,
-        },
+        error: missingFields.reduce((acc, field) => {
+          acc[field] = `${field.replace(/_/g, ' ')} is required`;
+          return acc;
+        }, {})
       });
     }
 
@@ -57,7 +77,9 @@ const createCourse = async (req, res) => {
 
     // Format efforts per week if not already formatted
     const formattedEffortsPerWeek = efforts_per_Week || 
-      `${min_hours_per_week} - ${max_hours_per_week} hours / week`;
+      (min_hours_per_week && max_hours_per_week) ? 
+      `${min_hours_per_week} - ${max_hours_per_week} hours / week` : 
+      undefined;
 
     // Process curriculum if provided
     const processedCurriculum = curriculum?.map(week => ({
@@ -104,6 +126,7 @@ const createCourse = async (req, res) => {
       course_category,
       category_type,
       course_title,
+      course_tag: category_type === "Free" ? "Free" : (req.body.course_tag || "Live"),
       no_of_Sessions,
       course_duration,
       session_duration,
@@ -133,7 +156,9 @@ const createCourse = async (req, res) => {
     });
 
     await newCourse.save();
+    
     res.status(201).json({ 
+      success: true,
       message: "Course created successfully", 
       newCourse,
       summary: {
@@ -162,18 +187,49 @@ const createCourse = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating course:", error);
+    
+    // Send more detailed validation errors if available
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.keys(error.errors).reduce((acc, key) => {
+        acc[key] = error.errors[key].message;
+        return acc;
+      }, {});
+      
+      return res.status(400).json({ 
+        success: false,
+        message: "Validation error creating course", 
+        error: validationErrors
+      });
+    }
+    
     res.status(500).json({ 
+      success: false,
       message: "Error creating course", 
-      error: error.errors || error 
+      error: error.message || "An unexpected error occurred" 
     });
   }
 };
 
-// Get all courses
+/**
+ * @desc    Get all courses without pagination
+ * @route   GET /api/courses/get
+ * @access  Public
+ */
 const getAllCourses = async (req, res) => {
   try {
     // Use lean() for better performance when you don't need Mongoose document methods
-    const courses = await Course.find().lean();
+    // Use projection to select only needed fields for better performance
+    const courses = await Course.find({}, {
+      course_title: 1,
+      course_category: 1,
+      course_tag: 1,
+      course_image: 1,
+      course_fee: 1,
+      isFree: 1,
+      status: 1,
+      category_type: 1,
+      createdAt: 1
+    }).lean();
     
     res.status(200).json({
       success: true,
@@ -181,6 +237,7 @@ const getAllCourses = async (req, res) => {
       data: courses
     });
   } catch (error) {
+    console.error("Error fetching all courses:", error);
     res.status(500).json({ 
       success: false,
       message: "Error fetching courses", 
@@ -189,7 +246,11 @@ const getAllCourses = async (req, res) => {
   }
 };
 
-// Get all courses
+/**
+ * @desc    Get all courses with filtering, pagination and search
+ * @route   GET /api/courses/search
+ * @access  Public
+ */
 const getAllCoursesWithLimits = async (req, res) => {
   try {
     let {
@@ -200,6 +261,8 @@ const getAllCoursesWithLimits = async (req, res) => {
       category_type,
       status,
       price_range,
+      course_tag,
+      class_type,
       sort_by = "createdAt",
       sort_order = "desc",
       min_duration,
@@ -228,22 +291,74 @@ const getAllCoursesWithLimits = async (req, res) => {
 
     // Text search handling
     if (search) {
-      filter.$text = { $search: search };
-      textSearchFields.score = { $meta: "textScore" };
+      // If using text index
+      if (search.length >= 3) {
+        filter.$text = { $search: search };
+        textSearchFields.score = { $meta: "textScore" };
+      } else {
+        // For shorter search terms, use regex on key fields
+        filter.$or = [
+          { course_title: { $regex: search, $options: "i" } },
+          { course_category: { $regex: search, $options: "i" } },
+          { course_tag: { $regex: search, $options: "i" } }
+        ];
+      }
     }
 
-    // Category filter
+    // Category filter - support array or string
     if (course_category) {
-      filter.course_category = Array.isArray(course_category) 
-        ? { $in: course_category }
-        : course_category;
+      if (Array.isArray(course_category)) {
+        filter.course_category = { $in: course_category };
+      } else if (typeof course_category === 'string') {
+        // Handle comma-separated string values
+        if (course_category.includes(',')) {
+          filter.course_category = { $in: course_category.split(',').map(c => c.trim()) };
+        } else {
+          filter.course_category = course_category;
+        }
+      }
     }
 
-    // Category type filter
+    // Category type filter - support array or string
     if (category_type) {
-      filter.category_type = Array.isArray(category_type)
-        ? { $in: category_type }
-        : category_type;
+      if (Array.isArray(category_type)) {
+        filter.category_type = { $in: category_type };
+      } else if (typeof category_type === 'string') {
+        // Handle comma-separated string values
+        if (category_type.includes(',')) {
+          filter.category_type = { $in: category_type.split(',').map(c => c.trim()) };
+        } else {
+          filter.category_type = category_type;
+        }
+      }
+    }
+
+    // Course tag filter
+    if (course_tag) {
+      if (Array.isArray(course_tag)) {
+        filter.course_tag = { $in: course_tag };
+      } else if (typeof course_tag === 'string') {
+        // Handle comma-separated string values
+        if (course_tag.includes(',')) {
+          filter.course_tag = { $in: course_tag.split(',').map(c => c.trim()) };
+        } else {
+          filter.course_tag = course_tag;
+        }
+      }
+    }
+
+    // Class type filter - Add proper handling for class_type parameter
+    if (class_type) {
+      if (Array.isArray(class_type)) {
+        filter.class_type = { $in: class_type };
+      } else if (typeof class_type === 'string') {
+        // Handle comma-separated string values
+        if (class_type.includes(',')) {
+          filter.class_type = { $in: class_type.split(',').map(c => c.trim()) };
+        } else {
+          filter.class_type = { $regex: new RegExp(class_type, 'i') };
+        }
+      }
     }
 
     // Status filter
@@ -259,24 +374,78 @@ const getAllCoursesWithLimits = async (req, res) => {
       }
     }
 
-    // Duration filter
+    // Duration filter - parse and validate values
     if (min_duration || max_duration) {
-      filter.course_duration = {};
-      if (min_duration) filter.course_duration.$gte = parseInt(min_duration);
-      if (max_duration) filter.course_duration.$lte = parseInt(max_duration);
+      // If duration is stored as a string like "10 weeks", we need to extract numbers
+      // This assumes course_duration is stored consistently
+      const durationFilterQuery = [];
+      
+      if (min_duration) {
+        const minDuration = parseInt(min_duration);
+        if (!isNaN(minDuration)) {
+          durationFilterQuery.push({ 
+            course_duration: { $regex: new RegExp(`${minDuration}.*weeks?|${minDuration}.*months?|${minDuration}.*days?`, 'i') } 
+          });
+          
+          // Also match any duration greater than the minimum
+          for (let i = minDuration + 1; i <= 52; i++) {
+            durationFilterQuery.push({ 
+              course_duration: { $regex: new RegExp(`${i}.*weeks?|${i}.*months?|${i}.*days?`, 'i') } 
+            });
+          }
+        }
+      }
+      
+      if (max_duration) {
+        const maxDuration = parseInt(max_duration);
+        if (!isNaN(maxDuration)) {
+          if (durationFilterQuery.length > 0) {
+            // Filter out durations above max
+            for (let i = maxDuration + 1; i <= 52; i++) {
+              durationFilterQuery.push({ 
+                course_duration: { $not: { $regex: new RegExp(`${i}.*weeks?|${i}.*months?|${i}.*days?`, 'i') } } 
+              });
+            }
+          } else {
+            // Create a filter for max duration only
+            for (let i = 1; i <= maxDuration; i++) {
+              durationFilterQuery.push({ 
+                course_duration: { $regex: new RegExp(`${i}.*weeks?|${i}.*months?|${i}.*days?`, 'i') } 
+              });
+            }
+          }
+        }
+      }
+      
+      if (durationFilterQuery.length > 0) {
+        filter.$and = (filter.$and || []).concat(durationFilterQuery);
+      }
     }
 
-    // Feature filters
-    if (certification) filter.is_Certification = certification;
-    if (has_assignments) filter.is_Assignments = has_assignments;
-    if (has_projects) filter.is_Projects = has_projects;
-    if (has_quizzes) filter.is_Quizes = has_quizzes;
+    // Feature filters - ensure values match the exact format in the database
+    if (certification === "Yes" || certification === "No") {
+      filter.is_Certification = certification;
+    }
+    
+    if (has_assignments === "Yes" || has_assignments === "No") {
+      filter.is_Assignments = has_assignments;
+    }
+    
+    if (has_projects === "Yes" || has_projects === "No") {
+      filter.is_Projects = has_projects;
+    }
+    
+    if (has_quizzes === "Yes" || has_quizzes === "No") {
+      filter.is_Quizes = has_quizzes;
+    }
 
     // Exclude specific course IDs
     if (exclude_ids && exclude_ids.length > 0) {
-      const validIds = exclude_ids
+      const excludeIdsArray = Array.isArray(exclude_ids) ? exclude_ids : exclude_ids.split(',');
+      const validIds = excludeIdsArray
         .filter(id => mongoose.Types.ObjectId.isValid(id))
         .map(id => new mongoose.Types.ObjectId(id));
+        
       if (validIds.length > 0) {
         filter._id = { $nin: validIds };
       }
@@ -284,11 +453,40 @@ const getAllCoursesWithLimits = async (req, res) => {
 
     // Build sort options
     const sortOptions = {};
-    if (search && sort_by === "relevance") {
+    if (search && sort_by === "relevance" && filter.$text) {
       sortOptions.score = { $meta: "textScore" };
+    } else if (sort_by === "price") {
+      sortOptions.course_fee = sort_order === "asc" ? 1 : -1;
+    } else if (sort_by === "popularity") {
+      sortOptions["meta.views"] = -1;
+      sortOptions["meta.enrollments"] = -1;
+    } else if (sort_by === "ratings") {
+      sortOptions["meta.ratings.average"] = -1;
     } else {
       sortOptions[sort_by] = sort_order === "asc" ? 1 : -1;
     }
+
+    // Determine fields to project in the response
+    const projection = {
+      course_title: 1,
+      course_category: 1,
+      course_tag: 1, 
+      course_image: 1,
+      course_fee: 1,
+      course_duration: 1,
+      isFree: 1,
+      status: 1,
+      category_type: 1,
+      is_Certification: 1,
+      is_Assignments: 1,
+      is_Projects: 1,
+      is_Quizes: 1,
+      prices: 1,
+      slug: 1,
+      meta: 1,
+      createdAt: 1,
+      ...textSearchFields
+    };
 
     // Execute the query with aggregation pipeline
     const aggregationPipeline = [
@@ -304,48 +502,95 @@ const getAllCoursesWithLimits = async (req, res) => {
       },
       { $sort: sortOptions },
       { $skip: (page - 1) * limit },
-      { $limit: limit }
+      { $limit: limit },
+      { $project: projection }
     ];
 
-    const [courses, totalCourses] = await Promise.all([
+    // Execute query with Promise.all for parallel processing
+    const [courses, totalCourses, facets] = await Promise.all([
       Course.aggregate(aggregationPipeline),
-      Course.countDocuments(filter)
-    ]);
-
-    // Calculate facets for filtering
-    const facets = await Course.aggregate([
-      { $match: filter },
-      {
-        $facet: {
-          categories: [
-            { $group: { _id: "$course_category", count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          categoryTypes: [
-            { $group: { _id: "$category_type", count: { $sum: 1 } } },
-            { $sort: { count: -1 } }
-          ],
-          priceRanges: [
-            {
-              $group: {
-                _id: {
-                  $switch: {
-                    branches: [
-                      { case: { $eq: ["$course_fee", 0] }, then: "Free" },
-                      { case: { $lte: ["$course_fee", 1000] }, then: "0-1000" },
-                      { case: { $lte: ["$course_fee", 5000] }, then: "1001-5000" },
-                      { case: { $lte: ["$course_fee", 10000] }, then: "5001-10000" }
-                    ],
-                    default: "10000+"
+      Course.countDocuments(filter),
+      Course.aggregate([
+        { $match: filter },
+        {
+          $facet: {
+            categories: [
+              { $group: { _id: "$course_category", count: { $sum: 1 } } },
+              { $sort: { count: -1 } }
+            ],
+            categoryTypes: [
+              { $group: { _id: "$category_type", count: { $sum: 1 } } },
+              { $sort: { count: -1 } }
+            ],
+            courseTags: [
+              { $group: { _id: "$course_tag", count: { $sum: 1 } } },
+              { $sort: { count: -1 } }
+            ],
+            classTypes: [
+              { $group: { _id: "$class_type", count: { $sum: 1 } } },
+              { $sort: { count: -1 } }
+            ],
+            priceRanges: [
+              {
+                $group: {
+                  _id: {
+                    $switch: {
+                      branches: [
+                        { case: { $eq: ["$course_fee", 0] }, then: "Free" },
+                        { case: { $lte: ["$course_fee", 1000] }, then: "0-1000" },
+                        { case: { $lte: ["$course_fee", 5000] }, then: "1001-5000" },
+                        { case: { $lte: ["$course_fee", 10000] }, then: "5001-10000" }
+                      ],
+                      default: "10000+"
+                    }
+                  },
+                  count: { $sum: 1 }
+                }
+              },
+              { $sort: { "_id": 1 } }
+            ],
+            features: [
+              {
+                $group: {
+                  _id: null,
+                  certification: {
+                    $push: {
+                      k: "$is_Certification",
+                      v: { $sum: 1 }
+                    }
+                  },
+                  assignments: {
+                    $push: {
+                      k: "$is_Assignments",
+                      v: { $sum: 1 }
+                    }
+                  },
+                  projects: {
+                    $push: {
+                      k: "$is_Projects",
+                      v: { $sum: 1 }
+                    }
+                  },
+                  quizzes: {
+                    $push: {
+                      k: "$is_Quizes",
+                      v: { $sum: 1 }
+                    }
                   }
-                },
-                count: { $sum: 1 }
+                }
+              },
+              {
+                $project: {
+                  certification: { $arrayToObject: "$certification" },
+                  assignments: { $arrayToObject: "$assignments" },
+                  projects: { $arrayToObject: "$projects" },
+                  quizzes: { $arrayToObject: "$quizzes" }
+                }
               }
-            },
-            { $sort: { "_id": 1 } }
-          ]
+            ]
+          }
         }
-      }
+      ])
     ]);
 
     const totalPages = Math.ceil(totalCourses / limit);
@@ -367,6 +612,8 @@ const getAllCoursesWithLimits = async (req, res) => {
           search,
           course_category,
           category_type,
+          course_tag,
+          class_type,
           status,
           price_range,
           certification,
@@ -386,6 +633,11 @@ const getAllCoursesWithLimits = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get new courses with filtering and pagination
+ * @route   GET /api/courses/new
+ * @access  Public
+ */
 const getNewCoursesWithLimits = async (req, res) => {
   try {
     let {
@@ -423,33 +675,48 @@ const getNewCoursesWithLimits = async (req, res) => {
     // Create a dynamic filter object
     const filter = {};
 
-    // Add filters
+    // Add filters using regex for partial matches with case insensitivity
     if (course_tag) {
-      filter.course_tag = { $regex: course_tag, $options: "i" };
+      if (Array.isArray(course_tag)) {
+        filter.course_tag = { $in: course_tag };
+      } else if (typeof course_tag === 'string') {
+        // Handle comma-separated string values
+        if (course_tag.includes(',')) {
+          filter.course_tag = { $in: course_tag.split(',').map(c => c.trim()) };
+        } else {
+          filter.course_tag = course_tag;
+        }
+      }
     }
+    
     if (status) {
       filter.status = status;
     }
 
     // Add full-text search across multiple fields
     if (search) {
-      filter.$or = [
-        { course_title: { $regex: search, $options: "i" } },
-        { course_tag: { $regex: search, $options: "i" } },
-        { course_category: { $regex: search, $options: "i" } },
-        { "course_description.program_overview": { $regex: search, $options: "i" } },
-        { "course_description.benefits": { $regex: search, $options: "i" } },
-        { course_grade: { $regex: search, $options: "i" } },
-      ];
+      if (search.length >= 3) {
+        filter.$text = { $search: search };
+      } else {
+        filter.$or = [
+          { course_title: { $regex: search, $options: "i" } },
+          { course_tag: { $regex: search, $options: "i" } },
+          { course_category: { $regex: search, $options: "i" } },
+          { "course_description.program_overview": { $regex: search, $options: "i" } },
+          { "course_description.benefits": { $regex: search, $options: "i" } },
+          { course_grade: { $regex: search, $options: "i" } },
+        ];
+      }
     }
 
     // If user_id is provided, exclude courses the user is already enrolled in
+    let enrolledCourseIds = [];
     if (user_id) {
       const enrolledCourses = await EnrolledCourse.find({
         student_id: user_id,
-      }, "course_id");
+      }, "course_id").lean();
 
-      const enrolledCourseIds = enrolledCourses.map(
+      enrolledCourseIds = enrolledCourses.map(
         (enrolledCourse) => enrolledCourse.course_id
       );
       
@@ -460,18 +727,72 @@ const getNewCoursesWithLimits = async (req, res) => {
 
     // Handle sorting
     const sortOptions = {};
-    sortOptions[sort_by] = sort_order === "asc" ? 1 : -1;
+    
+    if (sort_by === "relevance" && filter.$text) {
+      sortOptions.score = { $meta: "textScore" };
+    } else if (sort_by === "price") {
+      sortOptions.course_fee = sort_order === "asc" ? 1 : -1;
+    } else if (sort_by === "popularity") {
+      sortOptions["meta.views"] = -1;
+      sortOptions["meta.enrollments"] = -1;
+    } else if (sort_by === "ratings") {
+      sortOptions["meta.ratings.average"] = -1;
+    } else {
+      sortOptions[sort_by] = sort_order === "asc" ? 1 : -1;
+    }
 
-    // Execute query with pagination and sorting
-    const courses = await Course.find(filter)
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .sort(sortOptions)
-      .lean();
+    // Select only needed fields for the response
+    const projection = {
+      course_title: 1,
+      course_category: 1,
+      course_tag: 1,
+      course_image: 1,
+      course_fee: 1,
+      course_duration: 1,
+      isFree: 1,
+      status: 1,
+      category_type: 1,
+      is_Certification: 1,
+      is_Assignments: 1,
+      is_Projects: 1,
+      is_Quizes: 1,
+      prices: 1,
+      slug: 1,
+      meta: 1,
+      createdAt: 1
+    };
 
-    // Get total count for pagination
-    const totalCourses = await Course.countDocuments(filter);
+    // Add textScore projection if using text search
+    if (filter.$text) {
+      projection.score = { $meta: "textScore" };
+    }
+
+    // Execute query with Promise.all for parallel processing
+    const [courses, totalCourses] = await Promise.all([
+      Course.find(filter, projection)
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .sort(sortOptions)
+        .lean(),
+      Course.countDocuments(filter)
+    ]);
+
     const totalPages = Math.ceil(totalCourses / limit);
+
+    // Increment view count for returned courses
+    if (courses.length > 0) {
+      const bulkUpdateOps = courses.map(course => ({
+        updateOne: {
+          filter: { _id: course._id },
+          update: { $inc: { "meta.views": 1 } }
+        }
+      }));
+      
+      // Execute bulk update without waiting for completion
+      Course.bulkWrite(bulkUpdateOps).catch(err => {
+        console.error("Error updating course view counts:", err);
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -483,9 +804,19 @@ const getNewCoursesWithLimits = async (req, res) => {
         limit,
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1
+      },
+      filters: {
+        applied: {
+          search,
+          course_tag,
+          status,
+          user_id: user_id ? true : false,
+          enrolledCoursesExcluded: enrolledCourseIds.length
+        }
       }
     });
   } catch (error) {
+    console.error("Error in getNewCoursesWithLimits:", error);
     res.status(500).json({ 
       success: false,
       message: "Error fetching courses", 
