@@ -272,8 +272,47 @@ const getAllCoursesWithLimits = async (req, res) => {
       has_projects = "",
       has_quizzes = "",
       exclude_ids = [],
+      no_of_Sessions,
+      description,
+      course_grade,
+      resource_videos,
+      resource_pdfs,
+      curriculum,
+      tools_technologies,
+      min_hours_per_week,
+      max_hours_per_week,
     } = req.query;
 
+    if(min_hours_per_week){
+      filter.min_hours_per_week = min_hours_per_week;
+    }
+    
+    if(max_hours_per_week){
+      filter.max_hours_per_week = max_hours_per_week;
+    }
+
+    if(no_of_Sessions){
+      filter.no_of_Sessions = no_of_Sessions;
+    }
+    if(description){
+      filter.course_description = description;
+    }
+    if(course_grade){
+      filter.course_grade = course_grade;
+    }
+    if(resource_videos){
+      filter.resource_videos = resource_videos;
+    }
+    if(resource_pdfs){
+      filter.resource_pdfs = resource_pdfs;
+    }
+    if(curriculum){
+      filter.curriculum = curriculum;
+    }
+    if(tools_technologies){
+      filter.tools_technologies = tools_technologies;
+    }
+    
     // Parse and validate pagination parameters
     page = parseInt(page);
     limit = parseInt(limit);
@@ -485,6 +524,15 @@ const getAllCoursesWithLimits = async (req, res) => {
       slug: 1,
       meta: 1,
       createdAt: 1,
+      no_of_Sessions: 1,
+      course_description: 1,
+      course_grade: 1,
+      resource_videos: 1,
+      resource_pdfs: 1,
+      curriculum: 1,
+      tools_technologies: 1,
+      min_hours_per_week: 1,
+      max_hours_per_week: 1,
       ...textSearchFields
     };
 
