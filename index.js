@@ -8,6 +8,7 @@ const helmet = require('helmet');
 const compression = require('compression');
 const mongoSanitize = require('express-mongo-sanitize');
 const logger = require('./utils/logger');
+const mongoose = require('mongoose');
 
 // Import routes
 const router = require("./routes");

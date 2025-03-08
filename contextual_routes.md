@@ -1,59 +1,44 @@
-# Contextual Routes for MEDH Backend
+# Contextual Routes
 
-## Core Course Management Files
+## API Routes
+- **POST /api/v1/broucher/create** - Create a new brochure record and send email
+- **GET /api/v1/broucher** - Get all brochures with pagination and filtering
+- **GET /api/v1/broucher/:id** - Get a specific brochure by ID
+- **PUT /api/v1/broucher/:id** - Update a brochure
+- **DELETE /api/v1/broucher/:id** - Delete a brochure
+- **POST /api/v1/broucher/download/:courseId** - Download a brochure for a course
+- **GET /api/v1/broucher/analytics** - Get brochure download analytics
 
-### Models
-- **Course Model**: `models/course-model.js`
-  - Primary schema for course data
-  - Contains validation rules and indexes
-  - Implements pre-save hooks and utility methods
+## Course Routes
+- **POST /api/courses/create** - Create a new course
+- **GET /api/courses** - Get all courses
+- **GET /api/courses/:id** - Get course by ID
+- **PUT /api/courses/:id** - Update course
+- **DELETE /api/courses/:id** - Delete course
 
-- **Enrolled Course Model**: `models/enrolled-courses-model.js`
-  - Tracks student enrollments in courses
-  - Links students to courses with enrollment metadata
+## Brochure Routes
+- **GET /api/v1/broucher** - Get all brochures (Admin)
+- **GET /api/v1/broucher/:id** - Get specific brochure by ID (Admin)
+- **POST /api/v1/broucher/create** - Create a new brochure record and send via email
+- **POST /api/v1/broucher/download/:courseId** - Download brochure for a specific course (with user data collection & email)
+- **GET /api/v1/broucher/download/:courseId** - Get brochure URL for a specific course (simplified version)
+- **PUT /api/v1/broucher/update/:id** - Update brochure (Admin)
+- **DELETE /api/v1/broucher/delete/:id** - Delete brochure (Admin)
 
-### Controllers
-- **Course Controller**: `controllers/course-controller.js`
-  - Implements core course CRUD operations
-  - Handles course search and filtering
-  - Manages course status changes
+## Important Files
+- index.js - Main server entry point
+- routes/index.js - Main router
+- controllers/auth-controller.js - Authentication logic
+- models/user-model.js - User schema
+- middleware/auth.js - Authentication middleware
+- routes/broucherRoutes.js - Brochure routes
+- controllers/brouchers-controller.js - Brochure logic
+- models/broucker-model.js - Brochure schema
 
-### Routes
-- **Course Routes**: `routes/courseRoutes.js`
-  - Defines API endpoints for course operations
-  - Applies middleware for validation and authentication
-  - Organizes routes by access level
+## Utility Files
+- **nodemailer configuration** - Set up in brouchers-controller.js
+- **MongoDB connection** - Likely in app.js or a database configuration file
 
-### Middleware & Utilities
-- **Auth Middleware**: `middleware/auth-middleware.js`
-  - Handles JWT authentication and role-based authorization
-
-- **Validation Middleware**: `middleware/validation-middleware.js`
-  - Validates request inputs before processing
-  - Ensures data integrity and security
-
-- **Validation Helpers**: `utils/validation-helpers.js`
-  - Contains reusable validation functions
-  - Implements advanced data validation logic
-
-## Course API Endpoints
-
-### Public Endpoints
-- `GET /api/courses/get`: Get all courses without pagination
-- `GET /api/courses/search`: Search courses with filtering & pagination
-- `GET /api/courses/new`: Get new courses with filtering & pagination
-- `GET /api/courses/course-names`: Get course names for autocomplete
-- `POST /api/courses/related-courses`: Get related courses
-- `GET /api/courses/get/:id`: Get course by ID
-- `GET /api/courses/get-coorporate/:id`: Get corporate course by ID
-
-### Student Endpoints
-- `GET /api/courses/recorded-videos/:studentId`: Get recorded videos for a student
-
-### Admin Endpoints
-- `POST /api/courses/create`: Create a new course
-- `POST /api/courses/update/:id`: Update an existing course
-- `POST /api/courses/toggle-status/:id`: Toggle course status
-- `POST /api/courses/recorded-videos/:id`: Update recorded videos
-- `DELETE /api/courses/delete/:id`: Hard delete a course (super admin only)
-- `POST /api/courses/soft-delete/:id`: Soft delete a course 
+## Entry Points
+- **app.js or server.js** - Main application entry point
+- **routes/** - Directory containing route definitions 

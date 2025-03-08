@@ -2,6 +2,7 @@ const path = require("path");
 const Broucher = require("../models/broucker-model");
 const Course = require("../models/course-model");
 const nodemailer = require("nodemailer");
+const { validateObjectId } = require("../utils/validation-helpers");
 
 // Nodemailer Transporter Setup
 const transporter = nodemailer.createTransport({
@@ -12,23 +13,41 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+/**
+ * @desc    Create a new brochure record and send via email
+ * @route   POST /api/v1/broucher/create
+ * @access  Public
+ */
 const createBrouchers = async (req, res) => {
   try {
     const { full_name, email, phone_number, course_title } = req.body;
+
+    // Validate required fields
+    if (!full_name || !email || !phone_number || !course_title) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide all required information"
+      });
+    }
 
     // Fetch course details by course_title
     const course = await Course.findOne({ course_title }).populate(
       "course_videos",
       "brouchers"
-    ); // Populate related fields if needed
+    );
+    
     if (!course) {
-      return res.status(404).json({ message: "Course not found!" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Course not found!" 
+      });
     }
 
     // Validate brochures for the course
     if (!course.brochures || course.brochures.length === 0) {
       return res.status(404).json({
-        message: `No brochures available for the course "${course_title}"`,
+        success: false,
+        message: `No brochures available for the course "${course_title}"`
       });
     }
 
@@ -37,12 +56,14 @@ const createBrouchers = async (req, res) => {
       full_name,
       email,
       phone_number,
-      //   brochures,
+      course: course._id,
+      course_title,
+      selected_brochure: course.brochures[0]
     });
 
     await newBroucher.save();
 
-    const attachements = course.brochures.map((b) => {
+    const attachments = course.brochures.map((b) => {
       return {
         filename: `${course_title}-brochure.pdf`,
         path: b,
@@ -55,7 +76,7 @@ const createBrouchers = async (req, res) => {
       to: email,
       subject: `Brochure for ${course_title}`,
       text: `Hello ${full_name},\n\nThank you for your interest in our course "${course_title}". Please find the brochure attached.\n\nCourse Details:\nTitle: ${course.course_title}\nCategory: ${course.course_category}\nDuration: ${course.course_duration}\nFee: $${course.course_fee}\n\nBest regards,\nYour Team`,
-      attachments: attachements,
+      attachments: attachments,
     };
 
     // Send the email with the brochure
@@ -64,60 +85,174 @@ const createBrouchers = async (req, res) => {
         console.error("Error sending email:", err);
         return res
           .status(500)
-          .json({ message: "Error sending email", error: err.message });
+          .json({ 
+            success: false,
+            message: "Error sending email", 
+            error: err.message 
+          });
       }
 
       console.log("Email sent:", info.response);
       res.status(201).json({
+        success: true,
         message: "Brochure created and email sent successfully",
-        newBroucher,
+        data: newBroucher
       });
     });
   } catch (error) {
     console.error("Error in createBroucher:", error);
-    res.status(500).json({ message: "Error creating brochure", error });
+    res.status(500).json({ 
+      success: false,
+      message: "Error creating brochure", 
+      error: error.message 
+    });
   }
 };
 
-// Get all brochures
+/**
+ * @desc    Get all brochures
+ * @route   GET /api/v1/broucher
+ * @access  Private/Admin
+ */
 const getAllBrouchers = async (req, res) => {
   try {
-    const brouchers = await Broucher.find();
+    // Add pagination support
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    
+    // Add filtering options similar to course controller
+    const filter = {};
+    const { email, course_title, date_from, date_to } = req.query;
+    
+    if (email) {
+      filter.email = { $regex: email, $options: 'i' };
+    }
+    
+    if (course_title) {
+      filter.course_title = { $regex: course_title, $options: 'i' };
+    }
+    
+    if (date_from || date_to) {
+      filter.createdAt = {};
+      if (date_from) {
+        filter.createdAt.$gte = new Date(date_from);
+      }
+      if (date_to) {
+        filter.createdAt.$lte = new Date(date_to);
+      }
+    }
+
+    const brouchers = await Broucher.find(filter)
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 });
+      
+    const totalBrouchers = await Broucher.countDocuments(filter);
+    
     res.status(200).json({
+      success: true,
       message: "Brochures fetched successfully",
-      brouchers,
-      totalBrouchers: brouchers.length,
+      data: {
+        brouchers,
+        totalBrouchers,
+        totalPages: Math.ceil(totalBrouchers / limit),
+        currentPage: page
+      }
     });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching brochures", error });
+    console.error("Error fetching brochures:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Error fetching brochures", 
+      error: error.message 
+    });
   }
 };
 
-// Get brochure by ID
+/**
+ * @desc    Get brochure by ID
+ * @route   GET /api/v1/broucher/:id
+ * @access  Private/Admin
+ */
 const getBroucherById = async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Validate ID format
+    if (!validateObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid brochure ID format"
+      });
+    }
+    
     const broucher = await Broucher.findById(id);
 
     if (!broucher) {
-      return res.status(404).json({ message: "Brochure not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Brochure not found" 
+      });
     }
 
-    res.status(200).json(broucher);
+    res.status(200).json({
+      success: true,
+      data: broucher
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching brochure", error });
+    console.error("Error fetching brochure:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Error fetching brochure", 
+      error: error.message 
+    });
   }
 };
 
-// Update brochure by ID
+/**
+ * @desc    Update brochure by ID
+ * @route   PUT /api/v1/broucher/:id
+ * @access  Private/Admin
+ */
 const updateBroucher = async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Validate ID format
+    if (!validateObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid brochure ID format"
+      });
+    }
+    
     const { full_name, email, phone_number, course_title } = req.body;
 
-    const course = await Course.findOne({ course_title });
-    if (!course) {
-      return res.status(404).json({ message: "Course not found!" });
+    // Validate required fields
+    if (!full_name || !email || !phone_number) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide all required information"
+      });
+    }
+
+    // If course title provided, verify course exists
+    let courseData = {};
+    if (course_title) {
+      const course = await Course.findOne({ course_title });
+      if (!course) {
+        return res.status(404).json({ 
+          success: false,
+          message: "Course not found!" 
+        });
+      }
+      
+      courseData = {
+        course: course._id,
+        course_title,
+        selected_brochure: course.brochures && course.brochures.length > 0 ? course.brochures[0] : null
+      };
     }
 
     const updatedBroucher = await Broucher.findByIdAndUpdate(
@@ -126,43 +261,84 @@ const updateBroucher = async (req, res) => {
         full_name,
         email,
         phone_number,
-        brochures: course.brochures[0],
+        ...courseData
       },
       { new: true, runValidators: true }
     );
 
     if (!updatedBroucher) {
-      return res.status(404).json({ message: "Brochure not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Brochure not found" 
+      });
     }
 
-    res.status(200).json(updatedBroucher);
+    res.status(200).json({
+      success: true,
+      message: "Brochure updated successfully",
+      data: updatedBroucher
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error updating brochure", error });
+    console.error("Error updating brochure:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Error updating brochure", 
+      error: error.message 
+    });
   }
 };
 
-// Delete brochure by ID
+/**
+ * @desc    Delete brochure by ID
+ * @route   DELETE /api/v1/broucher/:id
+ * @access  Private/Admin
+ */
 const deleteBroucher = async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Validate ID format
+    if (!validateObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid brochure ID format"
+      });
+    }
+    
     const deletedBroucher = await Broucher.findByIdAndDelete(id);
     if (!deletedBroucher) {
-      return res.status(404).json({ message: "Brochure not found" });
+      return res.status(404).json({ 
+        success: false,
+        message: "Brochure not found" 
+      });
     }
 
-    res.status(200).json({ message: "Brochure deleted successfully" });
+    res.status(200).json({ 
+      success: true,
+      message: "Brochure deleted successfully" 
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error deleting brochure", error });
+    console.error("Error deleting brochure:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Error deleting brochure", 
+      error: error.message 
+    });
   }
 };
 
-// Download brochure for a specific course
+/**
+ * @desc    Download brochure for a specific course
+ * @route   POST /api/v1/broucher/download/:courseId
+ * @route   GET /api/v1/broucher/download/:courseId
+ * @access  Public
+ */
 const downloadBrochure = async (req, res) => {
   try {
     const { courseId } = req.params;
 
     // Validate courseId format
-    if (!courseId || !courseId.match(/^[0-9a-fA-F]{24}$/)) {
+    if (!validateObjectId(courseId)) {
       return res.status(400).json({ 
         success: false,
         message: "Please select a valid course" 
@@ -186,6 +362,23 @@ const downloadBrochure = async (req, res) => {
       });
     }
 
+    // For GET requests, only record minimal information - no email sent
+    if (req.method === 'GET') {
+      // Get the first brochure URL
+      const brochureUrl = course.brochures[0];
+      
+      // Return success response with download URL
+      return res.status(200).json({
+        success: true,
+        message: "Brochure download link generated successfully",
+        data: {
+          brochureUrl,
+          course_title: course.course_title
+        }
+      });
+    }
+
+    // For POST requests, continue with full functionality including email
     // Validate required fields
     const { full_name, email, phone_number } = req.body;
     if (!full_name || !email || !phone_number) {
@@ -211,7 +404,7 @@ const downloadBrochure = async (req, res) => {
     await broucherRecord.save();
 
     // Send email with brochure
-    const attachements = [{
+    const attachments = [{
       filename: `${course.course_title}-brochure.pdf`,
       path: brochureUrl
     }];
@@ -221,7 +414,7 @@ const downloadBrochure = async (req, res) => {
       to: email,
       subject: `Brochure for ${course.course_title}`,
       text: `Hello ${full_name},\n\nThank you for your interest in our course "${course.course_title}". Please find the brochure attached.\n\nCourse Details:\nTitle: ${course.course_title}\nCategory: ${course.course_category}\nDuration: ${course.course_duration}\nFee: $${course.course_fee}\n\nBest regards,\nYour Team`,
-      attachments: attachements
+      attachments: attachments
     };
 
     // Send the email with the brochure
@@ -256,11 +449,71 @@ const downloadBrochure = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get brochure download analytics
+ * @route   GET /api/v1/broucher/analytics
+ * @access  Private/Admin
+ */
+const getBroucherAnalytics = async (req, res) => {
+  try {
+    // Get counts by course
+    const courseAnalytics = await Broucher.aggregate([
+      {
+        $group: {
+          _id: "$course_title",
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { count: -1 } }
+    ]);
+
+    // Get total count
+    const totalDownloads = await Broucher.countDocuments();
+    
+    // Get counts by date (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const dailyDownloads = await Broucher.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: thirtyDaysAgo }
+        }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          count: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalDownloads,
+        courseAnalytics,
+        dailyDownloads
+      }
+    });
+    
+  } catch (error) {
+    console.error("Error getting brochure analytics:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Error fetching brochure analytics", 
+      error: error.message 
+    });
+  }
+};
+
 module.exports = {
   createBrouchers,
   getAllBrouchers,
   getBroucherById,
   updateBroucher,
   deleteBroucher,
-  downloadBrochure
+  downloadBrochure,
+  getBroucherAnalytics
 };
