@@ -7,3 +7,4 @@ app.use(trackingMiddleware.uiActivityTracker);
 
 // Add error tracking middleware after routes and other error handlers
 app.use(trackingMiddleware.errorTracker); 
+//

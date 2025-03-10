@@ -41,4 +41,9 @@
 
 ## Entry Points
 - **app.js or server.js** - Main application entry point
-- **routes/** - Directory containing route definitions 
+- **routes/** - Directory containing route definitions
+
+## Important Documentation
+- API Documentation: `/docs/api-documentation.md`
+- Base API URL: `https://api.medh.io/v1`
+- Authentication: JWT Token based 

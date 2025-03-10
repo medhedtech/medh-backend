@@ -9,3 +9,5 @@ router.post("/update/:id", blogController.updateBlog);
 router.delete("/delete/:id", blogController.deleteBlog);
 
 module.exports = router;
+
+// ex
