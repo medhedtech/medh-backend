@@ -12,7 +12,8 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
 });
-//aa
+
+/**
  * @desc    Create a new brochure record and send via email
  * @route   POST /api/v1/broucher/create
  * @access  Public
