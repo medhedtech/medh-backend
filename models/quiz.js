@@ -11,7 +11,7 @@ const questionSchema = new mongoose.Schema({
           options.every((option) => option.trim() !== "")
         );
       },
-      message: "All four options are required and cannot be empty.",
+      message: "All 4 options are required and cannot be empty.",
     },
   },
   correctAnswer: {
