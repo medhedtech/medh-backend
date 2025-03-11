@@ -33,17 +33,8 @@ const registerUser = async (req, res) => {
     phone_numbers,
     password = "",
     agree_terms,
-    role = ["student"],
-    role_description,
-    assign_department,
-    permissions,
-    age,
-    facebook_link,
-    instagram_link,
-    linkedin_link,
-    user_image,
-    admin_role,
-    meta
+    status = "Active",
+    meta = { gender: "Male", upload_resume: [] }
   } = value;
 
   try {
@@ -54,32 +45,18 @@ const registerUser = async (req, res) => {
         .json({ success: false, message: "User already exists" });
     }
 
-    let roleOverride = {};
-    if (admin_role === "admin") {
-      roleOverride = {
-        role: ["admin"],
-      };
-    }
-
-    // Create a new user instance with phone_numbers array
+    // Create user with default student role
     user = new User({
       full_name,
       email,
       phone_numbers,
       password,
       agree_terms,
-      role_description,
-      assign_department,
-      permissions,
-      age,
-      facebook_link,
-      instagram_link,
-      linkedin_link,
-      user_image,
-      admin_role,
-      role,
-      meta,
-      ...roleOverride,
+      role: ["student"],
+      status: "Active",
+      meta: meta || { gender: "Male", upload_resume: [] },
+      assign_department: [],
+      permissions: []
     });
 
     // Hash the password before saving
@@ -88,6 +65,9 @@ const registerUser = async (req, res) => {
     
     // Log the user object before saving for debugging
     console.log('User object before saving:', JSON.stringify(user, null, 2));
+    
+    // Double check role before saving to ensure it's student
+    user.role = ["student"];
     
     await user.save();
 

@@ -285,6 +285,56 @@ const getAllCoursesWithLimits = async (req, res) => {
       course_duration,
     } = req.query;
 
+    // Helper function to recursively decode URL encoded strings
+    const fullyDecodeURIComponent = (str) => {
+      try {
+        let decoded = str;
+        while (decoded.includes('%')) {
+          const prevDecoded = decoded;
+          decoded = decodeURIComponent(decoded);
+          if (prevDecoded === decoded) break; // Break if no further decoding possible
+        }
+        return decoded;
+      } catch (e) {
+        console.warn("Decoding error:", e);
+        return str;
+      }
+    };
+
+    // Helper function to handle array or string filters with support for multiple types
+    const handleArrayOrStringFilter = (field, value) => {
+      if (!value) return;
+      
+      if (Array.isArray(value)) {
+        // For arrays, handle each value with full decoding
+        const decodedValues = value.map(item => fullyDecodeURIComponent(item));
+        filter[field] = { 
+          $in: decodedValues.map(item => new RegExp('^' + escapeRegExp(item) + '$', 'i'))
+        };
+      } else if (typeof value === 'string') {
+        const decodedValue = fullyDecodeURIComponent(value);
+        
+        // Handle multiple values separated by commas or other delimiters
+        if (decodedValue.includes(',') || decodedValue.includes('|') || decodedValue.includes(';')) {
+          const separators = /[,|;]/;
+          const values = decodedValue.split(separators).map(v => v.trim()).filter(Boolean);
+          filter[field] = { 
+            $in: values.map(v => new RegExp('^' + escapeRegExp(v) + '$', 'i'))
+          };
+        } else {
+          // For single values, support both exact and partial matching
+          filter[field] = {
+            $regex: new RegExp(escapeRegExp(decodedValue), 'i')
+          };
+        }
+      }
+    };
+
+    // Helper function to escape special regex characters
+    const escapeRegExp = (string) => {
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    };
+
     // Parse and validate pagination parameters
     page = parseInt(page);
     limit = parseInt(limit);
@@ -296,43 +346,9 @@ const getAllCoursesWithLimits = async (req, res) => {
       });
     }
 
-
     // Initialize filter object
     const filter = {};
     const textSearchFields = {};
-
-    // Helper function to recursively decode URL encoded strings
-    const fullyDecodeURIComponent = (str) => {
-      try {
-        const decoded = decodeURIComponent(str);
-        return decoded.includes('%') ? fullyDecodeURIComponent(decoded) : decoded;
-      } catch (e) {
-        return str;
-      }
-    };
-
-    // Helper function to handle array or string filters
-    const handleArrayOrStringFilter = (field, value) => {
-      if (!value) return;
-      
-      if (Array.isArray(value)) {
-        // For arrays, handle each value with full decoding
-        filter[field] = { 
-          $in: value.map(item => new RegExp('^' + fullyDecodeURIComponent(item) + '$', 'i'))
-        };
-      } else if (typeof value === 'string') {
-        const decodedValue = fullyDecodeURIComponent(value);
-        if (decodedValue.includes(',')) {
-          // For comma-separated values, handle each value separately
-          filter[field] = { 
-            $in: decodedValue.split(',').map(c => new RegExp('^' + c.trim() + '$', 'i'))
-          };
-        } else {
-          // For single values, do partial matching
-          filter[field] = { $regex: new RegExp(decodedValue, 'i') };
-        }
-      }
-    };
 
     // Handle text search with full decoding
     if (search) {
@@ -342,29 +358,29 @@ const getAllCoursesWithLimits = async (req, res) => {
         textSearchFields.score = { $meta: "textScore" };
       } else {
         filter.$or = [
-          { course_title: { $regex: decodedSearch, $options: "i" } },
-          { course_category: { $regex: decodedSearch, $options: "i" } },
-          { course_tag: { $regex: decodedSearch, $options: "i" } },
-          { "course_description.program_overview": { $regex: decodedSearch, $options: "i" } },
-          { "course_description.benefits": { $regex: decodedSearch, $options: "i" } },
-          { course_grade: { $regex: decodedSearch, $options: "i" } }
+          { course_title: { $regex: new RegExp(escapeRegExp(decodedSearch), 'i') } },
+          { course_category: { $regex: new RegExp(escapeRegExp(decodedSearch), 'i') } },
+          { course_tag: { $regex: new RegExp(escapeRegExp(decodedSearch), 'i') } },
+          { "course_description.program_overview": { $regex: new RegExp(escapeRegExp(decodedSearch), 'i') } },
+          { "course_description.benefits": { $regex: new RegExp(escapeRegExp(decodedSearch), 'i') } },
+          { course_grade: { $regex: new RegExp(escapeRegExp(decodedSearch), 'i') } }
         ];
       }
     }
 
-    // Apply filters
-    if (course_duration) filter.course_duration = course_duration;
-    if (min_hours_per_week) filter.min_hours_per_week = min_hours_per_week;
-    if (max_hours_per_week) filter.max_hours_per_week = max_hours_per_week;
-    if (no_of_Sessions) filter.no_of_Sessions = no_of_Sessions;
+    // Apply filters with proper decoding
+    if (course_duration) filter.course_duration = fullyDecodeURIComponent(course_duration);
+    if (min_hours_per_week) filter.min_hours_per_week = fullyDecodeURIComponent(min_hours_per_week);
+    if (max_hours_per_week) filter.max_hours_per_week = fullyDecodeURIComponent(max_hours_per_week);
+    if (no_of_Sessions) filter.no_of_Sessions = fullyDecodeURIComponent(no_of_Sessions);
     if (description) filter.course_description = fullyDecodeURIComponent(description);
     if (course_grade) filter.course_grade = fullyDecodeURIComponent(course_grade);
-    if (resource_videos) filter.resource_videos = resource_videos;
-    if (resource_pdfs) filter.resource_pdfs = resource_pdfs;
-    if (curriculum) filter.curriculum = curriculum;
-    if (tools_technologies) filter.tools_technologies = tools_technologies;
+    if (resource_videos) filter.resource_videos = fullyDecodeURIComponent(resource_videos);
+    if (resource_pdfs) filter.resource_pdfs = fullyDecodeURIComponent(resource_pdfs);
+    if (curriculum) filter.curriculum = fullyDecodeURIComponent(curriculum);
+    if (tools_technologies) filter.tools_technologies = fullyDecodeURIComponent(tools_technologies);
 
-    // Apply all the filters
+    // Apply all the filters with support for multiple values
     handleArrayOrStringFilter('course_category', course_category);
     handleArrayOrStringFilter('category_type', category_type);
     handleArrayOrStringFilter('course_tag', course_tag);
@@ -372,10 +388,18 @@ const getAllCoursesWithLimits = async (req, res) => {
 
     // After all filters are applied, log the constructed filter for debugging
     console.log("Applied filters:", JSON.stringify(filter, null, 2));
+    console.log("Decoded course_category:", course_category ? fullyDecodeURIComponent(course_category) : null);
 
     if (status) {
-      // Make status case-insensitive as well
-      filter.status = new RegExp('^' + fullyDecodeURIComponent(status) + '$', 'i');
+      // Make status case-insensitive and handle multiple values
+      const decodedStatus = fullyDecodeURIComponent(status);
+      if (decodedStatus.includes(',')) {
+        filter.status = { 
+          $in: decodedStatus.split(',').map(s => new RegExp('^' + escapeRegExp(s.trim()) + '$', 'i'))
+        };
+      } else {
+        filter.status = new RegExp('^' + escapeRegExp(decodedStatus) + '$', 'i');
+      }
     }
 
     if (price_range) {

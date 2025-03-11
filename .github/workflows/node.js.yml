@@ -9,19 +9,33 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        node-version: [22.x]  # You can add more versions here if needed.
-        # For example: node-version: [14.x, 16.x, 18.x]
+        node-version: [22.x]  # Add more versions as needed
     steps:
     - uses: actions/checkout@v4
+    # Update cache action to v3
+    - name: Cache npm modules
+      uses: actions/cache@v3
+      with:
+        path: node_modules
+        key: ${{ runner.os }}-node-${{ matrix.node-version }}-build-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-${{ matrix.node-version }}-build-
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
+    # Install dependencies
     - run: npm ci
+    # Create .env file securely
     - name: Create .env file
-      run:  echo "${{ secrets.PROD_ENV_FILE }}" > .env
-    - run: pm2 restart all
-    # Uncomment if you need to build and run tests
-    # - run: npm run build --if-present
-    # - run: npm test
+      run: echo "${{ secrets.PROD_ENV_FILE }}" > .env
+    # Restart PM2 processes
+    - name: Restart PM2 Processes
+      run: pm2 restart all
+    # Optional: Upload artifacts if needed
+    # - name: Upload Build Artifacts
+    #   uses: actions/upload-artifact@v2
+    #   with:
+    #     name: build-artifacts
+    #     path: path/to/artifacts
