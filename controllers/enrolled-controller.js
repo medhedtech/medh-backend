@@ -8,7 +8,20 @@ const EnrolledModule = require("../models/enrolled-modules.modal");
 // Create a new enrollment
 exports.createEnrolledCourse = async (req, res) => {
   try {
-    const { student_id, course_id, expiry_date, is_self_paced } = req.body;
+    const { 
+      student_id, 
+      course_id, 
+      expiry_date, 
+      is_self_paced,
+      enrollment_type,
+      batch_size,
+      payment_status,
+      status,
+      paymentResponse,
+      currencyCode,
+      activePricing,
+      getFinalPrice
+    } = req.body;
 
     // Check if the student exists
     const student = await User.findById(student_id);
@@ -27,7 +40,24 @@ exports.createEnrolledCourse = async (req, res) => {
       student_id,
       course_id,
       is_self_paced,
+      enrollment_type,
+      batch_size: enrollment_type === 'batch' && activePricing ? activePricing.min_batch_size : 1,
+      payment_status: payment_status || 'completed',
+      enrollment_date: new Date(),
+      course_progress: 0,
+      status: status || 'active',
       ...(expiry_date && { expiry_date }),
+      ...(paymentResponse && {
+        payment_details: {
+          payment_id: paymentResponse.razorpay_payment_id || '',
+          payment_signature: paymentResponse.razorpay_signature || '',
+          payment_order_id: paymentResponse.razorpay_order_id || '',
+          payment_method: 'razorpay',
+          amount: typeof getFinalPrice === 'function' ? getFinalPrice() : paymentResponse.amount || 0,
+          currency: currencyCode || 'INR',
+          payment_date: new Date()
+        }
+      })
     });
 
     // Save the enrollment record
@@ -253,9 +283,11 @@ exports.getEnrollmentCountsByStudentId = async (req, res) => {
       "course_id"
     );
     const liveCoursesCount = enrollments.filter(
-      (enrollment) => enrollment.course_id.course_category === "Live Courses"
+      (enrollment) => enrollment.course_id.class_type === "Live Courses"
     ).length;
-    const selfPackedCourses = 10;
+    const selfPackedCourses = enrollments.filter(
+      (enrollment) => enrollment.course_id.class_type === "Blended Courses"
+    ).length;
 
     // Send response with both counts
     res
