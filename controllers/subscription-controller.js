@@ -519,12 +519,29 @@ const getSubscriptionsByStudentId = async (req, res) => {
       });
     }
 
-    res.status(200).json({ success: true, data: subscriptions });
+    // Transform the data to include payment information in a consistent format
+    const subscriptionsWithPaymentInfo = subscriptions.map(subscription => {
+      const subscriptionObj = subscription.toObject();
+      
+      // Add payment type for frontend to distinguish this from enrollments
+      subscriptionObj.payment_type = 'subscription';
+      
+      return subscriptionObj;
+    });
+
+    res.status(200).json({ 
+      success: true, 
+      data: subscriptionsWithPaymentInfo 
+    });
   } catch (err) {
     console.error("Error fetching subscriptions by student ID:", err.message);
     res
       .status(500)
-      .json({ success: false, message: "Server error", error: err.message });
+      .json({ 
+        success: false, 
+        message: "Server error", 
+        error: err.message 
+      });
   }
 };
 

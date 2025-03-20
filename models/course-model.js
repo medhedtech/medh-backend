@@ -285,6 +285,206 @@ const priceSchema = new mongoose.Schema({
   }
 });
 
+// Section Schema
+const sectionSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: [true, 'Section title is required'],
+    trim: true
+  },
+  description: {
+    type: String,
+    trim: true
+  },
+  order: {
+    type: Number,
+    required: [true, 'Section order is required'],
+    min: [0, 'Order cannot be negative']
+  },
+  lessons: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Lesson'
+  }]
+}, { timestamps: true });
+
+// Lesson Schema
+const lessonSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: [true, 'Lesson title is required'],
+    trim: true
+  },
+  description: {
+    type: String,
+    trim: true
+  },
+  content: {
+    type: String,
+    required: [true, 'Lesson content is required']
+  },
+  duration: {
+    type: Number, // in minutes
+    required: [true, 'Lesson duration is required'],
+    min: [0, 'Duration cannot be negative']
+  },
+  order: {
+    type: Number,
+    required: [true, 'Lesson order is required'],
+    min: [0, 'Order cannot be negative']
+  },
+  videoUrl: {
+    type: String,
+    trim: true
+  },
+  resources: [{
+    title: {
+      type: String,
+      required: [true, 'Resource title is required'],
+      trim: true
+    },
+    description: {
+      type: String,
+      trim: true
+    },
+    fileUrl: {
+      type: String,
+      required: [true, 'Resource file URL is required']
+    },
+    filename: {
+      type: String,
+      required: [true, 'Resource filename is required']
+    },
+    mimeType: {
+      type: String,
+      required: [true, 'Resource MIME type is required']
+    },
+    size: {
+      type: Number,
+      required: [true, 'Resource size is required']
+    }
+  }]
+}, { timestamps: true });
+
+// Assignment Schema
+const assignmentSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: [true, 'Assignment title is required'],
+    trim: true
+  },
+  description: {
+    type: String,
+    required: [true, 'Assignment description is required']
+  },
+  dueDate: {
+    type: Date,
+    required: [true, 'Due date is required']
+  },
+  maxScore: {
+    type: Number,
+    required: [true, 'Maximum score is required'],
+    min: [0, 'Maximum score cannot be negative']
+  },
+  instructions: {
+    type: String,
+    required: [true, 'Assignment instructions are required']
+  },
+  resources: [{
+    title: {
+      type: String,
+      required: [true, 'Resource title is required'],
+      trim: true
+    },
+    fileUrl: {
+      type: String,
+      required: [true, 'Resource file URL is required']
+    }
+  }],
+  submissions: [{
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    submission: {
+      type: String,
+      required: true
+    },
+    submittedAt: {
+      type: Date,
+      default: Date.now
+    },
+    score: {
+      type: Number,
+      min: [0, 'Score cannot be negative']
+    },
+    feedback: {
+      type: String,
+      trim: true
+    }
+  }]
+}, { timestamps: true });
+
+// Quiz Schema
+const quizSchema = new mongoose.Schema({
+  title: {
+    type: String,
+    required: [true, 'Quiz title is required'],
+    trim: true
+  },
+  description: {
+    type: String,
+    trim: true
+  },
+  duration: {
+    type: Number, // in minutes
+    required: [true, 'Quiz duration is required'],
+    min: [0, 'Duration cannot be negative']
+  },
+  questions: [{
+    question: {
+      type: String,
+      required: [true, 'Question text is required']
+    },
+    options: [{
+      type: String,
+      required: [true, 'Question options are required']
+    }],
+    correctAnswer: {
+      type: Number,
+      required: [true, 'Correct answer is required'],
+      min: [0, 'Correct answer index cannot be negative']
+    },
+    explanation: {
+      type: String,
+      trim: true
+    }
+  }],
+  submissions: [{
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
+    },
+    answers: [{
+      type: Number,
+      required: true
+    }],
+    score: {
+      type: Number,
+      required: true
+    },
+    percentage: {
+      type: Number,
+      required: true
+    },
+    submittedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }]
+}, { timestamps: true });
+
 const courseSchema = new mongoose.Schema(
   {
     course_category: {
@@ -580,7 +780,11 @@ const courseSchema = new mongoose.Schema(
         type: Date,
         default: Date.now
       }
-    }
+    },
+    sections: [sectionSchema],
+    lessons: [lessonSchema],
+    assignments: [assignmentSchema],
+    quizzes: [quizSchema]
   },
   { 
     timestamps: true,
