@@ -4,6 +4,8 @@ const Student = require("../models/student-model");
 const Course = require("../models/course-model");
 const User = require("../models/user-controller");
 const EnrolledModule = require("../models/enrolled-modules.modal");
+const { handleError } = require("../utils/errorHandler");
+const logger = require("../utils/logger");
 
 // Create a new enrollment
 exports.createEnrolledCourse = async (req, res) => {
@@ -20,23 +22,51 @@ exports.createEnrolledCourse = async (req, res) => {
       paymentResponse,
       currencyCode,
       activePricing,
-      getFinalPrice
+      getFinalPrice,
+      metadata
     } = req.body;
+
+    // Validate required fields
+    if (!student_id || !course_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Student ID and Course ID are required"
+      });
+    }
 
     // Check if the student exists
     const student = await User.findById(student_id);
     if (!student) {
-      return res.status(404).json({ message: "Student not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Student not found"
+      });
     }
 
     // Check if the course exists
     const course = await Course.findById(course_id);
     if (!course) {
-      return res.status(404).json({ message: "Course not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
     }
 
-    // Create a new enrollment (EnrolledCourse) record
-    const newEnrolledCourse = new EnrolledCourse({
+    // Check for existing enrollment
+    const existingEnrollment = await EnrolledCourse.findOne({
+      student_id,
+      course_id
+    });
+
+    if (existingEnrollment) {
+      return res.status(400).json({
+        success: false,
+        message: "Student is already enrolled in this course"
+      });
+    }
+
+    // Create enrollment data
+    const enrollmentData = {
       student_id,
       course_id,
       is_self_paced,
@@ -46,23 +76,37 @@ exports.createEnrolledCourse = async (req, res) => {
       enrollment_date: new Date(),
       course_progress: 0,
       status: status || 'active',
-      ...(expiry_date && { expiry_date }),
-      ...(paymentResponse && {
-        payment_details: {
-          payment_id: paymentResponse.razorpay_payment_id || '',
-          payment_signature: paymentResponse.razorpay_signature || '',
-          payment_order_id: paymentResponse.razorpay_order_id || '',
-          payment_method: 'razorpay',
-          amount: typeof getFinalPrice === 'function' ? getFinalPrice() : paymentResponse.amount || 0,
-          currency: currencyCode || 'INR',
-          payment_date: new Date()
-        }
-      })
-    });
+      metadata: {
+        deviceInfo: req.headers['user-agent'],
+        ipAddress: req.ip,
+        enrollmentSource: req.headers.referer || 'direct',
+        ...metadata
+      }
+    };
 
-    // Save the enrollment record
+    // Add expiry date if not self-paced
+    if (!is_self_paced && expiry_date) {
+      enrollmentData.expiry_date = expiry_date;
+    }
+
+    // Add payment details if available
+    if (paymentResponse) {
+      enrollmentData.payment_details = {
+        payment_id: paymentResponse.razorpay_payment_id || '',
+        payment_signature: paymentResponse.razorpay_signature || '',
+        payment_order_id: paymentResponse.razorpay_order_id || '',
+        payment_method: 'razorpay',
+        amount: typeof getFinalPrice === 'function' ? getFinalPrice() : paymentResponse.amount || 0,
+        currency: currencyCode || 'INR',
+        payment_date: new Date()
+      };
+    }
+
+    // Create new enrollment
+    const newEnrolledCourse = new EnrolledCourse(enrollmentData);
     await newEnrolledCourse.save();
 
+    // Create enrolled modules if course has videos
     if (course.course_videos && course.course_videos.length > 0) {
       const enrolledModules = course.course_videos.map((video_url) => ({
         student_id,
@@ -73,140 +117,223 @@ exports.createEnrolledCourse = async (req, res) => {
       await EnrolledModule.insertMany(enrolledModules);
     }
 
-    res
-      .status(201)
-      .json({ message: "Student enrolled successfully", newEnrolledCourse });
+    res.status(201).json({
+      success: true,
+      message: "Student enrolled successfully",
+      data: newEnrolledCourse
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error creating enrollment", error });
+    handleError(res, error, "Error creating enrollment");
   }
 };
 
-// Get all enrollments
+// Get all enrollments with pagination and filters
 exports.getAllEnrolledCourses = async (req, res) => {
   try {
-    const enrollments = await EnrolledCourse.find()
-      .populate("student_id")
-      .populate("course_id");
+    const {
+      page = 1,
+      limit = 10,
+      status,
+      payment_status,
+      enrollment_type,
+      search
+    } = req.query;
 
-    res.status(200).json(enrollments);
+    const query = {};
+    
+    // Apply filters
+    if (status) query.status = status;
+    if (payment_status) query.payment_status = payment_status;
+    if (enrollment_type) query.enrollment_type = enrollment_type;
+    if (search) {
+      query.$or = [
+        { 'student_id.name': { $regex: search, $options: 'i' } },
+        { 'course_id.course_title': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const options = {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      sort: { enrollment_date: -1 },
+      populate: [
+        { path: "student_id", select: "name email role" },
+        { path: "course_id", select: "course_title description thumbnail" }
+      ]
+    };
+
+    const enrollments = await EnrolledCourse.paginate(query, options);
+
+    res.status(200).json({
+      success: true,
+      data: enrollments
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching enrollments", error });
+    handleError(res, error, "Error fetching enrollments");
   }
 };
 
-// Get enrollment by ID
+// Get enrollment by ID with detailed information
 exports.getEnrolledCourseById = async (req, res) => {
   try {
     const { id } = req.params;
 
     const enrollment = await EnrolledCourse.findById(id)
-      .populate("student_id")
-      .populate("course_id");
+      .populate("student_id", "name email role profile_image")
+      .populate("course_id", "course_title description thumbnail duration")
+      .populate("certificate_id")
+      .lean();
 
     if (!enrollment) {
-      return res.status(404).json({ message: "Enrollment not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found"
+      });
     }
 
-    res.status(200).json(enrollment);
+    // Add additional enrollment statistics
+    const stats = await EnrolledCourse.getEnrollmentStats(enrollment.course_id);
+    enrollment.statistics = stats;
+
+    res.status(200).json({
+      success: true,
+      data: enrollment
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching enrollment", error });
+    handleError(res, error, "Error fetching enrollment");
   }
 };
 
+// Update enrollment with validation
 exports.updateEnrolledCourse = async (req, res) => {
   try {
     const { id } = req.params;
-    const { student_id, course_id, is_completed } = req.body;
+    const updateData = req.body;
 
-    // Optional: Check if the student exists
-    const student = await Student.findById(student_id);
-    if (!student) {
-      return res.status(404).json({ message: "Student not found" });
-    }
-
-    // Optional: Check if the course exists
-    const course = await Course.findById(course_id);
-    if (!course) {
-      return res.status(404).json({ message: "Course not found" });
-    }
-
-    // Find the enrollment record
+    // Find the enrollment
     const enrollment = await EnrolledCourse.findById(id);
     if (!enrollment) {
-      return res.status(404).json({ message: "Enrollment not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found"
+      });
     }
 
-    // Update the fields
-    if (student_id) enrollment.student_id = student_id;
-    if (course_id) enrollment.course_id = course_id;
-
-    // Update completion status and set `completed_on` if completed
-    if (typeof is_completed !== "undefined") {
-      enrollment.is_completed = is_completed;
-      enrollment.completed_on = is_completed ? new Date() : null;
+    // Validate student if provided
+    if (updateData.student_id) {
+      const student = await User.findById(updateData.student_id);
+      if (!student) {
+        return res.status(404).json({
+          success: false,
+          message: "Student not found"
+        });
+      }
     }
 
-    // Save the updated record
+    // Validate course if provided
+    if (updateData.course_id) {
+      const course = await Course.findById(updateData.course_id);
+      if (!course) {
+        return res.status(404).json({
+          success: false,
+          message: "Course not found"
+        });
+      }
+    }
+
+    // Update fields
+    Object.keys(updateData).forEach(key => {
+      if (key !== 'student_id' && key !== 'course_id') {
+        enrollment[key] = updateData[key];
+      }
+    });
+
+    // Update completion status
+    if (typeof updateData.is_completed !== "undefined") {
+      enrollment.is_completed = updateData.is_completed;
+      enrollment.completed_on = updateData.is_completed ? new Date() : null;
+      if (updateData.is_completed) {
+        enrollment.status = 'completed';
+      }
+    }
+
     const updatedEnrolledCourse = await enrollment.save();
 
     res.status(200).json({
+      success: true,
       message: "Enrollment updated successfully",
-      enrollment: updatedEnrolledCourse,
+      data: updatedEnrolledCourse
     });
   } catch (error) {
-    res.status(500).json({ message: "Error updating enrollment", error });
+    handleError(res, error, "Error updating enrollment");
   }
 };
 
-// Delete enrollment by ID
+// Delete enrollment with related data cleanup
 exports.deleteEnrolledCourse = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Delete the enrollment record
-    const deletedEnrolledCourse = await EnrolledCourse.findByIdAndDelete(id);
-
-    if (!deletedEnrolledCourse) {
-      return res.status(404).json({ message: "Enrollment not found" });
+    // Find the enrollment
+    const enrollment = await EnrolledCourse.findById(id);
+    if (!enrollment) {
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found"
+      });
     }
 
-    res.status(200).json({ message: "Enrollment deleted successfully" });
+    // Delete related enrolled modules
+    await EnrolledModule.deleteMany({ enrollment_id: id });
+
+    // Delete the enrollment
+    await EnrolledCourse.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: "Enrollment deleted successfully"
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error deleting enrollment", error });
+    handleError(res, error, "Error deleting enrollment");
   }
 };
 
+// Get enrollments by student ID with detailed information
 exports.getEnrolledCourseByStudentId = async (req, res) => {
   try {
     const { student_id } = req.params;
+    const { status, includeExpired = false } = req.query;
 
-    // Fetch enrollments for the given student ID
-    const enrollments = await EnrolledCourse.find({ student_id })
-      .populate("student_id")
+    const query = { student_id };
+    if (!includeExpired) {
+      query.status = { $ne: 'expired' };
+    }
+    if (status) {
+      query.status = status;
+    }
+
+    const enrollments = await EnrolledCourse.find(query)
+      .populate("student_id", "name email role profile_image")
       .populate({
         path: "course_id",
         populate: {
           path: "assigned_instructor",
           model: "AssignedInstructor",
         },
-      });
+      })
+      .sort({ enrollment_date: -1 });
 
     if (!enrollments.length) {
-      return res
-        .status(404)
-        .json({ 
-          success: false,
-          message: "No enrollments found for this student" 
-        });
+      return res.status(404).json({
+        success: false,
+        message: "No enrollments found for this student"
+      });
     }
 
-    // Transform the data to include payment information in a consistent format
+    // Transform the data
     const enrollmentsWithPaymentInfo = enrollments.map(enrollment => {
       const enrollmentObj = enrollment.toObject();
-      
-      // Add payment type for frontend to distinguish this from subscriptions
       enrollmentObj.payment_type = 'course';
-      
       return enrollmentObj;
     });
 
@@ -215,107 +342,270 @@ exports.getEnrolledCourseByStudentId = async (req, res) => {
       data: enrollmentsWithPaymentInfo
     });
   } catch (error) {
-    console.error("Error fetching enrollments:", error);
-    res
-      .status(500)
-      .json({ 
-        success: false,
-        message: "Error fetching enrollments by student ID", 
-        error: error.message 
-      });
+    handleError(res, error, "Error fetching enrollments by student ID");
   }
 };
 
+// Get enrolled students by course ID with detailed information
 exports.getEnrolledStudentsByCourseId = async (req, res) => {
   try {
     const { course_id } = req.params;
+    const { status, includeExpired = false } = req.query;
 
-    // Find enrolled courses and populate with student details
-    const studentsEnrolled = await EnrolledCourse.find({ course_id }).populate(
-      "student_id"
-    );
-
-    if (!studentsEnrolled.length) {
-      return res
-        .status(400)
-        .json({ message: "No students enrolled for this course" });
+    const query = { course_id };
+    if (!includeExpired) {
+      query.status = { $ne: 'expired' };
+    }
+    if (status) {
+      query.status = status;
     }
 
-    // Fetch only those students with the role of "student"
-    const filteredStudents = studentsEnrolled.filter(
-      (enrollment) =>
-        enrollment.student_id && enrollment.student_id.role.includes("student")
-    );
+    const studentsEnrolled = await EnrolledCourse.find(query)
+      .populate("student_id", "name email role profile_image")
+      .sort({ enrollment_date: -1 });
 
-    if (!filteredStudents.length) {
-      return res.status(400).json({
-        message: "No students with role 'student' enrolled for this course",
+    if (!studentsEnrolled.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No students enrolled for this course"
       });
     }
 
-    res.status(200).json(filteredStudents);
-  } catch (error) {
-    console.error("Error fetching enrollments: ", error);
-    res.status(500).json({
-      message: "Error fetching students enrolled by course ID",
-      error,
+    // Filter students with role "student"
+    const filteredStudents = studentsEnrolled.filter(
+      (enrollment) => enrollment.student_id && enrollment.student_id.role.includes("student")
+    );
+
+    if (!filteredStudents.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No students with role 'student' enrolled for this course"
+      });
+    }
+
+    // Get course statistics
+    const stats = await EnrolledCourse.getEnrollmentStats(course_id);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        students: filteredStudents,
+        statistics: stats
+      }
     });
+  } catch (error) {
+    handleError(res, error, "Error fetching enrolled students");
   }
 };
 
+// Mark course as completed with validation
 exports.markCourseAsCompleted = async (req, res) => {
   try {
     const { student_id, course_id } = req.body;
 
-    // Find the enrollment record
-    const enrollment = await EnrolledCourse.findOne({ student_id, course_id });
-    if (!enrollment) {
-      return res.status(404).json({ message: "Enrollment not found" });
+    if (!student_id || !course_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Student ID and Course ID are required"
+      });
     }
 
-    // Update `is_completed` and `completed_on`
+    const enrollment = await EnrolledCourse.findOne({ student_id, course_id });
+    if (!enrollment) {
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found"
+      });
+    }
+
+    // Check if course is already completed
+    if (enrollment.is_completed) {
+      return res.status(400).json({
+        success: false,
+        message: "Course is already marked as completed"
+      });
+    }
+
+    // Update completion status
     enrollment.is_completed = true;
     enrollment.completed_on = new Date();
+    enrollment.status = 'completed';
 
     await enrollment.save();
 
     res.status(200).json({
+      success: true,
       message: "Course marked as completed successfully",
-      enrollment,
+      data: enrollment
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error marking course as completed", error });
+    handleError(res, error, "Error marking course as completed");
   }
 };
 
-// In your EnrolledCourse controller
-
+/**
+ * Get enrollment counts for a student
+ */
 exports.getEnrollmentCountsByStudentId = async (req, res) => {
   try {
     const { student_id } = req.params;
-    const totalEnrollments = await EnrolledCourse.countDocuments({
-      student_id,
-    });
-    const enrollments = await EnrolledCourse.find({ student_id }).populate(
-      "course_id"
-    );
-    const liveCoursesCount = enrollments.filter(
-      (enrollment) => enrollment.course_id.class_type === "Live Courses"
-    ).length;
-    const selfPackedCourses = enrollments.filter(
-      (enrollment) => enrollment.course_id.class_type === "Blended Courses"
-    ).length;
 
-    // Send response with both counts
-    res
-      .status(200)
-      .json({ totalEnrollments, liveCoursesCount, selfPackedCourses });
+    // Validate student_id
+    if (!student_id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Student ID is required'
+      });
+    }
+
+    // Get all enrollments for the student with populated course information
+    const enrollments = await EnrolledCourse.find({ student_id })
+      .populate('course_id', 'course_title class_type description thumbnail duration');
+
+    // Calculate counts
+    const counts = {
+      total: enrollments.length,
+      active: enrollments.filter(e => e.status === 'active').length,
+      completed: enrollments.filter(e => e.status === 'completed').length,
+      pending: enrollments.filter(e => e.status === 'pending').length,
+      cancelled: enrollments.filter(e => e.status === 'cancelled').length,
+      expired: enrollments.filter(e => e.status === 'expired').length,
+      byPaymentStatus: {
+        paid: enrollments.filter(e => e.payment_status === 'paid').length,
+        pending: enrollments.filter(e => e.payment_status === 'pending').length,
+        failed: enrollments.filter(e => e.payment_status === 'failed').length,
+        refunded: enrollments.filter(e => e.payment_status === 'refunded').length
+      },
+      byEnrollmentType: {
+        individual: enrollments.filter(e => e.enrollment_type === 'individual').length,
+        batch: enrollments.filter(e => e.enrollment_type === 'batch').length,
+        corporate: enrollments.filter(e => e.enrollment_type === 'corporate').length
+      },
+      byCourseType: {
+        live: enrollments.filter(e => e.course_id?.class_type === 'Live Courses').length,
+        blended: enrollments.filter(e => e.course_id?.class_type === 'Blended Courses').length,
+        selfPaced: enrollments.filter(e => e.course_id?.class_type === 'Self Paced').length
+      }
+    };
+
+    // Calculate progress statistics
+    const progressStats = {
+      averageProgress: 0,
+      coursesInProgress: 0,
+      coursesCompleted: 0,
+      byCourseType: {
+        live: { inProgress: 0, completed: 0, averageProgress: 0 },
+        blended: { inProgress: 0, completed: 0, averageProgress: 0 },
+        selfPaced: { inProgress: 0, completed: 0, averageProgress: 0 }
+      }
+    };
+
+    if (enrollments.length > 0) {
+      // Calculate overall progress
+      const totalProgress = enrollments.reduce((sum, enrollment) => {
+        return sum + (enrollment.progress?.overall || 0);
+      }, 0);
+      progressStats.averageProgress = totalProgress / enrollments.length;
+
+      // Calculate progress by course type
+      enrollments.forEach(enrollment => {
+        const courseType = enrollment.course_id?.class_type;
+        const progress = enrollment.progress?.overall || 0;
+        
+        if (courseType) {
+          let typeKey;
+          switch (courseType) {
+            case 'Live Courses':
+              typeKey = 'live';
+              break;
+            case 'Blended Courses':
+              typeKey = 'blended';
+              break;
+            case 'Self Paced':
+              typeKey = 'selfPaced';
+              break;
+            default:
+              return; // Skip unknown course types
+          }
+
+          if (progress < 100) {
+            progressStats.byCourseType[typeKey].inProgress++;
+          } else {
+            progressStats.byCourseType[typeKey].completed++;
+          }
+          progressStats.byCourseType[typeKey].averageProgress += progress;
+        }
+      });
+
+      // Calculate averages for each course type
+      Object.keys(progressStats.byCourseType).forEach(type => {
+        const total = progressStats.byCourseType[type].inProgress + 
+                     progressStats.byCourseType[type].completed;
+        if (total > 0) {
+          progressStats.byCourseType[type].averageProgress /= total;
+        }
+      });
+
+      progressStats.coursesInProgress = enrollments.filter(e => 
+        e.status === 'active' && e.progress?.overall < 100
+      ).length;
+
+      progressStats.coursesCompleted = enrollments.filter(e => 
+        e.status === 'completed' || e.progress?.overall === 100
+      ).length;
+    }
+
+    // Get upcoming courses with detailed information
+    const upcomingCourses = enrollments
+      .filter(e => e.status === 'active' && e.expiry_date > new Date())
+      .sort((a, b) => a.expiry_date - b.expiry_date)
+      .slice(0, 5)
+      .map(e => ({
+        course_id: e.course_id._id,
+        course_title: e.course_id.course_title,
+        class_type: e.course_id.class_type,
+        thumbnail: e.course_id.thumbnail,
+        duration: e.course_id.duration,
+        expiry_date: e.expiry_date,
+        progress: e.progress?.overall || 0,
+        status: e.status
+      }));
+
+    // Get recent activity with detailed information
+    const recentActivity = enrollments
+      .sort((a, b) => b.updated_at - a.updated_at)
+      .slice(0, 5)
+      .map(e => ({
+        course_id: e.course_id._id,
+        course_title: e.course_id.course_title,
+        class_type: e.course_id.class_type,
+        thumbnail: e.course_id.thumbnail,
+        status: e.status,
+        last_activity: e.updated_at,
+        progress: e.progress?.overall || 0,
+        payment_status: e.payment_status
+      }));
+
+    // Prepare response data
+    const responseData = {
+      counts,
+      progress: progressStats,
+      upcoming_courses: upcomingCourses,
+      recent_activity: recentActivity
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: responseData
+    });
+
   } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Error fetching enrollments count", error });
+    logger.error('Error getting enrollment counts:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error getting enrollment counts',
+      error: error.message
+    });
   }
 };
 
@@ -323,122 +613,181 @@ exports.getEnrollmentCountsByStudentId = async (req, res) => {
 exports.getUpcomingMeetingsForStudent = async (req, res) => {
   try {
     const { student_id } = req.params;
+    const { limit = 10 } = req.query;
 
-    // Find all courses the student is enrolled in
-    const enrollments = await EnrolledCourse.find({ student_id }).populate(
-      "course_id"
-    );
+    // Find all active enrollments
+    const enrollments = await EnrolledCourse.find({ 
+      student_id,
+      status: 'active'
+    }).populate("course_id", "course_title");
+
     if (!enrollments.length) {
-      return res
-        .status(404)
-        .json({ message: "No enrollments found for this student" });
+      return res.status(404).json({
+        success: false,
+        message: "No active enrollments found for this student"
+      });
     }
 
-    // Extract course names from the enrollments
+    // Get enrolled course names
     const enrolledCourseNames = enrollments.map(
       (enrollment) => enrollment.course_id.course_title
     );
 
-    // Fetch upcoming meetings for these courses
+    // Fetch upcoming meetings
     const upcomingMeetings = await OnlineMeeting.find({
       course_name: { $in: enrolledCourseNames },
-      date: { $gte: new Date() },
-    }).sort({ date: 1, time: 1 });
+      date: { $gte: new Date() }
+    })
+    .sort({ date: 1, time: 1 })
+    .limit(parseInt(limit));
 
     if (!upcomingMeetings.length) {
       return res.status(404).json({
-        message: "No upcoming meetings found for the student's courses",
+        success: false,
+        message: "No upcoming meetings found for the student's courses"
       });
     }
 
-    // Respond with the list of upcoming meetings
     res.status(200).json({
-      message: "Upcoming meetings fetched successfully",
-      upcomingMeetings,
+      success: true,
+      data: upcomingMeetings
     });
   } catch (error) {
-    console.error("Error fetching upcoming meetings:", error);
-    res
-      .status(500)
-      .json({ message: "Error fetching upcoming meetings", error });
+    handleError(res, error, "Error fetching upcoming meetings");
   }
 };
 
+// Mark video as watched with progress tracking
 exports.watchVideo = async (req, res) => {
   try {
     const { id } = req.query;
+    const { student_id } = req.body;
+
+    if (!id || !student_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Video ID and Student ID are required"
+      });
+    }
+
     const enrolledModule = await EnrolledModule.findById(id);
+    if (!enrolledModule) {
+      return res.status(404).json({
+        success: false,
+        message: "Enrolled module not found"
+      });
+    }
+
+    // Verify student owns this enrollment
+    if (enrolledModule.student_id.toString() !== student_id) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized access to this video"
+      });
+    }
+
+    // Mark video as watched
     enrolledModule.is_watched = true;
     await enrolledModule.save();
+
+    // Get course and check completion
     const course = await Course.findById(enrolledModule.course_id);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    // Get all watched videos for this course
     const enrolledModules = await EnrolledModule.find({
       course_id: course._id,
-      student_id: enrolledModule.student_id,
-      is_watched: true,
+      student_id,
+      is_watched: true
     });
+
+    // Check if all videos are watched
     if (course.course_videos.length === enrolledModules.length) {
       await EnrolledCourse.findOneAndUpdate(
         {
-          is_completed: false,
           course_id: course._id,
-          student_id: enrolledModule.student_id,
+          student_id,
+          is_completed: false
         },
         {
           is_completed: true,
           completed_on: new Date(),
+          status: 'completed'
         }
       );
     }
+
     res.status(200).json({
       success: true,
-      message: "marked as watched",
+      message: "Video marked as watched successfully"
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Something went wrong",
-    });
+    handleError(res, error, "Error marking video as watched");
   }
 };
 
+// Get all students with enrolled courses
 exports.getAllStudentsWithEnrolledCourses = async (req, res) => {
   try {
-    // Fetch enrollments and populate user (student) and course details
-    const enrollments = await EnrolledCourse.find({
-      course_id: { $exists: true },
-    })
+    const { status, includeExpired = false } = req.query;
+
+    const query = { course_id: { $exists: true } };
+    if (!includeExpired) {
+      query.status = { $ne: 'expired' };
+    }
+    if (status) {
+      query.status = status;
+    }
+
+    const enrollments = await EnrolledCourse.find(query)
       .populate({
         path: "student_id",
         match: { role: "student" },
         model: "User",
+        select: "name email role profile_image"
       })
       .populate({
         path: "course_id",
         model: "Course",
-      });
+        select: "course_title description thumbnail"
+      })
+      .sort({ enrollment_date: -1 });
 
-    // Filter out enrollments where student details or course details are missing
+    // Filter out invalid enrollments
     const filteredEnrollments = enrollments.filter(
       (enrollment) => enrollment.student_id && enrollment.course_id
     );
 
-    // Check if there are any valid enrollments
     if (!filteredEnrollments.length) {
       return res.status(404).json({
-        message: "No students enrolled in courses found",
+        success: false,
+        message: "No students enrolled in courses found"
       });
     }
 
-    // Respond with the list of students and their enrolled courses
+    // Group enrollments by student
+    const studentsWithCourses = filteredEnrollments.reduce((acc, enrollment) => {
+      const studentId = enrollment.student_id._id.toString();
+      if (!acc[studentId]) {
+        acc[studentId] = {
+          student: enrollment.student_id,
+          enrollments: []
+        };
+      }
+      acc[studentId].enrollments.push(enrollment);
+      return acc;
+    }, {});
+
     res.status(200).json({
-      message: "Students with enrolled courses fetched successfully",
-      enrollments: filteredEnrollments,
+      success: true,
+      data: Object.values(studentsWithCourses)
     });
   } catch (error) {
-    console.error("Error fetching students and enrolled courses: ", error);
-    res.status(500).json({
-      message: "Error fetching students and enrolled courses",
-      error,
-    });
+    handleError(res, error, "Error fetching students with enrolled courses");
   }
 };

@@ -1,0 +1,372 @@
+{
+  "course_category": "Physics",
+  "course_title": "Quantum Mechanics: From Fundamentals to Advanced Applications",
+  "course_tag": "Pre-Recorded",
+  "no_of_Sessions": 24,
+  "course_duration": "12 weeks",
+  "session_duration": "90 minutes",
+  "course_description": {
+    "program_overview": "This comprehensive course delves into the fascinating world of quantum mechanics, from its historical foundations to modern applications. Students will explore wave-particle duality, quantum superposition, entanglement, and their applications in quantum computing and cryptography.",
+    "benefits": "By the end of this course, students will understand quantum mechanics fundamentals, be able to solve basic quantum mechanical problems, and comprehend its applications in modern technology. The course provides a strong foundation for careers in quantum computing, quantum cryptography, and advanced physics research."
+  },
+  "category": "Advanced Physics",
+  "course_fee": 299,
+  "prices": [
+    {
+      "currency": "USD",
+      "individual": 299,
+      "batch": 249,
+      "min_batch_size": 5,
+      "max_batch_size": 20,
+      "early_bird_discount": 15,
+      "group_discount": 20,
+      "is_active": true
+    },
+    {
+      "currency": "EUR",
+      "individual": 279,
+      "batch": 229,
+      "min_batch_size": 5,
+      "max_batch_size": 20,
+      "early_bird_discount": 15,
+      "group_discount": 20,
+      "is_active": true
+    }
+  ],
+  "course_videos": [
+    "https://example.com/videos/quantum-intro.mp4",
+    "https://example.com/videos/wave-particle.mp4"
+  ],
+  "brochures": [
+    "https://example.com/brochures/quantum-syllabus.pdf",
+    "https://example.com/brochures/quantum-prerequisites.pdf"
+  ],
+  "status": "Published",
+  "isFree": false,
+  "course_image": "https://example.com/images/quantum-mechanics.jpg",
+  "course_grade": "Advanced",
+  "resource_videos": [
+    "https://example.com/resources/quantum-experiments.mp4",
+    "https://example.com/resources/quantum-computing.mp4"
+  ],
+  "resource_pdfs": [
+    {
+      "title": "Quantum Mechanics Fundamentals",
+      "url": "https://example.com/pdfs/quantum-fundamentals.pdf",
+      "description": "Comprehensive guide to quantum mechanics basics",
+      "size_mb": 15.5,
+      "pages": 120,
+      "upload_date": "2024-03-15T10:00:00Z"
+    },
+    {
+      "title": "Advanced Quantum Applications",
+      "url": "https://example.com/pdfs/quantum-applications.pdf",
+      "description": "Modern applications of quantum mechanics",
+      "size_mb": 20.3,
+      "pages": 150,
+      "upload_date": "2024-03-15T10:30:00Z"
+    }
+  ],
+  "curriculum": [
+    {
+      "id": "week_1",
+      "weekTitle": "Introduction to Quantum Mechanics",
+      "weekDescription": "Historical development and basic concepts",
+      "sections": [
+        {
+          "id": "section_1_1",
+          "title": "Historical Foundations",
+          "description": "The birth and evolution of quantum mechanics",
+          "order": 1,
+          "lessons": [
+            {
+              "id": "lesson_1_1_1",
+              "title": "The Birth of Quantum Mechanics",
+              "description": "Historical development and key experiments",
+              "content": "In this foundational lesson, we explore the historical development of quantum mechanics, from Max Planck's quantum hypothesis to Werner Heisenberg's uncertainty principle. We'll examine key experiments like the photoelectric effect and the double-slit experiment that challenged classical physics.",
+              "duration": 90,
+              "order": 1,
+              "videoUrl": "https://example.com/videos/quantum-history.mp4",
+              "resources": [
+                {
+                  "id": "resource_1_1_1_1",
+                  "title": "Historical Timeline",
+                  "description": "Key events in quantum mechanics development",
+                  "fileUrl": "https://example.com/resources/timeline.pdf",
+                  "filename": "quantum-timeline.pdf",
+                  "mimeType": "application/pdf",
+                  "size": 2048576
+                }
+              ]
+            }
+          ],
+          "assignments": [
+            {
+              "id": "assignment_1_1_1",
+              "title": "Historical Analysis",
+              "description": "Analyze key historical developments in quantum mechanics",
+              "dueDate": "2024-04-15T23:59:59Z",
+              "maxScore": 100,
+              "instructions": "Research and analyze three key historical developments in quantum mechanics. Include their impact on modern physics."
+            }
+          ],
+          "quizzes": [
+            {
+              "id": "quiz_1_1_1",
+              "title": "History of Quantum Mechanics",
+              "description": "Test your understanding of quantum mechanics history",
+              "duration": 30,
+              "questions": [
+                {
+                  "id": "question_1_1_1_1",
+                  "question": "Who proposed the quantum hypothesis?",
+                  "options": ["Max Planck", "Albert Einstein", "Niels Bohr", "Werner Heisenberg"],
+                  "correctAnswer": 0,
+                  "explanation": "Max Planck proposed the quantum hypothesis in 1900."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "section_1_2",
+          "title": "Basic Concepts",
+          "description": "Fundamental principles of quantum mechanics",
+          "order": 2,
+          "lessons": [
+            {
+              "id": "lesson_1_2_1",
+              "title": "Wave-Particle Duality",
+              "description": "Understanding the dual nature of matter and light",
+              "content": "This lesson explores the concept of wave-particle duality, where particles exhibit both wave-like and particle-like behavior. We'll analyze the de Broglie hypothesis and its experimental verification through electron diffraction experiments.",
+              "duration": 90,
+              "order": 2,
+              "videoUrl": "https://example.com/videos/wave-particle.mp4",
+              "resources": [
+                {
+                  "id": "resource_1_2_1_1",
+                  "title": "Wave-Particle Duality Experiments",
+                  "description": "Interactive simulations of key experiments",
+                  "fileUrl": "https://example.com/resources/wave-particle-sim.pdf",
+                  "filename": "wave-particle-sim.pdf",
+                  "mimeType": "application/pdf",
+                  "size": 1536000
+                }
+              ]
+            }
+          ],
+          "assignments": [
+            {
+              "id": "assignment_1_2_1",
+              "title": "Wave-Particle Duality Analysis",
+              "description": "Analyze wave-particle duality experiments",
+              "dueDate": "2024-04-22T23:59:59Z",
+              "maxScore": 100,
+              "instructions": "Analyze the double-slit experiment and explain its implications for wave-particle duality."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "week_2",
+      "weekTitle": "Wave Functions and Operators",
+      "weekDescription": "Understanding quantum states and measurements",
+      "sections": [
+        {
+          "id": "section_2_1",
+          "title": "Wave Functions",
+          "description": "Understanding quantum states through wave functions",
+          "order": 1,
+          "lessons": [
+            {
+              "id": "lesson_2_1_1",
+              "title": "The Schrödinger Equation",
+              "description": "Fundamental equation of quantum mechanics",
+              "content": "We'll derive and analyze the Schrödinger equation, understanding its physical interpretation and applications. This includes solving the time-independent Schrödinger equation for simple systems like the particle in a box.",
+              "duration": 120,
+              "order": 3,
+              "videoUrl": "https://example.com/videos/schrodinger.mp4",
+              "resources": [
+                {
+                  "id": "resource_2_1_1_1",
+                  "title": "Schrödinger Equation Solutions",
+                  "description": "Step-by-step solutions to common quantum problems",
+                  "fileUrl": "https://example.com/resources/schrodinger-solutions.pdf",
+                  "filename": "schrodinger-solutions.pdf",
+                  "mimeType": "application/pdf",
+                  "size": 2560000
+                }
+              ]
+            }
+          ],
+          "assignments": [
+            {
+              "id": "assignment_2_1_1",
+              "title": "Wave Function Analysis",
+              "description": "Analyze and plot wave functions for different quantum states",
+              "dueDate": "2024-04-29T23:59:59Z",
+              "maxScore": 100,
+              "instructions": "Complete the wave function analysis and submit your findings. Include plots of the wave functions and their probability distributions."
+            }
+          ]
+        },
+        {
+          "id": "section_2_2",
+          "title": "Quantum Operators",
+          "description": "Mathematical framework of quantum mechanics",
+          "order": 2,
+          "lessons": [
+            {
+              "id": "lesson_2_2_1",
+              "title": "Quantum Operators and Observables",
+              "description": "Mathematical framework of quantum mechanics",
+              "content": "This lesson introduces the mathematical framework of quantum mechanics, including operators, observables, and their relationships. We'll explore the commutation relations and the uncertainty principle from an operator perspective.",
+              "duration": 90,
+              "order": 4,
+              "videoUrl": "https://example.com/videos/operators.mp4",
+              "resources": [
+                {
+                  "id": "resource_2_2_1_1",
+                  "title": "Quantum Operators Guide",
+                  "description": "Comprehensive guide to quantum operators",
+                  "fileUrl": "https://example.com/resources/operators-guide.pdf",
+                  "filename": "operators-guide.pdf",
+                  "mimeType": "application/pdf",
+                  "size": 2048000
+                }
+              ]
+            }
+          ],
+          "quizzes": [
+            {
+              "id": "quiz_2_2_1",
+              "title": "Quantum Operators and Measurements",
+              "description": "Test your understanding of quantum operators and measurement theory",
+              "duration": 45,
+              "questions": [
+                {
+                  "id": "question_2_2_1_1",
+                  "question": "What is the commutator of position and momentum operators?",
+                  "options": ["iℏ", "ℏ²", "0", "1"],
+                  "correctAnswer": 0,
+                  "explanation": "The canonical commutation relation [x̂, p̂] = iℏ is fundamental to quantum mechanics."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "week_3",
+      "weekTitle": "Advanced Quantum Concepts",
+      "weekDescription": "Complex quantum phenomena and applications",
+      "sections": [
+        {
+          "id": "section_3_1",
+          "title": "Quantum Phenomena",
+          "description": "Advanced concepts in quantum mechanics",
+          "order": 1,
+          "lessons": [
+            {
+              "id": "lesson_3_1_1",
+              "title": "Quantum Superposition and Entanglement",
+              "description": "Advanced quantum phenomena",
+              "content": "We'll explore the fascinating concepts of quantum superposition and entanglement, including their applications in quantum computing and quantum cryptography. This includes the EPR paradox and Bell's theorem.",
+              "duration": 120,
+              "order": 5,
+              "videoUrl": "https://example.com/videos/superposition.mp4",
+              "resources": [
+                {
+                  "id": "resource_3_1_1_1",
+                  "title": "Quantum Entanglement Experiments",
+                  "description": "Analysis of entanglement experiments and applications",
+                  "fileUrl": "https://example.com/resources/entanglement.pdf",
+                  "filename": "entanglement.pdf",
+                  "mimeType": "application/pdf",
+                  "size": 3072000
+                }
+              ]
+            }
+          ],
+          "assignments": [
+            {
+              "id": "assignment_3_1_1",
+              "title": "Quantum Computing Simulation",
+              "description": "Implement and analyze quantum algorithms",
+              "dueDate": "2024-05-06T23:59:59Z",
+              "maxScore": 100,
+              "instructions": "Using Qiskit, implement and analyze the following quantum algorithms: 1) Quantum Fourier Transform, 2) Grover's Algorithm."
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "faqs": [
+    {
+      "question": "What are the prerequisites for this course?",
+      "answer": "Students should have a strong foundation in classical mechanics, linear algebra, and differential equations. Basic knowledge of physics and mathematics is required."
+    },
+    {
+      "question": "Is this course suitable for beginners?",
+      "answer": "While some basic physics knowledge is required, the course is designed to build concepts from the ground up. However, it's recommended for students with at least an undergraduate level understanding of physics."
+    }
+  ],
+  "tools_technologies": [
+    {
+      "name": "Python",
+      "category": "programming_language",
+      "description": "For quantum computing simulations and numerical calculations",
+      "logo_url": "https://example.com/logos/python.png"
+    },
+    {
+      "name": "Qiskit",
+      "category": "framework",
+      "description": "IBM's quantum computing framework",
+      "logo_url": "https://example.com/logos/qiskit.png"
+    }
+  ],
+  "bonus_modules": [
+    {
+      "title": "Quantum Computing Applications",
+      "description": "Practical applications of quantum mechanics in computing",
+      "resources": [
+        {
+          "title": "Quantum Computing Basics",
+          "type": "video",
+          "url": "https://example.com/videos/quantum-computing.mp4",
+          "description": "Introduction to quantum computing"
+        }
+      ]
+    }
+  ],
+  "recorded_videos": [
+    "https://example.com/recorded/lecture1.mp4",
+    "https://example.com/recorded/lecture2.mp4"
+  ],
+  "efforts_per_Week": "8-10 hours / week",
+  "class_type": "Pre-Recorded",
+  "is_Certification": "Yes",
+  "is_Assignments": "Yes",
+  "is_Projects": "Yes",
+  "is_Quizes": "Yes",
+  "related_courses": [
+    "Advanced Classical Mechanics",
+    "Quantum Field Theory",
+    "Quantum Computing Fundamentals"
+  ],
+  "min_hours_per_week": 8,
+  "max_hours_per_week": 10,
+  "category_type": "Paid",
+  "meta": {
+    "views": 1500,
+    "ratings": {
+      "average": 4.8,
+      "count": 120
+    },
+    "enrollments": 85,
+    "lastUpdated": "2024-03-15T12:00:00Z"
+  }
+} 

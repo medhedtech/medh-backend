@@ -1,46 +1,52 @@
 const jwt = require('jsonwebtoken');
+const User = require('../models/user-controller');
 
 /**
- * Middleware to authenticate user based on JWT token
- * @param {object} req - Express request object
- * @param {object} res - Express response object
- * @param {function} next - Express next function
+ * Middleware to authenticate user requests
  */
-const authenticateUser = (req, res, next) => {
-  // Get token from header - check both Authorization and x-access-token
-  let token;
-  
-  // Check Authorization header
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.split(' ')[1];
-  }
-  
-  // If no token in Authorization header, check x-access-token
-  if (!token && req.headers['x-access-token']) {
-    token = req.headers['x-access-token'];
-  }
-  
-  // Check if token exists
-  if (!token) {
-    return res.status(401).json({
-      success: false,
-      message: 'Authentication failed: No token provided'
-    });
-  }
-  
+const authenticate = async (req, res, next) => {
   try {
-    // Verify token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY || 'mynewjwtsecretkeytoken');
+    // Get token from header - check both Authorization and x-access-token
+    let token;
     
-    // Add user information to request
-    // Check if user property is in the decoded object (to handle different token formats)
-    req.user = decoded.user || decoded;
-    next();
+    // Check Authorization header
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    }
+    
+    // If no token in Authorization header, check x-access-token
+    if (!token && req.headers['x-access-token']) {
+      token = req.headers['x-access-token'];
+    }
+    
+    // Check if token exists
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication failed: No token provided'
+      });
+    }
+    
+    try {
+      // Verify token
+      const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY || 'mynewjwtsecretkeytoken');
+      
+      // Add user information to request
+      // Check if user property is in the decoded object (to handle different token formats)
+      req.user = decoded.user || decoded;
+      next();
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication failed: Invalid token',
+        error: error.message
+      });
+    }
   } catch (error) {
-    return res.status(401).json({
+    return res.status(500).json({
       success: false,
-      message: 'Authentication failed: Invalid token',
+      message: 'Authentication error',
       error: error.message
     });
   }
@@ -48,10 +54,9 @@ const authenticateUser = (req, res, next) => {
 
 /**
  * Middleware to authorize user based on roles
- * @param {...string} roles - Roles that are authorized
- * @returns {function} Express middleware function
+ * @param {Array} roles - Array of allowed roles
  */
-const authorizeRoles = (...roles) => {
+const authorize = (roles) => {
   return (req, res, next) => {
     // Check if user exists
     if (!req.user) {
@@ -78,7 +83,38 @@ const authorizeRoles = (...roles) => {
   };
 };
 
+/**
+ * Middleware to verify student ownership
+ */
+const verifyStudentOwnership = async (req, res, next) => {
+  try {
+    const { student_id } = req.params;
+    const userId = req.user._id;
+
+    // Allow access if user is admin or instructor
+    if (req.user.role === 'admin' || req.user.role === 'instructor') {
+      return next();
+    }
+
+    // For students, verify they own the resource
+    if (student_id !== userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only access your own data.'
+      });
+    }
+
+    next();
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error verifying student ownership'
+    });
+  }
+};
+
 module.exports = {
-  authenticateUser,
-  authorizeRoles
+  authenticate,
+  authorize,
+  verifyStudentOwnership
 }; 

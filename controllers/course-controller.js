@@ -2,6 +2,12 @@ const { default: mongoose } = require("mongoose");
 const Course = require("../models/course-model");
 const EnrolledCourse = require("../models/enrolled-courses-model");
 const { validateObjectId } = require("../utils/validation-helpers");
+const Progress = require("../models/progress-model");
+const Note = require("../models/note-model");
+const Bookmark = require("../models/bookmark-model");
+const Enrollment = require("../models/enrollment-model");
+const CourseCreationService = require("../services/courseCreationService");
+const { handleUploadError } = require("../middleware/upload");
 
 /**
  * @desc    Create a new course
@@ -10,202 +16,33 @@ const { validateObjectId } = require("../utils/validation-helpers");
  */
 const createCourse = async (req, res) => {
   try {
-    const {
-      course_category,
-      category_type,
-      course_title,
-      no_of_Sessions,
-      course_duration,
-      session_duration,
-      course_description,
-      course_fee,
-      course_videos,
-      brochures,
-      course_image,
-      course_grade,
-      resource_videos,
-      resource_pdfs,
-      curriculum,
-      tools_technologies,
-      bonus_modules,
-      faqs,
-      min_hours_per_week,
-      max_hours_per_week,
-      efforts_per_Week,
-      class_type,
-      is_Certification,
-      is_Assignments,
-      is_Projects,
-      is_Quizes,
-      related_courses,
-      prices,
-    } = req.body;
-
-    // Validate required fields with detailed error messages
-    const requiredFields = {
-      course_title,
-      course_category,
-      category_type,
-      course_image,
-      is_Certification,
-      is_Assignments,
-      is_Projects,
-      is_Quizes
-    };
-    
-    const missingFields = Object.entries(requiredFields)
-      .filter(([_, value]) => !value)
-      .map(([key]) => key);
-    
-    if (missingFields.length > 0) {
+    // Handle file upload error if any
+    if (req.fileError) {
       return res.status(400).json({
-        message: "Missing required fields",
-        error: missingFields.reduce((acc, field) => {
-          acc[field] = `${field.replace(/_/g, ' ')} is required`;
-          return acc;
-        }, {})
+        success: false,
+        message: req.fileError
       });
     }
 
-    // Validate course fee for free courses
-    if (category_type === "Free" && course_fee !== 0) {
-      return res.status(400).json({
-        message: "Course fee must be 0 for free courses",
-        error: { course_fee: "Course fee must be 0 for free courses" },
-      });
+    // Add course image URL if file was uploaded
+    if (req.file) {
+      req.body.course_image = req.file.location;
     }
 
-    // Format efforts per week if not already formatted
-    const formattedEffortsPerWeek = efforts_per_Week || 
-      (min_hours_per_week && max_hours_per_week) ? 
-      `${min_hours_per_week} - ${max_hours_per_week} hours / week` : 
-      undefined;
+    // Create course with lessons using the service
+    const course = await CourseCreationService.createCourseWithLessons(req.body);
 
-    // Process curriculum if provided
-    const processedCurriculum = curriculum?.map(week => ({
-      weekTitle: week.weekTitle,
-      weekDescription: week.weekDescription,
-      topics: week.topics || [],
-      resources: week.resources || []
-    })) || [];
-
-    // Process tools and technologies if provided
-    const processedTools = tools_technologies?.map(tool => ({
-      name: tool.name,
-      category: tool.category || 'other',
-      description: tool.description || '',
-      logo_url: tool.logo_url || ''
-    })) || [];
-
-    // Process bonus modules if provided
-    const processedBonusModules = bonus_modules?.map(module => ({
-      title: module.title,
-      description: module.description || '',
-      resources: module.resources || []
-    })) || [];
-
-    // Process FAQs if provided
-    const processedFaqs = faqs?.map(faq => ({
-      question: faq.question,
-      answer: faq.answer
-    })) || [];
-
-    // Process prices if provided
-    const processedPrices = prices?.map(price => ({
-      currency: price.currency,
-      individual: price.individual || 0,
-      batch: price.batch || 0,
-      min_batch_size: price.min_batch_size || 2,
-      max_batch_size: price.max_batch_size || 10,
-      early_bird_discount: price.early_bird_discount || 0,
-      group_discount: price.group_discount || 0,
-      is_active: price.is_active !== false
-    })) || [];
-
-    const newCourse = new Course({
-      course_category,
-      category_type,
-      course_title,
-      course_tag: category_type === "Free" ? "Free" : (req.body.course_tag || "Live"),
-      no_of_Sessions,
-      course_duration,
-      session_duration,
-      course_description,
-      course_fee,
-      course_videos: course_videos || [],
-      brochures: brochures || [],
-      course_image,
-      course_grade,
-      resource_videos: resource_videos || [],
-      resource_pdfs: resource_pdfs || [],
-      curriculum: processedCurriculum,
-      tools_technologies: processedTools,
-      bonus_modules: processedBonusModules,
-      faqs: processedFaqs,
-      min_hours_per_week,
-      max_hours_per_week,
-      efforts_per_Week: formattedEffortsPerWeek,
-      class_type,
-      is_Certification,
-      is_Assignments,
-      is_Projects,
-      is_Quizes,
-      related_courses: related_courses || [],
-      prices: processedPrices,
-      isFree: category_type === "Free",
-    });
-
-    await newCourse.save();
-    
-    res.status(201).json({ 
+    res.status(201).json({
       success: true,
-      message: "Course created successfully", 
-      newCourse,
-      summary: {
-        curriculum: {
-          totalWeeks: processedCurriculum.length,
-          totalTopics: processedCurriculum.reduce((total, week) => total + (week.topics?.length || 0), 0),
-          totalResources: processedCurriculum.reduce((total, week) => total + (week.resources?.length || 0), 0)
-        },
-        tools: {
-          count: processedTools.length,
-          categories: [...new Set(processedTools.map(t => t.category))]
-        },
-        bonusModules: {
-          count: processedBonusModules.length,
-          totalResources: processedBonusModules.reduce((total, module) => total + (module.resources?.length || 0), 0)
-        },
-        faqs: {
-          count: processedFaqs.length
-        },
-        pricing: {
-          currencies: processedPrices.map(p => p.currency),
-          hasBatchPricing: processedPrices.some(p => p.batch > 0),
-          hasIndividualPricing: processedPrices.some(p => p.individual > 0)
-        }
-      }
+      message: "Course created successfully",
+      data: course
     });
   } catch (error) {
     console.error("Error creating course:", error);
-    
-    // Send more detailed validation errors if available
-    if (error.name === 'ValidationError') {
-      const validationErrors = Object.keys(error.errors).reduce((acc, key) => {
-        acc[key] = error.errors[key].message;
-        return acc;
-      }, {});
-      
-      return res.status(400).json({ 
-        success: false,
-        message: "Validation error creating course", 
-        error: validationErrors
-      });
-    }
-    
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Error creating course", 
-      error: error.message || "An unexpected error occurred" 
+      message: "Failed to create course",
+      error: error.message
     });
   }
 };
@@ -1428,7 +1265,7 @@ const getCourseSections = async (req, res) => {
     }
 
     const course = await Course.findById(courseId)
-      .select('sections lessons')
+      .select('curriculum')
       .lean();
 
     if (!course) {
@@ -1439,30 +1276,30 @@ const getCourseSections = async (req, res) => {
     }
 
     // Enhance sections with progress information
-    const enhancedSections = course.sections.map(section => {
-      const sectionLessons = course.lessons.filter(lesson => 
-        section.lessons.includes(lesson._id)
-      );
-      
-      const completedLessons = sectionLessons.filter(lesson =>
-        enrollment.completed_lessons.includes(lesson._id)
-      );
+    const enhancedCurriculum = course.curriculum.map(week => ({
+      ...week,
+      sections: week.sections.map(section => {
+        const sectionLessons = section.lessons;
+        const completedLessons = sectionLessons.filter(lesson =>
+          enrollment.completed_lessons.includes(lesson._id)
+        );
 
-      return {
-        ...section,
-        progress: {
-          total: sectionLessons.length,
-          completed: completedLessons.length,
-          percentage: sectionLessons.length > 0 
-            ? Math.round((completedLessons.length / sectionLessons.length) * 100)
-            : 0
-        },
-        lessons: sectionLessons.map(lesson => ({
-          ...lesson,
-          isCompleted: enrollment.completed_lessons.includes(lesson._id)
-        }))
-      };
-    });
+        return {
+          ...section,
+          progress: {
+            total: sectionLessons.length,
+            completed: completedLessons.length,
+            percentage: sectionLessons.length > 0 
+              ? Math.round((completedLessons.length / sectionLessons.length) * 100)
+              : 0
+          },
+          lessons: sectionLessons.map(lesson => ({
+            ...lesson,
+            isCompleted: enrollment.completed_lessons.includes(lesson._id)
+          }))
+        };
+      })
+    }));
 
     // Update last accessed time
     enrollment.last_accessed = new Date();
@@ -1470,7 +1307,7 @@ const getCourseSections = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: enhancedSections,
+      data: enhancedCurriculum,
       overallProgress: enrollment.progress
     });
   } catch (error) {
@@ -1509,7 +1346,7 @@ const getCourseLessons = async (req, res) => {
     }
 
     const course = await Course.findById(courseId)
-      .select('lessons sections')
+      .select('curriculum')
       .lean();
 
     if (!course) {
@@ -1519,44 +1356,39 @@ const getCourseLessons = async (req, res) => {
       });
     }
 
-    // Enhance lessons with section information and completion status
-    const enhancedLessons = course.lessons.map(lesson => {
-      const section = course.sections.find(s => 
-        s.lessons.includes(lesson._id)
-      );
+    // Extract and enhance all lessons from the curriculum
+    const enhancedLessons = course.curriculum.flatMap(week => 
+      week.sections.flatMap(section => 
+        section.lessons.map(lesson => ({
+          ...lesson,
+          week: {
+            id: week._id,
+            title: week.weekTitle,
+            order: week.order
+          },
+          section: {
+            id: section._id,
+            title: section.title,
+            order: section.order
+          },
+          isCompleted: enrollment.completed_lessons.includes(lesson._id),
+          hasNotes: enrollment.notes.some(note => 
+            note.lessonId.toString() === lesson._id.toString()
+          ),
+          hasBookmarks: enrollment.bookmarks.some(bookmark => 
+            bookmark.lessonId.toString() === lesson._id.toString()
+          )
+        }))
+      )
+    );
 
-      const lessonData = {
-        ...lesson,
-        section: section ? {
-          id: section._id,
-          title: section.title,
-          order: section.order
-        } : null,
-        isCompleted: enrollment.completed_lessons.includes(lesson._id),
-        hasNotes: enrollment.notes.some(note => 
-          note.lessonId.toString() === lesson._id.toString()
-        ),
-        hasBookmarks: enrollment.bookmarks.some(bookmark => 
-          bookmark.lessonId.toString() === lesson._id.toString()
-        )
-      };
-
-      // Include resources if requested
-      if (includeResources === 'true') {
-        lessonData.resources = lesson.resources || [];
-      } else {
-        delete lessonData.resources;
-      }
-
-      return lessonData;
-    });
-
-    // Sort lessons by section order and lesson order
+    // Sort lessons by week order, section order, and lesson order
     enhancedLessons.sort((a, b) => {
-      if (a.section && b.section) {
-        if (a.section.order !== b.section.order) {
-          return a.section.order - b.section.order;
-        }
+      if (a.week.order !== b.week.order) {
+        return a.week.order - b.week.order;
+      }
+      if (a.section.order !== b.section.order) {
+        return a.section.order - b.section.order;
       }
       return a.order - b.order;
     });
@@ -1592,26 +1424,10 @@ const getCourseLessons = async (req, res) => {
 const getLessonDetails = async (req, res) => {
   try {
     const { courseId, lessonId } = req.params;
-    const { studentId } = req.user;
+    const userId = req.user._id;
 
-    // Verify student is enrolled in the course
-    const enrollment = await EnrolledCourse.findOne({
-      student_id: studentId,
-      course_id: courseId,
-      status: 'active'
-    });
-
-    if (!enrollment) {
-      return res.status(403).json({
-        success: false,
-        message: "You must be enrolled in this course to view lesson details"
-      });
-    }
-
-    const course = await Course.findById(courseId)
-      .select('lessons sections')
-      .lean();
-
+    // Find the course and check enrollment
+    const course = await Course.findById(courseId);
     if (!course) {
       return res.status(404).json({
         success: false,
@@ -1619,60 +1435,170 @@ const getLessonDetails = async (req, res) => {
       });
     }
 
-    const lesson = course.lessons.find(l => l._id.toString() === lessonId);
-    if (!lesson) {
-      return res.status(404).json({
+    // Check if user is enrolled
+    const enrollment = await Enrollment.findOne({
+      course: courseId,
+      student: userId,
+      status: "active"
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
         success: false,
-        message: "Lesson not found"
+        message: "You must be enrolled in this course to access lessons"
       });
     }
 
-    // Find section information
-    const section = course.sections.find(s => 
-      s.lessons.includes(lesson._id)
-    );
-
-    // Get student's notes and bookmarks for this lesson
-    const notes = enrollment.notes.filter(note => 
-      note.lessonId.toString() === lessonId
-    );
-
-    const bookmarks = enrollment.bookmarks.filter(bookmark => 
-      bookmark.lessonId.toString() === lessonId
-    );
-
-    // Get next and previous lessons
-    const allLessons = course.lessons.sort((a, b) => a.order - b.order);
-    const currentIndex = allLessons.findIndex(l => l._id.toString() === lessonId);
-    
-    const navigation = {
-      previous: currentIndex > 0 ? {
-        id: allLessons[currentIndex - 1]._id,
-        title: allLessons[currentIndex - 1].title
-      } : null,
-      next: currentIndex < allLessons.length - 1 ? {
-        id: allLessons[currentIndex + 1]._id,
-        title: allLessons[currentIndex + 1].title
-      } : null
+    // Find the lesson in the curriculum
+    let lesson = null;
+    let lessonContext = {
+      week: null,
+      section: null,
+      weekIndex: -1,
+      sectionIndex: -1,
+      lessonIndex: -1
     };
 
-    // Update last accessed time
-    enrollment.last_accessed = new Date();
-    await enrollment.save();
+    // Search through curriculum to find the lesson
+    for (let weekIndex = 0; weekIndex < course.curriculum.length; weekIndex++) {
+      const week = course.curriculum[weekIndex];
+      
+      for (let sectionIndex = 0; sectionIndex < week.sections.length; sectionIndex++) {
+        const section = week.sections[sectionIndex];
+        
+        const lessonIndex = section.lessons.findIndex(l => l.id === lessonId);
+        if (lessonIndex !== -1) {
+          lesson = section.lessons[lessonIndex];
+          lessonContext = {
+            week,
+            section,
+            weekIndex,
+            sectionIndex,
+            lessonIndex
+          };
+          break;
+        }
+      }
+      
+      if (lesson) break;
+    }
 
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: "Lesson not found in this course. Please check the lesson ID and try again."
+      });
+    }
+
+    // Get lesson progress
+    const progress = await Progress.findOne({
+      course: courseId,
+      student: userId,
+      lesson: lessonId
+    });
+
+    // Get lesson notes
+    const notes = await Note.find({
+      course: courseId,
+      student: userId,
+      lesson: lessonId
+    }).sort({ createdAt: -1 });
+
+    // Get lesson bookmarks
+    const bookmarks = await Bookmark.find({
+      course: courseId,
+      student: userId,
+      lesson: lessonId
+    }).sort({ createdAt: -1 });
+
+    // Find previous and next lessons
+    const { week, section, weekIndex, sectionIndex, lessonIndex } = lessonContext;
+    let previousLesson = null;
+    let nextLesson = null;
+
+    // Check for previous lesson in the same section
+    if (lessonIndex > 0) {
+      previousLesson = section.lessons[lessonIndex - 1];
+    } else {
+      // Check previous section
+      if (sectionIndex > 0) {
+        const prevSection = week.sections[sectionIndex - 1];
+        if (prevSection.lessons.length > 0) {
+          previousLesson = prevSection.lessons[prevSection.lessons.length - 1];
+        }
+      } else if (weekIndex > 0) {
+        // Check previous week's last section
+        const prevWeek = course.curriculum[weekIndex - 1];
+        if (prevWeek.sections.length > 0) {
+          const prevSection = prevWeek.sections[prevWeek.sections.length - 1];
+          if (prevSection.lessons.length > 0) {
+            previousLesson = prevSection.lessons[prevSection.lessons.length - 1];
+          }
+        }
+      }
+    }
+
+    // Check for next lesson in the same section
+    if (lessonIndex < section.lessons.length - 1) {
+      nextLesson = section.lessons[lessonIndex + 1];
+    } else {
+      // Check next section
+      if (sectionIndex < week.sections.length - 1) {
+        const nextSection = week.sections[sectionIndex + 1];
+        if (nextSection.lessons.length > 0) {
+          nextLesson = nextSection.lessons[0];
+        }
+      } else if (weekIndex < course.curriculum.length - 1) {
+        // Check next week's first section
+        const nextWeek = course.curriculum[weekIndex + 1];
+        if (nextWeek.sections.length > 0) {
+          const nextSection = nextWeek.sections[0];
+          if (nextSection.lessons.length > 0) {
+            nextLesson = nextSection.lessons[0];
+          }
+        }
+      }
+    }
+
+    // Return lesson details with context
     res.status(200).json({
       success: true,
       data: {
-        ...lesson,
-        section: section ? {
-          id: section._id,
-          title: section.title,
-          order: section.order
-        } : null,
-        isCompleted: enrollment.completed_lessons.includes(lesson._id),
-        notes,
-        bookmarks,
-        navigation
+        lesson: {
+          ...lesson.toObject(),
+          progress: progress ? progress.status : "not_started",
+          notes: notes.map(note => ({
+            id: note._id,
+            content: note.content,
+            createdAt: note.createdAt
+          })),
+          bookmarks: bookmarks.map(bookmark => ({
+            id: bookmark._id,
+            createdAt: bookmark.createdAt
+          }))
+        },
+        context: {
+          week: {
+            id: week.id,
+            title: week.weekTitle,
+            description: week.weekDescription
+          },
+          section: {
+            id: section.id,
+            title: section.title,
+            description: section.description
+          }
+        },
+        navigation: {
+          previous: previousLesson ? {
+            id: previousLesson.id,
+            title: previousLesson.title
+          } : null,
+          next: nextLesson ? {
+            id: nextLesson.id,
+            title: nextLesson.title
+          } : null
+        }
       }
     });
   } catch (error) {
@@ -2312,21 +2238,14 @@ const downloadResource = async (req, res) => {
 const addLessonNote = async (req, res) => {
   try {
     const { courseId, lessonId } = req.params;
-    const { studentId } = req.user;
-    const { content } = req.body;
+    const { content, timestamp, tags } = req.body;
+    const userId = req.user._id;
 
-    if (!content || content.trim().length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Note content is required"
-      });
-    }
-
-    // Verify student is enrolled in the course
-    const enrollment = await EnrolledCourse.findOne({
-      student_id: studentId,
-      course_id: courseId,
-      status: 'active'
+    // Check if user is enrolled
+    const enrollment = await Enrollment.findOne({
+      course: courseId,
+      student: userId,
+      status: "active"
     });
 
     if (!enrollment) {
@@ -2336,35 +2255,25 @@ const addLessonNote = async (req, res) => {
       });
     }
 
-    // Add or update note
-    const existingNoteIndex = enrollment.notes.findIndex(note => 
-      note.lessonId.toString() === lessonId
-    );
+    // Create new note
+    const note = await Note.create({
+      course: courseId,
+      student: userId,
+      lesson: lessonId,
+      content,
+      timestamp,
+      tags: tags || []
+    });
 
-    if (existingNoteIndex >= 0) {
-      enrollment.notes[existingNoteIndex].content = content;
-      enrollment.notes[existingNoteIndex].updatedAt = new Date();
-    } else {
-      enrollment.notes.push({
-        lessonId,
-        content,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-    }
-
-    await enrollment.save();
-
-    res.status(200).json({
+    res.status(201).json({
       success: true,
-      message: "Note saved successfully",
-      data: enrollment.notes.find(note => note.lessonId.toString() === lessonId)
+      data: note
     });
   } catch (error) {
-    console.error("Error adding lesson note:", error);
+    console.error("Error adding note:", error);
     res.status(500).json({
       success: false,
-      message: "Error adding lesson note",
+      message: "Error adding note",
       error: error.message
     });
   }
@@ -2378,21 +2287,14 @@ const addLessonNote = async (req, res) => {
 const addLessonBookmark = async (req, res) => {
   try {
     const { courseId, lessonId } = req.params;
-    const { studentId } = req.user;
-    const { timestamp, note } = req.body;
+    const { timestamp, title, description, tags } = req.body;
+    const userId = req.user._id;
 
-    if (!timestamp || timestamp < 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Valid timestamp is required"
-      });
-    }
-
-    // Verify student is enrolled in the course
-    const enrollment = await EnrolledCourse.findOne({
-      student_id: studentId,
-      course_id: courseId,
-      status: 'active'
+    // Check if user is enrolled
+    const enrollment = await Enrollment.findOne({
+      course: courseId,
+      student: userId,
+      status: "active"
     });
 
     if (!enrollment) {
@@ -2402,26 +2304,26 @@ const addLessonBookmark = async (req, res) => {
       });
     }
 
-    // Add bookmark
-    enrollment.bookmarks.push({
-      lessonId,
+    // Create new bookmark
+    const bookmark = await Bookmark.create({
+      course: courseId,
+      student: userId,
+      lesson: lessonId,
       timestamp,
-      note: note || '',
-      createdAt: new Date()
+      title,
+      description: description || "",
+      tags: tags || []
     });
 
-    await enrollment.save();
-
-    res.status(200).json({
+    res.status(201).json({
       success: true,
-      message: "Bookmark added successfully",
-      data: enrollment.bookmarks[enrollment.bookmarks.length - 1]
+      data: bookmark
     });
   } catch (error) {
-    console.error("Error adding lesson bookmark:", error);
+    console.error("Error adding bookmark:", error);
     res.status(500).json({
       success: false,
-      message: "Error adding lesson bookmark",
+      message: "Error adding bookmark",
       error: error.message
     });
   }
@@ -2504,6 +2406,228 @@ const handleMultipleUpload = async (req, res) => {
   }
 };
 
+// Get lesson notes
+const getLessonNotes = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const userId = req.user._id;
+
+    // Check if user is enrolled
+    const enrollment = await Enrollment.findOne({
+      course: courseId,
+      student: userId,
+      status: "active"
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view notes"
+      });
+    }
+
+    // Get notes
+    const notes = await Note.getLessonNotes(courseId, userId, lessonId);
+
+    res.status(200).json({
+      success: true,
+      data: notes
+    });
+  } catch (error) {
+    console.error("Error fetching notes:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching notes",
+      error: error.message
+    });
+  }
+};
+
+// Get lesson bookmarks
+const getLessonBookmarks = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const userId = req.user._id;
+
+    // Check if user is enrolled
+    const enrollment = await Enrollment.findOne({
+      course: courseId,
+      student: userId,
+      status: "active"
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view bookmarks"
+      });
+    }
+
+    // Get bookmarks
+    const bookmarks = await Bookmark.getLessonBookmarks(courseId, userId, lessonId);
+
+    res.status(200).json({
+      success: true,
+      data: bookmarks
+    });
+  } catch (error) {
+    console.error("Error fetching bookmarks:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching bookmarks",
+      error: error.message
+    });
+  }
+};
+
+// Update note
+const updateNote = async (req, res) => {
+  try {
+    const { courseId, lessonId, noteId } = req.params;
+    const { content, tags } = req.body;
+    const userId = req.user._id;
+
+    // Find and update note
+    const note = await Note.findOne({
+      _id: noteId,
+      course: courseId,
+      student: userId,
+      lesson: lessonId
+    });
+
+    if (!note) {
+      return res.status(404).json({
+        success: false,
+        message: "Note not found"
+      });
+    }
+
+    await note.updateContent(content);
+    if (tags) {
+      note.tags = tags;
+      await note.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      data: note
+    });
+  } catch (error) {
+    console.error("Error updating note:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating note",
+      error: error.message
+    });
+  }
+};
+
+// Update bookmark
+const updateBookmark = async (req, res) => {
+  try {
+    const { courseId, lessonId, bookmarkId } = req.params;
+    const { title, description, tags } = req.body;
+    const userId = req.user._id;
+
+    // Find and update bookmark
+    const bookmark = await Bookmark.findOne({
+      _id: bookmarkId,
+      course: courseId,
+      student: userId,
+      lesson: lessonId
+    });
+
+    if (!bookmark) {
+      return res.status(404).json({
+        success: false,
+        message: "Bookmark not found"
+      });
+    }
+
+    await bookmark.updateDetails(title, description, tags);
+
+    res.status(200).json({
+      success: true,
+      data: bookmark
+    });
+  } catch (error) {
+    console.error("Error updating bookmark:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating bookmark",
+      error: error.message
+    });
+  }
+};
+
+// Delete note
+const deleteNote = async (req, res) => {
+  try {
+    const { courseId, lessonId, noteId } = req.params;
+    const userId = req.user._id;
+
+    const note = await Note.findOneAndDelete({
+      _id: noteId,
+      course: courseId,
+      student: userId,
+      lesson: lessonId
+    });
+
+    if (!note) {
+      return res.status(404).json({
+        success: false,
+        message: "Note not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Note deleted successfully"
+    });
+  } catch (error) {
+    console.error("Error deleting note:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error deleting note",
+      error: error.message
+    });
+  }
+};
+
+// Delete bookmark
+const deleteBookmark = async (req, res) => {
+  try {
+    const { courseId, lessonId, bookmarkId } = req.params;
+    const userId = req.user._id;
+
+    const bookmark = await Bookmark.findOneAndDelete({
+      _id: bookmarkId,
+      course: courseId,
+      student: userId,
+      lesson: lessonId
+    });
+
+    if (!bookmark) {
+      return res.status(404).json({
+        success: false,
+        message: "Bookmark not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Bookmark deleted successfully"
+    });
+  } catch (error) {
+    console.error("Error deleting bookmark:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error deleting bookmark",
+      error: error.message
+    });
+  }
+};
+
 // Export the new functions
 module.exports = {
   createCourse,
@@ -2535,5 +2659,11 @@ module.exports = {
   addLessonNote,
   addLessonBookmark,
   handleUpload,
-  handleMultipleUpload
+  handleMultipleUpload,
+  getLessonNotes,
+  getLessonBookmarks,
+  updateNote,
+  updateBookmark,
+  deleteNote,
+  deleteBookmark
 };

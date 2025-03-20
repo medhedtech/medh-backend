@@ -144,7 +144,7 @@ const sendReceiptEmail = async (email, receiptUrl, paymentDetails, type) => {
 };
 
 // Combined function to process payment and create either enrollment or subscription
-exports.processPaymentAndEnroll = async (req, res) => {
+const processPaymentAndEnroll = async (req, res) => {
   try {
     const { 
       student_id, 
@@ -250,10 +250,7 @@ exports.processPaymentAndEnroll = async (req, res) => {
         // Continue even if PDF generation fails
       }
 
-      result = {
-        message: "Student enrolled successfully",
-        data: newEnrolledCourse
-      };
+      result = newEnrolledCourse;
     } else if (payment_type === "subscription") {
       // Create a new subscription
       const start_date = new Date();
@@ -308,10 +305,7 @@ exports.processPaymentAndEnroll = async (req, res) => {
         // Continue even if PDF generation fails
       }
 
-      result = {
-        message: "Subscription created successfully",
-        data: subscription
-      };
+      result = subscription;
     } else {
       return res.status(400).json({ 
         message: "Invalid payment type. Must be 'course' or 'subscription'." 
@@ -320,436 +314,346 @@ exports.processPaymentAndEnroll = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      ...result
+      message: `${payment_type === 'course' ? 'Course enrollment' : 'Subscription'} created successfully`,
+      data: result
     });
   } catch (error) {
-    console.error("Error processing payment:", error);
-    res.status(500).json({ 
+    logger.error('Error processing payment and enrollment', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+    res.status(500).json({
       success: false,
-      message: "Error processing payment and enrollment",
-      error: error.message 
+      message: 'Error processing payment and enrollment',
+      error: error.message
     });
   }
 };
 
-// Get all enrollments and subscriptions for a student
-exports.getStudentPayments = async (req, res) => {
+// Get all payments for a student
+const getStudentPayments = async (req, res) => {
   try {
     const { student_id } = req.params;
-
-    // Fetch both enrollments and subscriptions
+    
+    // Get both enrollments and subscriptions
     const [enrollments, subscriptions] = await Promise.all([
-      EnrolledCourse.find({ student_id })
-        .populate("student_id")
-        .populate({
-          path: "course_id",
-          populate: {
-            path: "assigned_instructor",
-            model: "AssignedInstructor",
-          },
-        }),
+      EnrolledCourse.find({ student_id }),
       Subscription.find({ user_id: student_id })
-        .populate("user_id", "full_name email")
-        .populate(
-          "plan_id",
-          "plan_name plan_category plan_description plan_fee plan_image status plan_grade"
-        )
     ]);
 
-    // If both are empty, return 404
-    if (!enrollments.length && !subscriptions.length) {
-      return res
-        .status(404)
-        .json({ message: "No payments found for this student" });
-    }
-
-    // Combine the results
-    const payments = {
-      enrollments,
-      subscriptions,
-      total: enrollments.length + subscriptions.length
-    };
-
     res.status(200).json({
       success: true,
-      data: payments
+      data: {
+        enrollments,
+        subscriptions
+      }
     });
   } catch (error) {
-    console.error("Error fetching student payments:", error);
-    res.status(500).json({ 
+    logger.error('Error fetching student payments', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+    res.status(500).json({
       success: false,
-      message: "Error fetching student payments",
-      error: error.message 
+      message: 'Error fetching student payments',
+      error: error.message
     });
   }
 };
 
-// Get payment details (either enrollment or subscription)
-exports.getPaymentById = async (req, res) => {
+// Get a specific payment by ID and type
+const getPaymentById = async (req, res) => {
   try {
-    const { payment_id, payment_type } = req.params;
-
-    let paymentDetails;
-
+    const { payment_type, payment_id } = req.params;
+    
+    let payment;
     if (payment_type === 'course') {
-      paymentDetails = await EnrolledCourse.findById(payment_id)
-        .populate("student_id")
-        .populate("course_id");
+      payment = await EnrolledCourse.findById(payment_id);
     } else if (payment_type === 'subscription') {
-      paymentDetails = await Subscription.findById(payment_id)
-        .populate("user_id", "full_name email")
-        .populate(
-          "plan_id",
-          "plan_name plan_category plan_description plan_fee plan_image status plan_grade"
-        );
+      payment = await Subscription.findById(payment_id);
     } else {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Invalid payment type. Must be 'course' or 'subscription'." 
+        message: 'Invalid payment type'
       });
     }
 
-    if (!paymentDetails) {
-      return res.status(404).json({ 
+    if (!payment) {
+      return res.status(404).json({
         success: false,
-        message: "Payment not found" 
+        message: 'Payment not found'
       });
     }
 
     res.status(200).json({
       success: true,
-      data: paymentDetails
+      data: payment
     });
   } catch (error) {
-    console.error("Error fetching payment details:", error);
-    res.status(500).json({ 
+    logger.error('Error fetching payment by ID', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+    res.status(500).json({
       success: false,
-      message: "Error fetching payment details",
-      error: error.message 
+      message: 'Error fetching payment by ID',
+      error: error.message
     });
   }
 };
 
-// Get payment statistics for admin dashboard
-exports.getPaymentStats = async (req, res) => {
+// Get payment statistics (admin only)
+const getPaymentStats = async (req, res) => {
   try {
-    // Get counts and totals
     const [
-      enrollmentCount,
-      subscriptionCount,
-      enrollmentTotal,
-      subscriptionTotal
+      totalEnrollments,
+      totalSubscriptions,
+      totalRevenue,
+      recentPayments
     ] = await Promise.all([
       EnrolledCourse.countDocuments(),
       Subscription.countDocuments(),
-      EnrolledCourse.aggregate([
-        {
-          $group: {
-            _id: null,
-            total: { $sum: { $toDouble: "$payment_details.amount" } }
-          }
-        }
+      Promise.all([
+        EnrolledCourse.aggregate([
+          { $group: { _id: null, total: { $sum: "$payment_details.amount" } } }
+        ]),
+        Subscription.aggregate([
+          { $group: { _id: null, total: { $sum: "$payment_details.amount" } } }
+        ])
       ]),
-      Subscription.aggregate([
-        {
-          $group: {
-            _id: null,
-            total: { $sum: { $toDouble: "$amount" } }
-          }
-        }
+      Promise.all([
+        EnrolledCourse.find().sort({ enrollment_date: -1 }).limit(5),
+        Subscription.find().sort({ start_date: -1 }).limit(5)
       ])
     ]);
 
-    // Get recent payments (both enrollments and subscriptions)
-    const [recentEnrollments, recentSubscriptions] = await Promise.all([
-      EnrolledCourse.find()
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .populate("student_id", "full_name email")
-        .populate("course_id", "course_title"),
-      Subscription.find()
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .populate("user_id", "full_name email")
-        .populate("plan_id", "plan_name")
-    ]);
-
-    const stats = {
-      total_payments: enrollmentCount + subscriptionCount,
-      total_amount: (enrollmentTotal[0]?.total || 0) + (subscriptionTotal[0]?.total || 0),
-      enrollment_count: enrollmentCount,
-      subscription_count: subscriptionCount,
-      enrollment_amount: enrollmentTotal[0]?.total || 0,
-      subscription_amount: subscriptionTotal[0]?.total || 0,
-      recent_payments: [
-        ...recentEnrollments.map(e => ({
-          type: 'enrollment',
-          id: e._id,
-          student: e.student_id,
-          item: e.course_id.course_title,
-          amount: e.payment_details?.amount || 0,
-          date: e.createdAt
-        })),
-        ...recentSubscriptions.map(s => ({
-          type: 'subscription',
-          id: s._id,
-          student: s.user_id,
-          item: s.plan_name,
-          amount: s.amount,
-          date: s.createdAt
-        }))
-      ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5)
-    };
+    const totalRevenueAmount = (totalRevenue[0][0]?.total || 0) + (totalRevenue[1][0]?.total || 0);
+    const recentPaymentsList = [...recentPayments[0], ...recentPayments[1]]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 5);
 
     res.status(200).json({
       success: true,
-      data: stats
+      data: {
+        totalEnrollments,
+        totalSubscriptions,
+        totalRevenue: totalRevenueAmount,
+        recentPayments: recentPaymentsList
+      }
     });
   } catch (error) {
-    console.error("Error fetching payment statistics:", error);
-    res.status(500).json({ 
+    logger.error('Error fetching payment statistics', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+    res.status(500).json({
       success: false,
-      message: "Error fetching payment statistics",
-      error: error.message 
+      message: 'Error fetching payment statistics',
+      error: error.message
     });
   }
 };
 
 // Generate receipt for existing payment
-exports.generateReceiptForExistingPayment = async (req, res) => {
+const generateReceiptForExistingPayment = async (req, res) => {
   try {
-    const { payment_id, payment_type } = req.params;
+    const { payment_type, payment_id } = req.params;
     
-    let paymentRecord;
-    
+    let payment;
     if (payment_type === 'course') {
-      paymentRecord = await EnrolledCourse.findById(payment_id)
-        .populate("student_id", "full_name email")
-        .populate("course_id", "course_title");
-        
-      if (!paymentRecord) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "Enrollment record not found" 
-        });
-      }
-      
-      // Add additional fields for receipt generation
-      paymentRecord.course_name = paymentRecord.course_id.course_title;
-      paymentRecord.student_name = paymentRecord.student_id.full_name;
-      paymentRecord.student_email = paymentRecord.student_id.email;
-      
+      payment = await EnrolledCourse.findById(payment_id);
     } else if (payment_type === 'subscription') {
-      paymentRecord = await Subscription.findById(payment_id)
-        .populate("user_id", "full_name email")
-        .populate("plan_id", "plan_name");
-        
-      if (!paymentRecord) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "Subscription record not found" 
-        });
-      }
-      
-      // Add additional fields for receipt generation
-      paymentRecord.user_name = paymentRecord.user_id.full_name;
-      paymentRecord.user_email = paymentRecord.user_id.email;
-      
+      payment = await Subscription.findById(payment_id);
     } else {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Invalid payment type. Must be 'course' or 'subscription'." 
+        message: 'Invalid payment type'
       });
     }
-    
-    // Check if receipt already exists
-    if (paymentRecord.receipt_url) {
-      return res.status(200).json({
-        success: true,
-        message: "Receipt already exists",
-        receipt_url: paymentRecord.receipt_url
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payment not found'
       });
     }
-    
-    // Generate new receipt
-    const receiptUrl = await generateAndUploadReceipt(paymentRecord, payment_type);
-    
+
+    const receiptUrl = await generateAndUploadReceipt(payment, payment_type);
     if (receiptUrl) {
-      // Update the record with receipt URL
-      paymentRecord.receipt_url = receiptUrl;
-      await paymentRecord.save();
+      payment.receipt_url = receiptUrl;
+      await payment.save();
       
-      // Send email with receipt if requested
-      if (req.query.send_email === 'true') {
-        const email = payment_type === 'course' 
-          ? paymentRecord.student_id.email 
-          : paymentRecord.user_id.email;
-          
+      // Send email with receipt
+      const email = payment_type === 'course' ? payment.student_email : payment.user_email;
+      if (email) {
         await sendReceiptEmail(
           email,
           receiptUrl,
-          paymentRecord,
+          payment_type === 'course' 
+            ? { course_name: payment.course_name, payment_details: payment.payment_details }
+            : { plan_name: payment.plan_name, payment_details: payment.payment_details },
           payment_type
         );
       }
-      
-      res.status(200).json({
-        success: true,
-        message: "Receipt generated successfully",
-        receipt_url: receiptUrl
-      });
-    } else {
-      throw new Error("Failed to generate receipt");
     }
-    
+
+    res.status(200).json({
+      success: true,
+      message: 'Receipt generated successfully',
+      data: { receipt_url: receiptUrl }
+    });
   } catch (error) {
-    console.error("Error generating receipt:", error);
-    res.status(500).json({ 
+    logger.error('Error generating receipt for existing payment', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+    res.status(500).json({
       success: false,
-      message: "Error generating receipt",
-      error: error.message 
+      message: 'Error generating receipt',
+      error: error.message
     });
   }
 };
 
 // Resend receipt email
-exports.resendReceiptEmail = async (req, res) => {
+const resendReceiptEmail = async (req, res) => {
   try {
-    const { payment_id, payment_type } = req.params;
-    const { email } = req.body;
+    const { payment_type, payment_id } = req.params;
     
-    let paymentRecord;
-    
+    let payment;
     if (payment_type === 'course') {
-      paymentRecord = await EnrolledCourse.findById(payment_id)
-        .populate("student_id", "full_name email")
-        .populate("course_id", "course_title");
+      payment = await EnrolledCourse.findById(payment_id);
     } else if (payment_type === 'subscription') {
-      paymentRecord = await Subscription.findById(payment_id)
-        .populate("user_id", "full_name email")
-        .populate("plan_id", "plan_name");
+      payment = await Subscription.findById(payment_id);
     } else {
-      return res.status(400).json({ 
-        success: false,
-        message: "Invalid payment type. Must be 'course' or 'subscription'."
-      });
-    }
-    
-    if (!paymentRecord) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Payment record not found" 
-      });
-    }
-    
-    // Check if receipt exists
-    if (!paymentRecord.receipt_url) {
-      // Generate receipt if it doesn't exist
-      try {
-        const receiptUrl = await generateAndUploadReceipt(paymentRecord, payment_type);
-        if (receiptUrl) {
-          paymentRecord.receipt_url = receiptUrl;
-          await paymentRecord.save();
-        } else {
-          throw new Error("Failed to generate receipt");
-        }
-      } catch (error) {
-        return res.status(500).json({
-          success: false,
-          message: "Failed to generate receipt",
-          error: error.message
-        });
-      }
-    }
-    
-    // Send email
-    const recipientEmail = email || 
-      (payment_type === 'course' ? paymentRecord.student_id.email : paymentRecord.user_id.email);
-      
-    if (!recipientEmail) {
       return res.status(400).json({
         success: false,
-        message: "No email address provided or found in record"
+        message: 'Invalid payment type'
       });
     }
-    
-    const emailSent = await sendReceiptEmail(
-      recipientEmail,
-      paymentRecord.receipt_url,
-      paymentRecord,
-      payment_type
-    );
-    
-    if (emailSent) {
-      res.status(200).json({
-        success: true,
-        message: `Receipt email sent to ${recipientEmail}`
+
+    if (!payment) {
+      return res.status(404).json({
+        success: false,
+        message: 'Payment not found'
       });
+    }
+
+    if (!payment.receipt_url) {
+      return res.status(400).json({
+        success: false,
+        message: 'No receipt URL found for this payment'
+      });
+    }
+
+    const email = payment_type === 'course' ? payment.student_email : payment.user_email;
+    if (email) {
+      const sent = await sendReceiptEmail(
+        email,
+        payment.receipt_url,
+        payment_type === 'course'
+          ? { course_name: payment.course_name, payment_details: payment.payment_details }
+          : { plan_name: payment.plan_name, payment_details: payment.payment_details },
+        payment_type
+      );
+
+      if (sent) {
+        res.status(200).json({
+          success: true,
+          message: 'Receipt email sent successfully'
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Failed to send receipt email'
+        });
+      }
     } else {
-      throw new Error("Failed to send receipt email");
+      res.status(400).json({
+        success: false,
+        message: 'No email address found for this payment'
+      });
     }
-    
   } catch (error) {
-    console.error("Error sending receipt email:", error);
-    res.status(500).json({ 
+    logger.error('Error resending receipt email', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+    res.status(500).json({
       success: false,
-      message: "Error sending receipt email",
-      error: error.message 
+      message: 'Error resending receipt email',
+      error: error.message
     });
   }
 };
 
-// Get all payment receipts for a student
-exports.getStudentReceipts = async (req, res) => {
+// Get all receipts for a student
+const getStudentReceipts = async (req, res) => {
   try {
     const { student_id } = req.params;
     
-    // Fetch all enrollments and subscriptions with receipt URLs
+    // Get both enrollments and subscriptions with receipt URLs
     const [enrollments, subscriptions] = await Promise.all([
-      EnrolledCourse.find({ 
-        student_id, 
-        receipt_url: { $exists: true, $ne: null } 
-      })
-        .select('_id receipt_url payment_details.amount payment_details.payment_date course_id enrollment_date')
-        .populate("course_id", "course_title"),
-      Subscription.find({ 
-        user_id: student_id, 
-        receipt_url: { $exists: true, $ne: null } 
-      })
-        .select('_id receipt_url amount start_date plan_name')
+      EnrolledCourse.find({ student_id, receipt_url: { $exists: true } }),
+      Subscription.find({ user_id: student_id, receipt_url: { $exists: true } })
     ]);
-    
-    // Format the response
+
     const receipts = [
       ...enrollments.map(e => ({
-        id: e._id,
         type: 'course',
-        name: e.course_id?.course_title || 'Course Enrollment',
-        amount: e.payment_details?.amount || 0,
-        date: e.payment_details?.payment_date || e.enrollment_date,
-        receipt_url: e.receipt_url
+        id: e._id,
+        receipt_url: e.receipt_url,
+        payment_date: e.payment_details?.payment_date,
+        amount: e.payment_details?.amount,
+        course_name: e.course_name
       })),
       ...subscriptions.map(s => ({
-        id: s._id,
         type: 'subscription',
-        name: s.plan_name || 'Subscription',
-        amount: s.amount || 0,
-        date: s.start_date,
-        receipt_url: s.receipt_url
+        id: s._id,
+        receipt_url: s.receipt_url,
+        payment_date: s.payment_details?.payment_date,
+        amount: s.payment_details?.amount,
+        plan_name: s.plan_name
       }))
-    ].sort((a, b) => new Date(b.date) - new Date(a.date));
-    
+    ].sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date));
+
     res.status(200).json({
       success: true,
       data: receipts
     });
-    
   } catch (error) {
-    console.error("Error fetching student receipts:", error);
-    res.status(500).json({ 
+    logger.error('Error fetching student receipts', {
+      error: {
+        message: error.message,
+        stack: error.stack
+      }
+    });
+    res.status(500).json({
       success: false,
-      message: "Error fetching student receipts",
-      error: error.message 
+      message: 'Error fetching student receipts',
+      error: error.message
     });
   }
+};
+
+module.exports = {
+  processPaymentAndEnroll,
+  getStudentPayments,
+  getPaymentById,
+  getPaymentStats,
+  generateReceiptForExistingPayment,
+  resendReceiptEmail,
+  getStudentReceipts
 }; 
