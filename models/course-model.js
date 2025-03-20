@@ -60,6 +60,11 @@ const faqSchema = new mongoose.Schema({
 
 // Define curriculum week schema
 const curriculumWeekSchema = new mongoose.Schema({
+  id: {
+    type: String,
+    required: [true, 'Week ID is required'],
+    unique: true
+  },
   weekTitle: {
     type: String,
     required: [true, 'Week title is required'],
@@ -67,73 +72,58 @@ const curriculumWeekSchema = new mongoose.Schema({
   },
   weekDescription: {
     type: String,
-    required: [true, 'Week description is required'],
     trim: true
   },
-  topics: {
-    type: [String],
-    default: [],
-    validate: {
-      validator: function(topics) {
-        return topics.every(topic => topic && topic.trim().length > 0);
-      },
-      message: 'Topics cannot be empty strings'
-    }
-  },
-  resources: {
-    type: [{
-      title: { 
-        type: String, 
-        required: [true, 'Resource title is required'], 
-        trim: true 
-      },
-      type: { 
-        type: String, 
-        enum: {
-          values: ['video', 'pdf', 'link', 'other'],
-          message: '{VALUE} is not a valid resource type'
-        },
-        required: [true, 'Resource type is required']
-      },
-      url: { 
-        type: String,
-        required: [true, 'Resource URL is required'],
-        validate: {
-          validator: function(v) {
-            // Only validate if type is pdf
-            if (this.type === 'pdf') {
-              return /\.pdf($|\?|#)/.test(v) || 
-                     /\/pdf\//.test(v) || 
-                     /documents.*\.amazonaws\.com/.test(v) ||
-                     /drive\.google\.com/.test(v) ||
-                     /dropbox\.com/.test(v);
-            }
-            return true;
-          },
-          message: props => `${props.value} is not a valid PDF URL. URL must end with .pdf or be from a supported cloud storage provider.`
-        }
-      },
-      description: { type: String, default: '', trim: true },
-      // Additional fields for PDF resources
-      size_mb: { 
-        type: Number, 
-        min: [0, 'PDF size cannot be negative'],
-        max: [50, 'PDF size cannot exceed 50MB'],
-        default: null 
-      },
-      pages: { 
-        type: Number, 
-        min: [1, 'PDF must have at least 1 page'],
-        default: null 
-      },
-      upload_date: { 
-        type: Date, 
-        default: Date.now 
-      }
+  topics: [{
+    type: String,
+    trim: true
+  }],
+  sections: [{
+    id: {
+      type: String,
+      required: [true, 'Section ID is required'],
+      unique: true
+    },
+    title: {
+      type: String,
+      required: [true, 'Section title is required'],
+      trim: true
+    },
+    description: {
+      type: String,
+      trim: true
+    },
+    order: {
+      type: Number,
+      required: [true, 'Section order is required'],
+      min: [0, 'Order cannot be negative']
+    },
+    lessons: [{
+      type: String, // Reference to Lesson model's id
+      required: [true, 'Lesson ID is required']
     }],
-    default: []
-  }
-});
+    resources: [{
+      title: {
+        type: String,
+        required: [true, 'Resource title is required'],
+        trim: true
+      },
+      description: {
+        type: String,
+        trim: true
+      },
+      fileUrl: {
+        type: String,
+        required: [true, 'Resource file URL is required']
+      },
+      type: {
+        type: String,
+        enum: ['pdf', 'document', 'video', 'audio', 'link'],
+        required: [true, 'Resource type is required']
+      }
+    }]
+  }]
+}, { timestamps: true });
 
 // Define tools and technologies schema
 const toolTechnologySchema = new mongoose.Schema({
@@ -284,206 +274,6 @@ const priceSchema = new mongoose.Schema({
     default: true
   }
 });
-
-// Section Schema
-const sectionSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: [true, 'Section title is required'],
-    trim: true
-  },
-  description: {
-    type: String,
-    trim: true
-  },
-  order: {
-    type: Number,
-    required: [true, 'Section order is required'],
-    min: [0, 'Order cannot be negative']
-  },
-  lessons: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Lesson'
-  }]
-}, { timestamps: true });
-
-// Lesson Schema
-const lessonSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: [true, 'Lesson title is required'],
-    trim: true
-  },
-  description: {
-    type: String,
-    trim: true
-  },
-  content: {
-    type: String,
-    required: [true, 'Lesson content is required']
-  },
-  duration: {
-    type: Number, // in minutes
-    required: [true, 'Lesson duration is required'],
-    min: [0, 'Duration cannot be negative']
-  },
-  order: {
-    type: Number,
-    required: [true, 'Lesson order is required'],
-    min: [0, 'Order cannot be negative']
-  },
-  videoUrl: {
-    type: String,
-    trim: true
-  },
-  resources: [{
-    title: {
-      type: String,
-      required: [true, 'Resource title is required'],
-      trim: true
-    },
-    description: {
-      type: String,
-      trim: true
-    },
-    fileUrl: {
-      type: String,
-      required: [true, 'Resource file URL is required']
-    },
-    filename: {
-      type: String,
-      required: [true, 'Resource filename is required']
-    },
-    mimeType: {
-      type: String,
-      required: [true, 'Resource MIME type is required']
-    },
-    size: {
-      type: Number,
-      required: [true, 'Resource size is required']
-    }
-  }]
-}, { timestamps: true });
-
-// Assignment Schema
-const assignmentSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: [true, 'Assignment title is required'],
-    trim: true
-  },
-  description: {
-    type: String,
-    required: [true, 'Assignment description is required']
-  },
-  dueDate: {
-    type: Date,
-    required: [true, 'Due date is required']
-  },
-  maxScore: {
-    type: Number,
-    required: [true, 'Maximum score is required'],
-    min: [0, 'Maximum score cannot be negative']
-  },
-  instructions: {
-    type: String,
-    required: [true, 'Assignment instructions are required']
-  },
-  resources: [{
-    title: {
-      type: String,
-      required: [true, 'Resource title is required'],
-      trim: true
-    },
-    fileUrl: {
-      type: String,
-      required: [true, 'Resource file URL is required']
-    }
-  }],
-  submissions: [{
-    studentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },
-    submission: {
-      type: String,
-      required: true
-    },
-    submittedAt: {
-      type: Date,
-      default: Date.now
-    },
-    score: {
-      type: Number,
-      min: [0, 'Score cannot be negative']
-    },
-    feedback: {
-      type: String,
-      trim: true
-    }
-  }]
-}, { timestamps: true });
-
-// Quiz Schema
-const quizSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: [true, 'Quiz title is required'],
-    trim: true
-  },
-  description: {
-    type: String,
-    trim: true
-  },
-  duration: {
-    type: Number, // in minutes
-    required: [true, 'Quiz duration is required'],
-    min: [0, 'Duration cannot be negative']
-  },
-  questions: [{
-    question: {
-      type: String,
-      required: [true, 'Question text is required']
-    },
-    options: [{
-      type: String,
-      required: [true, 'Question options are required']
-    }],
-    correctAnswer: {
-      type: Number,
-      required: [true, 'Correct answer is required'],
-      min: [0, 'Correct answer index cannot be negative']
-    },
-    explanation: {
-      type: String,
-      trim: true
-    }
-  }],
-  submissions: [{
-    studentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
-    },
-    answers: [{
-      type: Number,
-      required: true
-    }],
-    score: {
-      type: Number,
-      required: true
-    },
-    percentage: {
-      type: Number,
-      required: true
-    },
-    submittedAt: {
-      type: Date,
-      default: Date.now
-    }
-  }]
-}, { timestamps: true });
 
 const courseSchema = new mongoose.Schema(
   {
@@ -780,11 +570,7 @@ const courseSchema = new mongoose.Schema(
         type: Date,
         default: Date.now
       }
-    },
-    sections: [sectionSchema],
-    lessons: [lessonSchema],
-    assignments: [assignmentSchema],
-    quizzes: [quizSchema]
+    }
   },
   { 
     timestamps: true,
@@ -834,6 +620,98 @@ courseSchema.virtual('priceDisplay').get(function() {
   return `INR ${this.course_fee}`;
 });
 
+// Add virtual fields for quizzes, assignments, and certificates
+courseSchema.virtual('quizzes', {
+  ref: 'Quiz',
+  localField: '_id',
+  foreignField: 'course'
+});
+
+courseSchema.virtual('assignments', {
+  ref: 'Assignment',
+  localField: '_id',
+  foreignField: 'course'
+});
+
+courseSchema.virtual('certificates', {
+  ref: 'Certificate',
+  localField: '_id',
+  foreignField: 'course'
+});
+
+// Add virtual fields for lessons
+courseSchema.virtual('lessons', {
+  ref: 'Lesson',
+  localField: '_id',
+  foreignField: 'course'
+});
+
+// Add method to get course statistics
+courseSchema.methods.getStatistics = async function() {
+  const [totalStudents, averageRating, totalViews] = await Promise.all([
+    this.model('Enrollment').countDocuments({ course: this._id }),
+    this.model('Review').aggregate([
+      { $match: { course: this._id, status: 'approved' } },
+      { $group: { _id: null, avg: { $avg: '$rating' } } }
+    ]),
+    this.model('Lesson').aggregate([
+      { $match: { course: this._id } },
+      { $group: { _id: null, total: { $sum: '$meta.views' } } }
+    ])
+  ]);
+
+  return {
+    totalStudents,
+    averageRating: averageRating[0]?.avg || 0,
+    totalViews: totalViews[0]?.total || 0,
+    totalLessons: this.curriculum.reduce((sum, week) => 
+      sum + week.sections.reduce((weekSum, section) => 
+        weekSum + section.lessons.length, 0), 0),
+    totalQuizzes: await this.model('Quiz').countDocuments({ course: this._id }),
+    totalAssignments: await this.model('Assignment').countDocuments({ course: this._id }),
+    totalCertificates: await this.model('Certificate').countDocuments({ course: this._id })
+  };
+};
+
+// Add method to get student progress
+courseSchema.methods.getStudentProgress = async function(studentId) {
+  const [enrollment, progress] = await Promise.all([
+    this.model('Enrollment').findOne({ course: this._id, student: studentId }),
+    this.model('Progress').findOne({ course: this._id, student: studentId })
+  ]);
+
+  if (!enrollment || !progress) return null;
+
+  const lessons = await this.model('Lesson').find({ course: this._id });
+  const completedLessons = progress.lessonProgress.filter(p => p.status === 'completed');
+  const completedQuizzes = progress.quizProgress.filter(p => p.status === 'completed');
+  const completedAssignments = progress.assignmentProgress.filter(p => p.status === 'graded');
+
+  return {
+    enrollment,
+    progress: {
+      overall: progress.overallProgress,
+      lessons: {
+        total: lessons.length,
+        completed: completedLessons.length,
+        inProgress: progress.lessonProgress.length - completedLessons.length
+      },
+      quizzes: {
+        total: await this.model('Quiz').countDocuments({ course: this._id }),
+        completed: completedQuizzes.length
+      },
+      assignments: {
+        total: await this.model('Assignment').countDocuments({ course: this._id }),
+        completed: completedAssignments.length
+      },
+      certificate: await this.model('Certificate').findOne({
+        course: this._id,
+        student: studentId
+      })
+    }
+  };
+};
+
 // Helper function to generate slug from title
 function generateSlug(title) {
   return title
@@ -870,6 +748,56 @@ courseSchema.pre("save", function (next) {
   // Update lastUpdated metadata
   if (this.isModified()) {
     this.meta.lastUpdated = Date.now();
+  }
+  
+  // Assign IDs to weeks
+  if (this.curriculum && this.curriculum.length > 0) {
+    this.curriculum.forEach((week, weekIndex) => {
+      // Assign week ID
+      week.id = `week_${weekIndex + 1}`;
+      
+      // Assign section IDs
+      if (week.sections && week.sections.length > 0) {
+        week.sections.forEach((section, sectionIndex) => {
+          section.id = `section_${weekIndex + 1}_${sectionIndex + 1}`;
+          
+          // Assign lesson IDs
+          if (section.lessons && section.lessons.length > 0) {
+            section.lessons.forEach((lesson, lessonIndex) => {
+              lesson.id = `lesson_${weekIndex + 1}_${sectionIndex + 1}_${lessonIndex + 1}`;
+              
+              // Assign resource IDs
+              if (lesson.resources && lesson.resources.length > 0) {
+                lesson.resources.forEach((resource, resourceIndex) => {
+                  resource.id = `resource_${weekIndex + 1}_${sectionIndex + 1}_${lessonIndex + 1}_${resourceIndex + 1}`;
+                });
+              }
+              
+              // Assign assignment IDs
+              if (lesson.assignments && lesson.assignments.length > 0) {
+                lesson.assignments.forEach((assignment, assignmentIndex) => {
+                  assignment.id = `assignment_${weekIndex + 1}_${sectionIndex + 1}_${lessonIndex + 1}_${assignmentIndex + 1}`;
+                });
+              }
+              
+              // Assign quiz IDs
+              if (lesson.quizzes && lesson.quizzes.length > 0) {
+                lesson.quizzes.forEach((quiz, quizIndex) => {
+                  quiz.id = `quiz_${weekIndex + 1}_${sectionIndex + 1}_${lessonIndex + 1}_${quizIndex + 1}`;
+                  
+                  // Assign question IDs
+                  if (quiz.questions && quiz.questions.length > 0) {
+                    quiz.questions.forEach((question, questionIndex) => {
+                      question.id = `question_${weekIndex + 1}_${sectionIndex + 1}_${lessonIndex + 1}_${quizIndex + 1}_${questionIndex + 1}`;
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      }
+    });
   }
   
   next();

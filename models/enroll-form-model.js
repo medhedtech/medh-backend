@@ -27,5 +27,5 @@ const enrollFormSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const EnrollForm = mongoose.model("Enrollment", enrollFormSchema);
+const EnrollForm = mongoose.model("EnrollForm", enrollFormSchema);
 module.exports = EnrollForm;

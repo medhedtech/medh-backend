@@ -1,47 +1,89 @@
 const express = require("express");
 const router = express.Router();
-const courseController = require("../controllers/course-controller");
-const { authenticateUser } = require("../middleware/auth");
-const { validateCourseInput } = require("../middleware/validation-middleware");
-const { upload, handleUploadError } = require("../middleware/file-upload");
+const {
+  createCourse,
+  getAllCourses,
+  getCourseById,
+  getCoorporateCourseById,
+  updateCourse,
+  deleteCourse,
+  getCourseTitles,
+  getAllCoursesWithLimits,
+  toggleCourseStatus,
+  updateRecordedVideos,
+  getRecordedVideosForUser,
+  getAllRelatedCourses,
+  getNewCoursesWithLimits,
+  downloadBrochure,
+  getCourseSections,
+  getCourseLessons,
+  getLessonDetails,
+  getCourseProgress,
+  markLessonComplete,
+  getCourseAssignments,
+  submitAssignment,
+  getCourseQuizzes,
+  submitQuiz,
+  getQuizResults,
+  getLessonResources,
+  downloadResource,
+  addLessonNote,
+  addLessonBookmark,
+  handleUpload,
+  handleMultipleUpload,
+  getLessonNotes,
+  updateNote,
+  deleteNote,
+  getLessonBookmarks,
+  updateBookmark,
+  deleteBookmark
+} = require("../controllers/course-controller");
+const { authenticate } = require("../middleware/auth");
+const { upload, uploadMultiple, handleUploadError } = require("../middleware/upload");
 
 // Public Routes
-router.get("/get", courseController.getAllCourses);
-router.get("/search", courseController.getAllCoursesWithLimits);
-router.get("/new", courseController.getNewCoursesWithLimits);
-router.get("/:id", courseController.getCourseById);
-router.get("/corporate/:id", courseController.getCoorporateCourseById);
+router.get("/get", getAllCourses);
+router.get("/search", getAllCoursesWithLimits);
+router.get("/new", getNewCoursesWithLimits);
+router.get("/:id", getCourseById);
+router.get("/coorporate/:id", getCoorporateCourseById);
+router.get("/titles", getCourseTitles);
+router.get("/related", getAllRelatedCourses);
 
 // Student Routes (Protected)
-router.use(authenticateUser);
-router.get("/:courseId/sections", courseController.getCourseSections);
-router.get("/:courseId/lessons", courseController.getCourseLessons);
-router.get("/:courseId/lessons/:lessonId", courseController.getLessonDetails);
-router.post("/:courseId/lessons/:lessonId/complete", courseController.markLessonComplete);
-router.post("/:courseId/lessons/:lessonId/notes", courseController.addLessonNote);
-router.post("/:courseId/lessons/:lessonId/bookmarks", courseController.addLessonBookmark);
-router.get("/:courseId/progress", courseController.getCourseProgress);
-router.get("/:courseId/assignments", courseController.getCourseAssignments);
-router.post("/:courseId/assignments/:assignmentId/submit", courseController.submitAssignment);
-router.get("/:courseId/quizzes", courseController.getCourseQuizzes);
-router.post("/:courseId/quizzes/:quizId/submit", courseController.submitQuiz);
-router.get("/:courseId/quizzes/:quizId/results", courseController.getQuizResults);
-router.get("/:courseId/lessons/:lessonId/resources", courseController.getLessonResources);
-router.get("/:courseId/lessons/:lessonId/resources/:resourceId/download", courseController.downloadResource);
-router.get("/recorded-videos/:studentId", courseController.getRecordedVideosForUser);
+router.use(authenticate);
+router.get("/:courseId/sections", getCourseSections);
+router.get("/:courseId/lessons", getCourseLessons);
+router.get("/:courseId/lessons/:lessonId", getLessonDetails);
+router.get("/:courseId/progress", getCourseProgress);
+router.post("/:courseId/lessons/:lessonId/complete", markLessonComplete);
+router.get("/:courseId/assignments", getCourseAssignments);
+router.post("/:courseId/assignments/:assignmentId/submit", submitAssignment);
+router.get("/:courseId/quizzes", getCourseQuizzes);
+router.post("/:courseId/quizzes/:quizId/submit", submitQuiz);
+router.get("/:courseId/quizzes/:quizId/results", getQuizResults);
+router.get("/:courseId/lessons/:lessonId/resources", getLessonResources);
+router.get("/:courseId/lessons/:lessonId/resources/:resourceId/download", downloadResource);
+router.get("/:courseId/lessons/:lessonId/notes", getLessonNotes);
+router.post("/:courseId/lessons/:lessonId/notes", addLessonNote);
+router.put("/:courseId/lessons/:lessonId/notes/:noteId", updateNote);
+router.delete("/:courseId/lessons/:lessonId/notes/:noteId", deleteNote);
+router.get("/:courseId/lessons/:lessonId/bookmarks", getLessonBookmarks);
+router.post("/:courseId/lessons/:lessonId/bookmarks", addLessonBookmark);
+router.put("/:courseId/lessons/:lessonId/bookmarks/:bookmarkId", updateBookmark);
+router.delete("/:courseId/lessons/:lessonId/bookmarks/:bookmarkId", deleteBookmark);
+router.post("/broucher/download/:courseId", downloadBrochure);
 
 // Admin Routes (Protected)
-router.use(authenticateUser);
-router.post("/create", validateCourseInput, courseController.createCourse);
-router.put("/:id", validateCourseInput, courseController.updateCourse);
-router.delete("/:id", courseController.deleteCourse);
-router.get("/titles", courseController.getCourseTitles);
-router.patch("/:id/toggle-status", courseController.toggleCourseStatus);
-router.post("/:id/recorded-videos", courseController.updateRecordedVideos);
-router.get("/related-courses", courseController.getAllRelatedCourses);
+router.post("/create", upload.single("course_image"), handleUploadError, createCourse);
+router.put("/:id", upload.single("course_image"), handleUploadError, updateCourse);
+router.delete("/:id", deleteCourse);
+router.patch("/:id/toggle-status", toggleCourseStatus);
+router.post("/:id/recorded-videos", updateRecordedVideos);
+router.get("/recorded-videos/:studentId", getRecordedVideosForUser);
 
 // File Upload Routes (Protected)
-router.post("/upload", authenticateUser, upload.single('file'), handleUploadError, courseController.handleUpload);
-router.post("/upload-multiple", authenticateUser, upload.array('files', 10), handleUploadError, courseController.handleMultipleUpload);
+router.post("/upload", upload.single("file"), handleUploadError, handleUpload);
+router.post("/upload-multiple", uploadMultiple.array("files", 10), handleUploadError, handleMultipleUpload);
 
 module.exports = router;
