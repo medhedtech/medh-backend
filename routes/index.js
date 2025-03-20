@@ -33,6 +33,7 @@ const quizResponseRoutes = require("./quizResponseRoutes");
 const trackSessionRoute = require("./track-sessionsRoutes");
 const assignCoorporateCourse = require("./assign-course-coorporateRoutes");
 const corporateRoute = require("./corporate-traing-Routes");
+const paymentRoutes = require("./paymentRoutes");
 
 const moduleRoutes = [
   {
@@ -170,6 +171,10 @@ const moduleRoutes = [
   {
     path: "/corporate-training",
     route: corporateRoute,
+  },
+  {
+    path: "/payments",
+    route: paymentRoutes,
   }
 ];
 

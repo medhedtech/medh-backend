@@ -1399,7 +1399,1112 @@ const downloadBrochure = async (courseId, userDetails) => {
   }
 };
 
-// Export only the defined functions
+// =========================================
+// COURSE SECTIONS & LESSONS
+// =========================================
+
+/**
+ * @desc    Get all sections for a course with progress tracking
+ * @route   GET /api/courses/:courseId/sections
+ * @access  Private (Enrolled Students)
+ */
+const getCourseSections = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { studentId } = req.user;
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view sections"
+      });
+    }
+
+    const course = await Course.findById(courseId)
+      .select('sections lessons')
+      .lean();
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    // Enhance sections with progress information
+    const enhancedSections = course.sections.map(section => {
+      const sectionLessons = course.lessons.filter(lesson => 
+        section.lessons.includes(lesson._id)
+      );
+      
+      const completedLessons = sectionLessons.filter(lesson =>
+        enrollment.completed_lessons.includes(lesson._id)
+      );
+
+      return {
+        ...section,
+        progress: {
+          total: sectionLessons.length,
+          completed: completedLessons.length,
+          percentage: sectionLessons.length > 0 
+            ? Math.round((completedLessons.length / sectionLessons.length) * 100)
+            : 0
+        },
+        lessons: sectionLessons.map(lesson => ({
+          ...lesson,
+          isCompleted: enrollment.completed_lessons.includes(lesson._id)
+        }))
+      };
+    });
+
+    // Update last accessed time
+    enrollment.last_accessed = new Date();
+    await enrollment.save();
+
+    res.status(200).json({
+      success: true,
+      data: enhancedSections,
+      overallProgress: enrollment.progress
+    });
+  } catch (error) {
+    console.error("Error fetching course sections:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course sections",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get all lessons for a course with enhanced details
+ * @route   GET /api/courses/:courseId/lessons
+ * @access  Private (Enrolled Students)
+ */
+const getCourseLessons = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { studentId } = req.user;
+    const { includeResources = false } = req.query;
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view lessons"
+      });
+    }
+
+    const course = await Course.findById(courseId)
+      .select('lessons sections')
+      .lean();
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    // Enhance lessons with section information and completion status
+    const enhancedLessons = course.lessons.map(lesson => {
+      const section = course.sections.find(s => 
+        s.lessons.includes(lesson._id)
+      );
+
+      const lessonData = {
+        ...lesson,
+        section: section ? {
+          id: section._id,
+          title: section.title,
+          order: section.order
+        } : null,
+        isCompleted: enrollment.completed_lessons.includes(lesson._id),
+        hasNotes: enrollment.notes.some(note => 
+          note.lessonId.toString() === lesson._id.toString()
+        ),
+        hasBookmarks: enrollment.bookmarks.some(bookmark => 
+          bookmark.lessonId.toString() === lesson._id.toString()
+        )
+      };
+
+      // Include resources if requested
+      if (includeResources === 'true') {
+        lessonData.resources = lesson.resources || [];
+      } else {
+        delete lessonData.resources;
+      }
+
+      return lessonData;
+    });
+
+    // Sort lessons by section order and lesson order
+    enhancedLessons.sort((a, b) => {
+      if (a.section && b.section) {
+        if (a.section.order !== b.section.order) {
+          return a.section.order - b.section.order;
+        }
+      }
+      return a.order - b.order;
+    });
+
+    // Update last accessed time
+    enrollment.last_accessed = new Date();
+    await enrollment.save();
+
+    res.status(200).json({
+      success: true,
+      data: enhancedLessons,
+      progress: {
+        total: enhancedLessons.length,
+        completed: enrollment.completed_lessons.length,
+        percentage: enrollment.progress
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching course lessons:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course lessons",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get lesson details with enhanced information
+ * @route   GET /api/courses/:courseId/lessons/:lessonId
+ * @access  Private (Enrolled Students)
+ */
+const getLessonDetails = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const { studentId } = req.user;
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view lesson details"
+      });
+    }
+
+    const course = await Course.findById(courseId)
+      .select('lessons sections')
+      .lean();
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    const lesson = course.lessons.find(l => l._id.toString() === lessonId);
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: "Lesson not found"
+      });
+    }
+
+    // Find section information
+    const section = course.sections.find(s => 
+      s.lessons.includes(lesson._id)
+    );
+
+    // Get student's notes and bookmarks for this lesson
+    const notes = enrollment.notes.filter(note => 
+      note.lessonId.toString() === lessonId
+    );
+
+    const bookmarks = enrollment.bookmarks.filter(bookmark => 
+      bookmark.lessonId.toString() === lessonId
+    );
+
+    // Get next and previous lessons
+    const allLessons = course.lessons.sort((a, b) => a.order - b.order);
+    const currentIndex = allLessons.findIndex(l => l._id.toString() === lessonId);
+    
+    const navigation = {
+      previous: currentIndex > 0 ? {
+        id: allLessons[currentIndex - 1]._id,
+        title: allLessons[currentIndex - 1].title
+      } : null,
+      next: currentIndex < allLessons.length - 1 ? {
+        id: allLessons[currentIndex + 1]._id,
+        title: allLessons[currentIndex + 1].title
+      } : null
+    };
+
+    // Update last accessed time
+    enrollment.last_accessed = new Date();
+    await enrollment.save();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        ...lesson,
+        section: section ? {
+          id: section._id,
+          title: section.title,
+          order: section.order
+        } : null,
+        isCompleted: enrollment.completed_lessons.includes(lesson._id),
+        notes,
+        bookmarks,
+        navigation
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching lesson details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching lesson details",
+      error: error.message
+    });
+  }
+};
+
+// =========================================
+// COURSE PROGRESS & COMPLETION
+// =========================================
+
+/**
+ * @desc    Get course progress for a student
+ * @route   GET /api/courses/:courseId/progress
+ * @access  Private (Enrolled Students)
+ */
+const getCourseProgress = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { studentId } = req.user;
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view progress"
+      });
+    }
+
+    const course = await Course.findById(courseId)
+      .select('lessons')
+      .lean();
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    const totalLessons = course.lessons.length;
+    const completedLessons = enrollment.completed_lessons?.length || 0;
+    const progress = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalLessons,
+        completedLessons,
+        progress,
+        lastAccessed: enrollment.last_accessed,
+        completedLessonsList: enrollment.completed_lessons || []
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching course progress:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course progress",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Mark a lesson as complete
+ * @route   POST /api/courses/:courseId/lessons/:lessonId/complete
+ * @access  Private (Enrolled Students)
+ */
+const markLessonComplete = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const { studentId } = req.user;
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to mark lessons complete"
+      });
+    }
+
+    // Check if lesson is already completed
+    if (enrollment.isLessonCompleted(lessonId)) {
+      return res.status(200).json({
+        success: true,
+        message: "Lesson already marked as complete"
+      });
+    }
+
+    // Add lesson to completed lessons
+    enrollment.completed_lessons.push(lessonId);
+    enrollment.last_accessed = new Date();
+    await enrollment.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Lesson marked as complete",
+      data: {
+        progress: enrollment.progress,
+        completedLessons: enrollment.completed_lessons.length
+      }
+    });
+  } catch (error) {
+    console.error("Error marking lesson complete:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error marking lesson complete",
+      error: error.message
+    });
+  }
+};
+
+// =========================================
+// COURSE ASSIGNMENTS
+// =========================================
+
+/**
+ * @desc    Get all assignments for a course
+ * @route   GET /api/courses/:courseId/assignments
+ * @access  Private (Enrolled Students)
+ */
+const getCourseAssignments = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { studentId } = req.user;
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view assignments"
+      });
+    }
+
+    const course = await Course.findById(courseId)
+      .select('assignments')
+      .lean();
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: course.assignments || []
+    });
+  } catch (error) {
+    console.error("Error fetching course assignments:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course assignments",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Submit an assignment
+ * @route   POST /api/courses/:courseId/assignments/:assignmentId/submit
+ * @access  Private (Enrolled Students)
+ */
+const submitAssignment = async (req, res) => {
+  try {
+    const { courseId, assignmentId } = req.params;
+    const { studentId } = req.user;
+    const { submission } = req.body;
+
+    if (!submission) {
+      return res.status(400).json({
+        success: false,
+        message: "Submission content is required"
+      });
+    }
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to submit assignments"
+      });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    const assignment = course.assignments.id(assignmentId);
+    if (!assignment) {
+      return res.status(404).json({
+        success: false,
+        message: "Assignment not found"
+      });
+    }
+
+    // Add or update submission
+    const existingSubmission = enrollment.getAssignmentSubmission(assignmentId);
+    if (existingSubmission) {
+      existingSubmission.submission = submission;
+      existingSubmission.submittedAt = new Date();
+    } else {
+      enrollment.assignment_submissions.push({
+        assignmentId,
+        submission,
+        submittedAt: new Date()
+      });
+    }
+
+    // Mark assignment as completed if not already
+    if (!enrollment.isAssignmentCompleted(assignmentId)) {
+      enrollment.completed_assignments.push(assignmentId);
+    }
+
+    enrollment.last_accessed = new Date();
+    await enrollment.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Assignment submitted successfully",
+      data: {
+        progress: enrollment.progress,
+        completedAssignments: enrollment.completed_assignments.length
+      }
+    });
+  } catch (error) {
+    console.error("Error submitting assignment:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error submitting assignment",
+      error: error.message
+    });
+  }
+};
+
+// =========================================
+// COURSE QUIZZES
+// =========================================
+
+/**
+ * @desc    Get all quizzes for a course
+ * @route   GET /api/courses/:courseId/quizzes
+ * @access  Private (Enrolled Students)
+ */
+const getCourseQuizzes = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { studentId } = req.user;
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view quizzes"
+      });
+    }
+
+    const course = await Course.findById(courseId)
+      .select('quizzes')
+      .lean();
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: course.quizzes || []
+    });
+  } catch (error) {
+    console.error("Error fetching course quizzes:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course quizzes",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Submit a quiz
+ * @route   POST /api/courses/:courseId/quizzes/:quizId/submit
+ * @access  Private (Enrolled Students)
+ */
+const submitQuiz = async (req, res) => {
+  try {
+    const { courseId, quizId } = req.params;
+    const { studentId } = req.user;
+    const { answers } = req.body;
+
+    if (!answers || !Array.isArray(answers)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid answers array is required"
+      });
+    }
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to submit quizzes"
+      });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    const quiz = course.quizzes.id(quizId);
+    if (!quiz) {
+      return res.status(404).json({
+        success: false,
+        message: "Quiz not found"
+      });
+    }
+
+    // Calculate score
+    let score = 0;
+    quiz.questions.forEach((question, index) => {
+      if (answers[index] === question.correctAnswer) {
+        score++;
+      }
+    });
+
+    const percentage = (score / quiz.questions.length) * 100;
+
+    // Add or update submission
+    const existingSubmission = enrollment.getQuizSubmission(quizId);
+    if (existingSubmission) {
+      existingSubmission.answers = answers;
+      existingSubmission.score = score;
+      existingSubmission.percentage = percentage;
+      existingSubmission.submittedAt = new Date();
+    } else {
+      enrollment.quiz_submissions.push({
+        quizId,
+        answers,
+        score,
+        percentage,
+        submittedAt: new Date()
+      });
+    }
+
+    // Mark quiz as completed if not already
+    if (!enrollment.isQuizCompleted(quizId)) {
+      enrollment.completed_quizzes.push(quizId);
+    }
+
+    enrollment.last_accessed = new Date();
+    await enrollment.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Quiz submitted successfully",
+      data: {
+        score,
+        percentage,
+        totalQuestions: quiz.questions.length,
+        progress: enrollment.progress,
+        completedQuizzes: enrollment.completed_quizzes.length
+      }
+    });
+  } catch (error) {
+    console.error("Error submitting quiz:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error submitting quiz",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get quiz results
+ * @route   GET /api/courses/:courseId/quizzes/:quizId/results
+ * @access  Private (Enrolled Students)
+ */
+const getQuizResults = async (req, res) => {
+  try {
+    const { courseId, quizId } = req.params;
+    const { studentId } = req.user;
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view quiz results"
+      });
+    }
+
+    const course = await Course.findById(courseId)
+      .select('quizzes')
+      .lean();
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    const quiz = course.quizzes.find(q => q._id.toString() === quizId);
+    if (!quiz) {
+      return res.status(404).json({
+        success: false,
+        message: "Quiz not found"
+      });
+    }
+
+    const submission = quiz.submissions.find(
+      s => s.studentId.toString() === studentId
+    );
+
+    if (!submission) {
+      return res.status(404).json({
+        success: false,
+        message: "No submission found for this quiz"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: submission
+    });
+  } catch (error) {
+    console.error("Error fetching quiz results:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching quiz results",
+      error: error.message
+    });
+  }
+};
+
+// =========================================
+// COURSE RESOURCES
+// =========================================
+
+/**
+ * @desc    Get all resources for a lesson
+ * @route   GET /api/courses/:courseId/lessons/:lessonId/resources
+ * @access  Private (Enrolled Students)
+ */
+const getLessonResources = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const { studentId } = req.user;
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view resources"
+      });
+    }
+
+    const course = await Course.findById(courseId)
+      .select('lessons')
+      .lean();
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    const lesson = course.lessons.find(l => l._id.toString() === lessonId);
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: "Lesson not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: lesson.resources || []
+    });
+  } catch (error) {
+    console.error("Error fetching lesson resources:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching lesson resources",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Download a resource
+ * @route   GET /api/courses/:courseId/lessons/:lessonId/resources/:resourceId/download
+ * @access  Private (Enrolled Students)
+ */
+const downloadResource = async (req, res) => {
+  try {
+    const { courseId, lessonId, resourceId } = req.params;
+    const { studentId } = req.user;
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to download resources"
+      });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    const lesson = course.lessons.id(lessonId);
+    if (!lesson) {
+      return res.status(404).json({
+        success: false,
+        message: "Lesson not found"
+      });
+    }
+
+    const resource = lesson.resources.id(resourceId);
+    if (!resource) {
+      return res.status(404).json({
+        success: false,
+        message: "Resource not found"
+      });
+    }
+
+    // Set headers for file download
+    res.setHeader('Content-Type', resource.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${resource.filename}"`);
+
+    // Stream the file
+    const fileStream = await getFileStream(resource.fileUrl);
+    fileStream.pipe(res);
+
+    // Handle errors in the stream
+    fileStream.on('error', (error) => {
+      console.error("Error streaming resource:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error downloading resource",
+        error: error.message
+      });
+    });
+  } catch (error) {
+    console.error("Error downloading resource:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error downloading resource",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Add a note to a lesson
+ * @route   POST /api/courses/:courseId/lessons/:lessonId/notes
+ * @access  Private (Enrolled Students)
+ */
+const addLessonNote = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const { studentId } = req.user;
+    const { content } = req.body;
+
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Note content is required"
+      });
+    }
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to add notes"
+      });
+    }
+
+    // Add or update note
+    const existingNoteIndex = enrollment.notes.findIndex(note => 
+      note.lessonId.toString() === lessonId
+    );
+
+    if (existingNoteIndex >= 0) {
+      enrollment.notes[existingNoteIndex].content = content;
+      enrollment.notes[existingNoteIndex].updatedAt = new Date();
+    } else {
+      enrollment.notes.push({
+        lessonId,
+        content,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+    }
+
+    await enrollment.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Note saved successfully",
+      data: enrollment.notes.find(note => note.lessonId.toString() === lessonId)
+    });
+  } catch (error) {
+    console.error("Error adding lesson note:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error adding lesson note",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Add a bookmark to a lesson
+ * @route   POST /api/courses/:courseId/lessons/:lessonId/bookmarks
+ * @access  Private (Enrolled Students)
+ */
+const addLessonBookmark = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const { studentId } = req.user;
+    const { timestamp, note } = req.body;
+
+    if (!timestamp || timestamp < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid timestamp is required"
+      });
+    }
+
+    // Verify student is enrolled in the course
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: 'active'
+    });
+
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to add bookmarks"
+      });
+    }
+
+    // Add bookmark
+    enrollment.bookmarks.push({
+      lessonId,
+      timestamp,
+      note: note || '',
+      createdAt: new Date()
+    });
+
+    await enrollment.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Bookmark added successfully",
+      data: enrollment.bookmarks[enrollment.bookmarks.length - 1]
+    });
+  } catch (error) {
+    console.error("Error adding lesson bookmark:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error adding lesson bookmark",
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Handle single file upload
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
+ */
+const handleUpload = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+    }
+
+    // Return file information
+    res.status(200).json({
+      success: true,
+      message: 'File uploaded successfully',
+      data: {
+        filename: req.file.filename,
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        path: req.file.path
+      }
+    });
+  } catch (error) {
+    console.error('Error in handleUpload:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error uploading file',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Handle multiple file upload
+ * @param {object} req - Express request object
+ * @param {object} res - Express response object
+ */
+const handleMultipleUpload = async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No files uploaded'
+      });
+    }
+
+    // Return information about all uploaded files
+    const files = req.files.map(file => ({
+      filename: file.filename,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+      size: file.size,
+      path: file.path
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: 'Files uploaded successfully',
+      data: {
+        count: files.length,
+        files
+      }
+    });
+  } catch (error) {
+    console.error('Error in handleMultipleUpload:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error uploading files',
+      error: error.message
+    });
+  }
+};
+
+// Export the new functions
 module.exports = {
   createCourse,
   getAllCourses,
@@ -1415,4 +2520,20 @@ module.exports = {
   getAllRelatedCourses,
   getNewCoursesWithLimits,
   downloadBrochure,
+  getCourseSections,
+  getCourseLessons,
+  getLessonDetails,
+  getCourseProgress,
+  markLessonComplete,
+  getCourseAssignments,
+  submitAssignment,
+  getCourseQuizzes,
+  submitQuiz,
+  getQuizResults,
+  getLessonResources,
+  downloadResource,
+  addLessonNote,
+  addLessonBookmark,
+  handleUpload,
+  handleMultipleUpload
 };

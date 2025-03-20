@@ -190,20 +190,39 @@ exports.getEnrolledCourseByStudentId = async (req, res) => {
           model: "AssignedInstructor",
         },
       });
-    // populate enrolled modules
 
     if (!enrollments.length) {
       return res
         .status(404)
-        .json({ message: "No enrollments found for this student" });
+        .json({ 
+          success: false,
+          message: "No enrollments found for this student" 
+        });
     }
 
-    res.status(200).json(enrollments);
+    // Transform the data to include payment information in a consistent format
+    const enrollmentsWithPaymentInfo = enrollments.map(enrollment => {
+      const enrollmentObj = enrollment.toObject();
+      
+      // Add payment type for frontend to distinguish this from subscriptions
+      enrollmentObj.payment_type = 'course';
+      
+      return enrollmentObj;
+    });
+
+    res.status(200).json({
+      success: true,
+      data: enrollmentsWithPaymentInfo
+    });
   } catch (error) {
     console.error("Error fetching enrollments:", error);
     res
       .status(500)
-      .json({ message: "Error fetching enrollments by student ID", error });
+      .json({ 
+        success: false,
+        message: "Error fetching enrollments by student ID", 
+        error: error.message 
+      });
   }
 };
 

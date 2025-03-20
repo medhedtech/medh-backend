@@ -6,6 +6,10 @@ const subscriptionSchema = new mongoose.Schema({
     ref: 'User',
     required: [true, 'User ID is required']
   },
+  plan_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Plan',
+  },
   plan_name: {
     type: String,
     required: [true, 'Plan name is required'],
@@ -37,6 +41,32 @@ const subscriptionSchema = new mongoose.Schema({
   payment_id: {
     type: String,
     trim: true
+  },
+  payment_details: {
+    payment_id: {
+      type: String,
+    },
+    payment_signature: {
+      type: String,
+    },
+    payment_order_id: {
+      type: String,
+    },
+    payment_method: {
+      type: String,
+      default: 'razorpay',
+    },
+    amount: {
+      type: Number,
+    },
+    currency: {
+      type: String,
+      default: 'INR',
+    },
+    payment_date: {
+      type: Date,
+      default: Date.now,
+    }
   },
   receipt_url: {
     type: String,
