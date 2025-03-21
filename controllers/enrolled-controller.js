@@ -8,7 +8,7 @@ const { handleError } = require("../utils/errorHandler");
 const logger = require("../utils/logger");
 
 // Create a new enrollment
-exports.createEnrolledCourse = async (req, res) => {
+exports.createEnrolledCourse = async (req, res, next) => {
   try {
     const { 
       student_id, 
@@ -69,7 +69,7 @@ exports.createEnrolledCourse = async (req, res) => {
     const enrollmentData = {
       student_id,
       course_id,
-      is_self_paced,
+      is_self_paced: is_self_paced || false,
       enrollment_type,
       batch_size: enrollment_type === 'batch' && activePricing ? activePricing.min_batch_size : 1,
       payment_status: payment_status || 'completed',
@@ -84,9 +84,16 @@ exports.createEnrolledCourse = async (req, res) => {
       }
     };
 
-    // Add expiry date if not self-paced
-    if (!is_self_paced && expiry_date) {
-      enrollmentData.expiry_date = expiry_date;
+    // Handle expiry date based on course type and is_self_paced flag
+    if (!enrollmentData.is_self_paced) {
+      if (!expiry_date) {
+        // If not self-paced and no expiry date provided, set default expiry to 1 year from now
+        const defaultExpiry = new Date();
+        defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
+        enrollmentData.expiry_date = defaultExpiry;
+      } else {
+        enrollmentData.expiry_date = expiry_date;
+      }
     }
 
     // Add payment details if available
@@ -123,12 +130,12 @@ exports.createEnrolledCourse = async (req, res) => {
       data: newEnrolledCourse
     });
   } catch (error) {
-    handleError(res, error, "Error creating enrollment");
+    handleError(error, req, res, next);
   }
 };
 
 // Get all enrollments with pagination and filters
-exports.getAllEnrolledCourses = async (req, res) => {
+exports.getAllEnrolledCourses = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -169,12 +176,12 @@ exports.getAllEnrolledCourses = async (req, res) => {
       data: enrollments
     });
   } catch (error) {
-    handleError(res, error, "Error fetching enrollments");
+    handleError(error, req, res, next);
   }
 };
 
 // Get enrollment by ID with detailed information
-exports.getEnrolledCourseById = async (req, res) => {
+exports.getEnrolledCourseById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -200,12 +207,12 @@ exports.getEnrolledCourseById = async (req, res) => {
       data: enrollment
     });
   } catch (error) {
-    handleError(res, error, "Error fetching enrollment");
+    handleError(error, req, res, next);
   }
 };
 
 // Update enrollment with validation
-exports.updateEnrolledCourse = async (req, res) => {
+exports.updateEnrolledCourse = async (req, res, next) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -265,12 +272,12 @@ exports.updateEnrolledCourse = async (req, res) => {
       data: updatedEnrolledCourse
     });
   } catch (error) {
-    handleError(res, error, "Error updating enrollment");
+    handleError(error, req, res, next);
   }
 };
 
 // Delete enrollment with related data cleanup
-exports.deleteEnrolledCourse = async (req, res) => {
+exports.deleteEnrolledCourse = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -294,12 +301,12 @@ exports.deleteEnrolledCourse = async (req, res) => {
       message: "Enrollment deleted successfully"
     });
   } catch (error) {
-    handleError(res, error, "Error deleting enrollment");
+    handleError(error, req, res, next);
   }
 };
 
 // Get enrollments by student ID with detailed information
-exports.getEnrolledCourseByStudentId = async (req, res) => {
+exports.getEnrolledCourseByStudentId = async (req, res, next) => {
   try {
     const { student_id } = req.params;
     const { status, includeExpired = false } = req.query;
@@ -342,12 +349,12 @@ exports.getEnrolledCourseByStudentId = async (req, res) => {
       data: enrollmentsWithPaymentInfo
     });
   } catch (error) {
-    handleError(res, error, "Error fetching enrollments by student ID");
+    handleError(error, req, res, next);
   }
 };
 
 // Get enrolled students by course ID with detailed information
-exports.getEnrolledStudentsByCourseId = async (req, res) => {
+exports.getEnrolledStudentsByCourseId = async (req, res, next) => {
   try {
     const { course_id } = req.params;
     const { status, includeExpired = false } = req.query;
@@ -394,12 +401,12 @@ exports.getEnrolledStudentsByCourseId = async (req, res) => {
       }
     });
   } catch (error) {
-    handleError(res, error, "Error fetching enrolled students");
+    handleError(error, req, res, next);
   }
 };
 
 // Mark course as completed with validation
-exports.markCourseAsCompleted = async (req, res) => {
+exports.markCourseAsCompleted = async (req, res, next) => {
   try {
     const { student_id, course_id } = req.body;
 
@@ -439,14 +446,14 @@ exports.markCourseAsCompleted = async (req, res) => {
       data: enrollment
     });
   } catch (error) {
-    handleError(res, error, "Error marking course as completed");
+    handleError(error, req, res, next);
   }
 };
 
 /**
  * Get enrollment counts for a student
  */
-exports.getEnrollmentCountsByStudentId = async (req, res) => {
+exports.getEnrollmentCountsByStudentId = async (req, res, next) => {
   try {
     const { student_id } = req.params;
 
@@ -600,17 +607,12 @@ exports.getEnrollmentCountsByStudentId = async (req, res) => {
     });
 
   } catch (error) {
-    logger.error('Error getting enrollment counts:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Error getting enrollment counts',
-      error: error.message
-    });
+    handleError(error, req, res, next);
   }
 };
 
 // Get upcoming online meetings for a student's enrolled courses
-exports.getUpcomingMeetingsForStudent = async (req, res) => {
+exports.getUpcomingMeetingsForStudent = async (req, res, next) => {
   try {
     const { student_id } = req.params;
     const { limit = 10 } = req.query;
@@ -653,12 +655,12 @@ exports.getUpcomingMeetingsForStudent = async (req, res) => {
       data: upcomingMeetings
     });
   } catch (error) {
-    handleError(res, error, "Error fetching upcoming meetings");
+    handleError(error, req, res, next);
   }
 };
 
 // Mark video as watched with progress tracking
-exports.watchVideo = async (req, res) => {
+exports.watchVideo = async (req, res, next) => {
   try {
     const { id } = req.query;
     const { student_id } = req.body;
@@ -727,12 +729,12 @@ exports.watchVideo = async (req, res) => {
       message: "Video marked as watched successfully"
     });
   } catch (error) {
-    handleError(res, error, "Error marking video as watched");
+    handleError(error, req, res, next);
   }
 };
 
 // Get all students with enrolled courses
-exports.getAllStudentsWithEnrolledCourses = async (req, res) => {
+exports.getAllStudentsWithEnrolledCourses = async (req, res, next) => {
   try {
     const { status, includeExpired = false } = req.query;
 
@@ -788,6 +790,6 @@ exports.getAllStudentsWithEnrolledCourses = async (req, res) => {
       data: Object.values(studentsWithCourses)
     });
   } catch (error) {
-    handleError(res, error, "Error fetching students with enrolled courses");
+    handleError(error, req, res, next);
   }
 };

@@ -66,16 +66,19 @@ const authorize = (roles) => {
       });
     }
     
-    // Check for role - handle both string and array formats
-    const userRole = Array.isArray(req.user.role) ? req.user.role : [req.user.role];
+    // Get user roles - handle both nested user object and direct role property
+    const userRoles = req.user.role || (req.user.user && req.user.user.role);
+    
+    // Ensure we have an array of roles
+    const userRoleArray = Array.isArray(userRoles) ? userRoles : [userRoles];
     
     // Check if any of the user's roles are in the allowed roles
-    const hasPermission = roles.some(role => userRole.includes(role));
+    const hasPermission = userRoleArray.some(role => roles.includes(role));
     
     if (!hasPermission) {
       return res.status(403).json({
         success: false,
-        message: `Access denied: User role(s) not authorized`
+        message: `Access denied: User role(s) [${userRoleArray.join(', ')}] not authorized. Required roles: [${roles.join(', ')}]`
       });
     }
     
