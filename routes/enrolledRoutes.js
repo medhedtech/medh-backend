@@ -12,7 +12,7 @@ router.use(authenticate);
 // Create enrollment
 router.post(
   "/create",
-  authorize(["admin", "instructor"]),
+  authorize(["student"]),
   validateEnrollment,
   enrollerCourseController.createEnrolledCourse
 );
