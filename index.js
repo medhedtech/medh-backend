@@ -20,14 +20,26 @@ const app = express();
 // Security Middleware
 app.use(helmet());
 app.use(mongoSanitize());
+
+// Configure CORS with proper preflight handling
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.ALLOWED_ORIGINS?.split(',') 
+    : '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+}));
+
+// Handle OPTIONS preflight requests explicitly
+app.options('*', cors());
+
 app.use(compression());
 
 // Basic Middleware
 app.use(express.static("public"));
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' ? process.env.ALLOWED_ORIGINS?.split(',') : '*',
-  credentials: true
-}));
 app.use(express.urlencoded({ extended: true }));
 app.use(bodyParser.json({ limit: "128mb", extended: true }));
 app.use(express.json());
