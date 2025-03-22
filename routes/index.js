@@ -182,4 +182,21 @@ moduleRoutes.forEach((route) => {
   router.use(route.path, route.route);
 });
 
+// Add a test endpoint for diagnosing CORS issues
+router.get('/cors-test', (req, res) => {
+  // Log request headers for debugging
+  console.log('CORS Test Request Headers:', req.headers);
+  
+  // Log response headers that will be sent
+  console.log('CORS Test Response Headers:', res.getHeaders());
+  
+  // Return environment info to verify settings
+  return res.json({
+    message: 'CORS test successful',
+    nodeEnv: process.env.NODE_ENV,
+    allowedOrigins: process.env.ALLOWED_ORIGINS,
+    requestOrigin: req.headers.origin
+  });
+});
+
 module.exports = router;
