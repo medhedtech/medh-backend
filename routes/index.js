@@ -182,38 +182,4 @@ moduleRoutes.forEach((route) => {
   router.use(route.path, route.route);
 });
 
-<<<<<<< Updated upstream
-=======
-// Add a test endpoint for diagnosing CORS issues
-router.get('/cors-test', (req, res) => {
-  // Log request headers for debugging
-  console.log('CORS Test Request Headers:', req.headers);
-  
-  // Log response headers that will be sent
-  console.log('CORS Test Response Headers:', res.getHeaders());
-  
-  // Return environment info to verify settings
-  return res.json({
-    message: 'CORS test successful',
-    nodeEnv: process.env.NODE_ENV,
-    allowedOrigins: process.env.ALLOWED_ORIGINS,
-    requestOrigin: req.headers.origin,
-    corsHeaders: {
-      allowOrigin: res.getHeader('Access-Control-Allow-Origin'),
-      allowMethods: res.getHeader('Access-Control-Allow-Methods'),
-      allowHeaders: res.getHeader('Access-Control-Allow-Headers'),
-      allowCredentials: res.getHeader('Access-Control-Allow-Credentials')
-    }
-  });
-});
-
-// Add an OPTIONS test endpoint
-router.options('/cors-test', (req, res) => {
-  // This route should never be reached if our CORS middleware is working correctly
-  // as OPTIONS requests should be handled by our middleware
-  console.log('OPTIONS request reached the route handler - this should not happen');
-  return res.status(204).end();
-});
-
->>>>>>> Stashed changes
 module.exports = router;
