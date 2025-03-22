@@ -415,7 +415,8 @@ const getPaymentStats = async (req, res) => {
       totalEnrollments,
       totalSubscriptions,
       totalRevenue,
-      recentPayments
+      recentPayments,
+      studentSpending
     ] = await Promise.all([
       EnrolledCourse.countDocuments(),
       Subscription.countDocuments(),
@@ -430,6 +431,61 @@ const getPaymentStats = async (req, res) => {
       Promise.all([
         EnrolledCourse.find().sort({ enrollment_date: -1 }).limit(5),
         Subscription.find().sort({ start_date: -1 }).limit(5)
+      ]),
+      // Calculate total spent per student
+      Promise.all([
+        EnrolledCourse.aggregate([
+          {
+            $group: {
+              _id: "$student_id",
+              totalSpent: { $sum: "$payment_details.amount" },
+              enrollments: { $sum: 1 }
+            }
+          },
+          {
+            $lookup: {
+              from: "users",
+              localField: "_id",
+              foreignField: "_id",
+              as: "student"
+            }
+          },
+          { $unwind: "$student" },
+          {
+            $project: {
+              studentName: "$student.name",
+              studentEmail: "$student.email",
+              totalSpent: 1,
+              enrollments: 1
+            }
+          }
+        ]),
+        Subscription.aggregate([
+          {
+            $group: {
+              _id: "$user_id",
+              totalSpent: { $sum: "$payment_details.amount" },
+              subscriptions: { $sum: 1 }
+            }
+          },
+          {
+            $lookup: {
+              from: "users",
+              localField: "_id",
+              foreignField: "_id",
+              as: "student"
+            }
+          },
+          { $unwind: "$student" },
+          {
+            $project: {
+              studentName: "$student.name",
+              studentEmail: "$student.email",
+              totalSpent: 1,
+              subscriptions: 1
+            }
+          }
+        ])
       ])
     ]);
 
@@ -438,13 +494,49 @@ const getPaymentStats = async (req, res) => {
       .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
       .slice(0, 5);
 
+    // Combine and aggregate student spending
+    const studentSpendingMap = new Map();
+    
+    // Process enrollments
+    studentSpending[0].forEach(student => {
+      studentSpendingMap.set(student._id.toString(), {
+        studentName: student.studentName,
+        studentEmail: student.studentEmail,
+        totalSpent: student.totalSpent,
+        enrollments: student.enrollments,
+        subscriptions: 0
+      });
+    });
+
+    // Process subscriptions and combine with enrollments
+    studentSpending[1].forEach(student => {
+      const existing = studentSpendingMap.get(student._id.toString());
+      if (existing) {
+        existing.totalSpent += student.totalSpent;
+        existing.subscriptions = student.subscriptions;
+      } else {
+        studentSpendingMap.set(student._id.toString(), {
+          studentName: student.studentName,
+          studentEmail: student.studentEmail,
+          totalSpent: student.totalSpent,
+          enrollments: 0,
+          subscriptions: student.subscriptions
+        });
+      }
+    });
+
+    // Convert map to array and sort by total spent
+    const studentSpendingList = Array.from(studentSpendingMap.values())
+      .sort((a, b) => b.totalSpent - a.totalSpent);
+
     res.status(200).json({
       success: true,
       data: {
         totalEnrollments,
         totalSubscriptions,
         totalRevenue: totalRevenueAmount,
-        recentPayments: recentPaymentsList
+        recentPayments: recentPaymentsList,
+        studentSpending: studentSpendingList
       }
     });
   } catch (error) {
