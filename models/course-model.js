@@ -515,8 +515,7 @@ const courseSchema = new Schema(
     slug: {
       type: String,
       lowercase: true,
-      trim: true,
-      index: true
+      trim: true
     },
     course_image: {
       type: String,
