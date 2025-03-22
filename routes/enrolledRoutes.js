@@ -90,7 +90,7 @@ router.get(
   enrollerCourseController.getAllStudentsWithEnrolledCourses
 );
 
-// Mark video as watched
+// Mark video as watche
 router.get(
   "/watch",
   validateObjectId("id"),
