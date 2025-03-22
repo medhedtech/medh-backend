@@ -20,13 +20,15 @@ const logFormat = winston.format.combine(
 
 // Create separate transports for different log types
 const transports = [
-  // Console transport for development
-  new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.simple()
-    )
-  }),
+  // Console transport for development (will be added conditionally later)
+  ...(process.env.NODE_ENV !== 'production' ? [] : [
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      )
+    })
+  ]),
 
   // File transport for all logs using daily rotation
   new winston.transports.DailyRotateFile({
