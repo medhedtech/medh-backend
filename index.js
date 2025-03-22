@@ -58,7 +58,7 @@ app.use((err, req, res, next) => {
   logger.error('Unhandled error:', err);
   res.status(err.status || 500).json({
     status: 'error',
-    message: process.env.NODE_ENV === 'production' 
+    message: ENV_VARS.NODE_ENV === 'production' 
       ? 'Internal server error' 
       : err.message
   });
@@ -70,7 +70,7 @@ connectDB();
 // Start server
 const PORT = ENV_VARS.PORT;
 const server = app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT} in ${process.env.NODE_ENV} mode`);
+  logger.info(`Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode`);
 });
 
 // Graceful shutdown handling
