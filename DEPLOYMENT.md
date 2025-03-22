@@ -122,3 +122,43 @@ Follow these steps:
 - Regularly update dependencies to address security vulnerabilities
 - Consider implementing rate limiting to prevent abuse
 - Set up SSL/TLS certificates for both your frontend and backend domains 
+
+## Local Development Setup
+
+When running the application locally, you'll typically have:
+- Frontend running on http://localhost:3000
+- Backend running on http://localhost:8080
+
+The CORS configuration automatically allows requests between these localhost origins in development mode. To ensure this works correctly:
+
+1. **Set NODE_ENV correctly**:
+   ```bash
+   # Add to your .env file for development
+   NODE_ENV=development
+   ```
+   
+   Or when starting the server:
+   ```bash
+   NODE_ENV=development npm start
+   ```
+
+2. **Test local CORS configuration**:
+   ```bash
+   curl -v -X OPTIONS \
+     -H "Origin: http://localhost:3000" \
+     -H "Access-Control-Request-Method: GET" \
+     http://localhost:8080/api/v1/cors-test
+   ```
+   
+   The response should include:
+   ```
+   Access-Control-Allow-Origin: http://localhost:3000
+   ```
+
+3. **If using a different local port**, the code will automatically allow it as long as it's a localhost or 127.0.0.1 origin and you're in development mode.
+
+4. **Troubleshooting local CORS issues**:
+   - Ensure NODE_ENV is not set to 'production' during local development
+   - Restart your server after making changes to CORS configuration
+   - Check server logs for 'CORS Headers Debug' entries
+   - Try using Chrome with CORS disabled for testing (launch with `--disable-web-security` flag) 
