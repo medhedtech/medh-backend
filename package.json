@@ -38,6 +38,7 @@
     "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^7.5.0",
     "express-validator": "^7.2.1",
+    "file-stream-rotator": "^1.0.0",
     "googleapis": "^146.0.0",
     "helmet": "^8.1.0",
     "html-pdf-chrome": "^0.8.4",

@@ -3886,6 +3886,11 @@ file-stream-rotator@^0.6.1:
   dependencies:
     moment "^2.29.1"
 
+file-stream-rotator@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.npmjs.org/file-stream-rotator/-/file-stream-rotator-1.0.0.tgz"
+  integrity sha512-qg5mQO7o+vhS7NPqkrkfJS8qqhz0d17Tnewmb5sUTUKwYe27LKaDtbTuRAtQWkBn6jROuFPVIDF5DtckzokFTQ==
+
 file-type@3.9.0:
   version "3.9.0"
   resolved "https://registry.npmjs.org/file-type/-/file-type-3.9.0.tgz"
