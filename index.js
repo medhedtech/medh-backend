@@ -46,6 +46,39 @@ app.use((req, res, next) => {
   next();
 });
 
+<<<<<<< Updated upstream
+=======
+// Final CORS header enforcer - ensures headers aren't stripped by other middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').filter(o => o.trim() !== '');
+  
+  if (origin) {
+    // In production, check against allowed origins
+    if (process.env.NODE_ENV === 'production' && allowedOrigins.length > 0) {
+      if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+      }
+    } else {
+      // In development or if no allowed origins configured, be permissive
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    
+    // Set all necessary CORS headers
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, x-access-token');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    // For OPTIONS requests, immediately respond with 204
+    if (req.method === 'OPTIONS') {
+      res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+      return res.status(204).end();
+    }
+  }
+  next();
+});
+
+>>>>>>> Stashed changes
 // Routes
 app.use("/api/v1", router);
 app.use((req, res) => {
