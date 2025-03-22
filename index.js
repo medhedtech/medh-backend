@@ -18,6 +18,29 @@ const { statusUpdater } = require("./cronjob/inactive-meetings");
 
 const app = express();
 
+// Direct CORS configuration - will apply to all environments
+app.use(cors({
+  origin: true, // Allow any origin
+  credentials: true, // Allow credentials
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['X-Requested-With', 'Content-Type', 'Authorization', 'Accept', 'x-access-token'],
+  maxAge: 86400 // 24 hours
+}));
+
+// Forcefully add CORS headers to every response
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
+  res.header('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, x-access-token');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
+
 // Apply security middleware which includes CORS configuration
 securityMiddleware(app);
 
