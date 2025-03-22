@@ -1,6 +1,8 @@
 const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
+// Add DailyRotateFile transport
+require('winston-daily-rotate-file');
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(process.cwd(), 'logs');
@@ -26,23 +28,24 @@ const transports = [
     )
   }),
 
-  // File transport for all logs
-  new winston.transports.File({
-    filename: path.join(logsDir, 'combined.log'),
+  // File transport for all logs using daily rotation
+  new winston.transports.DailyRotateFile({
+    filename: path.join(logsDir, 'combined-%DATE%.log'),
+    datePattern: 'YYYY-MM-DD',
     format: logFormat,
-    maxsize: 10000000, // 10MB
-    maxFiles: 5,
-    tailable: true
+    maxSize: '10m',
+    maxFiles: '14d',
+    level: 'info'
   }),
 
-  // Separate file for error logs
-  new winston.transports.File({
-    filename: path.join(logsDir, 'error.log'),
-    level: 'error',
+  // Separate file for error logs using daily rotation
+  new winston.transports.DailyRotateFile({
+    filename: path.join(logsDir, 'error-%DATE%.log'),
+    datePattern: 'YYYY-MM-DD',
     format: logFormat,
-    maxsize: 10000000, // 10MB
-    maxFiles: 5,
-    tailable: true
+    maxSize: '10m',
+    maxFiles: '14d',
+    level: 'error'
   }),
 
   // Separate file for UI activity logs
