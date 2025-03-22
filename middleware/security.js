@@ -56,15 +56,15 @@ const securityMiddleware = (app) => {
         scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", "https://api.medh.co", "https://www.medh.co", "https://medh.co"],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
         frameSrc: ["'none'"]
       }
     },
-    crossOriginEmbedderPolicy: true,
-    crossOriginOpenerPolicy: true,
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
     dnsPrefetchControl: true,
     frameguard: { action: 'deny' },
@@ -91,26 +91,55 @@ const securityMiddleware = (app) => {
 
   // CORS configuration
   app.use((req, res, next) => {
-    const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',');
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').filter(origin => origin.trim() !== '');
     const origin = req.headers.origin;
     
-    if (allowedOrigins.includes(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-    }
-
-    res.setHeader(
-      'Access-Control-Allow-Methods',
-      'GET, POST, OPTIONS, PUT, PATCH, DELETE'
-    );
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'X-Requested-With, Content-Type, Authorization'
-    );
-    res.setHeader('Access-Control-Allow-Credentials', true);
+    // Log CORS diagnostic info
+    console.log('CORS Headers Debug:', {
+      origin,
+      allowedOrigins,
+      nodeEnv: process.env.NODE_ENV
+    });
     
-    // Cache CORS preflight
+    // Handle preflight OPTIONS requests
     if (req.method === 'OPTIONS') {
+      // Always set CORS headers
+      if (origin) {
+        // In production, check against allowed origins
+        if (process.env.NODE_ENV === 'production' && allowedOrigins.length > 0) {
+          if (allowedOrigins.includes(origin)) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+          }
+        } else {
+          // In development or if no allowed origins configured, be permissive
+          res.setHeader('Access-Control-Allow-Origin', origin);
+        }
+      }
+      
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+      res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+      
+      // Return 204 for preflight requests
+      return res.status(204).end();
+    }
+    
+    // For non-OPTIONS requests
+    if (origin) {
+      // In production, check against allowed origins
+      if (process.env.NODE_ENV === 'production' && allowedOrigins.length > 0) {
+        if (allowedOrigins.includes(origin)) {
+          res.setHeader('Access-Control-Allow-Origin', origin);
+        }
+      } else {
+        // In development or if no allowed origins configured, be permissive
+        res.setHeader('Access-Control-Allow-Origin', origin);
+      }
+      
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+      res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
     }
 
     next();

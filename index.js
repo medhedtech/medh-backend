@@ -9,6 +9,7 @@ const compression = require('compression');
 const mongoSanitize = require('express-mongo-sanitize');
 const logger = require('./utils/logger');
 const mongoose = require('mongoose');
+const securityMiddleware = require('./middleware/security');
 
 // Import routes
 const router = require("./routes");
@@ -17,26 +18,8 @@ const { statusUpdater } = require("./cronjob/inactive-meetings");
 
 const app = express();
 
-// Security Middleware
-app.use(helmet());
-app.use(mongoSanitize());
-
-// Configure CORS with proper preflight handling
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.ALLOWED_ORIGINS?.split(',') 
-    : '*',
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
-  preflightContinue: false,
-  optionsSuccessStatus: 204
-}));
-
-// Handle OPTIONS preflight requests explicitly
-app.options('*', cors());
-
-app.use(compression());
+// Apply security middleware (includes helmet, mongoSanitize, compression, and CORS)
+securityMiddleware(app);
 
 // Basic Middleware
 app.use(express.static("public"));
@@ -55,6 +38,25 @@ app.use((req, res, next) => {
     ip: req.ip,
     userAgent: req.get('user-agent')
   });
+  next();
+});
+
+// Final CORS header enforcer - ensures headers aren't stripped by other middleware
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && (process.env.ALLOWED_ORIGINS || '').split(',').includes(origin)) {
+    // Ensure CORS headers are set properly for allowed origins
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    // For OPTIONS requests, immediately respond with 204
+    if (req.method === 'OPTIONS') {
+      res.setHeader('Access-Control-Max-Age', '86400');
+      return res.status(204).end();
+    }
+  }
   next();
 });
 
