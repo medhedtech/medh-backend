@@ -36,14 +36,26 @@ if (isDev) {
   logger.info('CORS: Development mode - allowing all origins');
 } else {
   // In production, use a strict allowlist
-  const allowedDomains = ['http://api.medh.co'];
+  const allowedDomains = [
+    'http://api.medh.co', 
+    'https://api.medh.co',
+    'http://www.medh.co',
+    'https://www.medh.co',
+    'http://medh.co',
+    'https://medh.co'
+  ];
   const configuredOrigins = (ENV_VARS.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean);
   // Add configured origins to our allowlist
   allowedDomains.push(...configuredOrigins);
   
   // Use function to validate origins in production
   corsOrigin = function(origin, callback) {
-    if (!origin || allowedDomains.includes(origin)) {
+    // For requests without origin (like mobile apps, curl, etc.)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (allowedDomains.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       logger.warn(`CORS blocked request from origin: ${origin}`);
