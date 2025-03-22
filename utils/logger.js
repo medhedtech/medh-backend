@@ -1,8 +1,6 @@
 const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
-// Add DailyRotateFile transport
-require('winston-daily-rotate-file');
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(process.cwd(), 'logs');
@@ -29,24 +27,21 @@ const logger = winston.createLogger({
     environment: process.env.NODE_ENV || 'development'
   },
   transports: [
-    // File transport for all logs using daily rotation
-    new winston.transports.DailyRotateFile({
-      filename: path.join(logsDir, 'combined-%DATE%.log'),
-      datePattern: 'YYYY-MM-DD',
+    // File transport for all logs
+    new winston.transports.File({
+      filename: path.join(logsDir, 'combined.log'),
       format: logFormat,
-      maxSize: '10m',
-      maxFiles: '14d',
-      level: 'info'
+      maxsize: 10000000, // 10MB
+      maxFiles: 5
     }),
 
-    // Separate file for error logs using daily rotation
-    new winston.transports.DailyRotateFile({
-      filename: path.join(logsDir, 'error-%DATE%.log'),
-      datePattern: 'YYYY-MM-DD',
+    // Separate file for error logs
+    new winston.transports.File({
+      filename: path.join(logsDir, 'error.log'),
       format: logFormat,
-      maxSize: '10m',
-      maxFiles: '14d',
-      level: 'error'
+      level: 'error',
+      maxsize: 10000000, // 10MB
+      maxFiles: 5
     }),
 
     // Separate file for UI activity logs
@@ -54,11 +49,39 @@ const logger = winston.createLogger({
       filename: path.join(logsDir, 'ui-activity.log'),
       format: logFormat,
       maxsize: 10000000, // 10MB
-      maxFiles: 5,
-      tailable: true
+      maxFiles: 5
     })
   ]
 });
+
+// Try to add daily rotate file if the dependency exists
+try {
+  // Add DailyRotateFile transport conditionally
+  const DailyRotateFile = require('winston-daily-rotate-file');
+  
+  // Add daily rotate file transports if successfully imported
+  logger.add(new DailyRotateFile({
+    filename: path.join(logsDir, 'combined-%DATE%.log'),
+    datePattern: 'YYYY-MM-DD',
+    format: logFormat,
+    maxSize: '10m',
+    maxFiles: '14d',
+    level: 'info'
+  }));
+
+  logger.add(new DailyRotateFile({
+    filename: path.join(logsDir, 'error-%DATE%.log'),
+    datePattern: 'YYYY-MM-DD',
+    format: logFormat,
+    maxSize: '10m',
+    maxFiles: '14d',
+    level: 'error'
+  }));
+  
+  logger.info('Winston daily rotate file transport enabled');
+} catch (err) {
+  logger.error('Failed to initialize winston-daily-rotate-file, falling back to standard file transport', err);
+}
 
 // Add console transport in development mode
 if (process.env.NODE_ENV !== 'production') {
@@ -70,6 +93,17 @@ if (process.env.NODE_ENV !== 'production') {
         return `${timestamp} ${level}: ${message} ${meta !== '{}' ? meta : ''}`;
       })
     )
+  }));
+} else {
+  // Add console transport with minimal output in production
+  logger.add(new winston.transports.Console({
+    format: winston.format.combine(
+      winston.format.colorize(),
+      winston.format.printf(({ level, message }) => {
+        return `${level}: ${message}`;
+      })
+    ),
+    level: 'error' // Only log errors to console in production
   }));
 }
 
@@ -153,12 +187,6 @@ logger.trackSession = (action, sessionData) => {
     action
   });
 };
-
-// Production error handling
-if (process.env.NODE_ENV === 'production') {
-  // Add any production-specific error reporting services here
-  // For example, Sentry, LogRocket, etc.
-}
 
 // Export the logger instance
 module.exports = logger; 
