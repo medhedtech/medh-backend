@@ -41,25 +41,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Final CORS header enforcer - ensures headers aren't stripped by other middleware
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && (process.env.ALLOWED_ORIGINS || '').split(',').includes(origin)) {
-    // Ensure CORS headers are set properly for allowed origins
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    
-    // For OPTIONS requests, immediately respond with 204
-    if (req.method === 'OPTIONS') {
-      res.setHeader('Access-Control-Max-Age', '86400');
-      return res.status(204).end();
-    }
-  }
-  next();
-});
-
 // Routes
 app.use("/api/v1", router);
 app.use((req, res) => {
