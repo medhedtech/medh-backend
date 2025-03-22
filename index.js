@@ -9,6 +9,7 @@ const compression = require('compression');
 const mongoSanitize = require('express-mongo-sanitize');
 const logger = require('./utils/logger');
 const mongoose = require('mongoose');
+// const securityMiddleware = require('./middleware/security');
 
 // Import routes
 const router = require("./routes");
@@ -17,17 +18,14 @@ const { statusUpdater } = require("./cronjob/inactive-meetings");
 
 const app = express();
 
-// Security Middleware
-app.use(helmet());
-app.use(mongoSanitize());
-app.use(compression());
+// Apply security middleware (includes helmet, mongoSanitize, compression, and CORS)
 
 // Basic Middleware
-app.use(express.static("public"));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? process.env.ALLOWED_ORIGINS?.split(',') : '*',
   credentials: true
 }));
+app.use(express.static("public"));
 app.use(express.urlencoded({ extended: true }));
 app.use(bodyParser.json({ limit: "128mb", extended: true }));
 app.use(express.json());
@@ -46,39 +44,25 @@ app.use((req, res, next) => {
   next();
 });
 
-<<<<<<< Updated upstream
-=======
 // Final CORS header enforcer - ensures headers aren't stripped by other middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').filter(o => o.trim() !== '');
-  
-  if (origin) {
-    // In production, check against allowed origins
-    if (process.env.NODE_ENV === 'production' && allowedOrigins.length > 0) {
-      if (allowedOrigins.includes(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-      }
-    } else {
-      // In development or if no allowed origins configured, be permissive
-      res.setHeader('Access-Control-Allow-Origin', origin);
-    }
-    
-    // Set all necessary CORS headers
+  if (origin && (process.env.ALLOWED_ORIGINS || '').split(',').includes(origin)) {
+    // Ensure CORS headers are set properly for allowed origins
+    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, x-access-token');
+    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     
     // For OPTIONS requests, immediately respond with 204
     if (req.method === 'OPTIONS') {
-      res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+      res.setHeader('Access-Control-Max-Age', '86400');
       return res.status(204).end();
     }
   }
   next();
 });
 
->>>>>>> Stashed changes
 // Routes
 app.use("/api/v1", router);
 app.use((req, res) => {

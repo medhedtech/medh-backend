@@ -56,15 +56,15 @@ const securityMiddleware = (app) => {
         scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", "https://api.medh.co", "https://www.medh.co", "https://medh.co"],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
         frameSrc: ["'none'"]
       }
     },
-    crossOriginEmbedderPolicy: true,
-    crossOriginOpenerPolicy: true,
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
     dnsPrefetchControl: true,
     frameguard: { action: 'deny' },
@@ -90,63 +90,40 @@ const securityMiddleware = (app) => {
   app.use(compression());
 
   // CORS configuration
-  app.options('*', (req, res) => {
-    const origin = req.headers.origin;
-    const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').filter(origin => origin.trim() !== '');
-    
-    // Set CORS headers for preflight requests
-    if (origin) {
-      if (process.env.NODE_ENV === 'production' && allowedOrigins.length > 0) {
-        if (allowedOrigins.includes(origin)) {
-          res.setHeader('Access-Control-Allow-Origin', origin);
-        }
-      } else {
-        // In development or if no allowed origins configured, be permissive
-        res.setHeader('Access-Control-Allow-Origin', origin);
-      }
-    }
-    
-    // Set standard CORS headers
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, x-access-token');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
-    
-    // Send 204 response for OPTIONS requests
-    return res.status(204).end();
-  });
-
-  // CORS middleware for non-OPTIONS requests
   app.use((req, res, next) => {
-    const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',');
+    const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').filter(origin => origin.trim() !== '');
     const origin = req.headers.origin;
     
-<<<<<<< Updated upstream
-    if (allowedOrigins.includes(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-    }
-
-    res.setHeader(
-      'Access-Control-Allow-Methods',
-      'GET, POST, OPTIONS, PUT, PATCH, DELETE'
-    );
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'X-Requested-With, Content-Type, Authorization'
-    );
-    res.setHeader('Access-Control-Allow-Credentials', true);
-    
-    // Cache CORS preflight
-    if (req.method === 'OPTIONS') {
-      res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
-=======
     // Log CORS diagnostic info
     console.log('CORS Headers Debug:', {
       origin,
       allowedOrigins,
-      nodeEnv: process.env.NODE_ENV,
-      method: req.method
+      nodeEnv: process.env.NODE_ENV
     });
+    
+    // Handle preflight OPTIONS requests
+    if (req.method === 'OPTIONS') {
+      // Always set CORS headers
+      if (origin) {
+        // In production, check against allowed origins
+        if (process.env.NODE_ENV === 'production' && allowedOrigins.length > 0) {
+          if (allowedOrigins.includes(origin)) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+          }
+        } else {
+          // In development or if no allowed origins configured, be permissive
+          res.setHeader('Access-Control-Allow-Origin', origin);
+        }
+      }
+      
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+      res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+      
+      // Return 204 for preflight requests
+      return res.status(204).end();
+    }
     
     // For non-OPTIONS requests
     if (origin) {
@@ -161,9 +138,8 @@ const securityMiddleware = (app) => {
       }
       
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-      res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, x-access-token');
+      res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept');
       res.setHeader('Access-Control-Allow-Credentials', 'true');
->>>>>>> Stashed changes
     }
 
     next();
