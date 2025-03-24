@@ -102,11 +102,112 @@ const faqSchema = new Schema({
 });
 
 /* ------------------------------ */
-/* Lesson Subdocument Schemas     */
+/* Lesson Schemas (Embedded)      */
 /* ------------------------------ */
+const lessonResourceSchema = new Schema({
+  id: { 
+    type: String, 
+    required: [true, "Resource ID is required"]
+  },
+  title: { 
+    type: String, 
+    required: [true, "Resource title is required"], 
+    trim: true 
+  },
+  url: { 
+    type: String, 
+    required: [true, "Resource URL is required"], 
+    trim: true 
+  },
+  type: { 
+    type: String, 
+    enum: ["pdf", "document", "link", "other"],
+    required: [true, "Resource type is required"]
+  },
+  description: { 
+    type: String, 
+    default: "", 
+    trim: true 
+  }
+});
 
-// Import the Lesson model from lesson-model.js
-const { Lesson, VideoLesson, QuizLesson, AssessmentLesson } = require('./lesson-model');
+const baseLessonSchema = new Schema(
+  {
+    id: { 
+      type: String, 
+      required: [true, "Lesson ID is required"]
+    },
+    title: { 
+      type: String, 
+      required: [true, "Lesson title is required"], 
+      trim: true 
+    },
+    description: { 
+      type: String, 
+      default: "", 
+      trim: true 
+    },
+    order: { 
+      type: Number, 
+      default: 0 
+    },
+    lessonType: {
+      type: String,
+      enum: ["video", "quiz", "assessment"],
+      required: [true, "Lesson type is required"]
+    },
+    isPreview: { 
+      type: Boolean, 
+      default: false 
+    },
+    meta: { 
+      type: Schema.Types.Mixed, 
+      default: {} 
+    },
+    resources: [lessonResourceSchema],
+    
+    // Video Lesson specific fields
+    video_url: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: function(v) {
+          return this.lessonType !== "video" || (v && /^(http(s)?:\/\/)/.test(v));
+        },
+        message: "Video URL must be a valid URL for video lessons"
+      }
+    },
+    duration: {
+      type: String,
+      trim: true
+    },
+    
+    // Quiz Lesson specific field
+    quiz_id: { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Quiz",
+      validate: {
+        validator: function(v) {
+          return this.lessonType !== "quiz" || v;
+        },
+        message: "Quiz ID is required for quiz lessons"
+      }
+    },
+    
+    // Assessment Lesson specific field
+    assignment_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Assignment",
+      validate: {
+        validator: function(v) {
+          return this.lessonType !== "assessment" || v;
+        },
+        message: "Assignment ID is required for assessment lessons"
+      }
+    }
+  },
+  { timestamps: true }
+);
 
 /* ------------------------------ */
 /* Curriculum Section Schema      */
@@ -115,8 +216,7 @@ const curriculumSectionSchema = new Schema(
   {
     id: {
       type: String,
-      required: [true, "Section ID is required"],
-      unique: true
+      required: [true, "Section ID is required"]
     },
     title: {
       type: String,
@@ -133,11 +233,8 @@ const curriculumSectionSchema = new Schema(
       required: [true, "Section order is required"],
       min: [0, "Order cannot be negative"]
     },
-    // Reference to Lesson model instead of embedding
-    lessons: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Lesson'
-    }],
+    // Now using embedded lessons instead of references
+    lessons: [baseLessonSchema],
     resources: [{
       title: {
         type: String,
@@ -714,11 +811,6 @@ courseSchema.virtual("assignments", {
 });
 courseSchema.virtual("certificates", {
   ref: "Certificate",
-  localField: "_id",
-  foreignField: "course"
-});
-courseSchema.virtual("lessons", {
-  ref: "Lesson",
   localField: "_id",
   foreignField: "course"
 });

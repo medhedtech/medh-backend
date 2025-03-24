@@ -1,5 +1,16 @@
 const mongoose = require("mongoose");
 
+const optionSchema = new mongoose.Schema({
+  id: {
+    type: String,
+    required: [true, 'Option ID is required']
+  },
+  text: {
+    type: String,
+    required: [true, 'Option text is required']
+  }
+});
+
 const questionSchema = new mongoose.Schema({
   id: {
     type: String,
@@ -10,14 +21,21 @@ const questionSchema = new mongoose.Schema({
     type: String,
     required: [true, 'Question text is required']
   },
-  options: [{
+  type: {
     type: String,
-    required: [true, 'Question options are required']
-  }],
-  correctAnswer: {
+    required: [true, 'Question type is required'],
+    enum: ['multiple_choice', 'text'],
+    default: 'multiple_choice'
+  },
+  options: [optionSchema],
+  correct_answer: {
+    type: String,
+    required: function() { return this.type === 'multiple_choice'; }
+  },
+  word_limit: {
     type: Number,
-    required: [true, 'Correct answer is required'],
-    min: [0, 'Correct answer index cannot be negative']
+    min: [0, 'Word limit cannot be negative'],
+    default: null
   },
   explanation: {
     type: String,
@@ -54,20 +72,23 @@ const quizSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  duration: {
-    type: Number, // in minutes
-    required: [true, 'Quiz duration is required'],
-    min: [0, 'Duration cannot be negative']
+  time_limit_minutes: {
+    type: Number,
+    required: [true, 'Quiz time limit is required'],
+    min: [0, 'Time limit cannot be negative'],
+    alias: 'duration'
   },
   questions: [questionSchema],
   totalPoints: {
     type: Number,
     default: 0
   },
-  passingScore: {
+  passing_score: {
     type: Number,
     required: [true, 'Passing score is required'],
-    min: [0, 'Passing score cannot be negative']
+    min: [0, 'Passing score cannot be negative'],
+    max: [100, 'Passing score cannot exceed 100'],
+    alias: 'passingScore'
   },
   maxAttempts: {
     type: Number,
@@ -115,12 +136,19 @@ quizSchema.pre('save', function(next) {
 // Method to calculate score
 quizSchema.methods.calculateScore = function(answers) {
   let score = 0;
+  let totalPoints = 0;
+  
   this.questions.forEach((question, index) => {
-    if (answers[index] === question.correctAnswer) {
-      score += question.points;
+    if (question.type === 'multiple_choice') {
+      totalPoints += question.points;
+      if (answers[question.id] === question.correct_answer) {
+        score += question.points;
+      }
     }
   });
-  return score;
+  
+  // Convert to percentage if totalPoints is not 0
+  return totalPoints > 0 ? (score / totalPoints) * 100 : 0;
 };
 
 // Static method to get quizzes by course
