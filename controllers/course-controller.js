@@ -62,7 +62,7 @@ const assignCurriculumIds = (curriculum) => {
 /* ------------------------------ */
 
 /**
- * @desc    Create a new course with advanced features
+ * @desc    Create a new course with integrated lessons
  * @route   POST /api/courses/create
  * @access  Private/Admin
  */
@@ -71,13 +71,39 @@ const createCourse = async (req, res) => {
     if (req.fileError) {
       return res.status(400).json({ success: false, message: req.fileError });
     }
+    
     if (req.file) {
       req.body.course_image = req.file.location;
     }
-    const course = await CourseCreationService.createCourseWithLessons(req.body);
+    
+    // Extract course data from request body
+    const courseData = req.body;
+    
+    // If curriculum data is provided as JSON string, parse it
+    if (courseData.curriculum && typeof courseData.curriculum === 'string') {
+      try {
+        courseData.curriculum = JSON.parse(courseData.curriculum);
+      } catch (parseError) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid curriculum data format. Expected valid JSON.",
+          error: parseError.message
+        });
+      }
+    }
+    
+    // Process curriculum and assign IDs if needed
+    if (courseData.curriculum && Array.isArray(courseData.curriculum)) {
+      assignCurriculumIds(courseData.curriculum);
+    }
+    
+    // Create new course with embedded lessons
+    const course = new Course(courseData);
+    await course.save();
+    
     res.status(201).json({
       success: true,
-      message: "Course created successfully",
+      message: "Course created successfully with integrated lessons",
       data: course,
     });
   } catch (error) {
@@ -492,161 +518,64 @@ const getCourseById = async (req, res) => {
 };
 
 /**
- * @desc    Update course by ID (advanced: supports final evaluation)
+ * @desc    Update a course with integrated lessons
  * @route   PUT /api/courses/:id
  * @access  Private/Admin
  */
 const updateCourse = async (req, res) => {
   try {
-    const { id } = req.params;
-    const {
-      course_category,
-      category_type,
-      course_title,
-      no_of_Sessions,
-      course_duration,
-      session_duration,
-      course_description,
-      course_fee,
-      brochures,
-      course_image,
-      course_grade,
-      resource_pdfs,
-      curriculum,
-      tools_technologies,
-      bonus_modules,
-      faqs,
-      final_evaluation,
-      min_hours_per_week,
-      max_hours_per_week,
-      efforts_per_Week,
-      class_type,
-      is_Certification,
-      is_Assignments,
-      is_Projects,
-      is_Quizes,
-      related_courses,
-      prices,
-    } = req.body;
-
-    const formattedEffortsPerWeek =
-      efforts_per_Week || `${min_hours_per_week} - ${max_hours_per_week} hours / week`;
-
-    const processedCurriculum = curriculum
-      ? curriculum.map(week => ({
-          weekTitle: week.weekTitle,
-          weekDescription: week.weekDescription,
-          topics: week.topics || [],
-          sections: week.sections || []
-        }))
-      : undefined;
-
-    const processedTools = tools_technologies
-      ? tools_technologies.map(tool => ({
-          name: tool.name,
-          category: tool.category || "other",
-          description: tool.description || "",
-          logo_url: tool.logo_url || ""
-        }))
-      : undefined;
-
-    const processedBonusModules = bonus_modules
-      ? bonus_modules.map(module => ({
-          title: module.title,
-          description: module.description || "",
-          resources: module.resources || []
-        }))
-      : undefined;
-
-    const processedFaqs = faqs
-      ? faqs.map(faq => ({
-          question: faq.question,
-          answer: faq.answer
-        }))
-      : undefined;
-
-    const processedPrices = prices
-      ? prices.map(price => ({
-          currency: price.currency,
-          individual: price.individual || 0,
-          batch: price.batch || 0,
-          min_batch_size: price.min_batch_size || 2,
-          max_batch_size: price.max_batch_size || 10,
-          early_bird_discount: price.early_bird_discount || 0,
-          group_discount: price.group_discount || 0,
-          is_active: price.is_active !== false
-        }))
-      : undefined;
-
+    if (req.fileError) {
+      return res.status(400).json({ success: false, message: req.fileError });
+    }
+    
+    const courseData = { ...req.body };
+    
+    if (req.file) {
+      courseData.course_image = req.file.location;
+    }
+    
+    // If curriculum data is provided as JSON string, parse it
+    if (courseData.curriculum && typeof courseData.curriculum === 'string') {
+      try {
+        courseData.curriculum = JSON.parse(courseData.curriculum);
+      } catch (parseError) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid curriculum data format. Expected valid JSON.",
+          error: parseError.message
+        });
+      }
+    }
+    
+    // Reassign IDs if curriculum structure changed
+    if (courseData.curriculum && Array.isArray(courseData.curriculum)) {
+      assignCurriculumIds(courseData.curriculum);
+    }
+    
     const updatedCourse = await Course.findByIdAndUpdate(
-      id,
-      {
-        course_category,
-        category_type,
-        course_title,
-        no_of_Sessions,
-        course_duration,
-        session_duration,
-        course_description,
-        course_fee, // Note: This value will be overridden in pre-save by batch price
-        brochures,
-        course_image,
-        course_grade,
-        resource_pdfs,
-        curriculum: processedCurriculum,
-        tools_technologies: processedTools,
-        bonus_modules: processedBonusModules,
-        faqs: processedFaqs,
-        final_evaluation,
-        min_hours_per_week,
-        max_hours_per_week,
-        efforts_per_Week: formattedEffortsPerWeek,
-        class_type,
-        is_Certification,
-        is_Assignments,
-        is_Projects,
-        is_Quizes,
-        related_courses,
-        prices: processedPrices,
-        isFree: category_type === "Free",
-      },
+      req.params.id,
+      courseData,
       { new: true, runValidators: true }
     );
-
+    
     if (!updatedCourse) {
-      return res.status(404).json({ message: "Course not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
     }
-
+    
     res.status(200).json({
+      success: true,
       message: "Course updated successfully",
-      course: updatedCourse,
-      summary: {
-        curriculum: {
-          totalWeeks: updatedCourse.curriculum?.length || 0,
-          totalTopics: updatedCourse.curriculum?.reduce((total, week) => total + (week.topics?.length || 0), 0) || 0,
-          totalResources: updatedCourse.curriculum?.reduce((total, week) => total + (week.resources?.length || 0), 0) || 0
-        },
-        tools: {
-          count: updatedCourse.tools_technologies?.length || 0,
-          categories: [...new Set(updatedCourse.tools_technologies?.map(t => t.category) || [])]
-        },
-        bonusModules: {
-          count: updatedCourse.bonus_modules?.length || 0,
-          totalResources: updatedCourse.bonus_modules?.reduce((total, module) => total + (module.resources?.length || 0), 0) || 0
-        },
-        faqs: { count: updatedCourse.faqs?.length || 0 },
-        pricing: {
-          currencies: updatedCourse.prices?.map(p => p.currency) || [],
-          hasBatchPricing: updatedCourse.prices?.some(p => p.batch > 0) || false,
-          hasIndividualPricing: updatedCourse.prices?.some(p => p.individual > 0) || false
-        }
-      }
+      data: updatedCourse,
     });
   } catch (error) {
     console.error("Error updating course:", error);
-    res.status(500).json({ 
-      message: "Error updating course", 
-      error: error.errors || error 
+    res.status(500).json({
+      success: false,
+      message: "Failed to update course",
+      error: error.message,
     });
   }
 };
@@ -1532,11 +1461,16 @@ const getRecordedVideosForUser = async (req, res) => {
     const enrollments = await EnrolledCourse.find({ student_id: studentId })
       .populate("course_id", "recorded_videos course_title")
       .lean();
-    const videos = enrollments.map(enrollment => ({
-      course_id: enrollment.course_id._id,
-      course_title: enrollment.course_id.course_title,
-      videos: enrollment.course_id.recorded_videos || []
-    }));
+    
+    // Filter out enrollments with null course_id and map the valid ones
+    const videos = enrollments
+      .filter(enrollment => enrollment.course_id != null)
+      .map(enrollment => ({
+        course_id: enrollment.course_id._id,
+        course_title: enrollment.course_id.course_title,
+        videos: enrollment.course_id.recorded_videos || []
+      }));
+      
     res.status(200).json({ success: true, data: videos });
   } catch (error) {
     console.error("Error fetching recorded videos:", error);

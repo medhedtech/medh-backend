@@ -21,11 +21,32 @@ const catchAsync = (fn) => {
 
 exports.getAllAssignments = catchAsync(async (req, res) => {
   const assignments = await Assignment.find()
-    .populate("courseId")
+    .populate("courseId", "course_title category")
+    .populate("instructor_id", "full_name email")
     .lean()
     .cache({ time: 30 }); // Cache for 30 seconds
 
   res.status(200).json(formatResponse(assignments));
+});
+
+exports.getAssignmentById = catchAsync(async (req, res) => {
+  const { assignmentId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(assignmentId)) {
+    throw new AppError("Invalid assignment ID", 400);
+  }
+
+  const assignment = await Assignment.findById(assignmentId)
+    .populate("courseId", "course_title category")
+    .populate("instructor_id", "full_name email")
+    .lean()
+    .cache({ time: 30 });
+
+  if (!assignment) {
+    throw new AppError("Assignment not found", 404);
+  }
+
+  res.status(200).json(formatResponse(assignment));
 });
 
 exports.createAssignment = catchAsync(async (req, res) => {
@@ -33,9 +54,15 @@ exports.createAssignment = catchAsync(async (req, res) => {
     courseId,
     title,
     description,
-    deadline,
+    instructions,
+    due_date,
+    max_score,
+    submission_type,
+    allowed_file_types,
+    max_file_size_mb,
     instructor_id,
-    assignment_resources,
+    resources,
+    is_active
   } = req.body;
 
   // Verify course exists
@@ -48,16 +75,58 @@ exports.createAssignment = catchAsync(async (req, res) => {
     courseId,
     title,
     description,
-    deadline,
+    instructions,
+    due_date,
+    max_score,
+    submission_type,
+    allowed_file_types,
+    max_file_size_mb,
     instructor_id,
-    assignment_resources: assignment_resources || [],
+    resources: resources || [],
+    is_active: is_active !== undefined ? is_active : true
   });
 
   res.status(201).json(formatResponse(newAssignment, "Assignment created successfully"));
 });
 
+exports.updateAssignment = catchAsync(async (req, res) => {
+  const { assignmentId } = req.params;
+  const updateData = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(assignmentId)) {
+    throw new AppError("Invalid assignment ID", 400);
+  }
+
+  const assignment = await Assignment.findById(assignmentId);
+  if (!assignment) {
+    throw new AppError("Assignment not found", 404);
+  }
+
+  // Update only allowed fields
+  const allowedFields = [
+    'title', 'description', 'instructions', 'due_date', 'max_score',
+    'submission_type', 'allowed_file_types', 'max_file_size_mb',
+    'resources', 'is_active'
+  ];
+
+  const filteredData = Object.keys(updateData)
+    .filter(key => allowedFields.includes(key))
+    .reduce((obj, key) => {
+      obj[key] = updateData[key];
+      return obj;
+    }, {});
+
+  const updatedAssignment = await Assignment.findByIdAndUpdate(
+    assignmentId,
+    filteredData,
+    { new: true, runValidators: true }
+  );
+
+  res.status(200).json(formatResponse(updatedAssignment, "Assignment updated successfully"));
+});
+
 exports.submitAssignment = catchAsync(async (req, res) => {
-  const { assignmentId, studentId, submissionFile } = req.body;
+  const { assignmentId, studentId, submissionFiles, submissionText, submissionLinks } = req.body;
 
   // Validate ObjectIds
   if (!mongoose.Types.ObjectId.isValid(assignmentId) || !mongoose.Types.ObjectId.isValid(studentId)) {
@@ -69,23 +138,53 @@ exports.submitAssignment = catchAsync(async (req, res) => {
     throw new AppError("Assignment not found", 404);
   }
 
+  // Check if assignment is still active
+  if (!assignment.is_active) {
+    throw new AppError("This assignment is no longer accepting submissions", 400);
+  }
+
+  // Check if due date has passed
+  if (assignment.due_date && new Date() > assignment.due_date) {
+    throw new AppError("The deadline for this assignment has passed", 400);
+  }
+
   const existingSubmission = assignment.submissions.find(
     (submission) => submission.studentId.toString() === studentId
   );
 
   if (existingSubmission) {
-    existingSubmission.submissionFiles = [
-      ...existingSubmission.submissionFiles,
-      ...submissionFile,
-    ];
-    existingSubmission.updatedAt = new Date();
+    // Update existing submission
+    if (submissionFiles && Array.isArray(submissionFiles)) {
+      existingSubmission.submissionFiles = [
+        ...existingSubmission.submissionFiles,
+        ...submissionFiles,
+      ];
+    }
+    
+    if (submissionText) {
+      existingSubmission.submissionText = submissionText;
+    }
+    
+    if (submissionLinks && Array.isArray(submissionLinks)) {
+      existingSubmission.submissionLinks = [
+        ...existingSubmission.submissionLinks,
+        ...submissionLinks,
+      ];
+    }
+    
+    existingSubmission.submittedAt = new Date();
   } else {
+    // Create new submission
     assignment.submissions.push({
       studentId,
-      submissionFiles: submissionFile,
+      submissionFiles: submissionFiles || [],
+      submissionText: submissionText || "",
+      submissionLinks: submissionLinks || [],
     });
   }
 
+  // Update assignment stats
+  assignment.calculateStats();
   await assignment.save();
   
   res.status(200).json(
@@ -94,6 +193,45 @@ exports.submitAssignment = catchAsync(async (req, res) => {
       existingSubmission ? "Submission updated successfully" : "Submission successful"
     )
   );
+});
+
+exports.gradeSubmission = catchAsync(async (req, res) => {
+  const { assignmentId, studentId, score, feedback } = req.body;
+
+  // Validate ObjectIds
+  if (!mongoose.Types.ObjectId.isValid(assignmentId) || !mongoose.Types.ObjectId.isValid(studentId)) {
+    throw new AppError("Invalid assignment or student ID", 400);
+  }
+
+  const assignment = await Assignment.findById(assignmentId);
+  if (!assignment) {
+    throw new AppError("Assignment not found", 404);
+  }
+
+  const submission = assignment.submissions.find(
+    (sub) => sub.studentId.toString() === studentId
+  );
+
+  if (!submission) {
+    throw new AppError("Submission not found", 404);
+  }
+
+  // Validate score
+  if (score < 0 || score > assignment.max_score) {
+    throw new AppError(`Score must be between 0 and ${assignment.max_score}`, 400);
+  }
+
+  // Update submission with grade
+  submission.score = score;
+  submission.feedback = feedback;
+  submission.graded = true;
+  submission.gradedAt = new Date();
+
+  // Update assignment stats
+  assignment.calculateStats();
+  await assignment.save();
+
+  res.status(200).json(formatResponse(null, "Submission graded successfully"));
 });
 
 exports.getCourseByAssignmentId = catchAsync(async (req, res) => {
@@ -117,7 +255,7 @@ exports.getCourseByAssignmentId = catchAsync(async (req, res) => {
 });
 
 exports.getSubmittedAssignments = catchAsync(async (req, res) => {
-  const { page = 1, limit = 5, filter } = req.query;
+  const { page = 1, limit = 5, filter, courseId, instructorId } = req.query;
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const limitNumber = parseInt(limit, 10);
@@ -140,21 +278,31 @@ exports.getSubmittedAssignments = catchAsync(async (req, res) => {
     };
   }
 
+  // Add filters for courseId and instructorId if provided
+  let additionalFilters = {};
+  if (courseId && mongoose.Types.ObjectId.isValid(courseId)) {
+    additionalFilters.courseId = mongoose.Types.ObjectId(courseId);
+  }
+  if (instructorId && mongoose.Types.ObjectId.isValid(instructorId)) {
+    additionalFilters.instructor_id = mongoose.Types.ObjectId(instructorId);
+  }
+
+  const queryFilter = {
+    "submissions.0": { $exists: true },
+    ...dateFilter,
+    ...additionalFilters
+  };
+
   const [submittedAssignments, totalAssignments] = await Promise.all([
-    Assignment.find({
-      "submissions.0": { $exists: true },
-      ...dateFilter,
-    })
+    Assignment.find(queryFilter)
       .skip(skip)
       .limit(limitNumber)
       .populate("submissions.studentId", "full_name email user_image")
       .populate("courseId", "course_title category")
+      .populate("instructor_id", "full_name email")
       .lean()
       .cache({ time: 30 }),
-    Assignment.countDocuments({
-      "submissions.0": { $exists: true },
-      ...dateFilter,
-    }),
+    Assignment.countDocuments(queryFilter),
   ]);
 
   const totalPages = Math.ceil(totalAssignments / limitNumber);
@@ -171,13 +319,14 @@ exports.getSubmittedAssignments = catchAsync(async (req, res) => {
 
 exports.getSubmissionStatus = catchAsync(async (req, res) => {
   const { assignmentId } = req.params;
+  const { studentId } = req.query;
 
   if (!mongoose.Types.ObjectId.isValid(assignmentId)) {
     throw new AppError("Invalid assignment ID", 400);
   }
 
   const assignment = await Assignment.findById(assignmentId)
-    .populate("submissions.studentId", "full_name email")
+    .populate("submissions.studentId", "full_name email user_image")
     .lean()
     .cache({ time: 30 });
 
@@ -185,7 +334,29 @@ exports.getSubmissionStatus = catchAsync(async (req, res) => {
     throw new AppError("Assignment not found", 404);
   }
 
-  res.status(200).json(formatResponse({ submissions: assignment.submissions }));
+  // If studentId is provided, filter submissions for that student
+  if (studentId && mongoose.Types.ObjectId.isValid(studentId)) {
+    const submission = assignment.submissions.find(
+      sub => sub.studentId._id.toString() === studentId
+    );
+    
+    return res.status(200).json(formatResponse({ 
+      assignment: {
+        _id: assignment._id,
+        id: assignment.id,
+        title: assignment.title,
+        due_date: assignment.due_date,
+        max_score: assignment.max_score,
+        submission_type: assignment.submission_type
+      },
+      submission: submission || null
+    }));
+  }
+
+  res.status(200).json(formatResponse({ 
+    assignment,
+    submissions: assignment.submissions 
+  }));
 });
 
 exports.getSubmittedAssignmentsCountByInstructor = catchAsync(async (req, res) => {
@@ -200,15 +371,28 @@ exports.getSubmittedAssignmentsCountByInstructor = catchAsync(async (req, res) =
     "submissions.0": { $exists: true },
   });
 
+  const totalAssignmentsCount = await Assignment.countDocuments({
+    instructor_id
+  });
+
+  const pendingGradingCount = await Assignment.countDocuments({
+    instructor_id,
+    "submissions.0": { $exists: true },
+    "submissions.graded": false
+  });
+
   res.status(200).json(
     formatResponse({
+      totalAssignmentsCount,
       submittedAssignmentsCount,
+      pendingGradingCount
     })
   );
 });
 
 exports.getAssignmentsForEnrolledCourses = catchAsync(async (req, res) => {
   const { studentId } = req.params;
+  const { status } = req.query;
 
   if (!mongoose.Types.ObjectId.isValid(studentId)) {
     throw new AppError("Invalid student ID", 400);
@@ -228,17 +412,47 @@ exports.getAssignmentsForEnrolledCourses = catchAsync(async (req, res) => {
 
   const courseIds = enrolledCourses.map((enrollment) => enrollment.course_id);
   
-  const assignments = await Assignment.find({ courseId: { $in: courseIds } })
+  let query = { courseId: { $in: courseIds } };
+  
+  // Add status filter if provided
+  if (status === 'active') {
+    query.is_active = true;
+    query.due_date = { $gt: new Date() };
+  } else if (status === 'past') {
+    query.due_date = { $lt: new Date() };
+  }
+  
+  const assignments = await Assignment.find(query)
     .populate("courseId", "course_title")
     .populate("instructor_id", "full_name email")
     .lean()
     .cache({ time: 60 });
 
-  res.status(200).json(formatResponse({ assignments }));
+  // Add submission status for the student
+  const assignmentsWithStatus = assignments.map(assignment => {
+    const studentSubmission = assignment.submissions.find(
+      sub => sub.studentId.toString() === studentId
+    );
+    
+    return {
+      ...assignment,
+      studentSubmissionStatus: studentSubmission ? {
+        submitted: true,
+        submittedAt: studentSubmission.submittedAt,
+        graded: studentSubmission.graded,
+        score: studentSubmission.score
+      } : {
+        submitted: false
+      }
+    };
+  });
+
+  res.status(200).json(formatResponse({ assignments: assignmentsWithStatus }));
 });
 
 exports.getAssignmentsForCoorporateEnrolledCourses = catchAsync(async (req, res) => {
   const { coorporateId } = req.params;
+  const { status } = req.query;
 
   if (!mongoose.Types.ObjectId.isValid(coorporateId)) {
     throw new AppError("Invalid corporate ID", 400);
@@ -258,7 +472,17 @@ exports.getAssignmentsForCoorporateEnrolledCourses = catchAsync(async (req, res)
 
   const courseIds = enrolledCourses.map((enrollment) => enrollment.course_id);
   
-  const assignments = await Assignment.find({ courseId: { $in: courseIds } })
+  let query = { courseId: { $in: courseIds } };
+  
+  // Add status filter if provided
+  if (status === 'active') {
+    query.is_active = true;
+    query.due_date = { $gt: new Date() };
+  } else if (status === 'past') {
+    query.due_date = { $lt: new Date() };
+  }
+  
+  const assignments = await Assignment.find(query)
     .populate("courseId", "course_title")
     .populate("instructor_id", "full_name email")
     .lean()
@@ -268,8 +492,102 @@ exports.getAssignmentsForCoorporateEnrolledCourses = catchAsync(async (req, res)
     ...assignment,
     submissions: assignment.submissions.filter(
       submission => submission.studentId.toString() === coorporateId
-    )
+    ),
+    submissionStatus: assignment.submissions.some(
+      submission => submission.studentId.toString() === coorporateId
+    ) ? {
+      submitted: true,
+      submission: assignment.submissions.find(
+        submission => submission.studentId.toString() === coorporateId
+      )
+    } : {
+      submitted: false
+    }
   }));
 
   res.status(200).json(formatResponse({ assignments: filteredAssignments }));
+});
+
+exports.getAssignmentStatistics = catchAsync(async (req, res) => {
+  const { assignmentId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(assignmentId)) {
+    throw new AppError("Invalid assignment ID", 400);
+  }
+
+  const assignment = await Assignment.findById(assignmentId);
+  if (!assignment) {
+    throw new AppError("Assignment not found", 404);
+  }
+
+  // Calculate updated statistics
+  const stats = assignment.calculateStats();
+  
+  // Get additional statistics
+  const totalSubmissions = assignment.submissions.length;
+  const gradedSubmissions = assignment.submissions.filter(sub => sub.graded).length;
+  const pendingSubmissions = totalSubmissions - gradedSubmissions;
+  
+  const scoreDistribution = {};
+  
+  // Create score buckets (0-10, 11-20, etc.)
+  for (let i = 0; i <= 100; i += 10) {
+    scoreDistribution[`${i}-${i+9}`] = 0;
+  }
+  
+  // Count submissions in each score bucket
+  assignment.submissions.forEach(sub => {
+    if (sub.graded && sub.score !== undefined) {
+      const bucket = Math.floor(sub.score / 10) * 10;
+      const bucketKey = `${bucket}-${bucket+9}`;
+      scoreDistribution[bucketKey]++;
+    }
+  });
+
+  res.status(200).json(formatResponse({
+    assignmentId: assignment._id,
+    title: assignment.title,
+    totalSubmissions,
+    gradedSubmissions,
+    pendingSubmissions,
+    averageScore: stats.average_score,
+    scoreDistribution,
+    lastUpdated: stats.last_updated
+  }));
+});
+
+exports.deleteSubmissionFile = catchAsync(async (req, res) => {
+  const { assignmentId, studentId, fileUrl } = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(assignmentId) || !mongoose.Types.ObjectId.isValid(studentId)) {
+    throw new AppError("Invalid assignment or student ID", 400);
+  }
+
+  if (!fileUrl) {
+    throw new AppError("File URL is required", 400);
+  }
+
+  const assignment = await Assignment.findById(assignmentId);
+  if (!assignment) {
+    throw new AppError("Assignment not found", 404);
+  }
+
+  const submission = assignment.submissions.find(
+    sub => sub.studentId.toString() === studentId
+  );
+
+  if (!submission) {
+    throw new AppError("Submission not found", 404);
+  }
+
+  // Remove the file URL from submission files
+  const fileIndex = submission.submissionFiles.indexOf(fileUrl);
+  if (fileIndex === -1) {
+    throw new AppError("File not found in submission", 404);
+  }
+
+  submission.submissionFiles.splice(fileIndex, 1);
+  await assignment.save();
+
+  res.status(200).json(formatResponse(null, "File deleted successfully"));
 });
