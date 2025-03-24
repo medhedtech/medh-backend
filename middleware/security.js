@@ -91,45 +91,6 @@ const securityMiddleware = (app) => {
   // Compress all responses
   app.use(compression());
 
-  // CORS configuration
-  app.use((req, res, next) => {
-    // Log CORS diagnostic info using the proper logger
-    logger.info('CORS: Allowing all origins as configured');
-    
-    const origin = req.headers.origin;
-    
-    // Handle preflight OPTIONS requests
-    if (req.method === 'OPTIONS') {
-      // Always set CORS headers for any origin
-      if (origin) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-      } else {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-      }
-      
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-      res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, x-access-token');
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
-      
-      // Return 204 for preflight requests
-      return res.status(204).end();
-    }
-    
-    // For non-OPTIONS requests
-    if (origin) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-    } else {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-    }
-    
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, x-access-token');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-    next();
-  });
-
   // Additional security headers
   app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -138,13 +99,6 @@ const securityMiddleware = (app) => {
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=()');
     next();
-  });
-
-  // Verify CORS via referrer check
-  app.use((req, res, next) => {
-    // Skip referrer check as we're allowing all origins
-    logger.info('Skipping referrer check as all origins are allowed');
-    return next();
   });
 };
 

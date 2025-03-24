@@ -10,6 +10,7 @@ const mongoSanitize = require('express-mongo-sanitize');
 const logger = require('./utils/logger');
 const mongoose = require('mongoose');
 const securityMiddleware = require('./middleware/security');
+const redirectionMiddleware = require('./middleware/redirection');
 
 // Import routes
 const router = require("./routes");
@@ -18,30 +19,33 @@ const { statusUpdater } = require("./cronjob/inactive-meetings");
 
 const app = express();
 
-// Direct CORS configuration - will apply to all environments
+// Define allowed origins
+const allowedOrigins = ENV_VARS.ALLOWED_ORIGINS.length > 0 
+  ? ENV_VARS.ALLOWED_ORIGINS 
+  : ['http://localhost:3000', 'https://medh.co', 'https://www.medh.co', 'http://localhost:8080'];
+
+// Single CORS configuration to avoid conflicts
 app.use(cors({
-  origin: true, // Allow any origin
-  credentials: true, // Allow credentials
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, etc)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is allowed
+    if (allowedOrigins.indexOf(origin) !== -1 || ENV_VARS.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      logger.info(`CORS: Origin ${origin} not allowed`);
+      callback(null, true); // Allow all origins in any environment for now
+    }
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['X-Requested-With', 'Content-Type', 'Authorization', 'Accept', 'x-access-token'],
+  optionsSuccessStatus: 204, // Important for preflight requests
   maxAge: 86400 // 24 hours
 }));
 
-// Forcefully add CORS headers to every response
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
-  res.header('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, x-access-token');
-  
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-  next();
-});
-
-// Apply security middleware which includes CORS configuration
+// Apply security middleware but we'll modify it to not apply additional CORS headers
 securityMiddleware(app);
 
 // Basic Middleware
@@ -63,6 +67,9 @@ app.use((req, res, next) => {
   });
   next();
 });
+
+// Apply redirection middleware to handle CORS preflight requests that might involve redirects
+app.use(redirectionMiddleware);
 
 // Routes
 app.use("/api/v1", router);
