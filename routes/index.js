@@ -1,4 +1,5 @@
 const router = require("express").Router();
+const { ENV_VARS } = require("../config/envVars");
 const authRoutes = require("./authRoutes");
 const categoryRoutes = require("./categoryRoutes");
 const courseRoutes = require("./courseRoutes");
@@ -184,18 +185,24 @@ moduleRoutes.forEach((route) => {
 
 // Add a test endpoint for diagnosing CORS issues
 router.get('/cors-test', (req, res) => {
-  // Log request headers for debugging
-  console.log('CORS Test Request Headers:', req.headers);
+  // Record the origin of the request
+  const origin = req.headers.origin || 'No origin header';
   
-  // Log response headers that will be sent
+  console.log('CORS Test Request Headers:', req.headers);
+  console.log('Origin:', origin);
+  
+  // Log response headers for debugging
   console.log('CORS Test Response Headers:', res.getHeaders());
   
-  // Return environment info to verify settings
-  return res.json({
+  return res.status(200).json({
     message: 'CORS test successful',
-    nodeEnv: process.env.NODE_ENV,
-    allowedOrigins: process.env.ALLOWED_ORIGINS,
-    requestOrigin: req.headers.origin
+    origin: origin,
+    // Include the current CORS configuration
+    allowedOrigins: ENV_VARS.ALLOWED_ORIGINS.length > 0 
+      ? ENV_VARS.ALLOWED_ORIGINS 
+      : ['Using default origins - check index.js'],
+    environment: ENV_VARS.NODE_ENV,
+    timestamp: new Date().toISOString()
   });
 });
 
