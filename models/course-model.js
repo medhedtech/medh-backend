@@ -28,6 +28,29 @@ const generateSlug = (title) => {
 const assignCurriculumIds = (curriculum) => {
   curriculum.forEach((week, weekIndex) => {
     week.id = `week_${weekIndex + 1}`;
+    
+    // Assign IDs to direct lessons under weeks
+    if (week.lessons && week.lessons.length) {
+      week.lessons.forEach((lesson, lessonIndex) => {
+        lesson.id = `lesson_w${weekIndex + 1}_${lessonIndex + 1}`;
+        if (lesson.resources && lesson.resources.length) {
+          lesson.resources.forEach((resource, resourceIndex) => {
+            resource.id = `resource_${lesson.id}_${resourceIndex + 1}`;
+          });
+        }
+      });
+    }
+    
+    // Assign IDs to live classes
+    if (week.liveClasses && week.liveClasses.length) {
+      week.liveClasses.forEach((liveClass, classIndex) => {
+        if (!liveClass.id) {
+          liveClass.id = `live_w${weekIndex + 1}_${classIndex + 1}`;
+        }
+      });
+    }
+    
+    // Original section and lesson IDs assignment
     if (week.sections && week.sections.length) {
       week.sections.forEach((section, sectionIndex) => {
         section.id = `section_${weekIndex + 1}_${sectionIndex + 1}`;
@@ -284,6 +307,69 @@ const curriculumWeekSchema = new Schema(
       type: String,
       trim: true
     }],
+    // Support for direct lessons without sections
+    lessons: {
+      type: [baseLessonSchema],
+      default: []
+    },
+    // Live classes specific to this week
+    liveClasses: {
+      type: [{
+        title: {
+          type: String,
+          required: [true, "Live class title is required"],
+          trim: true
+        },
+        description: {
+          type: String,
+          default: "",
+          trim: true
+        },
+        scheduledDate: {
+          type: Date,
+          required: [true, "Live class scheduled date is required"]
+        },
+        duration: {
+          type: Number,
+          min: [15, "Live class duration must be at least 15 minutes"],
+          required: [true, "Live class duration is required"]
+        },
+        meetingLink: {
+          type: String,
+          trim: true
+        },
+        instructor: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Instructor"
+        },
+        recordingUrl: {
+          type: String,
+          trim: true
+        },
+        isRecorded: {
+          type: Boolean,
+          default: false
+        },
+        materials: [{
+          title: {
+            type: String,
+            required: [true, "Material title is required"],
+            trim: true
+          },
+          url: {
+            type: String,
+            required: [true, "Material URL is required"],
+            trim: true
+          },
+          type: {
+            type: String,
+            enum: ["pdf", "document", "presentation", "code", "other"],
+            default: "other"
+          }
+        }]
+      }],
+      default: []
+    },
     sections: {
       type: [curriculumSectionSchema],
       default: []
@@ -862,14 +948,26 @@ courseSchema.methods.getStatistics = async function () {
       { $group: { _id: null, total: { $sum: "$meta.views" } } },
     ]),
   ]);
+  
+  // Count total lessons including both direct lessons and section lessons
+  const totalLessons = this.curriculum.reduce((sum, week) => {
+    const directLessons = week.lessons ? week.lessons.length : 0;
+    const sectionLessons = week.sections ? 
+      week.sections.reduce((weekSum, section) => weekSum + (section.lessons ? section.lessons.length : 0), 0) : 0;
+    return sum + directLessons + sectionLessons;
+  }, 0);
+  
+  // Count total live classes
+  const totalLiveClasses = this.curriculum.reduce((sum, week) => {
+    return sum + (week.liveClasses ? week.liveClasses.length : 0);
+  }, 0);
+  
   return {
     totalStudents,
     averageRating: averageRating[0]?.avg || 0,
     totalViews: totalViews[0]?.total || 0,
-    totalLessons: this.curriculum.reduce((sum, week) =>
-      sum + week.sections.reduce((weekSum, section) => weekSum + section.lessons.length, 0),
-      0
-    ),
+    totalLessons,
+    totalLiveClasses,
     totalQuizzes: await this.model("Quiz").countDocuments({ course: this._id }),
     totalAssignments: await this.model("Assignment").countDocuments({ course: this._id }),
     totalCertificates: await this.model("Certificate").countDocuments({ course: this._id }),

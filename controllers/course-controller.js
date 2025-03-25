@@ -39,6 +39,29 @@ const escapeRegExp = (string) => {
 const assignCurriculumIds = (curriculum) => {
   curriculum.forEach((week, weekIndex) => {
     week.id = `week_${weekIndex + 1}`;
+    
+    // Assign IDs to direct lessons under weeks
+    if (week.lessons && week.lessons.length) {
+      week.lessons.forEach((lesson, lessonIndex) => {
+        lesson.id = `lesson_w${weekIndex + 1}_${lessonIndex + 1}`;
+        if (lesson.resources && lesson.resources.length) {
+          lesson.resources.forEach((resource, resourceIndex) => {
+            resource.id = `resource_${lesson.id}_${resourceIndex + 1}`;
+          });
+        }
+      });
+    }
+    
+    // Assign IDs to live classes
+    if (week.liveClasses && week.liveClasses.length) {
+      week.liveClasses.forEach((liveClass, classIndex) => {
+        if (!liveClass.id) {
+          liveClass.id = `live_w${weekIndex + 1}_${classIndex + 1}`;
+        }
+      });
+    }
+    
+    // Original section and lesson IDs assignment
     if (week.sections && week.sections.length) {
       week.sections.forEach((section, sectionIndex) => {
         section.id = `section_${weekIndex + 1}_${sectionIndex + 1}`;
@@ -680,25 +703,66 @@ const getCourseSections = async (req, res) => {
     if (!course) {
       return res.status(404).json({ success: false, message: "Course not found" });
     }
-    const enhancedCurriculum = course.curriculum.map(week => ({
-      ...week,
-      sections: week.sections.map(section => {
-        const sectionLessons = section.lessons;
-        const completedLessons = sectionLessons.filter(lesson => enrollment.completed_lessons.includes(lesson.id));
-        return {
-          ...section,
-          progress: {
-            total: sectionLessons.length,
-            completed: completedLessons.length,
-            percentage: sectionLessons.length > 0 ? Math.round((completedLessons.length / sectionLessons.length) * 100) : 0
-          },
-          lessons: sectionLessons.map(lesson => ({
-            ...lesson,
-            isCompleted: enrollment.completed_lessons.includes(lesson.id)
-          }))
+    
+    const enhancedCurriculum = course.curriculum.map(week => {
+      // Create a week object with basic info
+      const weekObj = {
+        ...week,
+        sections: []
+      };
+      
+      // Handle direct lessons if they exist
+      if (week.lessons && week.lessons.length) {
+        const directLessons = week.lessons;
+        const completedLessons = directLessons.filter(lesson => 
+          enrollment.completed_lessons.includes(lesson.id)
+        );
+        
+        weekObj.directLessonsProgress = {
+          total: directLessons.length,
+          completed: completedLessons.length,
+          percentage: directLessons.length > 0 ? 
+            Math.round((completedLessons.length / directLessons.length) * 100) : 0
         };
-      })
-    }));
+        
+        weekObj.lessons = directLessons.map(lesson => ({
+          ...lesson,
+          isCompleted: enrollment.completed_lessons.includes(lesson.id)
+        }));
+      }
+      
+      // Handle live classes if they exist
+      if (week.liveClasses && week.liveClasses.length) {
+        weekObj.liveClasses = week.liveClasses;
+      }
+      
+      // Process sections if they exist
+      if (week.sections && week.sections.length) {
+        weekObj.sections = week.sections.map(section => {
+          const sectionLessons = section.lessons || [];
+          const completedLessons = sectionLessons.filter(lesson => 
+            enrollment.completed_lessons.includes(lesson.id)
+          );
+          
+          return {
+            ...section,
+            progress: {
+              total: sectionLessons.length,
+              completed: completedLessons.length,
+              percentage: sectionLessons.length > 0 ? 
+                Math.round((completedLessons.length / sectionLessons.length) * 100) : 0
+            },
+            lessons: sectionLessons.map(lesson => ({
+              ...lesson,
+              isCompleted: enrollment.completed_lessons.includes(lesson.id)
+            }))
+          };
+        });
+      }
+      
+      return weekObj;
+    });
+    
     enrollment.last_accessed = new Date();
     await enrollment.save();
     res.status(200).json({ success: true, data: enhancedCurriculum, overallProgress: enrollment.progress });
@@ -726,26 +790,78 @@ const getCourseLessons = async (req, res) => {
     if (!course) {
       return res.status(404).json({ success: false, message: "Course not found" });
     }
-    const enhancedLessons = course.curriculum.flatMap(week =>
-      week.sections.flatMap(section =>
-        section.lessons.map(lesson => ({
-          ...lesson,
-          week: { id: week.id, title: week.weekTitle },
-          section: { id: section.id, title: section.title },
-          isCompleted: enrollment.completed_lessons.includes(lesson.id),
-          hasNotes: enrollment.notes.some(note => note.lessonId.toString() === lesson.id.toString()),
-          hasBookmarks: enrollment.bookmarks.some(bookmark => bookmark.lessonId.toString() === lesson.id.toString())
-        }))
-      )
-    );
+    
+    // Collect all lessons from both direct under weeks and from sections
+    const enhancedLessons = [];
+    
+    course.curriculum.forEach(week => {
+      // Add direct lessons under weeks
+      if (week.lessons && week.lessons.length) {
+        week.lessons.forEach(lesson => {
+          enhancedLessons.push({
+            ...lesson,
+            week: { id: week.id, title: week.weekTitle },
+            section: null, // No section for direct lessons
+            isCompleted: enrollment.completed_lessons.includes(lesson.id),
+            hasNotes: enrollment.notes.some(note => note.lessonId.toString() === lesson.id.toString()),
+            hasBookmarks: enrollment.bookmarks.some(bookmark => bookmark.lessonId.toString() === lesson.id.toString())
+          });
+        });
+      }
+      
+      // Add lessons from sections
+      if (week.sections && week.sections.length) {
+        week.sections.forEach(section => {
+          if (section.lessons && section.lessons.length) {
+            section.lessons.forEach(lesson => {
+              enhancedLessons.push({
+                ...lesson,
+                week: { id: week.id, title: week.weekTitle },
+                section: { id: section.id, title: section.title },
+                isCompleted: enrollment.completed_lessons.includes(lesson.id),
+                hasNotes: enrollment.notes.some(note => note.lessonId.toString() === lesson.id.toString()),
+                hasBookmarks: enrollment.bookmarks.some(bookmark => bookmark.lessonId.toString() === lesson.id.toString())
+              });
+            });
+          }
+        });
+      }
+    });
+    
+    // Also collect live classes if requested
+    const liveClasses = [];
+    if (req.query.includeLiveClasses === 'true') {
+      course.curriculum.forEach(week => {
+        if (week.liveClasses && week.liveClasses.length) {
+          week.liveClasses.forEach(liveClass => {
+            liveClasses.push({
+              ...liveClass,
+              week: { id: week.id, title: week.weekTitle }
+            });
+          });
+        }
+      });
+    }
+    
     enhancedLessons.sort((a, b) => a.order - b.order);
     enrollment.last_accessed = new Date();
     await enrollment.save();
-    res.status(200).json({
+    
+    const response = {
       success: true,
       data: enhancedLessons,
-      progress: { total: enhancedLessons.length, completed: enrollment.completed_lessons.length, percentage: enrollment.progress }
-    });
+      progress: { 
+        total: enhancedLessons.length, 
+        completed: enrollment.completed_lessons.length, 
+        percentage: enrollment.progress 
+      }
+    };
+    
+    if (req.query.includeLiveClasses === 'true') {
+      response.liveClasses = liveClasses;
+    }
+    
+    res.status(200).json(response);
   } catch (error) {
     console.error("Error fetching course lessons:", error);
     res.status(500).json({ success: false, message: "Error fetching course lessons", error: error.message });
@@ -769,31 +885,93 @@ const getLessonDetails = async (req, res) => {
     if (!enrollment) {
       return res.status(403).json({ success: false, message: "You must be enrolled in this course to access lessons" });
     }
+    
     let lesson = null;
     let lessonContext = {};
+    
+    // First search in direct lessons under weeks
     for (let week of course.curriculum) {
-      for (let section of week.sections) {
-        const found = section.lessons.find(l => l.id === lessonId);
+      // Check direct lessons under week
+      if (week.lessons && week.lessons.length) {
+        const found = week.lessons.find(l => l.id === lessonId);
         if (found) {
           lesson = found;
           lessonContext = {
             week: { id: week.id, title: week.weekTitle, description: week.weekDescription },
-            section: { id: section.id, title: section.title, description: section.description }
+            section: null // No section for direct lessons
           };
           break;
         }
       }
-      if (lesson) break;
+      
+      // Check in sections
+      if (week.sections && week.sections.length) {
+        for (let section of week.sections) {
+          const found = section.lessons.find(l => l.id === lessonId);
+          if (found) {
+            lesson = found;
+            lessonContext = {
+              week: { id: week.id, title: week.weekTitle, description: week.weekDescription },
+              section: { id: section.id, title: section.title, description: section.description }
+            };
+            break;
+          }
+        }
+        if (lesson) break;
+      }
     }
+    
     if (!lesson) {
       return res.status(404).json({ success: false, message: "Lesson not found in this course" });
     }
+    
     const progress = await Progress.findOne({ course: courseId, student: userId, lesson: lessonId });
     const notes = await Note.find({ course: courseId, student: userId, lesson: lessonId }).sort({ createdAt: -1 });
     const bookmarks = await Bookmark.find({ course: courseId, student: userId, lesson: lessonId }).sort({ createdAt: -1 });
+    
+    // Find previous and next lessons for navigation
+    let allLessons = [];
+    
+    course.curriculum.forEach(week => {
+      // Add direct lessons
+      if (week.lessons && week.lessons.length) {
+        allLessons = allLessons.concat(week.lessons.map(l => ({
+          ...l.toObject(),
+          weekId: week.id,
+          sectionId: null
+        })));
+      }
+      
+      // Add section lessons
+      if (week.sections && week.sections.length) {
+        week.sections.forEach(section => {
+          if (section.lessons && section.lessons.length) {
+            allLessons = allLessons.concat(section.lessons.map(l => ({
+              ...l.toObject(),
+              weekId: week.id,
+              sectionId: section.id
+            })));
+          }
+        });
+      }
+    });
+    
+    // Sort lessons by order
+    allLessons.sort((a, b) => a.order - b.order);
+    
+    // Find current lesson index
+    const currentIndex = allLessons.findIndex(l => l.id === lessonId);
     let previousLesson = null;
     let nextLesson = null;
-    // Navigation logic could be implemented here
+    
+    if (currentIndex > 0) {
+      previousLesson = allLessons[currentIndex - 1];
+    }
+    
+    if (currentIndex < allLessons.length - 1) {
+      nextLesson = allLessons[currentIndex + 1];
+    }
+    
     res.status(200).json({
       success: true,
       data: {
@@ -805,14 +983,79 @@ const getLessonDetails = async (req, res) => {
         },
         context: lessonContext,
         navigation: {
-          previous: previousLesson ? { id: previousLesson.id, title: previousLesson.title } : null,
-          next: nextLesson ? { id: nextLesson.id, title: nextLesson.title } : null
+          previous: previousLesson ? { 
+            id: previousLesson.id, 
+            title: previousLesson.title,
+            weekId: previousLesson.weekId,
+            sectionId: previousLesson.sectionId
+          } : null,
+          next: nextLesson ? { 
+            id: nextLesson.id, 
+            title: nextLesson.title,
+            weekId: nextLesson.weekId,
+            sectionId: nextLesson.sectionId
+          } : null
         }
       }
     });
   } catch (error) {
     console.error("Error fetching lesson details:", error);
     res.status(500).json({ success: false, message: "Error fetching lesson details", error: error.message });
+  }
+};
+
+/**
+ * @desc    Get all resources for a lesson
+ * @route   GET /api/courses/:courseId/lessons/:lessonId/resources
+ * @access  Private (Enrolled Students)
+ */
+const getLessonResources = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const { studentId } = req.user;
+    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    if (!enrollment) {
+      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view resources" });
+    }
+    const course = await Course.findById(courseId).select("curriculum").lean();
+    if (!course) {
+      return res.status(404).json({ success: false, message: "Course not found" });
+    }
+    
+    let lesson = null;
+    
+    // Search in direct lessons under weeks
+    for (let week of course.curriculum) {
+      // Check direct lessons under week
+      if (week.lessons && week.lessons.length) {
+        const found = week.lessons.find(l => l.id === lessonId);
+        if (found) {
+          lesson = found;
+          break;
+        }
+      }
+      
+      // Check in sections
+      if (!lesson && week.sections && week.sections.length) {
+        for (let section of week.sections) {
+          const found = section.lessons.find(l => l.id === lessonId);
+          if (found) {
+            lesson = found;
+            break;
+          }
+        }
+        if (lesson) break;
+      }
+    }
+    
+    if (!lesson) {
+      return res.status(404).json({ success: false, message: "Lesson not found" });
+    }
+    
+    res.status(200).json({ success: true, data: lesson.resources || [] });
+  } catch (error) {
+    console.error("Error fetching lesson resources:", error);
+    res.status(500).json({ success: false, message: "Error fetching lesson resources", error: error.message });
   }
 };
 
@@ -833,22 +1076,185 @@ const getCourseProgress = async (req, res) => {
     if (!course) {
       return res.status(404).json({ success: false, message: "Course not found" });
     }
-    const totalLessons = course.curriculum.reduce((sum, week) => sum + week.sections.reduce((s, section) => s + section.lessons.length, 0), 0);
+    
+    // Count both direct lessons and section lessons
+    let totalLessons = 0;
+    
+    course.curriculum.forEach(week => {
+      // Count direct lessons under weeks
+      if (week.lessons && week.lessons.length) {
+        totalLessons += week.lessons.length;
+      }
+      
+      // Count lessons in sections
+      if (week.sections && week.sections.length) {
+        week.sections.forEach(section => {
+          if (section.lessons && section.lessons.length) {
+            totalLessons += section.lessons.length;
+          }
+        });
+      }
+    });
+    
+    // Count live classes if any
+    let totalLiveClasses = 0;
+    let completedLiveClasses = 0;
+    
+    if (enrollment.attended_live_classes && enrollment.attended_live_classes.length) {
+      course.curriculum.forEach(week => {
+        if (week.liveClasses && week.liveClasses.length) {
+          totalLiveClasses += week.liveClasses.length;
+          week.liveClasses.forEach(liveClass => {
+            if (enrollment.attended_live_classes.includes(liveClass.id)) {
+              completedLiveClasses++;
+            }
+          });
+        }
+      });
+    }
+    
     const completedLessons = enrollment.completed_lessons?.length || 0;
     const progress = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
+    
+    const liveClassProgress = totalLiveClasses > 0 ? 
+      (completedLiveClasses / totalLiveClasses) * 100 : 0;
+    
     res.status(200).json({
       success: true,
       data: {
         totalLessons,
         completedLessons,
         progress,
+        totalLiveClasses,
+        completedLiveClasses,
+        liveClassProgress,
         lastAccessed: enrollment.last_accessed,
-        completedLessonsList: enrollment.completed_lessons || []
+        completedLessonsList: enrollment.completed_lessons || [],
+        attendedLiveClassesList: enrollment.attended_live_classes || []
       }
     });
   } catch (error) {
     console.error("Error fetching course progress:", error);
     res.status(500).json({ success: false, message: "Error fetching course progress", error: error.message });
+  }
+};
+
+/**
+ * @desc    Get live classes for a course
+ * @route   GET /api/courses/:courseId/live-classes
+ * @access  Private (Enrolled Students)
+ */
+const getCourseLiveClasses = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { studentId } = req.user;
+    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    if (!enrollment) {
+      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view live classes" });
+    }
+    const course = await Course.findById(courseId).select("curriculum").lean();
+    if (!course) {
+      return res.status(404).json({ success: false, message: "Course not found" });
+    }
+    
+    // Extract all live classes
+    const liveClasses = [];
+    course.curriculum.forEach(week => {
+      if (week.liveClasses && week.liveClasses.length) {
+        week.liveClasses.forEach(liveClass => {
+          liveClasses.push({
+            ...liveClass,
+            weekId: week.id,
+            weekTitle: week.weekTitle,
+            isAttended: enrollment.attended_live_classes?.includes(liveClass.id) || false
+          });
+        });
+      }
+    });
+    
+    // Sort by scheduled date
+    liveClasses.sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
+    
+    // Group by upcoming and past
+    const now = new Date();
+    const upcoming = liveClasses.filter(c => new Date(c.scheduledDate) > now);
+    const past = liveClasses.filter(c => new Date(c.scheduledDate) <= now);
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        all: liveClasses,
+        upcoming,
+        past,
+        total: liveClasses.length,
+        attended: enrollment.attended_live_classes?.length || 0
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching course live classes:", error);
+    res.status(500).json({ success: false, message: "Error fetching course live classes", error: error.message });
+  }
+};
+
+/**
+ * @desc    Mark live class as attended
+ * @route   POST /api/courses/:courseId/live-classes/:liveClassId/attend
+ * @access  Private (Enrolled Students)
+ */
+const markLiveClassAttended = async (req, res) => {
+  try {
+    const { courseId, liveClassId } = req.params;
+    const { studentId } = req.user;
+    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    if (!enrollment) {
+      return res.status(403).json({ success: false, message: "You must be enrolled in this course to mark live classes" });
+    }
+    
+    // Check if live class exists
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ success: false, message: "Course not found" });
+    }
+    
+    let liveClassExists = false;
+    for (const week of course.curriculum) {
+      if (week.liveClasses && week.liveClasses.length) {
+        if (week.liveClasses.some(lc => lc.id === liveClassId)) {
+          liveClassExists = true;
+          break;
+        }
+      }
+    }
+    
+    if (!liveClassExists) {
+      return res.status(404).json({ success: false, message: "Live class not found" });
+    }
+    
+    // Initialize attended_live_classes array if it doesn't exist
+    if (!enrollment.attended_live_classes) {
+      enrollment.attended_live_classes = [];
+    }
+    
+    // Check if already attended
+    if (enrollment.attended_live_classes.includes(liveClassId)) {
+      return res.status(200).json({ success: true, message: "Live class already marked as attended" });
+    }
+    
+    // Mark as attended
+    enrollment.attended_live_classes.push(liveClassId);
+    enrollment.last_accessed = new Date();
+    await enrollment.save();
+    
+    res.status(200).json({
+      success: true,
+      message: "Live class marked as attended",
+      data: { 
+        attendedLiveClasses: enrollment.attended_live_classes.length
+      }
+    });
+  } catch (error) {
+    console.error("Error marking live class attended:", error);
+    res.status(500).json({ success: false, message: "Error marking live class attended", error: error.message });
   }
 };
 
@@ -865,16 +1271,86 @@ const markLessonComplete = async (req, res) => {
     if (!enrollment) {
       return res.status(403).json({ success: false, message: "You must be enrolled in this course to mark lessons complete" });
     }
-    if (enrollment.isLessonCompleted(lessonId)) {
+    
+    // Check if the lesson exists in the course (either direct under week or in a section)
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({ success: false, message: "Course not found" });
+    }
+    
+    // Find the lesson to validate it exists
+    let lessonExists = false;
+    
+    // Check in all possible locations (direct lessons and section lessons)
+    for (const week of course.curriculum) {
+      // Check direct lessons
+      if (week.lessons && week.lessons.length) {
+        if (week.lessons.some(l => l.id === lessonId)) {
+          lessonExists = true;
+          break;
+        }
+      }
+      
+      // Check lessons in sections
+      if (!lessonExists && week.sections && week.sections.length) {
+        for (const section of week.sections) {
+          if (section.lessons && section.lessons.some(l => l.id === lessonId)) {
+            lessonExists = true;
+            break;
+          }
+        }
+        if (lessonExists) break;
+      }
+    }
+    
+    if (!lessonExists) {
+      return res.status(404).json({ success: false, message: "Lesson not found in this course" });
+    }
+    
+    // Check if lesson is already marked as complete
+    if (enrollment.completed_lessons && enrollment.completed_lessons.includes(lessonId)) {
       return res.status(200).json({ success: true, message: "Lesson already marked as complete" });
     }
+    
+    // Initialize completed_lessons array if it doesn't exist
+    if (!enrollment.completed_lessons) {
+      enrollment.completed_lessons = [];
+    }
+    
+    // Mark lesson as complete
     enrollment.completed_lessons.push(lessonId);
     enrollment.last_accessed = new Date();
     await enrollment.save();
+    
+    // Calculate new progress percentage
+    let totalLessons = 0;
+    course.curriculum.forEach(week => {
+      // Count direct lessons
+      if (week.lessons && week.lessons.length) {
+        totalLessons += week.lessons.length;
+      }
+      
+      // Count section lessons
+      if (week.sections && week.sections.length) {
+        week.sections.forEach(section => {
+          if (section.lessons && section.lessons.length) {
+            totalLessons += section.lessons.length;
+          }
+        });
+      }
+    });
+    
+    const newProgress = totalLessons > 0 ? 
+      (enrollment.completed_lessons.length / totalLessons) * 100 : 0;
+    
     res.status(200).json({
       success: true,
       message: "Lesson marked as complete",
-      data: { progress: enrollment.progress, completedLessons: enrollment.completed_lessons.length }
+      data: { 
+        progress: newProgress,
+        completedLessons: enrollment.completed_lessons.length,
+        totalLessons
+      }
     });
   } catch (error) {
     console.error("Error marking lesson complete:", error);
@@ -1087,43 +1563,7 @@ const getQuizResults = async (req, res) => {
 // COURSE RESOURCES, NOTES & BOOKMARKS
 // =========================================
 
-/**
- * @desc    Get all resources for a lesson
- * @route   GET /api/courses/:courseId/lessons/:lessonId/resources
- * @access  Private (Enrolled Students)
- */
-const getLessonResources = async (req, res) => {
-  try {
-    const { courseId, lessonId } = req.params;
-    const { studentId } = req.user;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
-    if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view resources" });
-    }
-    const course = await Course.findById(courseId).select("curriculum").lean();
-    if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
-    }
-    let lesson = null;
-    for (let week of course.curriculum) {
-      for (let section of week.sections) {
-        const found = section.lessons.find(l => l.id === lessonId);
-        if (found) {
-          lesson = found;
-          break;
-        }
-      }
-      if (lesson) break;
-    }
-    if (!lesson) {
-      return res.status(404).json({ success: false, message: "Lesson not found" });
-    }
-    res.status(200).json({ success: true, data: lesson.resources || [] });
-  } catch (error) {
-    console.error("Error fetching lesson resources:", error);
-    res.status(500).json({ success: false, message: "Error fetching lesson resources", error: error.message });
-  }
-};
+
 
 /**
  * @desc    Download a resource
@@ -1591,5 +2031,7 @@ module.exports = {
   getRecordedVideosForUser,
   getAllRelatedCourses,
   getNewCoursesWithLimits,
-  downloadBrochure
+  downloadBrochure,
+  getCourseLiveClasses,
+  markLiveClassAttended
 };
