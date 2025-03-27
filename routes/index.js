@@ -11,7 +11,7 @@ const certificateRoutes = require("./certificateRoutes");
 const onlineMeetingRoutes = require("./online_meetingRoutes");
 const enrolledRoutes = require("./enrolledRoutes");
 const recordedSessionRoutes = require("./recorded-sessionRoutes");
-const uploadFilesRoutes = require("./uploadPdfRoutes");
+const uploadRoutes = require("./uploadRoutes");
 const contactRoutes = require("./contactRoutes");
 const blogRoutes = require("./blogRoutes");
 const dashboardRoutes = require("./dashboardRoutes");
@@ -50,11 +50,11 @@ const moduleRoutes = [
     route: courseRoutes,
   },
   {
-    path: "/course-faqs",
+    path: "/freq",
     route: freqRoutes,
   },
   {
-    path: "/faqs",
+    path: "/faq",
     route: faqRoutes,
   },
   {
@@ -70,11 +70,11 @@ const moduleRoutes = [
     route: certificateRoutes,
   },
   {
-    path: "/online-meeting",
+    path: "/online-meetings",
     route: onlineMeetingRoutes,
   },
   {
-    path: "/enroll",
+    path: "/enrolled",
     route: enrolledRoutes,
   },
   {
@@ -83,7 +83,7 @@ const moduleRoutes = [
   },
   {
     path: "/upload",
-    route: uploadFilesRoutes,
+    route: uploadRoutes,
   },
   {
     path: "/contact",
@@ -98,28 +98,28 @@ const moduleRoutes = [
     route: dashboardRoutes,
   },
   {
-    path: "/assigned-instrutors",
+    path: "/assign-instructor",
     route: assignedInstructor,
   },
   {
-    path: "/assignments",
-    route: assignment,
-  },
-  {
-    path: "/memberships",
+    path: "/membership",
     route: membership,
-  },
-  {
-    path: "/quizes",
-    route: quizes,
   },
   {
     path: "/resources",
     route: resources,
   },
   {
+    path: "/quizes",
+    route: quizes,
+  },
+  {
     path: "/feedback",
     route: feedback,
+  },
+  {
+    path: "/assignment",
+    route: assignment,
   },
   {
     path: "/placements",
@@ -138,12 +138,12 @@ const moduleRoutes = [
     route: enrollForm,
   },
   {
-    path: "/job-post",
-    route: jobPost,
-  },
-  {
     path: "/add-job-post",
     route: addJobPost,
+  },
+  {
+    path: "/job-post",
+    route: jobPost,
   },
   {
     path: "/subscription",
@@ -158,7 +158,7 @@ const moduleRoutes = [
     route: newsLetterRoute,
   },
   {
-    path: "/quizResponses",
+    path: "/quiz-response",
     route: quizResponseRoutes,
   },
   {
@@ -166,7 +166,7 @@ const moduleRoutes = [
     route: trackSessionRoute,
   },
   {
-    path: "/enroll-coorporate",
+    path: "/assign-corporate-course",
     route: assignCoorporateCourse,
   },
   {

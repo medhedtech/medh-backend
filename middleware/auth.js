@@ -4,50 +4,49 @@ const User = require('../models/user-controller');
 /**
  * Middleware to authenticate user requests
  */
-const authenticate = async (req, res, next) => {
+const authenticateUser = (req, res, next) => {
   try {
-    // Get token from header - check both Authorization and x-access-token
-    let token;
+    // Check for token in Authorization header (preferred)
+    let token = req.header('Authorization')?.replace('Bearer ', '');
     
-    // Check Authorization header
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.split(' ')[1];
+    // If not found, check for token in x-access-token header
+    if (!token) {
+      token = req.header('x-access-token');
     }
     
-    // If no token in Authorization header, check x-access-token
-    if (!token && req.headers['x-access-token']) {
-      token = req.headers['x-access-token'];
-    }
-    
-    // Check if token exists
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: 'Authentication failed: No token provided'
+        message: 'Authentication required'
       });
     }
-    
+
+    console.log('Token received:', token);
+    console.log('JWT Secret Key:', process.env.JWT_SECRET_KEY);
+
     try {
-      // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY || 'mynewjwtsecretkeytoken');
-      
-      // Add user information to request
-      // Check if user property is in the decoded object (to handle different token formats)
-      req.user = decoded.user || decoded;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+      console.log('Decoded token:', decoded);
+      req.user = decoded;
       next();
-    } catch (error) {
-      return res.status(401).json({
+    } catch (jwtError) {
+      console.error('JWT Verification Error:', jwtError);
+      res.status(401).json({
         success: false,
-        message: 'Authentication failed: Invalid token',
-        error: error.message
+        message: 'Invalid token',
+        error: jwtError.message,
+        details: {
+          name: jwtError.name,
+          expiredAt: jwtError.expiredAt
+        }
       });
     }
-  } catch (error) {
-    return res.status(500).json({
+  } catch (err) {
+    console.error('General auth error:', err);
+    res.status(401).json({
       success: false,
       message: 'Authentication error',
-      error: error.message
+      error: err.message
     });
   }
 };
@@ -117,7 +116,7 @@ const verifyStudentOwnership = async (req, res, next) => {
 };
 
 module.exports = {
-  authenticate,
+  authenticate: authenticateUser,
   authorize,
   verifyStudentOwnership
 }; 
