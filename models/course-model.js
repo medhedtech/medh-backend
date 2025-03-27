@@ -413,7 +413,6 @@ const toolTechnologySchema = new Schema({
 const bonusModuleSchema = new Schema({
   title: {
     type: String,
-    required: [true, "Bonus module title is required"],
     trim: true
   },
   description: {
@@ -555,11 +554,6 @@ const courseSchema = new Schema(
     },
     course_tag: {
       type: String,
-      enum: {
-        values: ["Live", "Hybrid", "Pre-Recorded", "Blended Courses", "Free"],
-        message: "{VALUE} is not a valid course tag"
-      },
-      required: [true, "Course tag is required"],
       index: true
     },
     course_description: {
@@ -590,12 +584,7 @@ const courseSchema = new Schema(
       required: [true, "Course description is required"]
     },
     course_level: {
-      type: String,
-      enum: {
-        values: ["Beginner", "Intermediate", "Advanced"],
-        message: "{VALUE} is not a valid course level"
-      },
-      required: [true, "Course level is required"]
+      type: String
     },
     language: {
       type: String,
@@ -617,7 +606,6 @@ const courseSchema = new Schema(
     },
     session_duration: {
       type: String,
-      required: [true, "Session duration is required"],
       trim: true
     },
     course_fee: {
@@ -659,10 +647,10 @@ const courseSchema = new Schema(
     status: {
       type: String,
       enum: {
-        values: ["Published", "Upcoming"],
+        values: ["Published", "Upcoming", "Draft"],
         message: "{VALUE} is not a valid status"
       },
-      default: "Upcoming",
+      default: "Draft",
       index: true
     },
     category_type: {
