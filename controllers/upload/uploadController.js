@@ -81,10 +81,14 @@ const handleUpload = async (req, res) => {
 
 const handleBase64Upload = async (req, res) => {
   try {
-    // Set proper CORS headers for the upload endpoint
-    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+    // Explicitly set CORS headers for the upload endpoint
+    const origin = req.headers.origin;
+    if (origin) {
+      res.header('Access-Control-Allow-Origin', origin);
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+      res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, x-access-token');
+      res.header('Access-Control-Allow-Credentials', 'true');
+    }
     
     // Check that request body is not undefined
     if (!req.body || Object.keys(req.body).length === 0) {
@@ -94,14 +98,15 @@ const handleBase64Upload = async (req, res) => {
       );
     }
 
-    // Log the request body for debugging (without the full base64 string)
+    // Log the request details without the base64 string for debugging
     const debugBody = {
       hasBase64String: !!req.body.base64String,
       fileType: req.body.fileType,
       base64Length: req.body.base64String ? req.body.base64String.length : 0,
-      bodyKeys: Object.keys(req.body)
+      bodyKeys: Object.keys(req.body),
+      origin: req.headers.origin || 'No origin'
     };
-    console.log('Base64 upload request body:', debugBody);
+    console.log('Base64 upload request details:', debugBody);
 
     const { base64String, fileType } = req.body;
 

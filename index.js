@@ -32,14 +32,33 @@ app.use(mongoSanitize()); // Prevent MongoDB operator injection
 
 // Basic Middleware
 app.use(express.static("public"));
-app.use(express.urlencoded({ extended: true }));
-app.use(bodyParser.json({ limit: "128mb", extended: true }));
-app.use(express.json());
+app.use(express.urlencoded({ extended: true, limit: '10gb' }));
+app.use(bodyParser.json({ limit: "10gb", extended: true }));
+app.use(express.json({ limit: '10gb' }));
 app.use(fileUpload({
-  limits: { fileSize: 500 * 1024 * 1024 }, // 50MB max file size
+  limits: { fileSize: 1024 * 1024 * 10 * 1024 }, // 10GB max file size
   useTempFiles: true,
   tempFileDir: '/tmp/'
 }));
+
+// Add middleware to handle upload/base64 requests specially
+app.use('/api/v1/upload/base64', (req, res, next) => {
+  // Always set CORS headers for this specific endpoint
+  const origin = req.headers.origin;
+  const allowedOrigins = ENV_VARS.ALLOWED_ORIGINS.length > 0 
+    ? ENV_VARS.ALLOWED_ORIGINS 
+    : ['http://localhost:3000', 'http://localhost:3001', 'https://medh.co', 'https://www.medh.co'];
+    
+  if (origin && (allowedOrigins.includes(origin) || ENV_VARS.NODE_ENV === 'development')) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, x-access-token');
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  
+  // Continue to next middleware
+  next();
+});
 
 // Request logging
 app.use((req, res, next) => {
