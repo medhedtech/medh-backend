@@ -10,6 +10,7 @@
     "test:api:debug": "DEBUG=true node tests/api-test.js",
     "test:api:auto": "node tests/run-api-tests.js",
     "test:api:report": "start reports/api-test-report.html",
+    "test:postman": "./test-api.sh",
     "lint": "eslint .",
     "format": "prettier --write .",
     "logs:error": "tail -f logs/error-*.log",

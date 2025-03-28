@@ -1,6 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('./config/cors');
+const corsMiddleware = require('./config/cors');
 const trackingMiddleware = require('./middleware/trackingMiddleware');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -18,7 +18,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/medh', {
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors); // CORS middleware
+app.use(corsMiddleware); // Use the centralized CORS middleware
 
 // Add tracking middleware
 app.use(trackingMiddleware.requestTracker);

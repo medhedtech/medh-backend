@@ -1,0 +1,334 @@
+{
+  "info": {
+    "name": "MEDH API Complete Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "let timestamp = new Date().getTime();",
+                  "pm.environment.set('testEmail', `test+${timestamp}@example.com`);"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Registration response', function () {",
+                  "    const code = pm.response.code;",
+                  "    console.log('Status code:', code);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"password\": \"{{testPassword}}\",\n    \"full_name\": \"Test User\",\n    \"phone_number\": \"9876543210\",\n    \"agree_terms\": true,\n    \"role\": [\"student\"],\n    \"meta\": {\n        \"gender\": \"Male\",\n        \"upload_resume\": []\n    }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login response', function () {",
+                  "    const code = pm.response.code;",
+                  "    console.log('Status code:', code);",
+                  "    ",
+                  "    if (code === 200) {",
+                  "        const responseData = pm.response.json();",
+                  "        if (responseData.token) {",
+                  "            pm.environment.set('authToken', responseData.token);",
+                  "        }",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{testEmail}}\",\n    \"password\": \"{{testPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "Get All Categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/categories/getAll",
+              "host": ["{{baseUrl}}"],
+              "path": ["categories", "getAll"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Courses",
+      "item": [
+        {
+          "name": "Get All Courses",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/courses/get",
+              "host": ["{{baseUrl}}"],
+              "path": ["courses", "get"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "FAQ",
+      "item": [
+        {
+          "name": "Get All FAQs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/faq/get",
+              "host": ["{{baseUrl}}"],
+              "path": ["faq", "get"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Freq",
+      "item": [
+        {
+          "name": "Get Freq Data",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/freq/get",
+              "host": ["{{baseUrl}}"],
+              "path": ["freq", "get"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Students",
+      "item": [
+        {
+          "name": "Get Students",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/students/get",
+              "host": ["{{baseUrl}}"],
+              "path": ["students", "get"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Instructors",
+      "item": [
+        {
+          "name": "Get Instructors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/instructors/get",
+              "host": ["{{baseUrl}}"],
+              "path": ["instructors", "get"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Certificates",
+      "item": [
+        {
+          "name": "Get Certificates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/certificates/get",
+              "host": ["{{baseUrl}}"],
+              "path": ["certificates", "get"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Online Meetings",
+      "item": [
+        {
+          "name": "Get Online Meetings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/online-meetings/get",
+              "host": ["{{baseUrl}}"],
+              "path": ["online-meetings", "get"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Enrolled",
+      "item": [
+        {
+          "name": "Get Enrolled",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/enrolled/get",
+              "host": ["{{baseUrl}}"],
+              "path": ["enrolled", "get"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Recorded Sessions",
+      "item": [
+        {
+          "name": "Get Recorded Sessions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/recorded-sessions/get",
+              "host": ["{{baseUrl}}"],
+              "path": ["recorded-sessions", "get"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Upload",
+      "item": [
+        {
+          "name": "Test Upload Endpoint",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["upload"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "CORS Test",
+      "item": [
+        {
+          "name": "CORS Test Endpoint",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/cors-test",
+              "host": ["{{baseUrl}}"],
+              "path": ["cors-test"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+} 
