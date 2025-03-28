@@ -2,15 +2,23 @@ const cors = require('cors');
 const { ENV_VARS } = require('./envVars');
 const logger = require('../utils/logger');
 
-// Get allowed origins from environment variable or use default origins
-const allowedOrigins = ENV_VARS.ALLOWED_ORIGINS.length > 0 
-  ? ENV_VARS.ALLOWED_ORIGINS 
-  : [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://medh.co',
-      'https://www.medh.co'
-    ];
+// Ensure we always include the medh.co domains
+const allowedOrigins = [
+  'https://medh.co',
+  'https://www.medh.co',
+  'https://api.medh.co',
+  'http://localhost:3000',
+  'http://localhost:3001'
+];
+
+// If environment variables have additional domains, add them
+if (ENV_VARS.ALLOWED_ORIGINS && ENV_VARS.ALLOWED_ORIGINS.length > 0) {
+  ENV_VARS.ALLOWED_ORIGINS.forEach(origin => {
+    if (!allowedOrigins.includes(origin)) {
+      allowedOrigins.push(origin);
+    }
+  });
+}
 
 // CORS configuration
 const corsOptions = {
@@ -23,12 +31,12 @@ const corsOptions = {
       return callback(null, true);
     }
     
-    if (allowedOrigins.indexOf(origin) !== -1 || ENV_VARS.NODE_ENV === 'development') {
+    if (allowedOrigins.includes(origin) || ENV_VARS.NODE_ENV === 'development') {
       callback(null, true);
     } else {
       logger.warn(`Blocked request from unauthorized origin: ${origin}`);
       // Return an error for unauthorized origins
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error(`Not allowed by CORS: ${origin} is not allowed`));
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -45,8 +53,24 @@ const corsMiddleware = cors(corsOptions);
 
 // Middleware to handle preflight requests for all routes
 const handlePreflight = (req, res, next) => {
+  // First, set basic CORS headers for all requests as a fallback
+  // This ensures that even if other middleware fails, CORS headers are sent
+  const origin = req.headers.origin;
+  if (origin && (allowedOrigins.includes(origin) || ENV_VARS.NODE_ENV === 'development')) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.header('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, x-access-token');
+    res.header('Access-Control-Allow-Credentials', 'true');
+  }
+  
   // If this is a preflight OPTIONS request
   if (req.method === 'OPTIONS') {
+    // Log the preflight request
+    logger.info('CORS Preflight Request', {
+      url: req.originalUrl,
+      origin: req.headers.origin || 'No origin'
+    });
+    
     // Apply CORS headers and respond immediately
     return cors(corsOptions)(req, res, () => {
       res.status(204).end();
