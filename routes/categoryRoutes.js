@@ -12,7 +12,7 @@ const {
 
 // Category routes
 router.post("/create", createCategory);
-router.get("/getAll", getCategories);
+router.get("/", getCategories);
 router.get("/get/:id", getCategoryById);
 router.get("/related-courses/:id", getRelatedCourses);
 router.post("/update/:id", updateCategory);
