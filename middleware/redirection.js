@@ -27,6 +27,12 @@ const redirectionMiddleware = (req, res, next) => {
       { from: /^\/api\/v1\/courses\/search\?.*$/, to: '/api/v1/courses/search' },
       { from: /^\/courses\/search\/?$/, to: '/courses/search' },
       { from: /^\/courses\/search\?.*$/, to: '/courses/search' },
+      // Add instructors endpoint redirect
+      { from: /^\/api\/v1\/instructors\/?$/, to: '/api/v1/auth/get-all-instructors' },
+      { from: /^\/instructors\/?$/, to: '/auth/get-all-instructors' },
+      // Add upload endpoint patterns to ensure CORS headers are applied
+      { from: /^\/api\/v1\/upload\/base64\/?$/, to: '/api/v1/upload/base64' },
+      { from: /^\/upload\/base64\/?$/, to: '/upload/base64' },
       // Add other routes that might involve redirects and cause CORS issues
     ];
     

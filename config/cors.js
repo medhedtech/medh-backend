@@ -18,7 +18,7 @@ const corsOptions = {
     // Allow requests with no origin (like mobile apps, Postman or curl requests)
     if (!origin) {
       if (ENV_VARS.NODE_ENV === 'production') {
-        logger.warn('Request without origin header in production', { url: req?.originalUrl });
+        logger.warn('Request without origin header in production');
       }
       return callback(null, true);
     }
@@ -26,10 +26,7 @@ const corsOptions = {
     if (allowedOrigins.indexOf(origin) !== -1 || ENV_VARS.NODE_ENV === 'development') {
       callback(null, true);
     } else {
-      logger.warn(`Blocked request from unauthorized origin: ${origin}`, {
-        url: req?.originalUrl,
-        origin
-      });
+      logger.warn(`Blocked request from unauthorized origin: ${origin}`);
       // Return an error for unauthorized origins
       callback(new Error('Not allowed by CORS'));
     }

@@ -81,6 +81,11 @@ const handleUpload = async (req, res) => {
 
 const handleBase64Upload = async (req, res) => {
   try {
+    // Set proper CORS headers for the upload endpoint
+    res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+    
     // Check that request body is not undefined
     if (!req.body || Object.keys(req.body).length === 0) {
       throw new UploadError(

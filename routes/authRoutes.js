@@ -30,6 +30,7 @@ router.post("/update/:id", updateUser);
 router.delete("/delete/:id", deleteUser);
 
 router.post("/create", instructorController.createInstructor);
+router.get("/get-all-instructors", instructorController.getAllInstructors);
 router.get("/get-all-instrucors", instructorController.getAllInstructors);
 router.get("/get-instructor/:id", instructorController.getInstructorById);
 router.post("/updateInstrucor/:id", instructorController.updateInstructor);

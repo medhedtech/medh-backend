@@ -1,9 +1,15 @@
 const AWS = require('aws-sdk');
+const { ENV_VARS } = require('./envVars');
+
+// Check if AWS credentials are present
+if (!ENV_VARS.AWS_ACCESS_KEY || !ENV_VARS.AWS_SECRET_KEY) {
+  console.warn('AWS credentials are missing or incomplete. File uploads will fail.');
+}
 
 // Configure AWS
 AWS.config.update({
-  accessKeyId: process.env.IM_AWS_ACCESS_KEY,
-  secretAccessKey: process.env.IM_AWS_SECRET_KEY,
+  accessKeyId: ENV_VARS.AWS_ACCESS_KEY,
+  secretAccessKey: ENV_VARS.AWS_SECRET_KEY,
   region: 'ap-south-1'
 });
 
