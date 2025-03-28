@@ -188,11 +188,18 @@ router.get('/cors-test', (req, res) => {
   // Record the origin of the request
   const origin = req.headers.origin || 'No origin header';
   
-  console.log('CORS Test Request Headers:', req.headers);
+  // Log all headers for debugging
+  const headersObj = {};
+  Object.keys(req.headers).forEach(key => {
+    headersObj[key] = req.headers[key];
+  });
+  
+  console.log('CORS Test Request Headers:', headersObj);
   console.log('Origin:', origin);
   
   // Log response headers for debugging
-  console.log('CORS Test Response Headers:', res.getHeaders());
+  const responseHeaders = res.getHeaders();
+  console.log('CORS Test Response Headers:', responseHeaders);
   
   return res.status(200).json({
     message: 'CORS test successful',
@@ -200,8 +207,10 @@ router.get('/cors-test', (req, res) => {
     // Include the current CORS configuration
     allowedOrigins: ENV_VARS.ALLOWED_ORIGINS.length > 0 
       ? ENV_VARS.ALLOWED_ORIGINS 
-      : ['Using default origins - check index.js'],
+      : ['http://localhost:3000', 'http://localhost:3001', 'https://medh.co', 'https://www.medh.co'],
     environment: ENV_VARS.NODE_ENV,
+    requestHeaders: headersObj,
+    responseHeaders: responseHeaders,
     timestamp: new Date().toISOString()
   });
 });
