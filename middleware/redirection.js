@@ -4,6 +4,7 @@
  * without redirecting, as browsers do not allow redirections for preflight requests.
  */
 const logger = require('../utils/logger');
+const { ENV_VARS } = require('../config/envVars');
 
 const redirectionMiddleware = (req, res, next) => {
   // If this is a preflight request, we need to avoid redirects
@@ -26,7 +27,7 @@ const redirectionMiddleware = (req, res, next) => {
       { from: /^\/api\/v1\/courses\/search\?.*$/, to: '/api/v1/courses/search' },
       { from: /^\/courses\/search\/?$/, to: '/courses/search' },
       { from: /^\/courses\/search\?.*$/, to: '/courses/search' },
-      // Handle both with and without trailing slash and with query parameters
+      // Add other routes that might involve redirects and cause CORS issues
     ];
     
     // Check if this request matches any redirect patterns
@@ -38,8 +39,26 @@ const redirectionMiddleware = (req, res, next) => {
           origin: req.headers.origin || 'No origin'
         });
         
+        // Get allowed origins from environment or use default
+        const allowedOrigins = ENV_VARS.ALLOWED_ORIGINS.length > 0 
+          ? ENV_VARS.ALLOWED_ORIGINS 
+          : ['http://localhost:3000', 'http://localhost:3001', 'https://medh.co', 'https://www.medh.co'];
+          
+        // Check if origin is allowed
+        const origin = req.headers.origin;
+        const isOriginAllowed = !origin || 
+          allowedOrigins.includes(origin) || 
+          ENV_VARS.NODE_ENV === 'development';
+          
+        if (!isOriginAllowed) {
+          logger.warn(`Blocked preflight redirect for unauthorized origin: ${origin}`, {
+            url: req.originalUrl
+          });
+          return res.status(403).end();
+        }
+        
         // Set CORS headers directly for this specific preflight request
-        res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+        res.header('Access-Control-Allow-Origin', origin || '*');
         res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
         res.header('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, x-access-token');
         res.header('Access-Control-Allow-Credentials', 'true');
