@@ -114,6 +114,9 @@ const userValidation = joi.object({
     .messages({
       'string.pattern.base': 'Age must be a valid number between 1-999'
     }),
+  age_group: joi.string()
+    .valid("Under 18", "18-24", "25-34", "35-44", "45-54", "55-64", "65+")
+    .optional(),
   status: joi.string()
     .valid("Active", "Inactive")
     .default("Active"),
@@ -153,6 +156,9 @@ const userValidation = joi.object({
       .messages({
         'string.pattern.base': 'Age must be a valid number between 1-999'
       }),
+    age_group: joi.string()
+      .valid("Under 18", "18-24", "25-34", "35-44", "45-54", "55-64", "65+")
+      .optional(),
     category: joi.string().optional(),
     gender: joi.string()
       .valid("Male", "Female", "Others")

@@ -1,4 +1,4 @@
-const User = require("../models/user-controller");
+const User = require("../models/user-modal");
 const Course = require("../models/course-model");
 const Instructor = require("../models/instructor-model");
 const EnrolledCourse = require("../models/enrolled-courses-model");

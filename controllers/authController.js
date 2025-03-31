@@ -1,19 +1,60 @@
 const bcrypt = require("bcryptjs");
-const User = require("../models/user-controller");
+const User = require("../models/user-modal");
 const userValidation = require("../validations/userValidation");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { ENV_VARS } = require("../config/envVars");
 
-// Set up the email transporter
+// Set up the email transporter with AWS SES SMTP
 const transporter = nodemailer.createTransport({
-  service: "Gmail",
+  host: "email-smtp.us-east-1.amazonaws.com",
+  port: 465,
+  secure: true, // true for 465, false for other ports like 587
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
+    user: "AKIAU6VTTMQEWBXKX5ZS",
+    pass: "BBqpvqKF5HS2+PHWBparjgjallqQU4Bu5GPj/UPrk465"
+  }
 });
+
+// Add error handling for transporter
+transporter.verify(function(error, success) {
+  if (error) {
+    console.error("Email configuration error:", error);
+    // Log more details about the error
+    if (error.code === 'EAUTH') {
+      console.error("Authentication failed. Please check your credentials.");
+      console.error("If using Gmail, make sure to:");
+      console.error("1. Enable 2-Step Verification in your Google Account");
+      console.error("2. Generate an App Password from Google Account settings");
+      console.error("3. Use the App Password instead of your regular password");
+    } else if (error.code === 'EDNS') {
+      console.error("DNS lookup failed. Please check your internet connection and SMTP server settings.");
+    }
+  } else {
+    console.log("Email server is ready to send messages");
+  }
+});
+
+// Helper function to send emails with better error handling
+const sendEmail = async (mailOptions) => {
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Email sent successfully:", info.messageId);
+    return true;
+  } catch (error) {
+    console.error("Email sending failed:", error);
+    
+    // Handle specific Gmail errors
+    if (error.code === 'EAUTH') {
+      throw new Error("Email authentication failed. Please check your email credentials.");
+    } else if (error.code === 'ESOCKET') {
+      throw new Error("Email connection failed. Please check your internet connection.");
+    } else {
+      throw new Error("Failed to send email. Please try again later.");
+    }
+  }
+};
 
 // Register User
 const registerUser = async (req, res) => {
@@ -54,7 +95,7 @@ const registerUser = async (req, res) => {
       agree_terms,
       role: ["student"],
       status: "Active",
-      meta: meta || { gender: "Male", upload_resume: [] },
+      meta: meta || { gender: "Male", upload_resume: [], age: "", age_group: "", category: "" },
       assign_department: [],
       permissions: []
     });
@@ -88,7 +129,7 @@ const registerUser = async (req, res) => {
     };
 
     try {
-      await transporter.sendMail(mailOptions);
+      await sendEmail(mailOptions);
     } catch (emailError) {
       console.error('Email sending failed:', emailError);
       // Continue registration even if email sending fails
@@ -333,45 +374,58 @@ const forgotPassword = async (req, res) => {
     // Check if the user exists
     const user = await User.findOne({ email });
     if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
+      // Return success even if user not found to prevent email enumeration
+      return res.status(200).json({
+        success: true,
+        message: "If an account exists with this email, a password reset link will be sent."
+      });
     }
 
-    // Generate a random temporary password
-    const tempPassword = crypto.randomBytes(8).toString("hex");
+    // Generate a unique reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = Date.now() + 3600000; // Token expires in 1 hour
 
-    // Hash the temporary password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(tempPassword, salt);
-
-    // Update user's password in the database
-    user.password = hashedPassword;
+    // Store reset token and expiry in user document
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = resetTokenExpiry;
     await user.save();
 
-    // Send email with temporary password
+    // Create reset URL
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+    // Send email with reset link
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: `"Medh Care" <care@medh.co>`,
       to: email,
-      subject: "Your Password Reset Request",
+      subject: "Password Reset Request",
       html: `
         <h2>Dear ${user.full_name || "User"},</h2>
-        <p>You requested to reset your password. Here is your temporary password:</p>
-        <ul>
-          <li><strong>Temporary Password:</strong> ${tempPassword}</li>
-        </ul>
-        <p>Please log in with this temporary password and change your password immediately after login.</p>
+        <p>You requested to reset your password. Click the link below to reset it:</p>
+        <p><a href="${resetUrl}">Reset Password</a></p>
+        <p>This link will expire in 1 hour.</p>
+        <p>If you didn't request this, please ignore this email or contact support if you have concerns.</p>
+        <p>For security reasons, this link can only be used once.</p>
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    await sendEmail(mailOptions);
 
     res.status(200).json({
       success: true,
-      message: "Temporary password has been sent to your email.",
+      message: "If an account exists with this email, a password reset link will be sent."
     });
   } catch (err) {
     console.error("Error in forgotPassword:", err);
+    
+    // Handle email-specific errors
+    if (err.message.includes("Email authentication failed")) {
+      return res.status(500).json({
+        success: false,
+        message: "Email service configuration error. Please contact support.",
+        error: err.message
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -415,34 +469,56 @@ const verifyTemporaryPassword = async (req, res) => {
 };
 
 const resetPassword = async (req, res) => {
-  const { email, newPassword, confirmPassword } = req.body;
+  const { token, newPassword, confirmPassword } = req.body;
 
   if (newPassword !== confirmPassword) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Passwords do not match" });
+    return res.status(400).json({
+      success: false,
+      message: "Passwords do not match"
+    });
   }
 
   try {
-    // Find user by email
-    const user = await User.findOne({ email });
+    // Find user with valid reset token
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
     if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
+      return res.status(400).json({
+        success: false,
+        message: "Password reset token is invalid or has expired"
+      });
     }
 
     // Hash the new password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    // Update user's password
+    // Update password and clear reset token fields
     user.password = hashedPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
     await user.save();
+
+    // Send confirmation email
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: user.email,
+      subject: "Password Reset Successful",
+      html: `
+        <h2>Dear ${user.full_name || "User"},</h2>
+        <p>Your password has been successfully reset.</p>
+        <p>If you did not perform this action, please contact support immediately.</p>
+      `,
+    };
+
+    await sendEmail(mailOptions);
 
     res.status(200).json({
       success: true,
-      message: "Password updated successfully.",
+      message: "Password has been reset successfully"
     });
   } catch (err) {
     console.error("Error in resetPassword:", err);

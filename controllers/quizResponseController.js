@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const QuizResponse = require("../models/quizResponse");
-const User = require("../models/user-controller");
+const User = require("../models/user-modal");
 const Quiz = require("../models/quiz-model");
 
 const createResponse = async (req, res) => {

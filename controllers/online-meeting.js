@@ -1,7 +1,7 @@
 const moment = require("moment");
 const OnlineMeeting = require("../models/online-meeting");
 const Course = require("../models/course-model");
-const User = require("../models/user-controller");
+const User = require("../models/user-modal");
 const CoorporateAssignCourse = require("../models/assigned-courses-coorporates-modal");
 
 exports.createOnlineMeeting = async (req, res) => {

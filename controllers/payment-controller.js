@@ -1,7 +1,7 @@
 const EnrolledCourse = require("../models/enrolled-courses-model");
 const Subscription = require('../models/subscription-model');
 const Course = require("../models/course-model");
-const User = require("../models/user-controller");
+const User = require("../models/user-modal");
 const EnrolledModule = require("../models/enrolled-modules.modal");
 const logger = require('../utils/logger');
 const { AppError } = require('../utils/errorHandler');

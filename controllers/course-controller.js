@@ -1995,6 +1995,215 @@ const downloadBrochure = async (req, res) => {
   }
 };
 
+// Get course prices
+const getCoursePrices = async (req, res) => {
+  try {
+    const course = await Course.findById(req.params.id)
+      .select('prices course_title')
+      .lean();
+    
+    if (!course) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Course not found" 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        courseId: course._id,
+        courseTitle: course.course_title,
+        prices: course.prices || []
+      }
+    });
+  } catch (error) {
+    console.error("Error fetching course prices:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course prices",
+      error: error.message
+    });
+  }
+};
+
+// Update course prices
+const updateCoursePrices = async (req, res) => {
+  try {
+    const { prices } = req.body;
+    
+    if (!Array.isArray(prices)) {
+      return res.status(400).json({
+        success: false,
+        message: "Prices must be provided as an array"
+      });
+    }
+
+    // Validate price entries
+    for (const price of prices) {
+      if (!price.currency || !price.individual || !price.batch) {
+        return res.status(400).json({
+          success: false,
+          message: "Each price entry must contain currency, individual, and batch prices"
+        });
+      }
+    }
+
+    const course = await Course.findByIdAndUpdate(
+      req.params.id,
+      { $set: { prices } },
+      { new: true, runValidators: true }
+    );
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Prices updated successfully",
+      data: course.prices
+    });
+  } catch (error) {
+    console.error("Error updating course prices:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating course prices",
+      error: error.message
+    });
+  }
+};
+
+// Bulk update course prices
+const bulkUpdateCoursePrices = async (req, res) => {
+  try {
+    const { updates } = req.body;
+    
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Updates must be a non-empty array"
+      });
+    }
+
+    const bulkOps = updates.map(update => ({
+      updateOne: {
+        filter: { _id: update.courseId },
+        update: { 
+          $set: { 
+            prices: update.prices,
+            "meta.lastPriceUpdate": new Date()
+          } 
+        },
+        runValidators: true
+      }
+    }));
+
+    const result = await Course.bulkWrite(bulkOps);
+    
+    res.status(200).json({
+      success: true,
+      message: "Bulk price update completed",
+      data: {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount
+      }
+    });
+  } catch (error) {
+    console.error("Error in bulk price update:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error performing bulk price update",
+      error: error.message
+    });
+  }
+};
+
+const getAllCoursesWithPrices = async (req, res) => {
+  try {
+    const { currency, min_price, max_price, active_only } = req.query;
+    
+    const filter = {};
+    const projection = {
+      course_title: 1,
+      course_grade: 1,
+      'prices.currency': 1,
+      'prices.individual': 1,
+      'prices.batch': 1,
+      'prices.early_bird_discount': 1,
+      'prices.group_discount': 1,
+      'prices.is_active': 1,
+      'prices.min_batch_size': 1,
+      'prices.max_batch_size': 1
+    };
+
+    if (currency) {
+      filter['prices.currency'] = currency.toUpperCase();
+    }
+
+    if (min_price || max_price) {
+      filter['prices.individual'] = {};
+      if (min_price) filter['prices.individual'].$gte = Number(min_price);
+      if (max_price) filter['prices.individual'].$lte = Number(max_price);
+    }
+
+    if (active_only === 'true') {
+      filter['prices.is_active'] = true;
+    }
+
+    const courses = await Course.find(filter)
+      .select(projection)
+      .lean()
+      .sort({'prices.currency': 1});
+
+    if (!courses.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No courses found with matching criteria"
+      });
+    }
+
+    // Transform the data for better readability and handle undefined prices
+    const transformed = courses.map(course => ({
+      courseId: course._id,
+      courseTitle: course.course_grade ? 
+        `${course.course_title} [${course.course_grade}]` : 
+        course.course_title,
+      pricing: (course.prices || []).map(price => ({
+        currency: price.currency,
+        individualPrice: price.individual,
+        batchPrice: price.batch,
+        discounts: {
+          earlyBird: price.early_bird_discount,
+          group: price.group_discount
+        },
+        batchSize: {
+          min: price.min_batch_size,
+          max: price.max_batch_size
+        },
+        active: price.is_active
+      }))
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: courses.length,
+      data: transformed
+    });
+
+  } catch (error) {
+    console.error("Error fetching course prices:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course prices",
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createCourse,
   getAllCourses,
@@ -2033,5 +2242,9 @@ module.exports = {
   getNewCoursesWithLimits,
   downloadBrochure,
   getCourseLiveClasses,
-  markLiveClassAttended
+  markLiveClassAttended,
+  getCoursePrices,
+  updateCoursePrices,
+  bulkUpdateCoursePrices,
+  getAllCoursesWithPrices
 };

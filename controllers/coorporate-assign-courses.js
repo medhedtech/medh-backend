@@ -1,7 +1,7 @@
 const CoorporateEnrolledModule = require("../models/coorporate-enrolled-modules.model");
 const CoorporateAssignCourse = require("../models/assigned-courses-coorporates-modal");
 const Course = require("../models/course-model");
-const User = require("../models/user-controller");
+const User = require("../models/user-modal");
 const OnlineMeeting = require("../models/online-meeting");
 
 exports.createCoorporateAssignCourse = async (req, res) => {

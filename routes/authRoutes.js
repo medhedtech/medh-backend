@@ -11,6 +11,7 @@ const {
   forgotPassword,
   resetPassword,
   verifyTemporaryPassword,
+  sendEmail,
 } = require("../controllers/authController");
 const instructorController = require("../controllers/instructor-controller");
 const corporateController = require("../controllers/corporateController");
@@ -74,5 +75,29 @@ router.delete(
   "/delete-coorporate-student/:id",
   corporateStudentController.deleteCorporateStudent
 );
+
+router.post("/test-email", async (req, res) => {
+  try {
+    const mailOptions = {
+      from: `"Medh Care" <care@medh.co>`,
+      to: "care@medh.co",
+      subject: "Test Email",
+      html: "<p>This is a test email to verify the email configuration.</p>"
+    };
+
+    await sendEmail(mailOptions);
+    res.status(200).json({
+      success: true,
+      message: "Test email sent successfully"
+    });
+  } catch (error) {
+    console.error("Test email error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to send test email",
+      error: error.message
+    });
+  }
+});
 
 module.exports = router;
