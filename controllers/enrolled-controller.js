@@ -2,7 +2,7 @@ const EnrolledCourse = require("../models/enrolled-courses-model");
 const OnlineMeeting = require("../models/online-meeting");
 const Student = require("../models/student-model");
 const Course = require("../models/course-model");
-const User = require("../models/user-controller");
+const User = require("../models/user-modal");
 const EnrolledModule = require("../models/enrolled-modules.modal");
 const { handleError } = require("../utils/errorHandler");
 const logger = require("../utils/logger");
@@ -568,11 +568,11 @@ exports.getEnrollmentCountsByStudentId = async (req, res, next) => {
       .sort((a, b) => a.expiry_date - b.expiry_date)
       .slice(0, 5)
       .map(e => ({
-        course_id: e.course_id._id,
-        course_title: e.course_id.course_title,
-        class_type: e.course_id.class_type,
-        thumbnail: e.course_id.thumbnail,
-        duration: e.course_id.duration,
+        course_id: e.course_id?._id,
+        course_title: e.course_id?.course_title || 'Unknown Course',
+        class_type: e.course_id?.class_type || 'Unknown Type',
+        thumbnail: e.course_id?.thumbnail,
+        duration: e.course_id?.duration,
         expiry_date: e.expiry_date,
         progress: e.progress?.overall || 0,
         status: e.status
@@ -583,10 +583,10 @@ exports.getEnrollmentCountsByStudentId = async (req, res, next) => {
       .sort((a, b) => b.updated_at - a.updated_at)
       .slice(0, 5)
       .map(e => ({
-        course_id: e.course_id._id,
-        course_title: e.course_id.course_title,
-        class_type: e.course_id.class_type,
-        thumbnail: e.course_id.thumbnail,
+        course_id: e.course_id?._id,
+        course_title: e.course_id?.course_title || 'Unknown Course',
+        class_type: e.course_id?.class_type || 'Unknown Type',
+        thumbnail: e.course_id?.thumbnail,
         status: e.status,
         last_activity: e.updated_at,
         progress: e.progress?.overall || 0,

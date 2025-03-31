@@ -35,6 +35,7 @@ const trackSessionRoute = require("./track-sessionsRoutes");
 const assignCoorporateCourse = require("./assign-course-coorporateRoutes");
 const corporateRoute = require("./corporate-traing-Routes");
 const paymentRoutes = require("./paymentRoutes");
+const currencyRoutes = require("./currencyRoutes");
 
 const moduleRoutes = [
   {
@@ -176,6 +177,10 @@ const moduleRoutes = [
   {
     path: "/payments",
     route: paymentRoutes,
+  },
+  {
+    path: "/currencies",
+    route: currencyRoutes,
   }
 ];
 

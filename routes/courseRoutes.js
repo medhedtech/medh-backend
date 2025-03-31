@@ -36,7 +36,11 @@ const {
   deleteNote,
   getLessonBookmarks,
   updateBookmark,
-  deleteBookmark
+  deleteBookmark,
+  getCoursePrices,
+  updateCoursePrices,
+  bulkUpdateCoursePrices,
+  getAllCoursesWithPrices
 } = require("../controllers/course-controller");
 const { authenticate } = require("../middleware/auth");
 const { upload, uploadMultiple, handleUploadError } = require("../middleware/upload");
@@ -45,6 +49,7 @@ const { upload, uploadMultiple, handleUploadError } = require("../middleware/upl
 router.get("/get", getAllCourses);
 router.get("/search", getAllCoursesWithLimits);
 router.get("/new", getNewCoursesWithLimits);
+router.get("/prices", getAllCoursesWithPrices);
 router.get("/:id", getCourseById);
 router.get("/coorporate/:id", getCoorporateCourseById);
 router.get("/titles", getCourseTitles);
@@ -81,6 +86,9 @@ router.delete("/:id", deleteCourse);
 router.patch("/:id/toggle-status", toggleCourseStatus);
 router.post("/:id/recorded-videos", updateRecordedVideos);
 router.get("/recorded-videos/:studentId", getRecordedVideosForUser);
+router.get("/:id/prices", getCoursePrices);
+router.put("/:id/prices", updateCoursePrices);
+router.post("/prices/bulk-update", bulkUpdateCoursePrices);
 
 // File Upload Routes (Protected)
 router.post("/upload", upload.single("file"), handleUploadError, handleUpload);
