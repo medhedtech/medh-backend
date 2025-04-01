@@ -2149,22 +2149,51 @@ const bulkUpdateCoursePrices = async (req, res) => {
 
 const getAllCoursesWithPrices = async (req, res) => {
   try {
-    const { currency, min_price, max_price, active_only } = req.query;
+    const { 
+      currency, 
+      min_price, 
+      max_price, 
+      active_only,
+      status,
+      course_category,
+      courseCategory, // Added to support both parameter names
+      class_type,
+      course_type, // Added to support both parameter names
+      search,
+      has_discount
+    } = req.query;
     
     const filter = {};
     const projection = {
       course_title: 1,
       course_grade: 1,
       course_duration: 1,
-      'prices.currency': 1,
-      'prices.individual': 1,
-      'prices.batch': 1,
-      'prices.early_bird_discount': 1,
-      'prices.group_discount': 1,
-      'prices.is_active': 1,
-      'prices.min_batch_size': 1,
-      'prices.max_batch_size': 1
+      class_type: 1,
+      course_category: 1,
+      status: 1,
+      prices: 1
     };
+
+    // Apply filters
+    if (status) {
+      filter.status = status;
+    }
+
+    // Handle both course_category and courseCategory parameters for backward compatibility
+    const category = course_category || courseCategory;
+    if (category) {
+      filter.course_category = category;
+    }
+
+    // Handle both class_type and course_type parameters for backward compatibility
+    const courseType = class_type || course_type;
+    if (courseType) {
+      filter.class_type = courseType;
+    }
+
+    if (search) {
+      filter.course_title = { $regex: search, $options: 'i' };
+    }
 
     if (currency) {
       filter['prices.currency'] = currency.toUpperCase();
@@ -2180,6 +2209,13 @@ const getAllCoursesWithPrices = async (req, res) => {
       filter['prices.is_active'] = true;
     }
 
+    if (has_discount === 'true') {
+      filter.$or = [
+        { 'prices.early_bird_discount': { $gt: 0 } },
+        { 'prices.group_discount': { $gt: 0 } }
+      ];
+    }
+
     const courses = await Course.find(filter)
       .select(projection)
       .lean()
@@ -2192,25 +2228,40 @@ const getAllCoursesWithPrices = async (req, res) => {
       });
     }
 
+    // Get unique values for filters
+    const uniqueCategories = [...new Set(courses.map(course => course.course_category))].filter(Boolean);
+    const uniqueTypes = [...new Set(courses.map(course => course.class_type))].filter(Boolean);
+    const uniqueCurrencies = [...new Set(courses.flatMap(course => 
+      (course.prices || []).map(p => p.currency)
+    ))];
+
     // Transform the data for better readability and handle undefined prices
     const transformed = courses.map(course => {
-      // Format course title with grade and duration
+      // Format course title with grade, duration, class type and category
       const titleParts = [course.course_title];
+      if (course.course_category) {
+        titleParts.push(`Category: ${course.course_category}`);
+      }
       if (course.course_grade) {
         titleParts.push(`Grade: ${course.course_grade}`);
       }
       if (course.course_duration) {
         titleParts.push(`Duration: ${course.course_duration}`);
       }
+      if (course.class_type) {
+        titleParts.push(`Type: ${course.class_type}`);
+      }
       const formattedTitle = titleParts.join(' | ');
 
       // Format pricing information
       const pricing = (course.prices || []).map(price => {
+        if (!price) return null;
+        
         const formattedPrice = {
-          currency: price.currency,
+          currency: price.currency || 'Not specified',
           prices: {
-            individual: price.individual,
-            batch: price.batch
+            individual: price.individual || 0,
+            batch: price.batch || price.individual || 0
           },
           discounts: {
             earlyBird: price.early_bird_discount ? `${price.early_bird_discount}%` : 'N/A',
@@ -2225,29 +2276,52 @@ const getAllCoursesWithPrices = async (req, res) => {
 
         // Format currency with symbol
         if (price.currency === 'USD') {
-          formattedPrice.prices.individual = `$${price.individual}`;
-          formattedPrice.prices.batch = `$${price.batch}`;
+          formattedPrice.prices.individual = `$${formattedPrice.prices.individual}`;
+          formattedPrice.prices.batch = `$${formattedPrice.prices.batch}`;
         } else if (price.currency === 'EUR') {
-          formattedPrice.prices.individual = `€${price.individual}`;
-          formattedPrice.prices.batch = `€${price.batch}`;
+          formattedPrice.prices.individual = `€${formattedPrice.prices.individual}`;
+          formattedPrice.prices.batch = `€${formattedPrice.prices.batch}`;
         } else if (price.currency === 'INR') {
-          formattedPrice.prices.individual = `₹${price.individual}`;
-          formattedPrice.prices.batch = `₹${price.batch}`;
+          formattedPrice.prices.individual = `₹${formattedPrice.prices.individual}`;
+          formattedPrice.prices.batch = `₹${formattedPrice.prices.batch}`;
         }
 
         return formattedPrice;
-      });
+      }).filter(Boolean); // Remove any null entries
 
       return {
         courseId: course._id,
         courseTitle: formattedTitle,
-        pricing
+        courseCategory: course.course_category || 'Not specified',
+        classType: course.class_type || 'Not specified',
+        status: course.status || 'Not specified',
+        pricing: pricing.length > 0 ? pricing : [{
+          currency: 'Not specified',
+          prices: {
+            individual: 'N/A',
+            batch: 'N/A'
+          },
+          discounts: {
+            earlyBird: 'N/A',
+            group: 'N/A'
+          },
+          batchSize: {
+            min: 'N/A',
+            max: 'N/A'
+          },
+          status: 'Not available'
+        }]
       };
     });
 
     res.status(200).json({
       success: true,
       count: courses.length,
+      filters: {
+        categories: uniqueCategories,
+        types: uniqueTypes,
+        currencies: uniqueCurrencies
+      },
       data: transformed
     });
 
