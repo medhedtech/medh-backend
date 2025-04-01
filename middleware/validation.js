@@ -1,4 +1,26 @@
 const mongoose = require('mongoose');
+const { validationResult } = require('express-validator');
+
+/**
+ * Middleware to handle express-validator validation results
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next function
+ * @returns {void}
+ */
+const validateRequest = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      errors: errors.array().map(error => ({
+        field: error.path,
+        message: error.msg
+      }))
+    });
+  }
+  next();
+};
 
 /**
  * Validates if a string is a valid MongoDB ObjectId
@@ -114,6 +136,7 @@ const validatePattern = (paramName, pattern, message) => {
 };
 
 module.exports = {
+  validateRequest,
   validateObjectId,
   validateDate,
   validateNumberRange,

@@ -156,6 +156,7 @@ const getAllCourses = async (req, res) => {
       status: 1,
       category_type: 1,
       createdAt: 1,
+      prices: 1
     }).lean();
     res.status(200).json({ success: true, count: courses.length, data: courses });
   } catch (error) {
@@ -512,6 +513,7 @@ const getCourseById = async (req, res) => {
           course_fee: 1,
           course_duration: 1,
           no_of_Sessions: 1,
+          prices: 1,
           course_description: 1,
           final_evaluation: 1,
           curriculum: 1,
