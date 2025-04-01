@@ -2041,7 +2041,7 @@ const updateCoursePrices = async (req, res) => {
 
     // Validate price entries
     for (const price of prices) {
-      if (!price.currency || !price.individual || !price.batch) {
+      if (!price.currency || !price.individual) {
         return res.status(400).json({
           success: false,
           message: "Each price entry must contain currency, individual, and batch prices"
