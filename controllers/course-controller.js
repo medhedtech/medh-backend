@@ -2039,19 +2039,44 @@ const updateCoursePrices = async (req, res) => {
       });
     }
 
-    // Validate price entries
-    for (const price of prices) {
+    // Validate and format price entries
+    const formattedPrices = prices.map(price => {
+      // Ensure required fields are present
       if (!price.currency || !price.individual) {
-        return res.status(400).json({
-          success: false,
-          message: "Each price entry must contain currency, individual, and batch prices"
-        });
+        throw new Error("Each price entry must contain currency and individual price");
       }
-    }
+
+      // Convert string numbers to actual numbers
+      const formattedPrice = {
+        currency: price.currency.toUpperCase(),
+        individual: Number(price.individual),
+        batch: Number(price.batch) || Number(price.individual),
+        min_batch_size: Number(price.min_batch_size) || 1,
+        max_batch_size: Number(price.max_batch_size) || 10,
+        early_bird_discount: price.early_bird_discount === 'N/A' ? 0 : Number(price.early_bird_discount) || 0,
+        group_discount: price.group_discount === 'N/A' ? 0 : Number(price.group_discount) || 0,
+        is_active: true
+      };
+
+      // Validate numeric values
+      if (isNaN(formattedPrice.individual) || isNaN(formattedPrice.batch)) {
+        throw new Error("Individual and batch prices must be valid numbers");
+      }
+
+      if (isNaN(formattedPrice.early_bird_discount) || isNaN(formattedPrice.group_discount)) {
+        throw new Error("Discount values must be valid numbers");
+      }
+
+      if (isNaN(formattedPrice.min_batch_size) || isNaN(formattedPrice.max_batch_size)) {
+        throw new Error("Batch size values must be valid numbers");
+      }
+
+      return formattedPrice;
+    });
 
     const course = await Course.findByIdAndUpdate(
       req.params.id,
-      { $set: { prices } },
+      { $set: { prices: formattedPrices } },
       { new: true, runValidators: true }
     );
 
@@ -2130,6 +2155,7 @@ const getAllCoursesWithPrices = async (req, res) => {
     const projection = {
       course_title: 1,
       course_grade: 1,
+      course_duration: 1,
       'prices.currency': 1,
       'prices.individual': 1,
       'prices.batch': 1,
@@ -2167,26 +2193,57 @@ const getAllCoursesWithPrices = async (req, res) => {
     }
 
     // Transform the data for better readability and handle undefined prices
-    const transformed = courses.map(course => ({
-      courseId: course._id,
-      courseTitle: course.course_grade ? 
-        `${course.course_title} [${course.course_grade}]` : 
-        course.course_title,
-      pricing: (course.prices || []).map(price => ({
-        currency: price.currency,
-        individualPrice: price.individual,
-        batchPrice: price.batch,
-        discounts: {
-          earlyBird: price.early_bird_discount,
-          group: price.group_discount
-        },
-        batchSize: {
-          min: price.min_batch_size,
-          max: price.max_batch_size
-        },
-        active: price.is_active
-      }))
-    }));
+    const transformed = courses.map(course => {
+      // Format course title with grade and duration
+      const titleParts = [course.course_title];
+      if (course.course_grade) {
+        titleParts.push(`Grade: ${course.course_grade}`);
+      }
+      if (course.course_duration) {
+        titleParts.push(`Duration: ${course.course_duration}`);
+      }
+      const formattedTitle = titleParts.join(' | ');
+
+      // Format pricing information
+      const pricing = (course.prices || []).map(price => {
+        const formattedPrice = {
+          currency: price.currency,
+          prices: {
+            individual: price.individual,
+            batch: price.batch
+          },
+          discounts: {
+            earlyBird: price.early_bird_discount ? `${price.early_bird_discount}%` : 'N/A',
+            group: price.group_discount ? `${price.group_discount}%` : 'N/A'
+          },
+          batchSize: {
+            min: price.min_batch_size || 'N/A',
+            max: price.max_batch_size || 'N/A'
+          },
+          status: price.is_active ? 'Active' : 'Inactive'
+        };
+
+        // Format currency with symbol
+        if (price.currency === 'USD') {
+          formattedPrice.prices.individual = `$${price.individual}`;
+          formattedPrice.prices.batch = `$${price.batch}`;
+        } else if (price.currency === 'EUR') {
+          formattedPrice.prices.individual = `€${price.individual}`;
+          formattedPrice.prices.batch = `€${price.batch}`;
+        } else if (price.currency === 'INR') {
+          formattedPrice.prices.individual = `₹${price.individual}`;
+          formattedPrice.prices.batch = `₹${price.batch}`;
+        }
+
+        return formattedPrice;
+      });
+
+      return {
+        courseId: course._id,
+        courseTitle: formattedTitle,
+        pricing
+      };
+    });
 
     res.status(200).json({
       success: true,
