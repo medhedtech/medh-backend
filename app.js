@@ -31,6 +31,7 @@ app.use('/api/v1/users', require('./routes/users'));
 app.use('/api/v1/blogs', require('./routes/blogs'));
 app.use('/api/v1/upload', require('./routes/upload'));
 app.use('/api/v1/placement-forms', require('./routes/placementFormRoutes'));
+app.use('/api/v1/payments', require('./routes/payments'));
 
 // Error handling
 app.use(errorHandler);
