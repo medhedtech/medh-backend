@@ -44,16 +44,19 @@ Authorization: Bearer <your_jwt_token>
 #### Password Management
 - **POST** `/auth/forgot-password`
   - Body: `{ "email": "string" }`
+  - Description: Sends a system-generated temporary password to the user's email
 
 - **POST** `/auth/reset-password`
   - Body:
     ```json
     {
       "email": "string",
-      "token": "string",
-      "newPassword": "string"
+      "currentPassword": "string",
+      "newPassword": "string",
+      "confirmPassword": "string"
     }
     ```
+  - Description: Allows a user to change their password after logging in with the temporary password
 
 - **POST** `/auth/verify-temp-password`
   - Body:

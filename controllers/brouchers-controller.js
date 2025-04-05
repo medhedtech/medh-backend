@@ -4,14 +4,60 @@ const Course = require("../models/course-model");
 const nodemailer = require("nodemailer");
 const { validateObjectId } = require("../utils/validation-helpers");
 
-// Nodemailer Transporter Setup
+// Nodemailer Transporter Setup with AWS SES
 const transporter = nodemailer.createTransport({
-  service: "Gmail",
+  host: process.env.EMAIL_HOST || "email-smtp.us-east-1.amazonaws.com",
+  port: process.env.EMAIL_PORT || 465,
+  secure: process.env.EMAIL_SECURE === "true" || true, // true for 465, false for other ports like 587
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
+    pass: process.env.EMAIL_PASS
+  }
 });
+
+// Add error handling for transporter
+transporter.verify(function(error, success) {
+  if (error) {
+    console.error("Email configuration error:", error);
+    // Log more details about the error
+    if (error.code === 'EAUTH') {
+      console.error("Authentication failed. Please check your credentials.");
+      console.error("If using Gmail, make sure to:");
+      console.error("1. Enable 2-Step Verification in your Google Account");
+      console.error("2. Generate an App Password from Google Account settings");
+      console.error("3. Use the App Password instead of your regular password");
+    } else if (error.code === 'EDNS') {
+      console.error("DNS lookup failed. Please check your internet connection and SMTP server settings.");
+    }
+  } else {
+    console.log("Email server is ready to send messages");
+  }
+});
+
+// Helper function to send emails with better error handling
+const sendEmail = async (mailOptions) => {
+  try {
+    // Ensure from address is set correctly
+    if (!mailOptions.from) {
+      mailOptions.from = process.env.EMAIL_FROM || "noreply@medh.co";
+    }
+    
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Email sent successfully:", info.messageId);
+    return true;
+  } catch (error) {
+    console.error("Email sending failed:", error);
+    
+    // Handle specific email errors
+    if (error.code === 'EAUTH') {
+      throw new Error("Email authentication failed. Please check your email credentials.");
+    } else if (error.code === 'ESOCKET') {
+      throw new Error("Email connection failed. Please check your internet connection.");
+    } else {
+      throw new Error("Failed to send email. Please try again later.");
+    }
+  }
+};
 
 /**
  * @desc    Create a new brochure record and send via email
@@ -72,32 +118,20 @@ const createBrouchers = async (req, res) => {
 
     // Email options with the brochure as an attachment
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: process.env.EMAIL_FROM || "noreply@medh.co",
       to: email,
       subject: `Brochure for ${course_title}`,
-      text: `Hello ${full_name},\n\nThank you for your interest in our course "${course_title}". Please find the brochure attached.\n\nCourse Details:\nTitle: ${course.course_title}\nCategory: ${course.course_category}\nDuration: ${course.course_duration}\nFee: $${course.course_fee}\n\nBest regards,\nYour Team`,
+      text: `Hello ${full_name},\n\nThank you for your interest in our course "${course_title}". Please find the brochure attached.\n\nCourse Details:\nTitle: ${course.course_title}\nCategory: ${course.course_category}\nDuration: ${course.course_duration}\nFee: $${course.course_fee}\n\nBest regards,\nTeam Medh`,
       attachments: attachments,
     };
 
     // Send the email with the brochure
-    transporter.sendMail(mailOptions, (err, info) => {
-      if (err) {
-        console.error("Error sending email:", err);
-        return res
-          .status(500)
-          .json({ 
-            success: false,
-            message: "Error sending email", 
-            error: err.message 
-          });
-      }
+    await sendEmail(mailOptions);
 
-      console.log("Email sent:", info.response);
-      res.status(201).json({
-        success: true,
-        message: "Brochure created and email sent successfully",
-        data: newBroucher
-      });
+    res.status(201).json({
+      success: true,
+      message: "Brochure created and email sent successfully",
+      data: newBroucher
     });
   } catch (error) {
     console.error("Error in createBroucher:", error);
@@ -362,20 +396,17 @@ const downloadBrochure = async (req, res) => {
       });
     }
 
-    // For GET requests, only record minimal information - no email sent
+    // For GET requests, directly download the file
     if (req.method === 'GET') {
       // Get the first brochure URL
       const brochureUrl = course.brochures[0];
       
-      // Return success response with download URL
-      return res.status(200).json({
-        success: true,
-        message: "Brochure download link generated successfully",
-        data: {
-          brochureUrl,
-          course_title: course.course_title
-        }
-      });
+      // Set headers for file download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${course.course_title}-brochure.pdf"`);
+      
+      // Redirect to the S3 URL for direct download
+      return res.redirect(brochureUrl);
     }
 
     // For POST requests, continue with full functionality including email
@@ -403,30 +434,53 @@ const downloadBrochure = async (req, res) => {
 
     await broucherRecord.save();
 
-    // Send email with brochure
-    const attachments = [{
-      filename: `${course.course_title}-brochure.pdf`,
-      path: brochureUrl
-    }];
+    // Create HTML email content with download link instead of attachment
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 5px;">
+        <h2 style="color: #333; border-bottom: 1px solid #eee; padding-bottom: 10px;">Thank You for Your Interest!</h2>
+        <p>Hello <strong>${full_name}</strong>,</p>
+        <p>Thank you for your interest in our course <strong>"${course.course_title}"</strong>.</p>
+        
+        <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 15px 0;">
+          <h3 style="margin-top: 0; color: #444;">Course Details:</h3>
+          <ul style="list-style-type: none; padding-left: 0;">
+            <li><strong>Title:</strong> ${course.course_title}</li>
+            <li><strong>Category:</strong> ${course.course_category || 'Not specified'}</li>
+            <li><strong>Duration:</strong> ${course.course_duration || 'Not specified'}</li>
+            <li><strong>Fee:</strong> $${course.course_fee || 'Not specified'}</li>
+          </ul>
+        </div>
+        
+        <p>Click the button below to download your course brochure:</p>
+        
+        <div style="text-align: center; margin: 25px 0;">
+          <a href="${brochureUrl}" style="background-color: #4CAF50; color: white; padding: 12px 20px; text-decoration: none; border-radius: 4px; font-weight: bold; display: inline-block;">Download Brochure</a>
+        </div>
+        
+        <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+        <p style="background-color: #f5f5f5; padding: 10px; border-radius: 4px; word-break: break-all;"><a href="${brochureUrl}">${brochureUrl}</a></p>
+        
+        <p>If you have any questions about this course or would like to enroll, please don't hesitate to contact us.</p>
+        <p>Best regards,<br>Team Medh</p>
+      </div>
+    `;
 
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: process.env.EMAIL_FROM || "noreply@medh.co",
       to: email,
       subject: `Brochure for ${course.course_title}`,
-      text: `Hello ${full_name},\n\nThank you for your interest in our course "${course.course_title}". Please find the brochure attached.\n\nCourse Details:\nTitle: ${course.course_title}\nCategory: ${course.course_category}\nDuration: ${course.course_duration}\nFee: $${course.course_fee}\n\nBest regards,\nYour Team`,
-      attachments: attachments
+      html: htmlContent
+      // No attachments - using a download link instead
     };
 
-    // Send the email with the brochure
-    transporter.sendMail(mailOptions, (err, info) => {
-      if (err) {
-        console.error("Error sending email:", err);
-        // Still return success even if email fails, since we have the download URL
-        console.log("Email sending failed but continuing with download");
-      } else {
-        console.log("Email sent:", info.response);
-      }
-    });
+    // Send the email with the brochure link using the helper function
+    try {
+      await sendEmail(mailOptions);
+      console.log("Brochure email sent successfully to:", email);
+    } catch (emailError) {
+      console.error("Error sending brochure email:", emailError);
+      // Continue with the response even if email fails
+    }
 
     // Return success response with download URL
     res.status(200).json({

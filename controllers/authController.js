@@ -8,12 +8,12 @@ const { ENV_VARS } = require("../config/envVars");
 
 // Set up the email transporter with AWS SES SMTP
 const transporter = nodemailer.createTransport({
-  host: "email-smtp.us-east-1.amazonaws.com",
-  port: 465,
-  secure: true, // true for 465, false for other ports like 587
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  secure: process.env.EMAIL_SECURE === "true" || true, // true for 465, false for other ports like 587
   auth: {
-    user: "AKIAU6VTTMQEWBXKX5ZS",
-    pass: "BBqpvqKF5HS2+PHWBparjgjallqQU4Bu5GPj/UPrk465"
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
 });
 
@@ -377,34 +377,32 @@ const forgotPassword = async (req, res) => {
       // Return success even if user not found to prevent email enumeration
       return res.status(200).json({
         success: true,
-        message: "If an account exists with this email, a password reset link will be sent."
+        message: "If an account exists with this email, a new password will be sent."
       });
     }
 
-    // Generate a unique reset token
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    const resetTokenExpiry = Date.now() + 3600000; // Token expires in 1 hour
-
-    // Store reset token and expiry in user document
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = resetTokenExpiry;
+    // Generate a secure random password
+    const tempPassword = crypto.randomBytes(8).toString('hex');
+    
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(tempPassword, salt);
+    
+    // Update user's password
+    user.password = hashedPassword;
     await user.save();
 
-    // Create reset URL
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-
-    // Send email with reset link
+    // Send email with the new password
     const mailOptions = {
       from: `"Medh Care" <care@medh.co>`,
       to: email,
-      subject: "Password Reset Request",
+      subject: "Your New Password",
       html: `
         <h2>Dear ${user.full_name || "User"},</h2>
-        <p>You requested to reset your password. Click the link below to reset it:</p>
-        <p><a href="${resetUrl}">Reset Password</a></p>
-        <p>This link will expire in 1 hour.</p>
-        <p>If you didn't request this, please ignore this email or contact support if you have concerns.</p>
-        <p>For security reasons, this link can only be used once.</p>
+        <p>You requested to reset your password. Here is your new temporary password:</p>
+        <p><strong>${tempPassword}</strong></p>
+        <p>Please login with this password and change it immediately for security reasons.</p>
+        <p>If you didn't request this, please contact support immediately.</p>
       `,
     };
 
@@ -412,7 +410,7 @@ const forgotPassword = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "If an account exists with this email, a password reset link will be sent."
+      message: "If an account exists with this email, a new password will be sent."
     });
   } catch (err) {
     console.error("Error in forgotPassword:", err);
@@ -469,7 +467,7 @@ const verifyTemporaryPassword = async (req, res) => {
 };
 
 const resetPassword = async (req, res) => {
-  const { token, newPassword, confirmPassword } = req.body;
+  const { email, currentPassword, newPassword, confirmPassword } = req.body;
 
   if (newPassword !== confirmPassword) {
     return res.status(400).json({
@@ -479,16 +477,22 @@ const resetPassword = async (req, res) => {
   }
 
   try {
-    // Find user with valid reset token
-    const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpires: { $gt: Date.now() }
-    });
+    // Find user by email
+    const user = await User.findOne({ email });
 
     if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
       return res.status(400).json({
         success: false,
-        message: "Password reset token is invalid or has expired"
+        message: "Current password is incorrect"
       });
     }
 
@@ -496,20 +500,18 @@ const resetPassword = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-    // Update password and clear reset token fields
+    // Update password
     user.password = hashedPassword;
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpires = undefined;
     await user.save();
 
     // Send confirmation email
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: user.email,
-      subject: "Password Reset Successful",
+      subject: "Password Changed Successfully",
       html: `
         <h2>Dear ${user.full_name || "User"},</h2>
-        <p>Your password has been successfully reset.</p>
+        <p>Your password has been successfully changed.</p>
         <p>If you did not perform this action, please contact support immediately.</p>
       `,
     };
@@ -518,7 +520,7 @@ const resetPassword = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Password has been reset successfully"
+      message: "Password has been changed successfully"
     });
   } catch (err) {
     console.error("Error in resetPassword:", err);
