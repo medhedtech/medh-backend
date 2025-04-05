@@ -519,6 +519,7 @@ const getCourseById = async (req, res) => {
           course_category: 1,
           course_tag: 1,
           course_image: 1,
+          class_type: 1,
           course_fee: 1,
           course_duration: 1,
           no_of_Sessions: 1,
