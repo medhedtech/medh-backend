@@ -2165,6 +2165,8 @@ const getAllCoursesWithPrices = async (req, res) => {
       has_discount
     } = req.query;
     
+    console.log("Received query parameters:", req.query);
+    
     const filter = {};
     const projection = {
       course_title: 1,
@@ -2184,31 +2186,82 @@ const getAllCoursesWithPrices = async (req, res) => {
     // Handle both course_category and courseCategory parameters for backward compatibility
     const category = course_category || courseCategory;
     if (category) {
-      filter.course_category = category;
+      try {
+        // Decode the URL-encoded category name
+        const decodedCategory = decodeURIComponent(category);
+        console.log(`Original category: "${category}", Decoded category: "${decodedCategory}"`);
+        
+        // Create a more flexible search pattern that handles variations of the category name
+        // This will match "Data & Analytics", "Data and Analytics", etc.
+        const searchPattern = decodedCategory
+          .replace(/&/g, '(and|&)') // Replace & with (and|&) to match both "and" and "&"
+          .replace(/\s+/g, '\\s+') // Replace spaces with \s+ to match any number of spaces
+          .replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape other regex special characters
+        
+        // Use case-insensitive regex for more flexible matching
+        filter.course_category = { $regex: new RegExp(searchPattern, 'i') };
+        console.log(`Using search pattern: "${searchPattern}"`);
+        
+        // First, let's check if there are any courses with the given category
+        const categoryCheck = await Course.find({ course_category: { $regex: new RegExp(escapeRegExp(decodedCategory), 'i') } })
+          .select('course_category')
+          .lean();
+        
+        console.log(`Found ${categoryCheck.length} courses with category matching "${decodedCategory}"`);
+        if (categoryCheck.length > 0) {
+          console.log("Available categories:", categoryCheck.map(c => c.course_category).join(', '));
+        } else {
+          // Try a more lenient search without escaping special characters
+          const lenientCategoryCheck = await Course.find({ 
+            course_category: { 
+              $regex: new RegExp(decodedCategory.replace(/[.*+?^${}()|[\]\\]/g, ''), 'i') 
+            } 
+          })
+            .select('course_category')
+            .lean();
+          
+          if (lenientCategoryCheck.length > 0) {
+            console.log("Found categories with lenient search:", lenientCategoryCheck.map(c => c.course_category).join(', '));
+          }
+        }
+      } catch (error) {
+        console.error("Error processing category:", error);
+        // Continue with the original category without special handling
+        filter.course_category = category;
+      }
     }
 
     // Handle both class_type and course_type parameters for backward compatibility
     const courseType = class_type || course_type;
     if (courseType) {
-      filter.class_type = courseType;
+      // Decode the URL-encoded course type
+      const decodedCourseType = decodeURIComponent(courseType);
+      filter.class_type = decodedCourseType;
+      console.log("Filtering by course type:", decodedCourseType);
     }
 
     if (search) {
-      filter.course_title = { $regex: search, $options: 'i' };
+      // Decode the URL-encoded search term
+      const decodedSearch = decodeURIComponent(search);
+      filter.course_title = { $regex: decodedSearch, $options: 'i' };
+      console.log("Filtering by search term:", decodedSearch);
     }
 
     if (currency) {
       filter['prices.currency'] = currency.toUpperCase();
+      console.log("Filtering by currency:", currency.toUpperCase());
     }
 
     if (min_price || max_price) {
       filter['prices.individual'] = {};
       if (min_price) filter['prices.individual'].$gte = Number(min_price);
       if (max_price) filter['prices.individual'].$lte = Number(max_price);
+      console.log("Filtering by price range:", min_price ? `Min: ${min_price}` : '', max_price ? `Max: ${max_price}` : '');
     }
 
     if (active_only === 'true') {
       filter['prices.is_active'] = true;
+      console.log("Filtering by active prices only");
     }
 
     if (has_discount === 'true') {
@@ -2216,17 +2269,96 @@ const getAllCoursesWithPrices = async (req, res) => {
         { 'prices.early_bird_discount': { $gt: 0 } },
         { 'prices.group_discount': { $gt: 0 } }
       ];
+      console.log("Filtering by courses with discounts");
     }
 
+    console.log("Final filter:", JSON.stringify(filter));
+    
+    // Log the MongoDB query that will be executed
+    const queryString = JSON.stringify(filter);
+    console.log(`MongoDB query: ${queryString}`);
+    
+    // First, let's check if there are any courses with the given category
+    if (category) {
+      const categoryCheck = await Course.find({ course_category: { $regex: new RegExp(escapeRegExp(decodedCategory), 'i') } })
+        .select('course_category')
+        .lean();
+      
+      console.log(`Found ${categoryCheck.length} courses with category matching "${decodedCategory}"`);
+      if (categoryCheck.length > 0) {
+        console.log("Available categories:", categoryCheck.map(c => c.course_category).join(', '));
+      }
+    }
+    
     const courses = await Course.find(filter)
       .select(projection)
       .lean()
       .sort({'prices.currency': 1});
 
+    console.log(`Found ${courses.length} courses matching the criteria`);
+
+    // If no courses found and we're filtering by category, try a more lenient search
+    if (!courses.length && category) {
+      console.log("No courses found with initial search, trying a more lenient search...");
+      
+      // Create a more lenient filter by removing the category filter
+      const lenientFilter = { ...filter };
+      delete lenientFilter.course_category;
+      
+      // Try to find courses with the given status
+      const lenientCourses = await Course.find(lenientFilter)
+        .select(projection)
+        .lean()
+        .sort({'prices.currency': 1});
+      
+      console.log(`Found ${lenientCourses.length} courses with lenient search`);
+      
+      if (lenientCourses.length > 0) {
+        // Get all available categories
+        const allCategories = await Course.distinct('course_category');
+        console.log("All available categories:", allCategories);
+        
+        // Find similar categories to suggest
+        const decodedCategory = decodeURIComponent(category);
+        const similarCategories = allCategories.filter(cat => {
+          // Check if categories are similar (ignoring case and special characters)
+          const normalizedSearch = decodedCategory.toLowerCase().replace(/[&]/g, 'and').replace(/\s+/g, '');
+          const normalizedCategory = cat.toLowerCase().replace(/[&]/g, 'and').replace(/\s+/g, '');
+          return normalizedCategory.includes(normalizedSearch) || normalizedSearch.includes(normalizedCategory);
+        });
+        
+        return res.status(404).json({
+          success: false,
+          message: "No courses found with the specified category",
+          filter: filter,
+          debug: {
+            originalCategory: category,
+            decodedCategory: decodedCategory,
+            searchPattern: searchPattern,
+            availableCategories: allCategories,
+            similarCategories: similarCategories,
+            suggestion: similarCategories.length > 0 
+              ? `Try using one of these similar categories: ${similarCategories.join(', ')}` 
+              : "Try using one of the available categories listed above"
+          }
+        });
+      }
+    }
+
     if (!courses.length) {
+      // Get all available categories for better error reporting
+      const allCategories = await Course.distinct('course_category');
+      
       return res.status(404).json({
         success: false,
-        message: "No courses found with matching criteria"
+        message: "No courses found with matching criteria",
+        filter: filter, // Include the filter in the response for debugging
+        debug: {
+          originalCategory: category,
+          decodedCategory: category ? decodedCategory : null,
+          searchPattern: category ? searchPattern : null,
+          availableCategories: category ? (await Course.distinct('course_category')) : []
+        }
       });
     }
 
@@ -2329,11 +2461,23 @@ const getAllCoursesWithPrices = async (req, res) => {
 
   } catch (error) {
     console.error("Error fetching course prices:", error);
-    res.status(500).json({
+    
+    // Provide more detailed error information
+    const errorResponse = {
       success: false,
       message: "Error fetching course prices",
       error: error.message
-    });
+    };
+    
+    // Add stack trace in development environment
+    if (process.env.NODE_ENV === 'development') {
+      errorResponse.stack = error.stack;
+    }
+    
+    // Add query parameters for debugging
+    errorResponse.query = req.query;
+    
+    res.status(500).json(errorResponse);
   }
 };
 
