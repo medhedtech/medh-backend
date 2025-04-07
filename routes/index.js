@@ -36,6 +36,7 @@ const assignCoorporateCourse = require("./assign-course-coorporateRoutes");
 const corporateRoute = require("./corporate-traing-Routes");
 const paymentRoutes = require("./paymentRoutes");
 const currencyRoutes = require("./currencyRoutes");
+const homeDisplayRoutes = require("./homeDisplayRoutes");
 
 const moduleRoutes = [
   {
@@ -181,6 +182,10 @@ const moduleRoutes = [
   {
     path: "/currencies",
     route: currencyRoutes,
+  },
+  {
+    path: "/home-display",
+    route: homeDisplayRoutes,
   }
 ];
 

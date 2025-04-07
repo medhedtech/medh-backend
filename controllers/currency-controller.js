@@ -34,6 +34,19 @@ exports.getAllCurrencies = catchAsync(async (req, res, next) => {
   });
 });
 
+// Get all currency country codes
+exports.getAllCurrencyCountryCodes = catchAsync(async (req, res, next) => {
+  const currencies = await Currency.find().select('countryCode -_id');
+
+  res.status(200).json({
+    status: "success",
+    results: currencies.length,
+    data: {
+      countryCodes: currencies.map(currency => currency.countryCode),
+    },
+  });
+});
+
 // Get currency by ID
 exports.getCurrencyById = catchAsync(async (req, res, next) => {
   const currency = await Currency.findById(req.params.id);

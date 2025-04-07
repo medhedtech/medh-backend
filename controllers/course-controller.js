@@ -344,7 +344,6 @@ const getAllCoursesWithLimits = async (req, res) => {
       course_category: 1,
       course_tag: 1,
       course_image: 1,
-      course_fee: 1,
       course_duration: 1,
       isFree: 1,
       status: 1,
@@ -2365,6 +2364,329 @@ const getAllCoursesWithPrices = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get courses with specific fields requested by the frontend
+ * @route   GET /api/courses/fields
+ * @access  Public
+ */
+const getCoursesWithFields = async (req, res) => {
+  try {
+    const { fields, filters = {}, sort = {}, page = 1, limit = 10 } = req.query;
+    
+    // Parse fields from query parameter
+    let requestedFields = {};
+    
+    if (fields) {
+      // Handle comma-separated list of fields
+      const fieldList = fields.split(',').map(field => field.trim());
+      
+      // Map of valid fields and their MongoDB paths
+      const validFields = {
+        // Basic course info
+        id: '_id',
+        title: 'course_title',
+        subtitle: 'course_subtitle',
+        category: 'course_category',
+        subcategory: 'course_subcategory',
+        tag: 'course_tag',
+        image: 'course_image',
+        description: 'course_description',
+        level: 'course_level',
+        language: 'language',
+        subtitleLanguages: 'subtitle_languages',
+        sessions: 'no_of_Sessions',
+        duration: 'course_duration',
+        sessionDuration: 'session_duration',
+        prices: 'prices',
+        brochures: 'brochures',
+        status: 'status',
+        categoryType: 'category_type',
+        isFree: 'isFree',
+        grade: 'course_grade',
+        effortsPerWeek: 'efforts_per_Week',
+        classType: 'class_type',
+        minHoursPerWeek: 'min_hours_per_week',
+        maxHoursPerWeek: 'max_hours_per_week',
+        relatedCourses: 'related_courses',
+        
+        // Features
+        hasCertification: 'is_Certification',
+        hasAssignments: 'is_Assignments',
+        hasProjects: 'is_Projects',
+        hasQuizzes: 'is_Quizes',
+        
+        // Metadata
+        createdAt: 'createdAt',
+        updatedAt: 'updatedAt',
+        slug: 'slug',
+        views: 'meta.views',
+        ratings: 'meta.ratings',
+        enrollments: 'meta.enrollments',
+        
+        // Curriculum
+        curriculum: 'curriculum',
+        
+        // FAQs
+        faqs: 'faqs',
+        
+        // Tools & Technologies
+        toolsTechnologies: 'tools_technologies',
+        
+        // Bonus Modules
+        bonusModules: 'bonus_modules',
+        
+        // Final Evaluation
+        finalEvaluation: 'final_evaluation',
+        
+        // Resource PDFs
+        resourcePdfs: 'resource_pdfs',
+        
+        // Predefined field sets for common UI components
+        card: ['id', 'title', 'category', 'tag', 'image', 'duration', 'isFree', 'status', 'categoryType', 'prices', 'slug', 'views', 'ratings', 'effortsPerWeek', 'sessions','classType'],
+        list: ['id', 'title', 'category', 'tag', 'image', 'duration', 'isFree', 'status', 'categoryType', 'prices', 'slug', 'classType'],
+        detail: ['id', 'title', 'subtitle', 'category', 'subcategory', 'tag', 'image', 'description', 'level', 'language', 'sessions', 'duration', 'fee', 'prices', 'brochures', 'status', 'categoryType', 'isFree', 'grade', 'effortsPerWeek', 'classType', 'hasCertification', 'hasAssignments', 'hasProjects', 'hasQuizzes', 'curriculum', 'faqs', 'toolsTechnologies', 'bonusModules', 'finalEvaluation', 'resourcePdfs', 'createdAt', 'updatedAt', 'slug', 'views', 'ratings', 'enrollments'],
+        search: ['id', 'title', 'category', 'tag', 'image', 'duration', 'isFree', 'status', 'categoryType', 'prices', 'slug', 'views', 'ratings'],
+        related: ['id', 'title', 'category', 'tag', 'image', 'duration', 'isFree', 'status', 'categoryType', 'prices', 'slug']
+      };
+      
+      // Check if a predefined field set was requested
+      if (validFields[fields]) {
+        // If it's an array, it's a predefined field set
+        if (Array.isArray(validFields[fields])) {
+          requestedFields = validFields[fields].reduce((acc, field) => {
+            acc[validFields[field]] = 1;
+            return acc;
+          }, {});
+        } else {
+          // Single field
+          requestedFields[validFields[fields]] = 1;
+        }
+      } else {
+        // Process individual fields
+        fieldList.forEach(field => {
+          if (validFields[field]) {
+            requestedFields[validFields[field]] = 1;
+          }
+        });
+      }
+    }
+    
+    // Always include _id field
+    requestedFields._id = 1;
+    
+    // Parse filters
+    const queryFilters = {};
+    
+    // Handle text search
+    if (filters.search) {
+      const searchTerm = fullyDecodeURIComponent(filters.search);
+      if (searchTerm.length >= 3) {
+        queryFilters.$text = { $search: searchTerm };
+      } else {
+        queryFilters.$or = [
+          { course_title: { $regex: new RegExp(escapeRegExp(searchTerm), "i") } },
+          { course_category: { $regex: new RegExp(escapeRegExp(searchTerm), "i") } },
+          { course_tag: { $regex: new RegExp(escapeRegExp(searchTerm), "i") } }
+        ];
+      }
+    }
+    
+    // Handle category filter
+    if (filters.category) {
+      queryFilters.course_category = fullyDecodeURIComponent(filters.category);
+    }
+    
+    // Handle category type filter
+    if (filters.categoryType) {
+      queryFilters.category_type = fullyDecodeURIComponent(filters.categoryType);
+    }
+    
+    // Handle status filter
+    if (filters.status) {
+      queryFilters.status = fullyDecodeURIComponent(filters.status);
+    }
+    
+    // Handle price range filter
+    if (filters.priceRange) {
+      const [min, max] = filters.priceRange.split("-").map(Number);
+      if (!isNaN(min) && !isNaN(max)) {
+        queryFilters.course_fee = { $gte: min, $lte: max };
+      }
+    }
+    
+    // Handle tag filter
+    if (filters.tag) {
+      queryFilters.course_tag = fullyDecodeURIComponent(filters.tag);
+    }
+    
+    // Handle class type filter
+    if (req.query.filters && req.query.filters.class_type) {
+      const decodedClassType = fullyDecodeURIComponent(req.query.filters.class_type);
+      queryFilters.class_type = decodedClassType;
+      console.log('Class type filter:', queryFilters.class_type);
+    }
+    
+    // Handle feature filters
+    if (filters.hasCertification) {
+      queryFilters.is_Certification = filters.hasCertification;
+    }
+    if (filters.hasAssignments) {
+      queryFilters.is_Assignments = filters.hasAssignments;
+    }
+    if (filters.hasProjects) {
+      queryFilters.is_Projects = filters.hasProjects;
+    }
+    if (filters.hasQuizzes) {
+      queryFilters.is_Quizes = filters.hasQuizzes;
+    }
+    
+    // Handle isFree filter
+    if (filters.isFree !== undefined) {
+      queryFilters.isFree = filters.isFree === 'true';
+    }
+    
+    // Sort options
+    let sortOptions = {};
+    
+    // Apply sorting
+    if (sort) {
+      if (sort === 'recent') {
+        sortOptions = { createdAt: -1 };
+      } else if (sort === 'popular') {
+        sortOptions = { 'meta.views': -1 };
+      } else if (sort === 'price_asc') {
+        // For price ascending, we need to sort by the individual price in the prices array
+        // Will be handled after fetching the data
+        sortOptions = { _id: 1 }; // Default sort to ensure consistent results
+      } else if (sort === 'price_desc') {
+        // Will be handled after fetching the data
+        sortOptions = { _id: 1 }; // Default sort to ensure consistent results
+      } else {
+        sortOptions = { createdAt: -1 }; // Default to recent
+      }
+    } else {
+      sortOptions = { createdAt: -1 }; // Default to recent
+    }
+    
+    // Parse pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Function to format course duration
+    const formatCourseDuration = (duration) => {
+      if (!duration) return "";
+      
+      // Extract months and weeks
+      const monthsMatch = duration.match(/(\d+)\s*months?/i);
+      const weeksMatch = duration.match(/(\d+)\s*weeks?/i);
+      
+      const months = monthsMatch ? monthsMatch[1] : "";
+      const weeks = weeksMatch ? weeksMatch[1] : "";
+      
+      // Format as "X months / Y weeks"
+      if (months && weeks) {
+        return `${months} months / ${weeks} weeks`;
+      } else if (months) {
+        return `${months} months`;
+      } else if (weeks) {
+        return `${weeks} weeks`;
+      }
+      
+      return duration; // Return original if no matches
+    };
+    
+    // Handle currency filter
+    if (filters.currency) {
+      const currency = fullyDecodeURIComponent(filters.currency).toUpperCase();
+      queryFilters['prices.currency'] = currency;
+      
+      // Add a projection to only include prices for the requested currency
+      if (!requestedFields.prices) {
+        requestedFields.prices = 1;
+      }
+    }
+    
+    // Execute query
+    const [queryResults, totalCount] = await Promise.all([
+      Course.find(queryFilters, requestedFields)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Course.countDocuments(queryFilters)
+    ]);
+    
+    // Process courses based on filters
+    let processedCourses = queryResults.map(course => {
+      // Filter prices if currency filter is applied
+      if (filters.currency) {
+        const currency = fullyDecodeURIComponent(filters.currency).toUpperCase();
+        if (course.prices) {
+          course.prices = course.prices.filter(price => price.currency === currency);
+        }
+      }
+      
+      // Fix efforts_per_Week field if it's undefined
+      if (course.efforts_per_Week === "undefined - undefined hours / week") {
+        course.efforts_per_Week = "3-5 hours / week"; // Default value
+      }
+      
+      // Format course duration
+      if (course.course_duration) {
+        course.course_duration = formatCourseDuration(course.course_duration);
+      }
+      
+      return course;
+    });
+    
+    // Apply post-query sorting for price if needed
+    if (sort === 'price_asc' || sort === 'price_desc') {
+      const currencyFilter = filters.currency 
+        ? fullyDecodeURIComponent(filters.currency).toUpperCase() 
+        : 'USD'; // Default to USD if no currency specified
+      
+      // Sort by price after fetching the data
+      processedCourses = processedCourses.sort((a, b) => {
+        // Get prices for the specified currency
+        const aPrice = a.prices && a.prices.find(p => p.currency === currencyFilter);
+        const bPrice = b.prices && b.prices.find(p => p.currency === currencyFilter);
+        
+        // Get individual prices or use a default value if not found
+        const aPriceValue = aPrice ? aPrice.individual : (sort === 'price_asc' ? Number.MAX_SAFE_INTEGER : 0);
+        const bPriceValue = bPrice ? bPrice.individual : (sort === 'price_asc' ? Number.MAX_SAFE_INTEGER : 0);
+        
+        // Sort ascending or descending based on sort parameter
+        return sort === 'price_asc' ? aPriceValue - bPriceValue : bPriceValue - aPriceValue;
+      });
+    }
+    
+    // Calculate pagination info
+    const totalPages = Math.ceil(totalCount / limitNum);
+    
+    // Return response
+    res.status(200).json({
+      success: true,
+      data: processedCourses,
+      pagination: {
+        total: totalCount,
+        totalPages,
+        currentPage: pageNum,
+        limit: limitNum,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1
+      }
+    });
+  } catch (error) {
+    console.error("Error in getCoursesWithFields:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching courses",
+      error: error.message || "An unexpected error occurred"
+    });
+  }
+};
+
 module.exports = {
   createCourse,
   getAllCourses,
@@ -2407,5 +2729,6 @@ module.exports = {
   getCoursePrices,
   updateCoursePrices,
   bulkUpdateCoursePrices,
-  getAllCoursesWithPrices
+  getAllCoursesWithPrices,
+  getCoursesWithFields
 };

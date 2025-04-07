@@ -130,7 +130,8 @@ const moduleRoutesPaths = [
   "/track-sessions",
   "/assign-corporate-course",
   "/corporate-training",
-  "/payments"
+  "/payments",
+  "/home-display"
 ];
 
 // Set up direct access middleware for each path
