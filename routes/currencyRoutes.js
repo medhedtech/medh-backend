@@ -7,12 +7,14 @@ const {
   updateCurrency,
   deleteCurrency,
   toggleCurrencyStatus,
-  getCurrencyByCountryCode
+  getCurrencyByCountryCode,
+  getAllCurrencyCountryCodes
 } = require("../controllers/currency-controller");
 const { authenticate } = require("../middleware/auth");
 
 // Public routes
 router.get("/", getAllCurrencies);
+router.get("/country-codes", getAllCurrencyCountryCodes);
 router.get("/code/:code", getCurrencyByCountryCode);
 router.get("/:id", getCurrencyById);
 

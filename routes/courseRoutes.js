@@ -40,7 +40,8 @@ const {
   getCoursePrices,
   updateCoursePrices,
   bulkUpdateCoursePrices,
-  getAllCoursesWithPrices
+  getAllCoursesWithPrices,
+  getCoursesWithFields
 } = require("../controllers/course-controller");
 const { authenticate } = require("../middleware/auth");
 const { upload, uploadMultiple, handleUploadError } = require("../middleware/upload");
@@ -50,6 +51,7 @@ router.get("/get", getAllCourses);
 router.get("/search", getAllCoursesWithLimits);
 router.get("/new", getNewCoursesWithLimits);
 router.get("/prices", getAllCoursesWithPrices);
+router.get("/fields", getCoursesWithFields);
 router.get("/:id", getCourseById);
 router.get("/coorporate/:id", getCoorporateCourseById);
 router.get("/titles", getCourseTitles);
