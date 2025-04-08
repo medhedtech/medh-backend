@@ -447,7 +447,7 @@ const downloadBrochure = async (req, res) => {
             <li><strong>Title:</strong> ${course.course_title}</li>
             <li><strong>Category:</strong> ${course.course_category || 'Not specified'}</li>
             <li><strong>Duration:</strong> ${course.course_duration || 'Not specified'}</li>
-            <li><strong>Fee:</strong> $${course.course_fee || 'Not specified'}</li>
+            <li><strong>Fee:</strong> ${course.course_fee || 'Not specified'}</li>
           </ul>
         </div>
         

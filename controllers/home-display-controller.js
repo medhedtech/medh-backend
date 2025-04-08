@@ -41,7 +41,7 @@ const getAllHomeDisplays = async (req, res) => {
  */
 const getHomeDisplayWithFields = async (req, res) => {
   try {
-    const { fields, filters = {}, sort = 'display_order', page = 1, limit = 10 } = req.query;
+    const { fields, filters = {}, sort = 'display_order', page = 1, limit = 10, currency } = req.query;
     
     // Parse fields from query parameter
     let requestedFields = {};
@@ -137,9 +137,11 @@ const getHomeDisplayWithFields = async (req, res) => {
       queryFilters.classType = filters.classType;
     }
     
-    // Handle currency filter
-    if (filters.currency) {
-      queryFilters['prices.currency'] = filters.currency.toUpperCase();
+    // Handle currency filter - support both direct param and nested in filters
+    const currencyFilter = currency || filters.currency;
+    if (currencyFilter) {
+      // Use case-insensitive regex for currency matching
+      queryFilters['prices.currency'] = { $regex: new RegExp(`^${currencyFilter}$`, 'i') };
     }
     
     // Handle sort
@@ -175,14 +177,14 @@ const getHomeDisplayWithFields = async (req, res) => {
     let processedResults = queryResults;
     
     // If currency filter is applied, filter the prices array to only include that currency
-    if (filters.currency) {
+    if (currencyFilter) {
       processedResults = queryResults.map(item => {
         if (item.prices) {
           // Clone the item to avoid modifying the original object
           const clonedItem = { ...item };
-          // Filter prices to only include the specified currency
+          // Filter prices to only include the specified currency (case-insensitive)
           clonedItem.prices = item.prices.filter(
-            price => price.currency === filters.currency.toUpperCase()
+            price => price.currency.toUpperCase() === currencyFilter.toUpperCase()
           );
           return clonedItem;
         }
@@ -644,8 +646,10 @@ const getHomeDisplayPrices = async (req, res) => {
     // Filter by currency if provided
     let prices = homeDisplay.prices;
     if (req.query.currency) {
-      const currency = req.query.currency.toUpperCase();
-      prices = prices.filter(price => price.currency === currency);
+      const currency = req.query.currency;
+      prices = prices.filter(price => 
+        price.currency.toUpperCase() === currency.toUpperCase()
+      );
       
       if (prices.length === 0) {
         return res.status(404).json({
@@ -718,9 +722,9 @@ const getAllHomeDisplaysWithPrices = async (req, res) => {
       filter.id = id;
     }
     
-    // Currency filter
+    // Currency filter - case insensitive
     if (currency) {
-      filter['prices.currency'] = currency.toUpperCase();
+      filter['prices.currency'] = { $regex: new RegExp(`^${currency}$`, 'i') };
     }
     
     // Price range filter
@@ -825,14 +829,14 @@ const getAllHomeDisplaysWithPrices = async (req, res) => {
 
         // Format currency with symbol
         if (price.currency === 'USD') {
-          formattedPrice.prices.individual = `$${formattedPrice.prices.individual}`;
-          formattedPrice.prices.batch = `$${formattedPrice.prices.batch}`;
+          formattedPrice.prices.individual = `${formattedPrice.prices.individual}`;
+          formattedPrice.prices.batch = `${formattedPrice.prices.batch}`;
         } else if (price.currency === 'EUR') {
-          formattedPrice.prices.individual = `€${formattedPrice.prices.individual}`;
-          formattedPrice.prices.batch = `€${formattedPrice.prices.batch}`;
+          formattedPrice.prices.individual = `${formattedPrice.prices.individual}`;
+          formattedPrice.prices.batch = `${formattedPrice.prices.batch}`;
         } else if (price.currency === 'INR') {
-          formattedPrice.prices.individual = `₹${formattedPrice.prices.individual}`;
-          formattedPrice.prices.batch = `₹${formattedPrice.prices.batch}`;
+          formattedPrice.prices.individual = `${formattedPrice.prices.individual}`;
+          formattedPrice.prices.batch = `${formattedPrice.prices.batch}`;
         }
 
         return formattedPrice;
