@@ -21,6 +21,20 @@ router.route('/seed').post(authenticate, authorize('admin'), function(req, res) 
   return controller.seedHomeDisplayData(req, res);
 });
 
+// Prices routes
+router.get('/prices', function(req, res) {
+  return controller.getAllHomeDisplaysWithPrices(req, res);
+});
+
+router.post('/prices/bulk-update', authenticate, authorize('admin'), function(req, res) {
+  return controller.bulkUpdateHomeDisplayPrices(req, res);
+});
+
+// Route for getting prices for a specific home display item
+router.get('/:id/prices', function(req, res) {
+  return controller.getHomeDisplayPrices(req, res);
+});
+
 // ID parameter routes - must come after specific routes
 router.get('/:id', function(req, res) {
   return controller.getHomeDisplayById(req, res);

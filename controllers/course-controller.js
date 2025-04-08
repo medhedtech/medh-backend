@@ -211,6 +211,7 @@ const getAllCoursesWithLimits = async (req, res) => {
       max_hours_per_week,
       user_id,
       course_duration,
+      currency,
     } = req.query;
 
     page = parseInt(page);
@@ -299,6 +300,11 @@ const getAllCoursesWithLimits = async (req, res) => {
     }
     if (has_quizzes === "Yes" || has_quizzes === "No") {
       filter.is_Quizes = has_quizzes;
+    }
+
+    if (currency) {
+      const decodedCurrency = fullyDecodeURIComponent(currency);
+      filter['prices.currency'] = decodedCurrency.toUpperCase();
     }
 
     if (exclude_ids && exclude_ids.length > 0) {
@@ -399,7 +405,7 @@ const getAllCoursesWithLimits = async (req, res) => {
               { $group: { _id: "$category_type", count: { $sum: 1 } } },
               { $sort: { count: -1 } }
             ],
-            courseTags: [
+            tags: [
               { $group: { _id: "$course_tag", count: { $sum: 1 } } },
               { $sort: { count: -1 } }
             ],
@@ -410,38 +416,9 @@ const getAllCoursesWithLimits = async (req, res) => {
             priceRanges: [
               {
                 $group: {
-                  _id: {
-                    $switch: {
-                      branches: [
-                        { case: { $eq: ["$course_fee", 0] }, then: "Free" },
-                        { case: { $lte: ["$course_fee", 1000] }, then: "0-1000" },
-                        { case: { $lte: ["$course_fee", 5000] }, then: "1001-5000" },
-                        { case: { $lte: ["$course_fee", 10000] }, then: "5001-10000" }
-                      ],
-                      default: "10000+"
-                    }
-                  },
-                  count: { $sum: 1 }
-                }
-              },
-              { $sort: { _id: 1 } }
-            ],
-            features: [
-              {
-                $group: {
                   _id: null,
-                  certification: { $push: { k: "$is_Certification", v: { $sum: 1 } } },
-                  assignments: { $push: { k: "$is_Assignments", v: { $sum: 1 } } },
-                  projects: { $push: { k: "$is_Projects", v: { $sum: 1 } } },
-                  quizzes: { $push: { k: "$is_Quizes", v: { $sum: 1 } } }
-                }
-              },
-              {
-                $project: {
-                  certification: { $arrayToObject: "$certification" },
-                  assignments: { $arrayToObject: "$assignments" },
-                  projects: { $arrayToObject: "$projects" },
-                  quizzes: { $arrayToObject: "$quizzes" }
+                  minPrice: { $min: "$prices.individual" },
+                  maxPrice: { $max: "$prices.batch" }
                 }
               }
             ]
@@ -450,39 +427,32 @@ const getAllCoursesWithLimits = async (req, res) => {
       ])
     ]);
 
-    const totalPages = Math.ceil(totalCourses / limit);
-    if (courses.length > 0) {
-      const bulkUpdateOps = courses.map(course => ({
-        updateOne: {
-          filter: { _id: course._id },
-          update: { $inc: { "meta.views": 1 } }
+    // Post-process results to filter prices by currency if specified
+    let processedCourses = courses;
+    if (currency) {
+      processedCourses = courses.map(course => {
+        if (course.prices) {
+          const clonedCourse = { ...course };
+          clonedCourse.prices = course.prices.filter(
+            price => price.currency === currency.toUpperCase()
+          );
+          return clonedCourse;
         }
-      }));
-      Course.bulkWrite(bulkUpdateOps).catch(err => {
-        console.error("Error updating course view counts:", err);
+        return course;
       });
     }
 
     res.status(200).json({
       success: true,
-      courses,
-      pagination: {
-        totalCourses,
-        totalPages,
-        currentPage: page,
-        limit,
-        hasNextPage: page < totalPages,
-        hasPrevPage: page > 1
-      },
-      facets: facets[0],
-      filters: {
-        applied: {
-          search,
-          course_tag,
-          status,
-          user_id: !!user_id,
-          enrolledCoursesExcluded: user_id ? courses.length : 0
-        }
+      data: {
+        courses: processedCourses,
+        pagination: {
+          total: totalCourses,
+          page,
+          limit,
+          totalPages: Math.ceil(totalCourses / limit)
+        },
+        facets: facets[0]
       }
     });
   } catch (error) {
@@ -503,7 +473,7 @@ const getAllCoursesWithLimits = async (req, res) => {
 const getCourseById = async (req, res) => {
   try {
     const { id } = req.params;
-    const { studentId } = req.query;
+    const { studentId, currency } = req.query;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
@@ -540,6 +510,20 @@ const getCourseById = async (req, res) => {
         message: "Course not found"
       });
     }
+
+    // Apply currency filtering if specified
+    if (currency) {
+      const course = courseAgg[0];
+      if (course.prices && course.prices.length > 0) {
+        const filteredPrices = course.prices.filter(price => 
+          price.currency.toLowerCase() === currency.toLowerCase()
+        );
+        if (filteredPrices.length > 0) {
+          course.prices = filteredPrices;
+        }
+      }
+    }
+
     res.status(200).json({ success: true, data: courseAgg[0] });
   } catch (error) {
     console.error("Error in getCourseById:", error);
@@ -2161,74 +2145,87 @@ const bulkUpdateCoursePrices = async (req, res) => {
 const getAllCoursesWithPrices = async (req, res) => {
   try {
     const { 
-      currency, 
+      category, 
+      class_type, 
+      currency,
       min_price, 
-      max_price, 
+      max_price,
       active_only,
-      status,
-      course_category,
-      courseCategory, // Added to support both parameter names
-      class_type,
-      course_type, // Added to support both parameter names
+      has_discount,
       search,
-      has_discount
+      course_grade,
+      pricing_status,
+      has_pricing,
+      course_id
     } = req.query;
-    
+
+    // Build filter object
     const filter = {};
-    const projection = {
-      course_title: 1,
-      course_grade: 1,
-      course_duration: 1,
-      class_type: 1,
-      course_category: 1,
-      status: 1,
-      prices: 1
-    };
-
-    // Apply filters with URL decoding
-    if (status) {
-      filter.status = { $regex: fullyDecodeURIComponent(status), $options: 'i' };
-    }
-
-    // Handle both course_category and courseCategory parameters for backward compatibility
-    const category = course_category || courseCategory;
+    
+    // Category filter
     if (category) {
-      const decodedCategory = fullyDecodeURIComponent(category);
-      console.log('Original category:', category);
-      console.log('Decoded category:', decodedCategory);
-      // Use case-insensitive regex match with word boundaries
-      const escapedCategory = decodedCategory.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      filter.course_category = { $regex: `\\b${escapedCategory}\\b`, $options: 'i' };
-      console.log('Filter category:', filter.course_category);
+      filter.course_category = category;
     }
-
-    // Handle both class_type and course_type parameters for backward compatibility
-    const courseType = class_type || course_type;
-    if (courseType) {
-      const decodedType = fullyDecodeURIComponent(courseType);
-      // Use case-insensitive regex match for class_type to handle special characters
-      filter.class_type = { $regex: new RegExp(escapeRegExp(decodedType), 'i') };
+    
+    // Class type filter
+    if (class_type) {
+      filter.class_type = class_type;
     }
-
+    
+    // Course grade filter
+    if (course_grade) {
+      filter.course_grade = course_grade;
+    }
+    
+    // Search by title
     if (search) {
-      const decodedSearch = fullyDecodeURIComponent(search);
-      filter.course_title = { $regex: new RegExp(escapeRegExp(decodedSearch), 'i') };
+      filter.course_title = { $regex: search, $options: 'i' };
     }
-
+    
+    // Course ID filter
+    if (course_id) {
+      filter._id = course_id;
+    }
+    
+    // Currency filter
     if (currency) {
       filter['prices.currency'] = currency.toUpperCase();
     }
-
+    
+    // Price range filter
     if (min_price || max_price) {
       filter['prices.individual'] = {};
       if (min_price) filter['prices.individual'].$gte = Number(min_price);
       if (max_price) filter['prices.individual'].$lte = Number(max_price);
     }
-
+    
+    // Active status filter
     if (active_only === 'true') {
-      filter['prices.is_active'] = true;
+      filter.status = { $regex: 'Published', $options: 'i' };
     }
-
+    
+    // Pricing status filter (active/inactive)
+    if (pricing_status) {
+      if (pricing_status === 'active') {
+        filter['prices.is_active'] = true;
+      } else if (pricing_status === 'inactive') {
+        filter['prices.is_active'] = false;
+      }
+    }
+    
+    // Has pricing filter
+    if (has_pricing) {
+      if (has_pricing === 'yes') {
+        filter.prices = { $exists: true, $ne: [] };
+      } else if (has_pricing === 'no') {
+        filter.$or = [
+          { prices: { $exists: false } },
+          { prices: [] }
+        ];
+      }
+    }
+    
+    // Discount filter
     if (has_discount === 'true') {
       filter.$or = [
         { 'prices.early_bird_discount': { $gt: 0 } },
@@ -2236,19 +2233,15 @@ const getAllCoursesWithPrices = async (req, res) => {
       ];
     }
 
-    console.log('Final filter:', JSON.stringify(filter, null, 2));
-
     // Add status filter for published courses if not specified
-    if (!status) {
+    if (!filter.hasOwnProperty('status')) {
       filter.status = { $regex: 'Published', $options: 'i' };
     }
 
     const courses = await Course.find(filter)
-      .select(projection)
+      .select('_id course_title course_category course_grade course_duration class_type status prices')
       .lean()
       .sort({'prices.currency': 1});
-
-    console.log('Found courses:', courses.length);
 
     if (!courses.length) {
       return res.status(404).json({
@@ -2264,7 +2257,7 @@ const getAllCoursesWithPrices = async (req, res) => {
       (course.prices || []).map(p => p.currency)
     ))];
 
-    // Transform the data for better readability and handle undefined prices
+    // Transform the data for better readability
     const transformed = courses.map(course => {
       // Format course title with grade, duration, class type and category
       const titleParts = [course.course_title];
@@ -2322,6 +2315,7 @@ const getAllCoursesWithPrices = async (req, res) => {
         courseId: course._id,
         courseTitle: formattedTitle,
         courseCategory: course.course_category || 'Not specified',
+        courseGrade: course.course_grade || 'Not specified',
         classType: course.class_type || 'Not specified',
         status: course.status || 'Not specified',
         pricing: pricing.length > 0 ? pricing : [{
@@ -2504,6 +2498,11 @@ const getCoursesWithFields = async (req, res) => {
     // Handle status filter
     if (filters.status) {
       queryFilters.status = fullyDecodeURIComponent(filters.status);
+    }
+    
+    // Also check for status in query params directly
+    if (req.query.status) {
+      queryFilters.status = fullyDecodeURIComponent(req.query.status);
     }
     
     // Handle price range filter
