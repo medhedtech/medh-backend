@@ -617,6 +617,322 @@ const seedHomeDisplayData = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get prices for a home display item
+ * @route   GET /api/v1/home-display/:id/prices
+ * @access  Public
+ */
+const getHomeDisplayPrices = async (req, res) => {
+  try {
+    const homeDisplay = await HomeDisplay.findOne({ id: req.params.id }).lean();
+    
+    if (!homeDisplay) {
+      return res.status(404).json({
+        success: false,
+        message: `No home display item found with id ${req.params.id}`
+      });
+    }
+    
+    // Check if prices exist
+    if (!homeDisplay.prices || homeDisplay.prices.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: `No prices found for home display item with id ${req.params.id}`
+      });
+    }
+    
+    // Filter by currency if provided
+    let prices = homeDisplay.prices;
+    if (req.query.currency) {
+      const currency = req.query.currency.toUpperCase();
+      prices = prices.filter(price => price.currency === currency);
+      
+      if (prices.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: `No prices found for currency ${currency}`
+        });
+      }
+    }
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        id: homeDisplay.id,
+        title: homeDisplay.title,
+        prices: prices,
+        price_suffix: homeDisplay.price_suffix
+      }
+    });
+  } catch (error) {
+    console.error('Error in getHomeDisplayPrices:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting home display prices',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get all home display items with formatted prices
+ * @route   GET /api/v1/home-display/prices
+ * @access  Public
+ */
+const getAllHomeDisplaysWithPrices = async (req, res) => {
+  try {
+    const { 
+      category, 
+      class_type, 
+      currency,
+      min_price, 
+      max_price,
+      active_only,
+      has_discount,
+      search,
+      pricing_status,
+      has_pricing,
+      id
+    } = req.query;
+
+    // Build filter object
+    const filter = {};
+    
+    // Category filter
+    if (category) {
+      filter.category = category;
+    }
+    
+    // Class type filter
+    if (class_type) {
+      filter.classType = class_type;
+    }
+    
+    // Search by title
+    if (search) {
+      filter.title = { $regex: search, $options: 'i' };
+    }
+    
+    // ID filter
+    if (id) {
+      filter.id = id;
+    }
+    
+    // Currency filter
+    if (currency) {
+      filter['prices.currency'] = currency.toUpperCase();
+    }
+    
+    // Price range filter
+    if (min_price || max_price) {
+      filter['prices.individual'] = {};
+      if (min_price) filter['prices.individual'].$gte = Number(min_price);
+      if (max_price) filter['prices.individual'].$lte = Number(max_price);
+    }
+    
+    // Active status filter
+    if (active_only === 'true') {
+      filter.is_active = true;
+    }
+    
+    // Pricing status filter (active/inactive)
+    if (pricing_status) {
+      if (pricing_status === 'active') {
+        filter['prices.is_active'] = true;
+      } else if (pricing_status === 'inactive') {
+        filter['prices.is_active'] = false;
+      }
+    }
+    
+    // Has pricing filter
+    if (has_pricing) {
+      if (has_pricing === 'yes') {
+        filter.prices = { $exists: true, $ne: [] };
+      } else if (has_pricing === 'no') {
+        filter.$or = [
+          { prices: { $exists: false } },
+          { prices: [] }
+        ];
+      }
+    }
+    
+    // Discount filter
+    if (has_discount === 'true') {
+      filter.$or = [
+        { 'prices.early_bird_discount': { $gt: 0 } },
+        { 'prices.group_discount': { $gt: 0 } }
+      ];
+    }
+
+    // Add is_active filter if not otherwise specified
+    if (!filter.hasOwnProperty('is_active')) {
+      filter.is_active = true;
+    }
+
+    const homeDisplays = await HomeDisplay.find(filter)
+      .lean()
+      .sort({ display_order: 1 });
+
+    if (!homeDisplays.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No home display items found with matching criteria"
+      });
+    }
+
+    // Get unique values for filters
+    const uniqueCategories = [...new Set(homeDisplays.map(item => item.category))].filter(Boolean);
+    const uniqueTypes = [...new Set(homeDisplays.map(item => item.classType))].filter(Boolean);
+    const uniqueCurrencies = [...new Set(homeDisplays.flatMap(item => 
+      (item.prices || []).map(p => p.currency)
+    ))];
+
+    // Transform the data for better readability
+    const transformed = homeDisplays.map(item => {
+      // Format item title with category and class type
+      const titleParts = [item.title];
+      if (item.category) {
+        titleParts.push(`Category: ${item.category}`);
+      }
+      if (item.duration_range) {
+        titleParts.push(`Duration: ${item.duration_range}`);
+      }
+      if (item.classType) {
+        titleParts.push(`Type: ${item.classType}`);
+      }
+      const formattedTitle = titleParts.join(' | ');
+
+      // Format pricing information
+      const pricing = (item.prices || []).map(price => {
+        if (!price) return null;
+        
+        const formattedPrice = {
+          currency: price.currency || 'Not specified',
+          prices: {
+            individual: price.individual || 0,
+            batch: price.batch || price.individual || 0
+          },
+          discounts: {
+            earlyBird: price.early_bird_discount ? `${price.early_bird_discount}%` : 'N/A',
+            group: price.group_discount ? `${price.group_discount}%` : 'N/A'
+          },
+          batchSize: {
+            min: price.min_batch_size || 'N/A',
+            max: price.max_batch_size || 'N/A'
+          },
+          status: price.is_active ? 'Active' : 'Inactive'
+        };
+
+        // Format currency with symbol
+        if (price.currency === 'USD') {
+          formattedPrice.prices.individual = `$${formattedPrice.prices.individual}`;
+          formattedPrice.prices.batch = `$${formattedPrice.prices.batch}`;
+        } else if (price.currency === 'EUR') {
+          formattedPrice.prices.individual = `€${formattedPrice.prices.individual}`;
+          formattedPrice.prices.batch = `€${formattedPrice.prices.batch}`;
+        } else if (price.currency === 'INR') {
+          formattedPrice.prices.individual = `₹${formattedPrice.prices.individual}`;
+          formattedPrice.prices.batch = `₹${formattedPrice.prices.batch}`;
+        }
+
+        return formattedPrice;
+      }).filter(Boolean); // Remove any null entries
+
+      return {
+        id: item.id,
+        title: formattedTitle,
+        category: item.category || 'Not specified',
+        classType: item.classType || 'Not specified',
+        display_order: item.display_order,
+        is_active: item.is_active,
+        pricing: pricing.length > 0 ? pricing : [{
+          currency: 'Not specified',
+          prices: {
+            individual: 'N/A',
+            batch: 'N/A'
+          },
+          discounts: {
+            earlyBird: 'N/A',
+            group: 'N/A'
+          },
+          batchSize: {
+            min: 'N/A',
+            max: 'N/A'
+          },
+          status: 'Not available'
+        }]
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      count: homeDisplays.length,
+      filters: {
+        categories: uniqueCategories,
+        types: uniqueTypes,
+        currencies: uniqueCurrencies
+      },
+      data: transformed
+    });
+  } catch (error) {
+    console.error('Error in getAllHomeDisplaysWithPrices:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting home display items with prices',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Bulk update home display prices
+ * @route   POST /api/v1/home-display/prices/bulk-update
+ * @access  Private/Admin
+ */
+const bulkUpdateHomeDisplayPrices = async (req, res) => {
+  try {
+    const { updates } = req.body;
+    
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Updates must be a non-empty array"
+      });
+    }
+
+    const bulkOps = updates.map(update => ({
+      updateOne: {
+        filter: { id: update.id },
+        update: { 
+          $set: { 
+            prices: update.prices,
+            updatedAt: new Date()
+          } 
+        },
+        runValidators: true
+      }
+    }));
+
+    const result = await HomeDisplay.bulkWrite(bulkOps);
+    
+    res.status(200).json({
+      success: true,
+      message: "Bulk price update completed",
+      data: {
+        matchedCount: result.matchedCount,
+        modifiedCount: result.modifiedCount
+      }
+    });
+  } catch (error) {
+    console.error('Error in bulkUpdateHomeDisplayPrices:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error performing bulk price update',
+      error: error.message
+    });
+  }
+};
+
 console.log('Home Display Controller functions:');
 console.log('getAllHomeDisplays:', typeof getAllHomeDisplays);
 console.log('getHomeDisplayById:', typeof getHomeDisplayById);
@@ -626,6 +942,9 @@ console.log('deleteHomeDisplay:', typeof deleteHomeDisplay);
 console.log('updateDisplayOrder:', typeof updateDisplayOrder);
 console.log('seedHomeDisplayData:', typeof seedHomeDisplayData);
 console.log('getHomeDisplayWithFields:', typeof getHomeDisplayWithFields);
+console.log('getHomeDisplayPrices:', typeof getHomeDisplayPrices);
+console.log('getAllHomeDisplaysWithPrices:', typeof getAllHomeDisplaysWithPrices);
+console.log('bulkUpdateHomeDisplayPrices:', typeof bulkUpdateHomeDisplayPrices);
 
 module.exports = {
   getAllHomeDisplays,
@@ -635,5 +954,8 @@ module.exports = {
   deleteHomeDisplay,
   updateDisplayOrder,
   seedHomeDisplayData,
-  getHomeDisplayWithFields
+  getHomeDisplayWithFields,
+  getHomeDisplayPrices,
+  getAllHomeDisplaysWithPrices,
+  bulkUpdateHomeDisplayPrices
 }; 

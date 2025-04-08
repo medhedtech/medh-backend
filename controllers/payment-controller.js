@@ -336,18 +336,94 @@ const processPaymentAndEnroll = async (req, res) => {
 const getStudentPayments = async (req, res) => {
   try {
     const { student_id } = req.params;
+    const { page = 1, limit = 10 } = req.query;
     
-    // Get both enrollments and subscriptions
-    const [enrollments, subscriptions] = await Promise.all([
-      EnrolledCourse.find({ student_id }),
+    // Convert string params to numbers
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+    
+    // Query for both enrollments and subscriptions with pagination
+    const [enrollments, subscriptions, totalEnrollments, totalSubscriptions] = await Promise.all([
+      // Enrollments with course info
+      EnrolledCourse.find({ student_id })
+        .skip(skip)
+        .limit(limitNum)
+        .populate({
+          path: 'course_id',
+          select: 'course_title course_image'
+        })
+        .lean(),
+      
+      // Subscriptions
       Subscription.find({ user_id: student_id })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      
+      // Total counts for pagination
+      EnrolledCourse.countDocuments({ student_id }),
+      Subscription.countDocuments({ user_id: student_id })
     ]);
+
+    // Format enrollment data
+    const formattedEnrollments = enrollments.map(enrollment => ({
+      id: enrollment._id,
+      orderId: enrollment.payment_details?.payment_order_id || 'N/A',
+      type: 'Course Enrollment',
+      paymentType: enrollment.enrollment_type,
+      course: enrollment.course_id?.course_title || 'Unknown Course',
+      courseImage: enrollment.course_id?.course_image || '',
+      price: {
+        amount: enrollment.payment_details?.amount || 0,
+        currency: enrollment.payment_details?.currency || 'INR'
+      },
+      status: enrollment.payment_status,
+      enrollmentStatus: enrollment.status,
+      enrollmentDate: enrollment.enrollment_date,
+      expiryDate: enrollment.expiry_date,
+      progress: enrollment.progress,
+      isCertified: enrollment.is_certified
+    }));
+
+    // Format subscription data
+    const formattedSubscriptions = subscriptions.map(subscription => ({
+      id: subscription._id,
+      orderId: subscription.payment_details?.payment_order_id || 'N/A',
+      type: 'Subscription',
+      paymentType: 'Membership',
+      course: subscription.plan_name,
+      courseImage: '',
+      price: {
+        amount: subscription.amount || 0,
+        currency: subscription.payment_details?.currency || 'INR'
+      },
+      status: subscription.payment_status,
+      enrollmentStatus: subscription.status,
+      enrollmentDate: subscription.start_date,
+      expiryDate: subscription.end_date,
+      isActive: subscription.status === 'active',
+      remainingDays: Math.max(0, Math.ceil((new Date(subscription.end_date) - new Date()) / (1000 * 60 * 60 * 24)))
+    }));
+
+    // Combine and sort by date (most recent first)
+    const allPayments = [...formattedEnrollments, ...formattedSubscriptions]
+      .sort((a, b) => new Date(b.enrollmentDate) - new Date(a.enrollmentDate));
+    
+    // Calculate pagination info
+    const totalItems = totalEnrollments + totalSubscriptions;
+    const totalPages = Math.ceil(totalItems / limitNum);
 
     res.status(200).json({
       success: true,
-      data: {
-        enrollments,
-        subscriptions
+      data: allPayments,
+      pagination: {
+        total: totalItems,
+        page: pageNum,
+        limit: limitNum,
+        totalPages,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1
       }
     });
   } catch (error) {
