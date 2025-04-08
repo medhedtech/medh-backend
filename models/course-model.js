@@ -871,7 +871,7 @@ courseSchema.virtual("priceDisplay").get(function () {
     const defaultPrice = this.prices[0];
     return `${defaultPrice.currency} ${defaultPrice.individual}`;
   }
-  return `INR ${this.course_fee}`;
+  return `${this.course_fee}`;
 });
 courseSchema.virtual("quizzes", {
   ref: "Quiz",

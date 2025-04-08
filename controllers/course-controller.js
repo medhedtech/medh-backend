@@ -2298,14 +2298,14 @@ const getAllCoursesWithPrices = async (req, res) => {
 
         // Format currency with symbol
         if (price.currency === 'USD') {
-          formattedPrice.prices.individual = `$${formattedPrice.prices.individual}`;
-          formattedPrice.prices.batch = `$${formattedPrice.prices.batch}`;
+          formattedPrice.prices.individual = `${formattedPrice.prices.individual}`;
+          formattedPrice.prices.batch = `${formattedPrice.prices.batch}`;
         } else if (price.currency === 'EUR') {
-          formattedPrice.prices.individual = `€${formattedPrice.prices.individual}`;
-          formattedPrice.prices.batch = `€${formattedPrice.prices.batch}`;
+          formattedPrice.prices.individual = `${formattedPrice.prices.individual}`;
+          formattedPrice.prices.batch = `${formattedPrice.prices.batch}`;
         } else if (price.currency === 'INR') {
-          formattedPrice.prices.individual = `₹${formattedPrice.prices.individual}`;
-          formattedPrice.prices.batch = `₹${formattedPrice.prices.batch}`;
+          formattedPrice.prices.individual = `${formattedPrice.prices.individual}`;
+          formattedPrice.prices.batch = `${formattedPrice.prices.batch}`;
         }
 
         return formattedPrice;
