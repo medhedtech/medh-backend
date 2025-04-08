@@ -344,8 +344,16 @@ const getStudentPayments = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
     
     // Query for both enrollments and subscriptions with pagination
-    const [enrollments, subscriptions, totalEnrollments, totalSubscriptions] = await Promise.all([
-      // Enrollments with course info
+    const [
+      enrollments, 
+      subscriptions, 
+      totalEnrollments, 
+      totalSubscriptions,
+      // Get all enrollments and subscriptions for statistics (without pagination)
+      allEnrollments,
+      allSubscriptions
+    ] = await Promise.all([
+      // Enrollments with course info (paginated)
       EnrolledCourse.find({ student_id })
         .skip(skip)
         .limit(limitNum)
@@ -355,7 +363,7 @@ const getStudentPayments = async (req, res) => {
         })
         .lean(),
       
-      // Subscriptions
+      // Subscriptions (paginated)
       Subscription.find({ user_id: student_id })
         .skip(skip)
         .limit(limitNum)
@@ -363,7 +371,19 @@ const getStudentPayments = async (req, res) => {
       
       // Total counts for pagination
       EnrolledCourse.countDocuments({ student_id }),
-      Subscription.countDocuments({ user_id: student_id })
+      Subscription.countDocuments({ user_id: student_id }),
+      
+      // All enrollments for statistics (without pagination)
+      EnrolledCourse.find({ student_id })
+        .populate({
+          path: 'course_id',
+          select: 'course_title course_image'
+        })
+        .lean(),
+      
+      // All subscriptions for statistics (without pagination)
+      Subscription.find({ user_id: student_id })
+        .lean()
     ]);
 
     // Format enrollment data
@@ -372,6 +392,7 @@ const getStudentPayments = async (req, res) => {
       orderId: enrollment.payment_details?.payment_order_id || 'N/A',
       type: 'Course Enrollment',
       paymentType: enrollment.enrollment_type,
+      course_id: enrollment.course_id,
       course: enrollment.course_id?.course_title || 'Unknown Course',
       courseImage: enrollment.course_id?.course_image || '',
       price: {
@@ -414,6 +435,88 @@ const getStudentPayments = async (req, res) => {
     const totalItems = totalEnrollments + totalSubscriptions;
     const totalPages = Math.ceil(totalItems / limitNum);
 
+    // Calculate statistics in real-time from all data
+    // Format all enrollments and subscriptions for statistics
+    const allFormattedEnrollments = allEnrollments.map(enrollment => {
+      // Extract payment amount from payment_details
+      const paymentAmount = enrollment.payment_details?.amount || 0;
+      
+      return {
+        id: enrollment._id,
+        orderId: enrollment.payment_details?.payment_order_id || 'N/A',
+        type: 'Course Enrollment',
+        price: {
+          amount: paymentAmount,
+          currency: enrollment.payment_details?.currency || 'INR'
+        },
+        status: enrollment.payment_status,
+        enrollmentDate: enrollment.enrollment_date
+      };
+    });
+
+    const allFormattedSubscriptions = allSubscriptions.map(subscription => {
+      // Extract payment amount from subscription
+      const paymentAmount = subscription.amount || 0;
+      
+      return {
+        id: subscription._id,
+        orderId: subscription.payment_details?.payment_order_id || 'N/A',
+        type: 'Subscription',
+        price: {
+          amount: paymentAmount,
+          currency: subscription.payment_details?.currency || 'INR'
+        },
+        status: subscription.payment_status,
+        enrollmentDate: subscription.start_date,
+        isActive: subscription.status === 'active',
+        endDate: subscription.end_date
+      };
+    });
+
+    // Combine all payments for statistics
+    const allPaymentsForStats = [...allFormattedEnrollments, ...allFormattedSubscriptions]
+      .sort((a, b) => new Date(b.enrollmentDate) - new Date(a.enrollmentDate));
+
+    // Calculate total spent (lifetime spending) - IMPROVED CALCULATION
+    let totalSpent = 0;
+    
+    // Calculate from enrollments
+    allEnrollments.forEach(enrollment => {
+      if (enrollment.payment_details && enrollment.payment_details.amount) {
+        totalSpent += parseFloat(enrollment.payment_details.amount);
+      }
+    });
+    
+    // Calculate from subscriptions
+    allSubscriptions.forEach(subscription => {
+      if (subscription.amount) {
+        totalSpent += parseFloat(subscription.amount);
+      }
+    });
+    
+    // Round to 2 decimal places to avoid floating point issues
+    totalSpent = Math.round(totalSpent * 100) / 100;
+
+    // Calculate total payments (successful transactions)
+    const totalPayments = allPaymentsForStats.length;
+
+    // Get the most recent payment
+    const lastPayment = allPaymentsForStats[0] || null;
+    
+    // Count active subscriptions
+    const activeSubscriptions = allFormattedSubscriptions.filter(sub => 
+      sub.isActive && new Date(sub.endDate) > new Date()
+    ).length;
+
+    // Log the raw payment data for debugging
+    logger.info('Raw payment data for debugging:', {
+      enrollmentCount: allEnrollments.length,
+      subscriptionCount: allSubscriptions.length,
+      sampleEnrollment: allEnrollments[0]?.payment_details,
+      sampleSubscription: allSubscriptions[0]?.amount,
+      calculatedTotalSpent: totalSpent
+    });
+
     res.status(200).json({
       success: true,
       data: allPayments,
@@ -424,6 +527,39 @@ const getStudentPayments = async (req, res) => {
         totalPages,
         hasNextPage: pageNum < totalPages,
         hasPrevPage: pageNum > 1
+      },
+      statistics: {
+        totalSpent: {
+          amount: totalSpent,
+          currency: 'INR',
+          label: 'Lifetime spending'
+        },
+        totalPayments: {
+          count: totalPayments,
+          label: 'Successful transactions'
+        },
+        lastPayment: {
+          date: lastPayment ? new Date(lastPayment.enrollmentDate) : new Date(),
+          formattedDate: lastPayment ? new Date(lastPayment.enrollmentDate).toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+          }) : 'N/A',
+          label: 'Most recent transaction'
+        },
+        activeSubscriptions: {
+          count: activeSubscriptions,
+          label: 'Current subscriptions'
+        },
+        lastOrderId: {
+          id: lastPayment?.orderId || 'N/A',
+          label: 'Order ID'
+        },
+        lastPrice: {
+          amount: lastPayment?.price?.amount || 0,
+          currency: lastPayment?.price?.currency || 'INR',
+          label: 'Price'
+        }
       }
     });
   } catch (error) {
