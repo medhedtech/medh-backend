@@ -12,6 +12,7 @@ const {
   resetPassword,
   verifyTemporaryPassword,
   sendEmail,
+  getAllStudents,
 } = require("../controllers/authController");
 const instructorController = require("../controllers/instructor-controller");
 const corporateController = require("../controllers/corporateController");
@@ -21,6 +22,7 @@ const router = express.Router();
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 router.get("/get-all", getAllUsers);
+router.get("/get-all-students", getAllStudents);
 router.get("/get/:id", getUserById);
 router.post("/toggle-status/:id", toggleStudentStatus);
 router.post("/forgot-password", forgotPassword);
