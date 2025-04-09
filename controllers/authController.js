@@ -532,6 +532,41 @@ const resetPassword = async (req, res) => {
   }
 };
 
+// Get all students (both regular and corporate students)
+const getAllStudents = async (req, res) => {
+  try {
+    // Get regular students
+    const regularStudents = await User.find({
+      role: "student"
+    });
+    
+    // Get corporate students
+    const corporateStudents = await User.find({
+      role: "coorporate-student"
+    });
+    
+    // Combine both types of students
+    const allStudents = [...regularStudents, ...corporateStudents];
+    
+    res.status(200).json({
+      success: true,
+      data: allStudents,
+      counts: {
+        regularStudents: regularStudents.length,
+        corporateStudents: corporateStudents.length,
+        total: allStudents.length
+      }
+    });
+  } catch (err) {
+    console.error("Error in getAllStudents:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error",
+      error: err.message 
+    });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
@@ -544,4 +579,5 @@ module.exports = {
   forgotPassword,
   resetPassword,
   verifyTemporaryPassword,
+  getAllStudents,
 };

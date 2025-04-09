@@ -736,7 +736,13 @@ exports.watchVideo = async (req, res, next) => {
 // Get all students with enrolled courses
 exports.getAllStudentsWithEnrolledCourses = async (req, res, next) => {
   try {
-    const { status, includeExpired = false } = req.query;
+    const { 
+      status, 
+      includeExpired = false,
+      page = 1,
+      limit = 10,
+      search
+    } = req.query;
 
     const query = { course_id: { $exists: true } };
     if (!includeExpired) {
@@ -746,26 +752,42 @@ exports.getAllStudentsWithEnrolledCourses = async (req, res, next) => {
       query.status = status;
     }
 
-    const enrollments = await EnrolledCourse.find(query)
-      .populate({
-        path: "student_id",
-        match: { role: "student" },
-        model: "User",
-        select: "name email role profile_image"
-      })
-      .populate({
-        path: "course_id",
-        model: "Course",
-        select: "course_title description thumbnail"
-      })
-      .sort({ enrollment_date: -1 });
+    // Add search functionality
+    if (search) {
+      query.$or = [
+        { 'student_id.full_name': { $regex: search, $options: 'i' } },
+        { 'student_id.email': { $regex: search, $options: 'i' } },
+        { 'course_id.course_title': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const options = {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      sort: { enrollment_date: -1 },
+      populate: [
+        {
+          path: "student_id",
+          match: { role: "student" },
+          model: "User",
+          select: "full_name email phone_numbers role role_description status facebook_link instagram_link linkedin_link user_image meta age_group"
+        },
+        {
+          path: "course_id",
+          model: "Course",
+          select: "course_title description thumbnail"
+        }
+      ]
+    };
+
+    const enrollments = await EnrolledCourse.paginate(query, options);
 
     // Filter out invalid enrollments
-    const filteredEnrollments = enrollments.filter(
+    const filteredDocs = enrollments.docs.filter(
       (enrollment) => enrollment.student_id && enrollment.course_id
     );
 
-    if (!filteredEnrollments.length) {
+    if (!filteredDocs.length) {
       return res.status(404).json({
         success: false,
         message: "No students enrolled in courses found"
@@ -773,7 +795,7 @@ exports.getAllStudentsWithEnrolledCourses = async (req, res, next) => {
     }
 
     // Group enrollments by student
-    const studentsWithCourses = filteredEnrollments.reduce((acc, enrollment) => {
+    const studentsWithCourses = filteredDocs.reduce((acc, enrollment) => {
       const studentId = enrollment.student_id._id.toString();
       if (!acc[studentId]) {
         acc[studentId] = {
@@ -787,7 +809,20 @@ exports.getAllStudentsWithEnrolledCourses = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: Object.values(studentsWithCourses)
+      data: {
+        students: Object.values(studentsWithCourses),
+        pagination: {
+          totalDocs: enrollments.totalDocs,
+          limit: enrollments.limit,
+          totalPages: enrollments.totalPages,
+          page: enrollments.page,
+          pagingCounter: enrollments.pagingCounter,
+          hasPrevPage: enrollments.hasPrevPage,
+          hasNextPage: enrollments.hasNextPage,
+          prevPage: enrollments.prevPage,
+          nextPage: enrollments.nextPage
+        }
+      }
     });
   } catch (error) {
     handleError(error, req, res, next);

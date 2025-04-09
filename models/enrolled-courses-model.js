@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const mongoosePaginate = require('mongoose-paginate-v2');
 
 // Sub-schemas for better organization
 const paymentDetailsSchema = new mongoose.Schema({
@@ -411,6 +412,9 @@ enrolledCourseSchema.pre('save', async function(next) {
 
   next();
 });
+
+// Apply the paginate plugin to the schema
+enrolledCourseSchema.plugin(mongoosePaginate);
 
 const EnrolledCourse = mongoose.model("EnrolledCourse", enrolledCourseSchema);
 

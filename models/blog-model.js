@@ -148,7 +148,6 @@ blogSchema.index({ title: 'text', description: 'text', content: 'text' });
 blogSchema.index({ author: 1 });
 blogSchema.index({ status: 1 });
 blogSchema.index({ categories: 1 });
-blogSchema.index({ slug: 1 });
 
 // Virtual for comment count
 blogSchema.virtual('commentCount').get(function() {
@@ -156,24 +155,52 @@ blogSchema.virtual('commentCount').get(function() {
 });
 
 // Pre-save middleware to generate reading time and slug
-blogSchema.pre('save', function(next) {
-  // Generate reading time
-  if (this.content || this.description) {
-    const wordsPerMinute = 200;
-    const content = this.content || this.description;
-    const words = content.trim().split(/\s+/).length;
-    this.reading_time = Math.ceil(words / wordsPerMinute);
-  }
+blogSchema.pre('save', async function(next) {
+  try {
+    // Generate reading time
+    if (this.content || this.description) {
+      const wordsPerMinute = 200;
+      const content = this.content || this.description;
+      const words = content.trim().split(/\s+/).length;
+      this.reading_time = Math.ceil(words / wordsPerMinute);
+    }
 
-  // Generate slug from title if not provided
-  if (this.title && !this.slug) {
-    this.slug = this.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
-  }
+    // Generate slug from title if not provided
+    if (this.title && !this.slug) {
+      let baseSlug = this.title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '');
+      
+      // Check if the slug already exists
+      let slug = baseSlug;
+      let counter = 1;
+      let slugExists = true;
+      
+      while (slugExists) {
+        // Don't check against the current document when updating
+        const query = { 
+          slug: slug,
+          _id: { $ne: this._id } // Exclude current document
+        };
+        
+        const existingBlog = await mongoose.models.blogs.findOne(query);
+        
+        if (!existingBlog) {
+          slugExists = false;
+        } else {
+          slug = `${baseSlug}-${counter}`;
+          counter++;
+        }
+      }
+      
+      this.slug = slug;
+    }
 
-  next();
+    next();
+  } catch (error) {
+    next(error);
+  }
 });
 
 // Pre-find middleware to populate categories
