@@ -1,8 +1,8 @@
-const express = require("express");
-const enrollerCourseController = require("../controllers/enrolled-controller");
-const { validateObjectId } = require("../middleware/validation");
-const { authenticate, authorize } = require("../middleware/auth");
-const { validateEnrollment } = require("../middleware/validators/enrollmentValidator");
+import express from "express";
+import * as enrollerCourseController from "../controllers/enrolled-controller.js";
+import { validateObjectId } from "../middleware/validation.js";
+import { authenticate, authorize } from "../middleware/auth.js";
+import { validateEnrollment } from "../middleware/validators/enrollmentValidator.js";
 
 const router = express.Router();
 
@@ -97,4 +97,4 @@ router.get(
   enrollerCourseController.watchVideo
 );
 
-module.exports = router;
+export default router;

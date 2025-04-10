@@ -1,5 +1,5 @@
-const express = require("express");
-const {
+import express from "express";
+import {
   createSubscription,
   getAllSubscriptions,
   getSubscriptionById,
@@ -9,19 +9,29 @@ const {
   getSubscriptionsByStudentId,
   getCoorporateEnrollmentStatus,
   getCoorporateEmployeeEnrollmentStatus,
-} = require("../controllers/subscription-controller");
+  getSubscriptionByUserId,
+  getActiveSubscriptions,
+  getExpiredSubscriptions,
+  getUpcomingSubscriptions,
+  getSubscriptionStats
+} from "../controllers/subscription-controller.js";
 
 const router = express.Router();
 
 // Create a new subscription
-router.post("/create", createSubscription);
-router.get("/getAll", getAllSubscriptions);
-router.get("/get/:id", getSubscriptionById);
+router.post("/", createSubscription);
+router.get("/", getAllSubscriptions);
+router.get("/stats", getSubscriptionStats);
+router.get("/active", getActiveSubscriptions);
+router.get("/expired", getExpiredSubscriptions);
+router.get("/upcoming", getUpcomingSubscriptions);
+router.get("/user/:userId", getSubscriptionByUserId);
+router.get("/:id", getSubscriptionById);
 router.get("/get-subscription/:student_id", getSubscriptionsByStudentId);
 router.get("/enrollStatus", getEnrollmentStatus);
 router.get("/corporate-employee-enroll-status", getCoorporateEmployeeEnrollmentStatus);
 router.get("/coorporate-enrollStatus", getCoorporateEnrollmentStatus);
-router.put("/update/:id", updateSubscription);
-router.delete("/delete/:id", deleteSubscription);
+router.patch("/:id", updateSubscription);
+router.delete("/:id", deleteSubscription);
 
-module.exports = router;
+export default router;

@@ -1,7 +1,7 @@
-const CorporateForm = require("../models/corporate-training.model");
+import CorporateForm from "../models/corporate-training.model.js";
 
 // Create a new corporate
-const createCorporate = async (req, res) => {
+export const createCorporate = async (req, res) => {
   try {
     const {
       full_name,
@@ -58,7 +58,7 @@ const createCorporate = async (req, res) => {
 };
 
 // Retrieve all corporates
-const getAllCorporates = async (req, res) => {
+export const getAllCorporates = async (req, res) => {
   try {
     const corporates = await CorporateForm.find();
     res.status(200).json({ success: true, data: corporates });
@@ -71,7 +71,7 @@ const getAllCorporates = async (req, res) => {
 };
 
 // Retrieve a single corporate by ID
-const getCorporateById = async (req, res) => {
+export const getCorporateById = async (req, res) => {
   try {
     const corporate = await CorporateForm.findById(req.params.id);
     if (!corporate) {
@@ -89,7 +89,7 @@ const getCorporateById = async (req, res) => {
 };
 
 // Update a corporate by ID
-const updateCorporate = async (req, res) => {
+export const updateCorporate = async (req, res) => {
   try {
     const updatedCorporate = await CorporateForm.findByIdAndUpdate(
       req.params.id,
@@ -116,7 +116,7 @@ const updateCorporate = async (req, res) => {
 };
 
 // Delete a corporate by ID
-const deleteCorporate = async (req, res) => {
+export const deleteCorporate = async (req, res) => {
   try {
     const deletedCorporate = await CorporateForm.findByIdAndDelete(
       req.params.id
@@ -137,12 +137,4 @@ const deleteCorporate = async (req, res) => {
       .status(500)
       .json({ success: false, message: "Server error", error: err.message });
   }
-};
-
-module.exports = {
-  createCorporate,
-  getAllCorporates,
-  getCorporateById,
-  updateCorporate,
-  deleteCorporate,
 };

@@ -1,5 +1,5 @@
-const logger = require('../utils/logger');
-const { v4: uuidv4 } = require('uuid');
+import logger from '../utils/logger.js';
+import { v4 as uuidv4 } from 'uuid';
 
 class UITracker {
   constructor() {
@@ -241,4 +241,4 @@ class UITracker {
   }
 }
 
-module.exports = new UITracker(); 
+export default new UITracker(); 

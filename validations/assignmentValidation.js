@@ -1,5 +1,5 @@
-const Joi = require('joi');
-const logger = require('../utils/logger');
+import Joi from 'joi';
+import logger from '../utils/logger.js';
 
 const assignmentSchema = {
   create: Joi.object({
@@ -55,4 +55,4 @@ logger.info('Custom API Event', {
   data: someData
 });
 
-module.exports = assignmentSchema; 
+export default assignmentSchema; 

@@ -1,6 +1,7 @@
-require('dotenv').config();
-const mongoose = require('mongoose');
-const Course = require('../models/course-model');
+import dotenv from 'dotenv';
+dotenv.config();
+import mongoose from 'mongoose';
+import Course from '../models/course-model.js';
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)

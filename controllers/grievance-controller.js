@@ -1,55 +1,79 @@
-const Grievance = require("../models/grievance")
+import Grievance from "../models/grievance.js";
 
-exports.getAllGrievances = async (req, res) => {
+export const getAllGrievances = async (req, res) => {
   try {
-    const grievances = await Grievance.find().populate("userId");
-    res.status(200).json(grievances);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-exports.createGrievance = async (req, res) => {
-  const { userId, name, description } = req.body;
-  console.log("HGKHBJKNML:", req.body)
-  try {
-    const newGrievance = new Grievance({
-      userId,
-      name,
-      description,
-      role: ["student"],
+    const grievances = await Grievance.find();
+    res.status(200).json({
+      message: "Grievances fetched successfully",
+      grievances,
     });
-    await newGrievance.save();
-    res.status(201).json(newGrievance);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      message: "Error fetching grievances",
+      error: error.message,
+    });
   }
 };
 
-exports.updateGrievance = async (req, res) => {
-  const { status, resolutionDate } = req.body;
+export const createGrievance = async (req, res) => {
   try {
-    const updatedGrievance = await Grievance.findByIdAndUpdate(
+    const grievance = await Grievance.create(req.body);
+    res.status(201).json({
+      message: "Grievance created successfully",
+      grievance,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error creating grievance",
+      error: error.message,
+    });
+  }
+};
+
+export const updateGrievance = async (req, res) => {
+  try {
+    const grievance = await Grievance.findByIdAndUpdate(
       req.params.id,
-      { status, resolutionDate },
+      req.body,
       { new: true }
     );
-    res.status(200).json(updatedGrievance);
+    if (!grievance) {
+      return res.status(404).json({
+        message: "Grievance not found",
+      });
+    }
+    res.status(200).json({
+      message: "Grievance updated successfully",
+      grievance,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      message: "Error updating grievance",
+      error: error.message,
+    });
   }
 };
 
-exports.deleteGrievance = async (req, res) => {
+export const deleteGrievance = async (req, res) => {
   try {
-    await Grievance.findByIdAndDelete(req.params.id);
-    res.status(200).json({ message: "Grievance deleted successfully" });
+    const grievance = await Grievance.findByIdAndDelete(req.params.id);
+    if (!grievance) {
+      return res.status(404).json({
+        message: "Grievance not found",
+      });
+    }
+    res.status(200).json({
+      message: "Grievance deleted successfully",
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      message: "Error deleting grievance",
+      error: error.message,
+    });
   }
 };
 
-exports.getGrievancesByStatus = async (req, res) => {
+export const getGrievancesByStatus = async (req, res) => {
   try {
     const grievances = await Grievance.find({
       status: req.params.status,
@@ -57,5 +81,40 @@ exports.getGrievancesByStatus = async (req, res) => {
     res.status(200).json(grievances);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+export const getGrievanceById = async (req, res) => {
+  try {
+    const grievance = await Grievance.findById(req.params.id);
+    if (!grievance) {
+      return res.status(404).json({
+        message: "Grievance not found",
+      });
+    }
+    res.status(200).json({
+      message: "Grievance fetched successfully",
+      grievance,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error fetching grievance",
+      error: error.message,
+    });
+  }
+};
+
+export const getGrievancesByUser = async (req, res) => {
+  try {
+    const grievances = await Grievance.find({ userId: req.params.userId });
+    res.status(200).json({
+      message: "Grievances fetched successfully",
+      grievances,
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error fetching grievances",
+      error: error.message,
+    });
   }
 };

@@ -1,8 +1,8 @@
-const Category = require("../models/category-model");
-const Course = require("../models/course-model");
+import Category from "../models/category-model.js";
+import Course from "../models/course-model.js";
 
 // Create a new category
-const createCategory = async (req, res) => {
+export const createCategory = async (req, res) => {
   try {
     const { category_name, category_image } = req.body;
 
@@ -32,7 +32,7 @@ const createCategory = async (req, res) => {
   }
 };
 
-const getCategories = async (req, res) => {
+export const getCategories = async (req, res) => {
   try {
     const categories = await Category.find();
     res.status(200).json({
@@ -51,7 +51,7 @@ const getCategories = async (req, res) => {
 };
 
 // Get a single category by ID with populated courses
-const getCategoryById = async (req, res) => {
+export const getCategoryById = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -75,7 +75,7 @@ const getCategoryById = async (req, res) => {
 };
 
 // Update a category by ID
-const updateCategory = async (req, res) => {
+export const updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
     const { category_name, category_image } = req.body;
@@ -105,7 +105,7 @@ const updateCategory = async (req, res) => {
 };
 
 // Delete a category by ID
-const deleteCategory = async (req, res) => {
+export const deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;
     // Find the category
@@ -130,7 +130,7 @@ const deleteCategory = async (req, res) => {
 };
 
 // Get related courses for a specific category
-const getRelatedCourses = async (req, res) => {
+export const getRelatedCourses = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -159,13 +159,4 @@ const getRelatedCourses = async (req, res) => {
     console.error(error);
     res.status(500).json({ message: "Error fetching related courses", error });
   }
-};
-
-module.exports = {
-  createCategory,
-  getCategories,
-  getCategoryById,
-  updateCategory,
-  deleteCategory,
-  getRelatedCourses,
 };

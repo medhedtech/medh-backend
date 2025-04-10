@@ -1,14 +1,14 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
-const {
+import {
   addNewsletter,
   getAllSubscribers,
   deleteSubscriber,
-} = require("../controllers/newsletterController");
+} from "../controllers/newsletterController.js";
 
 // Routes
 router.post("/add", addNewsletter);
 router.get("/getAll", getAllSubscribers);
 router.delete("/update/:id", deleteSubscriber);
 
-module.exports = router;
+export default router;

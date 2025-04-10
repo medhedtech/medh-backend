@@ -1,9 +1,9 @@
-const User = require("../models/user-modal");
-const nodemailer = require("nodemailer");
-const bcrypt = require("bcryptjs");
-const Course = require("../models/course-model");
-const CoorporateAssignCourse = require("../models/assigned-courses-coorporates-modal");
-const CoorporateEnrolledModule = require("../models/coorporate-enrolled-modules.model");
+import User from "../models/user-modal.js";
+import nodemailer from "nodemailer";
+import bcrypt from "bcryptjs";
+import Course from "../models/course-model.js";
+import CoorporateAssignCourse from "../models/assigned-courses-coorporates-modal.js";
+import CoorporateEnrolledModule from "../models/coorporate-enrolled-modules.model.js";
 
 // Set up the email transporter
 const transporter = nodemailer.createTransport({
@@ -14,7 +14,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const createCorporateStudent = async (req, res) => {
+export const createCorporateStudent = async (req, res) => {
   const { full_name, email, phone_number, password, meta } = req.body;
 
   // Validate required fields
@@ -140,7 +140,7 @@ const createCorporateStudent = async (req, res) => {
 };
 
 // Get All Corporate Users
-const getAllCorporateStudents = async (req, res) => {
+export const getAllCorporateStudents = async (req, res) => {
   try {
     const { corporate_id } = req.query;
     const corporateUsers = await User.find({
@@ -154,7 +154,7 @@ const getAllCorporateStudents = async (req, res) => {
 };
 
 // Get Corporate User by ID
-const getCorporateStudentById = async (req, res) => {
+export const getCorporateStudentById = async (req, res) => {
   try {
     const { id } = req.params;
     const corporateUser = await User.findOne({
@@ -173,7 +173,7 @@ const getCorporateStudentById = async (req, res) => {
 };
 
 // Update Corporate User
-const updateCorporateStudent = async (req, res) => {
+export const updateCorporateStudent = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -195,7 +195,7 @@ const updateCorporateStudent = async (req, res) => {
 };
 
 // Delete Corporate User
-const deleteCorporateStudent = async (req, res) => {
+export const deleteCorporateStudent = async (req, res) => {
   try {
     const { id } = req.params;
     const deletedCorporateUser = await User.findOneAndDelete({
@@ -214,7 +214,7 @@ const deleteCorporateStudent = async (req, res) => {
 };
 
 // Toggle Corporate User Status
-const toggleCorporateStudentStatus = async (req, res) => {
+export const toggleCorporateStudentStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const corporateUser = await User.findOne({
@@ -239,13 +239,4 @@ const toggleCorporateStudentStatus = async (req, res) => {
       .status(500)
       .json({ message: "Error toggling corporate user status", error });
   }
-};
-
-module.exports = {
-  createCorporateStudent,
-  getAllCorporateStudents,
-  getCorporateStudentById,
-  updateCorporateStudent,
-  deleteCorporateStudent,
-  toggleCorporateStudentStatus,
 };

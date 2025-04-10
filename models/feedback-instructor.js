@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const instructorFeedbackSchema = new mongoose.Schema(
   {
@@ -14,7 +14,7 @@ const instructorFeedbackSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model(
+export default mongoose.model(
   "InstructorFeedback",
   instructorFeedbackSchema
 );

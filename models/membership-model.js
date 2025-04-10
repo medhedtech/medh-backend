@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const MembershipSchema = new mongoose.Schema(
   {
@@ -81,4 +81,4 @@ MembershipSchema.pre("save", function (next) {
 
 const Membership = mongoose.model("Membership", MembershipSchema);
 
-module.exports = Membership;
+export default Membership;

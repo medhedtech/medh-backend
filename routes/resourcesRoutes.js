@@ -1,14 +1,18 @@
-const express = require('express');
-const {
-  getAllResources,
+import express from 'express';
+import {
   createResource,
-  deleteResource,
-} = require('../controllers/resourcesController');
+  getAllResources,
+  getResourceById,
+  updateResource,
+  deleteResource
+} from '../controllers/resourcesController.js';
 
 const router = express.Router();
 
-router.get('/', getAllResources);
 router.post('/', createResource);
+router.get('/', getAllResources);
+router.get('/:id', getResourceById);
+router.patch('/:id', updateResource);
 router.delete('/:id', deleteResource);
 
-module.exports = router;
+export default router;

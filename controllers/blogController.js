@@ -1,10 +1,10 @@
-const BlogsModel = require("../models/blog-model");
-const slugify = require("slugify");
-const { validateBlog, validateComment, validateBlogStatus } = require("../utils/validators");
-const { handleBase64Upload } = require("./upload/uploadController");
+import BlogsModel from "../models/blog-model.js";
+import slugify from "slugify";
+import { validateBlog, validateComment, validateBlogStatus } from "../utils/validators.js";
+import { handleBase64Upload } from "./upload/uploadController.js";
 
 // Create a new blog post
-const createBlog = async (req, res) => {
+export const createBlog = async (req, res) => {
   try {
     const { error } = validateBlog(req.body);
     if (error) {
@@ -152,7 +152,7 @@ const createBlog = async (req, res) => {
 };
 
 // Get all blog posts with pagination and filters
-const getAllBlogs = async (req, res) => {
+export const getAllBlogs = async (req, res) => {
   try {
     const { 
       page = 1, 
@@ -220,7 +220,7 @@ const getAllBlogs = async (req, res) => {
 };
 
 // Search blogs
-const searchBlogs = async (req, res) => {
+export const searchBlogs = async (req, res) => {
   try {
     const { query } = req.query;
     if (!query) {
@@ -256,7 +256,7 @@ const searchBlogs = async (req, res) => {
 };
 
 // Get featured blogs
-const getFeaturedBlogs = async (req, res) => {
+export const getFeaturedBlogs = async (req, res) => {
   try {
     const blogs = await BlogsModel.find({ 
       featured: true,
@@ -282,7 +282,7 @@ const getFeaturedBlogs = async (req, res) => {
 };
 
 // Get blog by slug
-const getBlogBySlug = async (req, res) => {
+export const getBlogBySlug = async (req, res) => {
   try {
     // First find the blog without updating it
     const blog = await BlogsModel.findOne({ slug: req.params.slug })
@@ -323,7 +323,7 @@ const getBlogBySlug = async (req, res) => {
 };
 
 // Get blog by ID
-const getBlogById = async (req, res) => {
+export const getBlogById = async (req, res) => {
   try {
     // First find the blog without updating it
     const blog = await BlogsModel.findById(req.params.id)
@@ -364,7 +364,7 @@ const getBlogById = async (req, res) => {
 };
 
 // Get blogs by category
-const getBlogsByCategory = async (req, res) => {
+export const getBlogsByCategory = async (req, res) => {
   try {
     const blogs = await BlogsModel.find({
       categories: req.params.category,
@@ -389,7 +389,7 @@ const getBlogsByCategory = async (req, res) => {
 };
 
 // Get blogs by tag
-const getBlogsByTag = async (req, res) => {
+export const getBlogsByTag = async (req, res) => {
   try {
     const blogs = await BlogsModel.find({
       tags: req.params.tag,
@@ -414,7 +414,7 @@ const getBlogsByTag = async (req, res) => {
 };
 
 // Update blog status
-const updateBlogStatus = async (req, res) => {
+export const updateBlogStatus = async (req, res) => {
   try {
     const { error } = validateBlogStatus(req.body);
     if (error) {
@@ -461,7 +461,7 @@ const updateBlogStatus = async (req, res) => {
 };
 
 // Toggle featured status
-const toggleFeatured = async (req, res) => {
+export const toggleFeatured = async (req, res) => {
   try {
     const blog = await BlogsModel.findById(req.params.id);
 
@@ -491,7 +491,7 @@ const toggleFeatured = async (req, res) => {
 };
 
 // Like a blog
-const likeBlog = async (req, res) => {
+export const likeBlog = async (req, res) => {
   try {
     const blog = await BlogsModel.findById(req.params.id);
 
@@ -521,7 +521,7 @@ const likeBlog = async (req, res) => {
 };
 
 // Add comment to blog
-const addComment = async (req, res) => {
+export const addComment = async (req, res) => {
   try {
     const { error } = validateComment(req.body);
     if (error) {
@@ -564,7 +564,7 @@ const addComment = async (req, res) => {
 };
 
 // Delete comment
-const deleteComment = async (req, res) => {
+export const deleteComment = async (req, res) => {
   try {
     const blog = await BlogsModel.findById(req.params.id);
 
@@ -611,7 +611,7 @@ const deleteComment = async (req, res) => {
 };
 
 // Update blog post
-const updateBlog = async (req, res) => {
+export const updateBlog = async (req, res) => {
   try {
     const { error } = validateBlog(req.body);
     if (error) {
@@ -664,7 +664,7 @@ const updateBlog = async (req, res) => {
 };
 
 // Delete blog post
-const deleteBlog = async (req, res) => {
+export const deleteBlog = async (req, res) => {
   try {
     const blog = await BlogsModel.findById(req.params.id);
 
@@ -697,22 +697,4 @@ const deleteBlog = async (req, res) => {
       error: err.message,
     });
   }
-};
-
-module.exports = {
-  createBlog,
-  getAllBlogs,
-  searchBlogs,
-  getFeaturedBlogs,
-  getBlogBySlug,
-  getBlogById,
-  getBlogsByCategory,
-  getBlogsByTag,
-  updateBlogStatus,
-  toggleFeatured,
-  likeBlog,
-  addComment,
-  deleteComment,
-  updateBlog,
-  deleteBlog,
 };

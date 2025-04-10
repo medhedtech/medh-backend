@@ -1,10 +1,10 @@
-const CoorporateEnrolledModule = require("../models/coorporate-enrolled-modules.model");
-const CoorporateAssignCourse = require("../models/assigned-courses-coorporates-modal");
-const Course = require("../models/course-model");
-const User = require("../models/user-modal");
-const OnlineMeeting = require("../models/online-meeting");
+import CoorporateEnrolledModule from "../models/coorporate-enrolled-modules.model.js";
+import CoorporateAssignCourse from "../models/assigned-courses-coorporates-modal.js";
+import Course from "../models/course-model.js";
+import User from "../models/user-modal.js";
+import OnlineMeeting from "../models/online-meeting.js";
 
-exports.createCoorporateAssignCourse = async (req, res) => {
+export const createCoorporateAssignCourse = async (req, res) => {
   try {
     const { coorporate_id, course_id, expiry_date } = req.body;
 
@@ -116,7 +116,7 @@ exports.createCoorporateAssignCourse = async (req, res) => {
 };
 
 // Get all corporate course assignments
-exports.getAllCoorporateAssignCourses = async (req, res) => {
+export const getAllCoorporateAssignCourses = async (req, res) => {
   try {
     const assignments = await CoorporateAssignCourse.find()
       .populate("coorporate_id")
@@ -129,7 +129,7 @@ exports.getAllCoorporateAssignCourses = async (req, res) => {
 };
 
 // Get assignment by ID
-exports.getCoorporateAssignCourseById = async (req, res) => {
+export const getCoorporateAssignCourseById = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -148,7 +148,7 @@ exports.getCoorporateAssignCourseById = async (req, res) => {
 };
 
 // Delete assignment by ID
-exports.deleteCoorporateAssignCourse = async (req, res) => {
+export const deleteCoorporateAssignCourse = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -166,7 +166,7 @@ exports.deleteCoorporateAssignCourse = async (req, res) => {
 };
 
 // Get assignments by corporate ID
-exports.getCoorporateAssignCourseByCoorporateId = async (req, res) => {
+export const getCoorporateAssignCourseByCoorporateId = async (req, res) => {
   try {
     const { coorporate_id } = req.params;
 
@@ -187,7 +187,7 @@ exports.getCoorporateAssignCourseByCoorporateId = async (req, res) => {
 };
 
 // Get assignments by course ID
-exports.getEnrolledCoorporatesByCourseId = async (req, res) => {
+export const getEnrolledCoorporatesByCourseId = async (req, res) => {
   try {
     const { course_id } = req.params;
 
@@ -208,7 +208,7 @@ exports.getEnrolledCoorporatesByCourseId = async (req, res) => {
 };
 
 // Mark a video as watched
-exports.watchCoorporateVideo = async (req, res) => {
+export const watchCoorporateVideo = async (req, res) => {
   try {
     const { id } = req.query;
 
@@ -255,7 +255,7 @@ exports.watchCoorporateVideo = async (req, res) => {
 };
 
 // Get Courses by Corporate Student ID and Fetch Instructor Details from User Model
-exports.getCoursesByCorporateStudentId = async (req, res) => {
+export const getCoursesByCorporateStudentId = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -307,7 +307,7 @@ exports.getCoursesByCorporateStudentId = async (req, res) => {
 };
 
 // Get the count of enrolled corporate-students in a specific course
-exports.getCorporateStudentCountByCourseId = async (req, res) => {
+export const getCorporateStudentCountByCourseId = async (req, res) => {
   try {
     const { course_id } = req.params;
 
@@ -339,7 +339,7 @@ exports.getCorporateStudentCountByCourseId = async (req, res) => {
   }
 };
 
-exports.getEnrollmentCountsByCoorporateStudentId = async (req, res) => {
+export const getEnrollmentCountsByCoorporateStudentId = async (req, res) => {
   try {
     const { coorporate_id } = req.params;
 

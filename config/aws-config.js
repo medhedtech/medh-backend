@@ -1,52 +1,40 @@
-const AWS = require('aws-sdk');
-const { ENV_VARS } = require('./envVars');
-
-// Check if AWS credentials are present
-if (!ENV_VARS.AWS_ACCESS_KEY || !ENV_VARS.AWS_SECRET_KEY) {
-  console.warn('AWS credentials are missing or incomplete. File uploads will fail.');
-}
+import AWS from 'aws-sdk';
+import { ENV_VARS } from './envVars.js';
+import logger from '../utils/logger.js';
 
 // Configure AWS
 AWS.config.update({
   accessKeyId: ENV_VARS.AWS_ACCESS_KEY,
   secretAccessKey: ENV_VARS.AWS_SECRET_KEY,
-  region: 'ap-south-1'
+  // region: ENV_VARS.AWS_REGION // Removed region as it's not defined in ENV_VARS
 });
 
-const s3Client = new AWS.S3();
+// Create S3 instance
+const s3 = new AWS.S3();
 
-// Constants for file uploads
-const UPLOAD_CONSTANTS = {
-  BUCKET_NAME: 'medhdocuments',
-  MAX_FILE_SIZE: 10000 * 1024 * 1024, // 10GB
-  MAX_FILES: 10,
-  ALLOWED_MIME_TYPES: {
-    // Images
-    'image/jpeg': 'jpg',
-    'image/png': 'png',
-    'image/gif': 'gif',
-    'image/webp': 'webp',
+// Create SNS instance
+const sns = new AWS.SNS();
+
+// Create SES instance
+const ses = new AWS.SES();
+
+// Test AWS connection
+const testAWSConnection = async () => {
+  try {
+    await s3.listBuckets().promise();
+    logger.info('AWS S3 connection successful');
     
-    // Documents
-    'application/pdf': 'pdf',
-    'application/msword': 'doc',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    await sns.listTopics().promise();
+    logger.info('AWS SNS connection successful');
     
-    // Videos
-    'video/mp4': 'mp4',
-    'video/webm': 'webm',
+    await ses.getSendQuota().promise();
+    logger.info('AWS SES connection successful');
     
-    // Audio
-    'audio/mpeg': 'mp3',
-    'audio/wav': 'wav',
-    
-    // Other
-    'application/zip': 'zip',
-    'text/plain': 'txt'
+    return true;
+  } catch (error) {
+    logger.error('AWS connection error:', error);
+    return false;
   }
 };
 
-module.exports = {
-  s3Client,
-  UPLOAD_CONSTANTS
-};
+export { s3, sns, ses, testAWSConnection };

@@ -1,7 +1,7 @@
-const OnlineMeeting = require("../models/online-meeting");
-const moment = require("moment");
+import OnlineMeeting from "../models/online-meeting.js";
+import moment from "moment";
 
-const statusUpdater = async () => {
+export const statusUpdater = async () => {
   try {
     console.log("Running status update job...");
 
@@ -38,5 +38,3 @@ const statusUpdater = async () => {
     console.error("Error updating meeting status:", error);
   }
 };
-
-module.exports = { statusUpdater };

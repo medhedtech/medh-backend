@@ -1,5 +1,5 @@
-const PDF = require('html-pdf-chrome');
-const logger = require('../utils/logger');
+import PDF from 'html-pdf-chrome';
+import logger from '../utils/logger.js';
 
 const options = {
   port: 9222, // Chrome debug port
@@ -63,4 +63,4 @@ class PDFService {
   }
 }
 
-module.exports = new PDFService(); 
+export default new PDFService(); 

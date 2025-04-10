@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const trackInstructorSchema = new mongoose.Schema(
   {
@@ -16,4 +16,4 @@ const TrackInstructor = mongoose.model(
   trackInstructorSchema
 );
 
-module.exports = TrackInstructor;
+export default TrackInstructor;

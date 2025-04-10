@@ -1,10 +1,12 @@
-const router = require("express").Router();
-const uploadImage = require("../controllers/upload/uploadImages");
-const uploadDocument = require("../controllers/upload/uploadDocuments");
-const uploadMedia = require("../controllers/upload/uploadVideos");
+import express from "express";
+import { uploadImage } from "../controllers/upload/uploadImages.js";
+import { uploadDocument } from "../controllers/upload/uploadDocuments.js";
+import { uploadMedia } from "../controllers/upload/uploadVideos.js";
 
-router.post("/uploadImage", uploadImage);
-router.post("/uploadDocument", uploadDocument);
-router.post("/uploadMedia", uploadMedia);
+const router = express.Router();
 
-module.exports = router;
+router.post("/image", uploadImage);
+router.post("/document", uploadDocument);
+router.post("/media", uploadMedia);
+
+export default router;

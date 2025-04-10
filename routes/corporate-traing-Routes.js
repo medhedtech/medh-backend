@@ -1,11 +1,11 @@
-const express = require("express");
-const {
+import express from "express";
+import {
   createCorporate,
   getAllCorporates,
   getCorporateById,
   updateCorporate,
   deleteCorporate,
-} = require("../controllers/corporate-training-controller");
+} from "../controllers/corporate-training-controller.js";
 
 const router = express.Router();
 
@@ -15,4 +15,4 @@ router.get("/get/:id", getCorporateById);
 router.put("/update/:id", updateCorporate);
 router.delete("/delete/:id", deleteCorporate);
 
-module.exports = router;
+export default router;

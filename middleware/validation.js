@@ -1,5 +1,5 @@
-const mongoose = require('mongoose');
-const { validationResult } = require('express-validator');
+import mongoose from 'mongoose';
+import { validationResult } from 'express-validator';
 
 /**
  * Middleware to handle express-validator validation results
@@ -135,7 +135,7 @@ const validatePattern = (paramName, pattern, message) => {
   };
 };
 
-module.exports = {
+export {
   validateRequest,
   validateObjectId,
   validateDate,

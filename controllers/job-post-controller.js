@@ -1,6 +1,6 @@
-const JobPost = require("../models/add-post.model");
+import JobPost from "../models/add-post.model.js";
 
-const createJob = async (req, res) => {
+export const createJob = async (req, res) => {
   try {
     const { title, description } = req.body;
     const jobPost = new JobPost({
@@ -22,7 +22,7 @@ const createJob = async (req, res) => {
   }
 };
 
-const getAllJobPosts = async (req, res) => {
+export const getAllJobPosts = async (req, res) => {
   try {
     const jobPosts = await JobPost.find();
     res.status(200).json({ success: true, data: jobPosts });
@@ -34,7 +34,7 @@ const getAllJobPosts = async (req, res) => {
 };
 
 // Retrieve a single job form entry by ID
-const getJobPostById = async (req, res) => {
+export const getJobPostById = async (req, res) => {
   try {
     const jobPost = await JobPost.findById(req.params.id);
     if (!jobPost) {
@@ -52,7 +52,7 @@ const getJobPostById = async (req, res) => {
 };
 
 // Update a job form entry by ID
-const updateJobPost = async (req, res) => {
+export const updateJobPost = async (req, res) => {
   try {
     const updatedJobPost = await JobPost.findByIdAndUpdate(
       req.params.id,
@@ -75,7 +75,7 @@ const updateJobPost = async (req, res) => {
 };
 
 // Delete a job form entry by ID
-const deleteJobPost = async (req, res) => {
+export const deleteJobPost = async (req, res) => {
   try {
     const deletedJobPost = await JobPost.findByIdAndDelete(req.params.id);
 
@@ -93,12 +93,4 @@ const deleteJobPost = async (req, res) => {
       .status(500)
       .json({ success: false, message: "Server error", error: err.message });
   }
-};
-
-module.exports = {
-  createJob,
-  getAllJobPosts,
-  getJobPostById,
-  updateJobPost,
-  deleteJobPost,
 };

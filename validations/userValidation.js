@@ -1,4 +1,4 @@
-const joi = require("joi");
+import joi from "joi";
 
 const phoneNumberSchema = joi.object({
   country: joi.string()
@@ -190,4 +190,4 @@ const userValidation = joi.object({
     .optional()
 });
 
-module.exports = userValidation;
+export default userValidation;

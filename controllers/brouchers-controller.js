@@ -1,8 +1,8 @@
-const path = require("path");
-const Broucher = require("../models/broucker-model");
-const Course = require("../models/course-model");
-const nodemailer = require("nodemailer");
-const { validateObjectId } = require("../utils/validation-helpers");
+import path from "path";
+import Broucher from "../models/broucker-model.js";
+import Course from "../models/course-model.js";
+import nodemailer from "nodemailer";
+import { validateObjectId } from "../utils/validation-helpers.js";
 
 // Nodemailer Transporter Setup with AWS SES
 const transporter = nodemailer.createTransport({
@@ -562,7 +562,7 @@ const getBroucherAnalytics = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   createBrouchers,
   getAllBrouchers,
   getBroucherById,

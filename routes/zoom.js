@@ -1,6 +1,6 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const zoomService = require('../services/zoomService');
+import zoomService from '../services/zoomService.js';
 
 // Create a new Zoom meeting
 router.post('/meetings', async (req, res) => {
@@ -761,4 +761,4 @@ router.post('/users/student', async (req, res) => {
   }
 });
 
-module.exports = router; 
+export default router; 

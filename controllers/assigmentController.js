@@ -1,9 +1,9 @@
-const Assignment = require("../models/assignment");
-const Course = require("../models/course-model");
-const EnrolledCourse = require("../models/enrolled-courses-model");
-const CoorporateEnrolledModule = require("../models/coorporate-enrolled-modules.model");
-const { AppError } = require("../utils/errorHandler");
-const mongoose = require("mongoose");
+import Assignment from "../models/assignment.js";
+import Course from "../models/course-model.js";
+import EnrolledCourse from "../models/enrolled-courses-model.js";
+import CoorporateEnrolledModule from "../models/coorporate-enrolled-modules.model.js";
+import { AppError } from "../utils/errorHandler.js";
+import mongoose from "mongoose";
 
 // Response formatter
 const formatResponse = (data, message = "Success") => ({
@@ -19,7 +19,7 @@ const catchAsync = (fn) => {
   };
 };
 
-exports.getAllAssignments = catchAsync(async (req, res) => {
+export const getAllAssignments = catchAsync(async (req, res) => {
   const assignments = await Assignment.find()
     .populate("courseId", "course_title category")
     .populate("instructor_id", "full_name email")
@@ -29,7 +29,7 @@ exports.getAllAssignments = catchAsync(async (req, res) => {
   res.status(200).json(formatResponse(assignments));
 });
 
-exports.getAssignmentById = catchAsync(async (req, res) => {
+export const getAssignmentById = catchAsync(async (req, res) => {
   const { assignmentId } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(assignmentId)) {
@@ -49,7 +49,7 @@ exports.getAssignmentById = catchAsync(async (req, res) => {
   res.status(200).json(formatResponse(assignment));
 });
 
-exports.createAssignment = catchAsync(async (req, res) => {
+export const createAssignment = catchAsync(async (req, res) => {
   const {
     courseId,
     title,
@@ -89,7 +89,7 @@ exports.createAssignment = catchAsync(async (req, res) => {
   res.status(201).json(formatResponse(newAssignment, "Assignment created successfully"));
 });
 
-exports.updateAssignment = catchAsync(async (req, res) => {
+export const updateAssignment = catchAsync(async (req, res) => {
   const { assignmentId } = req.params;
   const updateData = req.body;
 
@@ -125,7 +125,7 @@ exports.updateAssignment = catchAsync(async (req, res) => {
   res.status(200).json(formatResponse(updatedAssignment, "Assignment updated successfully"));
 });
 
-exports.submitAssignment = catchAsync(async (req, res) => {
+export const submitAssignment = catchAsync(async (req, res) => {
   const { assignmentId, studentId, submissionFiles, submissionText, submissionLinks } = req.body;
 
   // Validate ObjectIds
@@ -195,7 +195,7 @@ exports.submitAssignment = catchAsync(async (req, res) => {
   );
 });
 
-exports.gradeSubmission = catchAsync(async (req, res) => {
+export const gradeSubmission = catchAsync(async (req, res) => {
   const { assignmentId, studentId, score, feedback } = req.body;
 
   // Validate ObjectIds
@@ -234,7 +234,7 @@ exports.gradeSubmission = catchAsync(async (req, res) => {
   res.status(200).json(formatResponse(null, "Submission graded successfully"));
 });
 
-exports.getCourseByAssignmentId = catchAsync(async (req, res) => {
+export const getCourseByAssignmentId = catchAsync(async (req, res) => {
   const { assignmentId } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(assignmentId)) {
@@ -254,7 +254,7 @@ exports.getCourseByAssignmentId = catchAsync(async (req, res) => {
   res.status(200).json(formatResponse(course));
 });
 
-exports.getSubmittedAssignments = catchAsync(async (req, res) => {
+export const getSubmittedAssignments = catchAsync(async (req, res) => {
   const { page = 1, limit = 5, filter, courseId, instructorId } = req.query;
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -317,7 +317,7 @@ exports.getSubmittedAssignments = catchAsync(async (req, res) => {
   );
 });
 
-exports.getSubmissionStatus = catchAsync(async (req, res) => {
+export const getSubmissionStatus = catchAsync(async (req, res) => {
   const { assignmentId } = req.params;
   const { studentId } = req.query;
 
@@ -359,7 +359,7 @@ exports.getSubmissionStatus = catchAsync(async (req, res) => {
   }));
 });
 
-exports.getSubmittedAssignmentsCountByInstructor = catchAsync(async (req, res) => {
+export const getSubmittedAssignmentsCountByInstructor = catchAsync(async (req, res) => {
   const { instructor_id } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(instructor_id)) {
@@ -390,7 +390,7 @@ exports.getSubmittedAssignmentsCountByInstructor = catchAsync(async (req, res) =
   );
 });
 
-exports.getAssignmentsForEnrolledCourses = catchAsync(async (req, res) => {
+export const getAssignmentsForEnrolledCourses = catchAsync(async (req, res) => {
   const { studentId } = req.params;
   const { status } = req.query;
 
@@ -450,7 +450,7 @@ exports.getAssignmentsForEnrolledCourses = catchAsync(async (req, res) => {
   res.status(200).json(formatResponse({ assignments: assignmentsWithStatus }));
 });
 
-exports.getAssignmentsForCoorporateEnrolledCourses = catchAsync(async (req, res) => {
+export const getAssignmentsForCoorporateEnrolledCourses = catchAsync(async (req, res) => {
   const { coorporateId } = req.params;
   const { status } = req.query;
 
@@ -508,7 +508,7 @@ exports.getAssignmentsForCoorporateEnrolledCourses = catchAsync(async (req, res)
   res.status(200).json(formatResponse({ assignments: filteredAssignments }));
 });
 
-exports.getAssignmentStatistics = catchAsync(async (req, res) => {
+export const getAssignmentStatistics = catchAsync(async (req, res) => {
   const { assignmentId } = req.params;
 
   if (!mongoose.Types.ObjectId.isValid(assignmentId)) {
@@ -556,7 +556,7 @@ exports.getAssignmentStatistics = catchAsync(async (req, res) => {
   }));
 });
 
-exports.deleteSubmissionFile = catchAsync(async (req, res) => {
+export const deleteSubmissionFile = catchAsync(async (req, res) => {
   const { assignmentId, studentId, fileUrl } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(assignmentId) || !mongoose.Types.ObjectId.isValid(studentId)) {

@@ -1,7 +1,7 @@
-const Student = require("../models/student-model");
+import Student from "../models/student-model.js";
 
 // Create a new student
-exports.createStudent = async (req, res) => {
+export const createStudent = async (req, res) => {
   try {
     const {
       full_name,
@@ -35,7 +35,7 @@ exports.createStudent = async (req, res) => {
 };
 
 // Get all students
-exports.getAllStudents = async (req, res) => {
+export const getAllStudents = async (req, res) => {
   try {
     const students = await Student.find();
     const activeStudents = await Student.countDocuments({
@@ -54,7 +54,7 @@ exports.getAllStudents = async (req, res) => {
 };
 
 // Get student by ID
-exports.getStudentById = async (req, res) => {
+export const getStudentById = async (req, res) => {
   try {
     const { id } = req.params;
     const student = await Student.findById(id);
@@ -70,7 +70,7 @@ exports.getStudentById = async (req, res) => {
 };
 
 // Update student by ID
-exports.updateStudent = async (req, res) => {
+export const updateStudent = async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -110,7 +110,7 @@ exports.updateStudent = async (req, res) => {
 };
 
 // Delete student by ID
-exports.deleteStudent = async (req, res) => {
+export const deleteStudent = async (req, res) => {
   try {
     const { id } = req.params;
     const deletedStudent = await Student.findByIdAndDelete(id);
@@ -124,7 +124,7 @@ exports.deleteStudent = async (req, res) => {
 };
 
 //Toggle student status by ID
-exports.toggleStudentStatus = async (req, res) => {
+export const toggleStudentStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const student = await Student.findById(id);

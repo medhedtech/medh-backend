@@ -1,6 +1,6 @@
-const User = require("../models/user-modal");
-const nodemailer = require("nodemailer");
-const bcrypt = require("bcryptjs");
+import User from "../models/user-modal.js";
+import nodemailer from "nodemailer";
+import bcrypt from "bcryptjs";
 
 // Set up the email transporter
 const transporter = nodemailer.createTransport({
@@ -12,7 +12,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // Create Instructor
-const createInstructor = async (req, res) => {
+export const createInstructor = async (req, res) => {
   const { full_name, email, phone_number, password, domain, meta } = req.body;
 
   if (!full_name || !email || !phone_number || !password) {
@@ -77,7 +77,7 @@ const createInstructor = async (req, res) => {
   }
 };
 
-const getAllInstructors = async (req, res) => {
+export const getAllInstructors = async (req, res) => {
   try {
     const instructors = await User.find({ role: "instructor" });
     res.status(200).json({ success: true, data: instructors });
@@ -86,7 +86,7 @@ const getAllInstructors = async (req, res) => {
   }
 };
 
-const getInstructorById = async (req, res) => {
+export const getInstructorById = async (req, res) => {
   try {
     const { id } = req.params;
     const instructor = await User.findOne({ _id: id, role: "instructor" });
@@ -101,7 +101,7 @@ const getInstructorById = async (req, res) => {
   }
 };
 
-const updateInstructor = async (req, res) => {
+export const updateInstructor = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -122,7 +122,7 @@ const updateInstructor = async (req, res) => {
   }
 };
 
-const deleteInstructor = async (req, res) => {
+export const deleteInstructor = async (req, res) => {
   try {
     const { id } = req.params;
     const deletedInstructor = await User.findOneAndDelete({
@@ -140,7 +140,7 @@ const deleteInstructor = async (req, res) => {
   }
 };
 
-const toggleInstructorStatus = async (req, res) => {
+export const toggleInstructorStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const instructor = await User.findOne({ _id: id, role: "instructor" });
@@ -161,13 +161,4 @@ const toggleInstructorStatus = async (req, res) => {
       .status(500)
       .json({ message: "Error toggling instructor status", error });
   }
-};
-
-module.exports = {
-  createInstructor,
-  getAllInstructors,
-  getInstructorById,
-  updateInstructor,
-  deleteInstructor,
-  toggleInstructorStatus,
 };

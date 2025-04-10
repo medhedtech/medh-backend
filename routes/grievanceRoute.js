@@ -1,18 +1,20 @@
-const express = require("express");
-const {
-  getAllGrievances,
+import express from "express";
+import {
   createGrievance,
+  getAllGrievances,
+  getGrievanceById,
   updateGrievance,
   deleteGrievance,
-  getGrievancesByStatus,
-} = require("../controllers/grievance-controller");
+  getGrievancesByUser
+} from "../controllers/grievance-controller.js";
 
 const router = express.Router();
 
-router.get("/", getAllGrievances);
 router.post("/", createGrievance);
-router.put("/:id", updateGrievance);
+router.get("/", getAllGrievances);
+router.get("/user/:userId", getGrievancesByUser);
+router.get("/:id", getGrievanceById);
+router.patch("/:id", updateGrievance);
 router.delete("/:id", deleteGrievance);
-router.get("/status/:status", getGrievancesByStatus);
 
-module.exports = router;
+export default router;

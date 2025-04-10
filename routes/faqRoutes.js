@@ -1,5 +1,5 @@
-const express = require("express");
-const {
+import express from "express";
+import {
   createFAQ,
   getAllFAQs,
   getFAQsByCategory,
@@ -7,7 +7,7 @@ const {
   updateFAQ,
   deleteFAQ,
   getAllCategories
-} = require("../controllers/faq-controller");
+} from "../controllers/faq-controller.js";
 
 const router = express.Router();
 
@@ -32,4 +32,4 @@ router.delete("/delete/:id", deleteFAQ);
 // Get FAQ by ID
 router.get("/:id", getFAQById);
 
-module.exports = router; 
+export default router; 

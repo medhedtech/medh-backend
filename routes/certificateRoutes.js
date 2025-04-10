@@ -1,5 +1,5 @@
-const express = require("express");
-const certificateController = require("../controllers/certificate-controller");
+import express from "express";
+import * as certificateController from "../controllers/certificate-controller.js";
 
 const router = express.Router();
 
@@ -11,4 +11,4 @@ router.get(
   certificateController.getCertificatesByStudentId
 );
 
-module.exports = router;
+export default router;

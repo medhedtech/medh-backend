@@ -1,10 +1,10 @@
-const Course = require('../models/course-model');
-const Lesson = require('../models/lesson-model');
-const Enrollment = require('../models/enrollment-model');
-const { v4: uuidv4 } = require('uuid');
-const mongoose = require('mongoose');
+import Course from '../models/course-model.js';
+import Lesson from '../models/lesson-model.js';
+import Enrollment from '../models/enrollment-model.js';
+import { v4 as uuidv4 } from 'uuid';
+import mongoose from 'mongoose';
 
-class CourseCreationService {
+export default class CourseCreationService {
   static async createCourseWithLessons(courseData) {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -438,6 +438,4 @@ class CourseCreationService {
     };
     return mimeTypes[type] || 'application/octet-stream';
   }
-}
-
-module.exports = CourseCreationService; 
+} 

@@ -1,6 +1,5 @@
-const express = require("express");
-const router = express.Router();
-const {
+import express from "express";
+import {
   createCurrency,
   getAllCurrencies,
   getCurrencyById,
@@ -9,8 +8,10 @@ const {
   toggleCurrencyStatus,
   getCurrencyByCountryCode,
   getAllCurrencyCountryCodes
-} = require("../controllers/currency-controller");
-const { authenticate } = require("../middleware/auth");
+} from "../controllers/currency-controller.js";
+import { authenticate } from "../middleware/auth.js";
+
+const router = express.Router();
 
 // Public routes
 router.get("/", getAllCurrencies);
@@ -25,4 +26,4 @@ router.put("/:id", updateCurrency);
 router.delete("/:id", deleteCurrency);
 router.patch("/:id/toggle-status", toggleCurrencyStatus);
 
-module.exports = router; 
+export default router; 

@@ -1,4 +1,4 @@
-const createError = require('http-errors');
+import createError from 'http-errors';
 
 const errorHandler = (err, req, res, next) => {
   // Log error for debugging
@@ -62,4 +62,4 @@ const errorHandler = (err, req, res, next) => {
   });
 };
 
-module.exports = errorHandler; 
+export default errorHandler; 

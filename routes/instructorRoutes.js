@@ -1,6 +1,6 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
-const instructorController = require("../controllers/instructor-controller");
+import * as instructorController from "../controllers/instructor-controller.js";
 
 router.post("/create", instructorController.createInstructor);
 router.get("/get", instructorController.getAllInstructors);
@@ -9,4 +9,4 @@ router.post("/update/:id", instructorController.updateInstructor);
 router.post("/toggle-status/:id", instructorController.toggleInstructorStatus);
 router.delete("/delete/:id", instructorController.deleteInstructor);
 
-module.exports = router;
+export default router;

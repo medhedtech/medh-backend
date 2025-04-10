@@ -1,8 +1,8 @@
-const User = require("../models/user-modal");
-const InstructorAssignment = require("../models/assign-instructor-model");
-const Course = require("../models/course-model");
+import User from "../models/user-modal.js";
+import InstructorAssignment from "../models/assign-instructor-model.js";
+import Course from "../models/course-model.js";
 
-const createOrUpdateInstructorAssignment = async (req, res) => {
+export const createOrUpdateInstructorAssignment = async (req, res) => {
   try {
     const { full_name, email, course_title, user_id } = req.body;
 
@@ -76,7 +76,7 @@ const createOrUpdateInstructorAssignment = async (req, res) => {
   }
 };
 
-const getAllInstructorAssignments = async (req, res) => {
+export const getAllInstructorAssignments = async (req, res) => {
   try {
     const assignments = await InstructorAssignment.find()
       .populate("user_id", "full_name email")
@@ -95,7 +95,7 @@ const getAllInstructorAssignments = async (req, res) => {
   }
 };
 
-const getInstructorAssignmentById = async (req, res) => {
+export const getInstructorAssignmentById = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -118,7 +118,7 @@ const getInstructorAssignmentById = async (req, res) => {
   }
 };
 
-const updateInstructorAssignment = async (req, res) => {
+export const updateInstructorAssignment = async (req, res) => {
   try {
     const { id } = req.params;
     const { full_name, email, course_title } = req.body;
@@ -158,7 +158,7 @@ const updateInstructorAssignment = async (req, res) => {
 };
 
 // Delete instructor assignment by ID
-const deleteInstructorAssignment = async (req, res) => {
+export const deleteInstructorAssignment = async (req, res) => {
   try {
     const { id } = req.params;
     const deletedAssignment = await InstructorAssignment.findByIdAndDelete(id);
@@ -172,7 +172,7 @@ const deleteInstructorAssignment = async (req, res) => {
   }
 };
 
-const getAssignedCoursesByInstructorId = async (req, res) => {
+export const getAssignedCoursesByInstructorId = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -193,13 +193,4 @@ const getAssignedCoursesByInstructorId = async (req, res) => {
     console.error("Error fetching assigned courses:", error);
     res.status(500).json({ message: "Error fetching assigned courses", error });
   }
-};
-
-module.exports = {
-  createOrUpdateInstructorAssignment,
-  getAssignedCoursesByInstructorId,
-  getAllInstructorAssignments,
-  getInstructorAssignmentById,
-  updateInstructorAssignment,
-  deleteInstructorAssignment,
 };

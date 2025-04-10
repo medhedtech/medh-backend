@@ -1,22 +1,22 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const { ENV_VARS } = require("./config/envVars");
-const fileUpload = require("express-fileupload");
-const cron = require("node-cron");
-const helmet = require('helmet');
-const compression = require('compression');
-const mongoSanitize = require('express-mongo-sanitize');
-const logger = require('./utils/logger');
-const mongoose = require('mongoose');
-const securityMiddleware = require('./middleware/security');
-const redirectionMiddleware = require('./middleware/redirection');
-const corsMiddleware = require('./config/cors');
-const path = require('path');
+import express from 'express';
+import bodyParser from 'body-parser';
+import fileUpload from 'express-fileupload';
+import cron from 'node-cron';
+import helmet from 'helmet';
+import compression from 'compression';
+import mongoSanitize from 'express-mongo-sanitize';
+import mongoose from 'mongoose';
+import path from 'path';
+import morgan from 'morgan';
 
-// Import routes
-const router = require("./routes");
-const connectDB = require("./config/db");
-const { statusUpdater } = require("./cronjob/inactive-meetings");
+import { ENV_VARS } from './config/envVars.js';
+import logger from './utils/logger.js';
+import securityMiddleware from './middleware/security.js';
+import redirectionMiddleware from './middleware/redirection.js';
+import corsMiddleware from './config/cors.js';
+import router from './routes/index.js';
+import connectDB from './config/db.js';
+import { statusUpdater } from './cronjob/inactive-meetings.js';
 
 const app = express();
 
@@ -25,6 +25,11 @@ app.use(corsMiddleware);
 
 // Apply security middleware but we'll modify it to not apply additional CORS headers
 securityMiddleware(app);
+
+// Use morgan for HTTP request logging in development
+if (ENV_VARS.NODE_ENV === 'development') {
+  app.use(morgan('dev'));
+}
 
 // Apply compression for better performance
 app.use(compression());
@@ -57,15 +62,6 @@ app.use('/api/v1/upload/base64', (req, res, next) => {
   }
   
   // Continue to next middleware
-  next();
-});
-
-// Request logging
-app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.url}`, {
-    ip: req.ip,
-    userAgent: req.get('user-agent')
-  });
   next();
 });
 
@@ -149,9 +145,9 @@ app.use((req, res) => {
   res.status(404).json({ message: "Invalid route" });
 });
 
-// Schedule the job to run every minute
+// Uncomment to enable cron job
 // cron.schedule("* * * * *", () => {
-//   console.log("Running scheduled job...");
+//   logger.info("Running scheduled job...");
 //   statusUpdater();
 // });
 
@@ -198,15 +194,6 @@ const gracefulShutdown = () => {
   }, 30000);
 };
 
+// Listen for termination signals
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
-process.on('uncaughtException', (err) => {
-  logger.error('Uncaught Exception:', err);
-  gracefulShutdown();
-});
-process.on('unhandledRejection', (err) => {
-  logger.error('Unhandled Rejection:', err);
-  gracefulShutdown();
-});
-
-module.exports = app;

@@ -1,5 +1,5 @@
-const express = require("express");
-const CoorporateAssignCourses = require("../controllers/coorporate-assign-courses");
+import express from "express";
+import * as CoorporateAssignCourses from "../controllers/coorporate-assign-courses.js";
 
 const router = express.Router();
 
@@ -35,4 +35,4 @@ router.get(
   CoorporateAssignCourses.watchCoorporateVideo
 );
 
-module.exports = router;
+export default router;

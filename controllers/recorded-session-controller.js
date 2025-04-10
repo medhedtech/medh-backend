@@ -1,11 +1,11 @@
-const EnrolledCourse = require("../models/enrolled-courses-model");
-const RecordedSession = require("../models/recorded-sessions-model");
-const Student = require("../models/student-model");
-const Course = require("../models/course-model");
-const Instructor = require("../models/instructor-model");
+import EnrolledCourse from "../models/enrolled-courses-model.js";
+import RecordedSession from "../models/recorded-sessions-model.js";
+import Student from "../models/student-model.js";
+import Course from "../models/course-model.js";
+import Instructor from "../models/instructor-model.js";
 
 // Get Recorded Sessions for a student based on enrolled courses
-exports.getRecordedSessionsByStudent = async (req, res) => {
+export const getRecordedSessionsByStudent = async (req, res) => {
   try {
     const { student_id } = req.params;
 
@@ -51,126 +51,129 @@ exports.getRecordedSessionsByStudent = async (req, res) => {
 };
 
 // Create a new recorded session (for Instructor/Admin)
-exports.createRecordedSession = async (req, res) => {
+export const createRecordedSession = async (req, res) => {
   try {
-    const {
-      instructor_id,
-      course_id,
-      session_title,
-      session_date,
-      session_link,
-    } = req.body;
-
-    // Validate that the instructor exists
-    const instructor = await Instructor.findById(instructor_id);
-    if (!instructor) {
-      return res.status(404).json({ message: "Instructor not found" });
-    }
-
-    // Validate that the course exists
-    const course = await Course.findById(course_id);
-    if (!course) {
-      return res.status(404).json({ message: "Course not found" });
-    }
-
-    // Create a new recorded session
-    const newRecordedSession = new RecordedSession({
-      instructor_id,
-      course_id,
-      session_title,
-      session_date,
-      session_link,
-    });
-
-    await newRecordedSession.save();
+    const recordedSession = await RecordedSession.create(req.body);
     res.status(201).json({
       message: "Recorded session created successfully",
-      newRecordedSession,
+      recordedSession
     });
   } catch (error) {
-    res.status(500).json({ message: "Error creating recorded session", error });
+    res.status(500).json({
+      message: "Error creating recorded session",
+      error: error.message
+    });
   }
 };
 
 // Get recorded session by ID (accessible to students if they are enrolled in the course)
-exports.getRecordedSessionById = async (req, res) => {
+export const getRecordedSessionById = async (req, res) => {
   try {
-    const { student_id, session_id } = req.params;
-
-    // Check if the student exists
-    const student = await Student.findById(student_id);
-    if (!student) {
-      return res.status(404).json({ message: "Student not found" });
-    }
-
-    // Check if the student is enrolled in the course related to the session
-    const session = await RecordedSession.findById(session_id).populate(
-      "course_id"
-    );
-    if (!session) {
-      return res.status(404).json({ message: "Recorded session not found" });
-    }
-
-    const enrolledCourse = await EnrolledCourse.findOne({
-      student_id,
-      course_id: session.course_id._id,
-    });
-
-    if (!enrolledCourse) {
-      return res.status(403).json({
-        message: "Student is not enrolled in the course for this session",
+    const recordedSession = await RecordedSession.findById(req.params.id)
+      .populate('course')
+      .populate('instructor');
+    
+    if (!recordedSession) {
+      return res.status(404).json({
+        message: "Recorded session not found"
       });
     }
-
-    res.status(200).json(session);
+    
+    res.status(200).json({
+      message: "Recorded session fetched successfully",
+      recordedSession
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching recorded session", error });
+    res.status(500).json({
+      message: "Error fetching recorded session",
+      error: error.message
+    });
   }
 };
 
 // Update recorded session by ID (for instructor/admin)
-exports.updateRecordedSession = async (req, res) => {
+export const updateRecordedSession = async (req, res) => {
   try {
-    const { session_id } = req.params;
-    const {
-      instructor_id,
-      course_id,
-      session_title,
-      session_date,
-      session_link,
-    } = req.body;
-
-    const updatedRecordedSession = await RecordedSession.findByIdAndUpdate(
-      session_id,
-      { instructor_id, course_id, session_title, session_date, session_link },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedRecordedSession) {
-      return res.status(404).json({ message: "Recorded session not found" });
+    const recordedSession = await RecordedSession.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    ).populate('course').populate('instructor');
+    
+    if (!recordedSession) {
+      return res.status(404).json({
+        message: "Recorded session not found"
+      });
     }
-
-    res.status(200).json(updatedRecordedSession);
+    
+    res.status(200).json({
+      message: "Recorded session updated successfully",
+      recordedSession
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error updating recorded session", error });
+    res.status(500).json({
+      message: "Error updating recorded session",
+      error: error.message
+    });
   }
 };
 
 // Delete recorded session by ID (for instructor/admin)
-exports.deleteRecordedSession = async (req, res) => {
+export const deleteRecordedSession = async (req, res) => {
   try {
-    const { session_id } = req.params;
-
-    const deletedRecordedSession = await RecordedSession.findByIdAndDelete(
-      session_id
-    );
-
-    if (!deletedRecordedSession) {
-      return res.status(404).json({ message: "Recorded session not found" });
+    const recordedSession = await RecordedSession.findByIdAndDelete(req.params.id);
+    
+    if (!recordedSession) {
+      return res.status(404).json({
+        message: "Recorded session not found"
+      });
     }
-
-    res.status(200).json({ message: "Recorded session deleted successfully" });
+    
+    res.status(200).json({
+      message: "Recorded session deleted successfully"
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error deleting recorded session", error });
+    res.status(500).json({
+      message: "Error deleting recorded session",
+      error: error.message
+    });
+  }
+};
+
+export const getRecordedSessionsByCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const recordedSessions = await RecordedSession.find({ course: courseId })
+      .populate('instructor')
+      .sort('-createdAt');
+    
+    res.status(200).json({
+      message: "Recorded sessions fetched successfully",
+      recordedSessions
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error fetching recorded sessions",
+      error: error.message
+    });
+  }
+};
+
+export const getRecordedSessionsByInstructor = async (req, res) => {
+  try {
+    const { instructorId } = req.params;
+    const recordedSessions = await RecordedSession.find({ instructor: instructorId })
+      .populate('course')
+      .sort('-createdAt');
+    
+    res.status(200).json({
+      message: "Recorded sessions fetched successfully",
+      recordedSessions
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error fetching recorded sessions",
+      error: error.message
+    });
   }
 };

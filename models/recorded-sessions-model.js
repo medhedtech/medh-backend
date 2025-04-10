@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const recordedSessionSchema = new mongoose.Schema(
   {
@@ -33,4 +33,4 @@ const RecordedSession = mongoose.model(
   recordedSessionSchema
 );
 
-module.exports = RecordedSession;
+export default RecordedSession;

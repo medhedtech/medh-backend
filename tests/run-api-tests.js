@@ -1,6 +1,10 @@
-const newman = require('newman');
-const path = require('path');
-const { spawn } = require('child_process');
+import newman from 'newman';
+import path from 'path';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Configuration
 const config = {

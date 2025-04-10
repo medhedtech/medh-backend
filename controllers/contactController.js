@@ -1,7 +1,7 @@
-const ContactForm = require("../models/contact-modal");
+import ContactForm from "../models/contact-modal.js";
 
 // Create a new form submission
-const createContact = async (req, res) => {
+export const createContact = async (req, res) => {
   try {
     const {
       full_name,
@@ -39,7 +39,7 @@ const createContact = async (req, res) => {
 };
 
 // Retrieve all form submissions
-const getAllContact = async (req, res) => {
+export const getAllContact = async (req, res) => {
   try {
     const forms = await ContactForm.find().sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: forms });
@@ -51,14 +51,14 @@ const getAllContact = async (req, res) => {
 };
 
 // Retrieve a single form submission by ID
-const getContactById = async (req, res) => {
+export const getContactById = async (req, res) => {
   try {
     const contact = await ContactForm.findById(req.params.id);
     if (!contact)
       return res
         .status(404)
         .json({ success: false, message: "Contact not found" });
-    res.status(200).json({ success: true, data: form });
+    res.status(200).json({ success: true, data: contact });
   } catch (err) {
     res
       .status(500)
@@ -67,7 +67,7 @@ const getContactById = async (req, res) => {
 };
 
 // Update a form submission by ID
-const updateContact = async (req, res) => {
+export const updateContact = async (req, res) => {
   try {
     const updatedContact = await ContactForm.findByIdAndUpdate(
       req.params.id,
@@ -78,7 +78,7 @@ const updateContact = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Contact not found" });
-    res.status(200).json({ success: true, data: updatedForm });
+    res.status(200).json({ success: true, data: updatedContact });
   } catch (err) {
     res
       .status(500)
@@ -87,7 +87,7 @@ const updateContact = async (req, res) => {
 };
 
 // Delete a form submission by ID
-const deleteContact = async (req, res) => {
+export const deleteContact = async (req, res) => {
   try {
     const deletedForm = await ContactForm.findByIdAndDelete(req.params.id);
     if (!deletedForm)
@@ -102,12 +102,4 @@ const deleteContact = async (req, res) => {
       .status(500)
       .json({ success: false, message: "Server error", error: err.message });
   }
-};
-
-module.exports = {
-  createContact,
-  getAllContact,
-  getContactById,
-  updateContact,
-  deleteContact,
 };

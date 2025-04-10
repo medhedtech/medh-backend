@@ -1,7 +1,8 @@
 // Script to list courses from the database
-require('dotenv').config();
-const mongoose = require('mongoose');
-const { ENV_VARS } = require('./config/envVars');
+import dotenv from 'dotenv';
+dotenv.config();
+import mongoose from 'mongoose';
+import { ENV_VARS } from './config/envVars.js';
 
 // Connect to MongoDB
 const connectDB = async () => {

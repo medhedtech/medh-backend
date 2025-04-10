@@ -1,11 +1,11 @@
-const express = require("express");
-const {
+import express from "express";
+import {
   createEnrollment,
   getAllEnrollments,
   getEnrollmentById,
   updateEnrollment,
   deleteEnrollment,
-} = require("../controllers/enrollFormController");
+} from "../controllers/enrollFormController.js";
 
 const router = express.Router();
 
@@ -15,4 +15,4 @@ router.get("/get/:id", getEnrollmentById);
 router.put("/update/:id", updateEnrollment);
 router.delete("/delete/:id", deleteEnrollment);
 
-module.exports = router;
+export default router;

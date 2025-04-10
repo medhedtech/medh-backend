@@ -1,7 +1,7 @@
-const PlacementForm = require("../models/placement-form-model");
+import PlacementForm from "../models/placement-form-model.js";
 
 // Get all placement form submissions
-exports.getAllPlacementForms = async (req, res) => {
+export const getAllPlacementForms = async (req, res) => {
   try {
     const placementForms = await PlacementForm.find();
     res.status(200).json(placementForms);
@@ -11,7 +11,7 @@ exports.getAllPlacementForms = async (req, res) => {
 };
 
 // Get a specific placement form by ID
-exports.getPlacementFormById = async (req, res) => {
+export const getPlacementFormById = async (req, res) => {
   try {
     const placementForm = await PlacementForm.findById(req.params.id);
     if (!placementForm) {
@@ -24,7 +24,7 @@ exports.getPlacementFormById = async (req, res) => {
 };
 
 // Create a new placement form submission
-exports.createPlacementForm = async (req, res) => {
+export const createPlacementForm = async (req, res) => {
   try {
     // Create new placement form from request body
     const newPlacementForm = new PlacementForm(req.body);
@@ -47,7 +47,7 @@ exports.createPlacementForm = async (req, res) => {
 };
 
 // Update a placement form by ID
-exports.updatePlacementForm = async (req, res) => {
+export const updatePlacementForm = async (req, res) => {
   try {
     const updatedForm = await PlacementForm.findByIdAndUpdate(
       req.params.id,
@@ -74,7 +74,7 @@ exports.updatePlacementForm = async (req, res) => {
 };
 
 // Delete a placement form by ID
-exports.deletePlacementForm = async (req, res) => {
+export const deletePlacementForm = async (req, res) => {
   try {
     const deletedForm = await PlacementForm.findByIdAndDelete(req.params.id);
     
@@ -96,7 +96,7 @@ exports.deletePlacementForm = async (req, res) => {
 };
 
 // Update application status
-exports.updateApplicationStatus = async (req, res) => {
+export const updateApplicationStatus = async (req, res) => {
   try {
     const { status, application_notes, interview_date, interviewer, interview_feedback } = req.body;
     
@@ -131,7 +131,7 @@ exports.updateApplicationStatus = async (req, res) => {
 };
 
 // Bulk update course fees
-exports.bulkUpdateCourseFees = async (req, res) => {
+export const bulkUpdateCourseFees = async (req, res) => {
   try {
     const { updates } = req.body;
     

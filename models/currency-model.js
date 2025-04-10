@@ -1,6 +1,7 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
+const { Schema } = mongoose;
 
-const currencySchema = new mongoose.Schema(
+const currencySchema = new Schema(
   {
     country: {
       type: String,
@@ -35,4 +36,4 @@ const currencySchema = new mongoose.Schema(
 
 const Currency = mongoose.model("Currency", currencySchema);
 
-module.exports = Currency; 
+export default Currency; 

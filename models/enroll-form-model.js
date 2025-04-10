@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const enrollFormSchema = new mongoose.Schema(
   {
@@ -28,4 +28,4 @@ const enrollFormSchema = new mongoose.Schema(
 );
 
 const EnrollForm = mongoose.model("EnrollForm", enrollFormSchema);
-module.exports = EnrollForm;
+export default EnrollForm;

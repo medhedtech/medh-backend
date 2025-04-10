@@ -1,6 +1,13 @@
-const winston = require('winston');
-const path = require('path');
-const fs = require('fs');
+import winston from 'winston';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { format } from 'winston';
+import util from 'util';
+
+// Get current file directory with ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(process.cwd(), 'logs');
@@ -9,13 +16,13 @@ if (!fs.existsSync(logsDir)) {
 }
 
 // Custom log format with proper timestamp formatting
-const logFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
-  winston.format.errors({ stack: true }),
-  winston.format.metadata({
+const logFormat = format.combine(
+  format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
+  format.errors({ stack: true }),
+  format.metadata({
     fillExcept: ['message', 'level', 'timestamp', 'label']
   }),
-  winston.format.json()
+  format.json()
 );
 
 // Create the logger instance
@@ -57,7 +64,7 @@ const logger = winston.createLogger({
 // Try to add daily rotate file if the dependency exists
 try {
   // Add DailyRotateFile transport conditionally
-  const DailyRotateFile = require('winston-daily-rotate-file');
+  const { default: DailyRotateFile } = await import('winston-daily-rotate-file');
   
   // Add daily rotate file transports if successfully imported
   logger.add(new DailyRotateFile({
@@ -86,20 +93,28 @@ try {
 // Add console transport in development mode
 if (process.env.NODE_ENV !== 'production') {
   logger.add(new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.printf(({ level, message, timestamp, metadata }) => {
-        const meta = metadata ? JSON.stringify(metadata) : '';
-        return `${timestamp} ${level}: ${message} ${meta !== '{}' ? meta : ''}`;
+    format: format.combine(
+      format.colorize(),
+      format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
+      format.printf(({ level, message, timestamp, metadata }) => {
+        let metaString = '';
+        const filteredMeta = { ...metadata };
+        delete filteredMeta.service;
+        delete filteredMeta.environment;
+        
+        if (filteredMeta && Object.keys(filteredMeta).length > 0) {
+          metaString = util.inspect(filteredMeta, { colors: true, depth: null });
+        }
+        return `${timestamp} ${level}: ${message}${metaString ? ' \n' + metaString : ''}`;
       })
     )
   }));
 } else {
   // Add console transport with minimal output in production
   logger.add(new winston.transports.Console({
-    format: winston.format.combine(
-      winston.format.colorize(),
-      winston.format.printf(({ level, message }) => {
+    format: format.combine(
+      format.colorize(),
+      format.printf(({ level, message }) => {
         return `${level}: ${message}`;
       })
     ),
@@ -189,4 +204,4 @@ logger.trackSession = (action, sessionData) => {
 };
 
 // Export the logger instance
-module.exports = logger; 
+export default logger; 

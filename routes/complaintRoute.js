@@ -1,5 +1,5 @@
-const express = require("express");
-const {
+import express from "express";
+import {
   getAllComplaints,
   createComplaint,
   updateComplaint,
@@ -10,7 +10,7 @@ const {
   createEmployeeComplaints,
   getAllEmployeeComplaints,
   getAllInstructorComplaints,
-} = require("../controllers/complaint-controller");
+} from "../controllers/complaint-controller.js";
 
 const router = express.Router();
 
@@ -25,4 +25,4 @@ router.delete("/delete/:id", deleteComplaint);
 router.get("/status/:status", getComplaintsByStatus);
 router.post("/change-status/:id", updateComplaintStatus);
 
-module.exports = router;
+export default router;

@@ -1,6 +1,7 @@
-const express = require("express");
+import express from "express";
+import * as broucherController from "../controllers/brouchers-controller.js";
+
 const router = express.Router();
-const broucherController = require("../controllers/brouchers-controller");
 
 // Create new brochure
 router.post("/create", broucherController.createBrouchers);
@@ -21,4 +22,4 @@ router.delete("/delete/:id", broucherController.deleteBroucher);
 router.post("/download/:courseId", broucherController.downloadBrochure);
 router.get("/download/:courseId", broucherController.downloadBrochure);
 
-module.exports = router;
+export default router;

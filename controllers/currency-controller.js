@@ -1,9 +1,9 @@
-const Currency = require("../models/currency-model");
-const catchAsync = require("../utils/catchAsync");
-const { AppError } = require("../utils/errorHandler");
+import Currency from "../models/currency-model.js";
+import catchAsync from "../utils/catchAsync.js";
+import { AppError } from "../utils/errorHandler.js";
 
 // Create a new currency
-exports.createCurrency = catchAsync(async (req, res, next) => {
+export const createCurrency = catchAsync(async (req, res, next) => {
   const { country, countryCode, valueWrtUSD, symbol } = req.body;
 
   const newCurrency = await Currency.create({
@@ -22,7 +22,7 @@ exports.createCurrency = catchAsync(async (req, res, next) => {
 });
 
 // Get all currencies
-exports.getAllCurrencies = catchAsync(async (req, res, next) => {
+export const getAllCurrencies = catchAsync(async (req, res, next) => {
   const currencies = await Currency.find();
 
   res.status(200).json({
@@ -35,7 +35,7 @@ exports.getAllCurrencies = catchAsync(async (req, res, next) => {
 });
 
 // Get all currency country codes
-exports.getAllCurrencyCountryCodes = catchAsync(async (req, res, next) => {
+export const getAllCurrencyCountryCodes = catchAsync(async (req, res, next) => {
   const currencies = await Currency.find().select('countryCode -_id');
 
   res.status(200).json({
@@ -48,7 +48,7 @@ exports.getAllCurrencyCountryCodes = catchAsync(async (req, res, next) => {
 });
 
 // Get currency by ID
-exports.getCurrencyById = catchAsync(async (req, res, next) => {
+export const getCurrencyById = catchAsync(async (req, res, next) => {
   const currency = await Currency.findById(req.params.id);
 
   if (!currency) {
@@ -64,7 +64,7 @@ exports.getCurrencyById = catchAsync(async (req, res, next) => {
 });
 
 // Update currency
-exports.updateCurrency = catchAsync(async (req, res, next) => {
+export const updateCurrency = catchAsync(async (req, res, next) => {
   const currency = await Currency.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true,
@@ -83,7 +83,7 @@ exports.updateCurrency = catchAsync(async (req, res, next) => {
 });
 
 // Delete currency
-exports.deleteCurrency = catchAsync(async (req, res, next) => {
+export const deleteCurrency = catchAsync(async (req, res, next) => {
   const currency = await Currency.findByIdAndDelete(req.params.id);
 
   if (!currency) {
@@ -97,7 +97,7 @@ exports.deleteCurrency = catchAsync(async (req, res, next) => {
 });
 
 // Toggle currency active status
-exports.toggleCurrencyStatus = catchAsync(async (req, res, next) => {
+export const toggleCurrencyStatus = catchAsync(async (req, res, next) => {
   const currency = await Currency.findById(req.params.id);
 
   if (!currency) {
@@ -116,7 +116,7 @@ exports.toggleCurrencyStatus = catchAsync(async (req, res, next) => {
 });
 
 // Get currency by country code
-exports.getCurrencyByCountryCode = catchAsync(async (req, res, next) => {
+export const getCurrencyByCountryCode = catchAsync(async (req, res, next) => {
   const currency = await Currency.findOne({ 
     countryCode: req.params.code.toUpperCase() 
   });

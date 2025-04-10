@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const assignmentResourceSchema = new mongoose.Schema({
   id: {
@@ -136,4 +136,4 @@ assignmentSchema.methods.calculatePenalty = function(submissionDate) {
 };
 
 const Assignment = mongoose.model("Assignment", assignmentSchema);
-module.exports = Assignment; 
+export default Assignment; 

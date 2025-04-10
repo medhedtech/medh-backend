@@ -1,15 +1,15 @@
-const EnrolledCourse = require("../models/enrolled-courses-model");
-const Subscription = require('../models/subscription-model');
-const Course = require("../models/course-model");
-const User = require("../models/user-modal");
-const EnrolledModule = require("../models/enrolled-modules.modal");
-const logger = require('../utils/logger');
-const { AppError } = require('../utils/errorHandler');
-const PDF = require('html-pdf-chrome');
-const chromeService = require('../utils/chromeService');
-const { uploadFile } = require('../utils/uploadFile');
-const { generateSubscriptionPdfContent } = require('../utils/htmlTemplate');
-const nodemailer = require("nodemailer");
+import EnrolledCourse from "../models/enrolled-courses-model.js";
+import Subscription from '../models/subscription-model.js';
+import Course from "../models/course-model.js";
+import User from "../models/user-modal.js";
+import EnrolledModule from "../models/enrolled-modules.modal.js";
+import logger from '../utils/logger.js';
+import { AppError } from '../utils/errorHandler.js';
+import PDF from 'html-pdf-chrome';
+import { chromeService} from '../utils/chromeService.js';
+import { uploadFile } from '../utils/uploadFile.js';
+import { generatePdfContentForSubscription } from '../utils/htmlTemplate.js';
+import nodemailer from "nodemailer";
 
 const pdfOptions = {
   port: 9222, // Chrome debug port
@@ -43,7 +43,7 @@ const generateAndUploadReceipt = async (data, type) => {
     // Generate appropriate HTML content based on receipt type
     let htmlContent;
     if (type === 'subscription') {
-      htmlContent = generateSubscriptionPdfContent({
+      htmlContent = generatePdfContentForSubscription({
         subscription_id: data._id,
         plan_name: data.plan_name,
         amount: data.amount,
@@ -55,7 +55,7 @@ const generateAndUploadReceipt = async (data, type) => {
         customer_email: data.user_email || ''
       });
     } else if (type === 'course') {
-      htmlContent = generateSubscriptionPdfContent({
+      htmlContent = generatePdfContentForSubscription({
         subscription_id: data._id,
         plan_name: data.course_name || 'Course Enrollment',
         amount: data.payment_details?.amount || 0,
@@ -144,7 +144,7 @@ const sendReceiptEmail = async (email, receiptUrl, paymentDetails, type) => {
 };
 
 // Combined function to process payment and create either enrollment or subscription
-const processPaymentAndEnroll = async (req, res) => {
+export const processPaymentAndEnroll = async (req, res) => {
   try {
     const { 
       student_id, 
@@ -333,7 +333,7 @@ const processPaymentAndEnroll = async (req, res) => {
 };
 
 // Get all payments for a student
-const getStudentPayments = async (req, res) => {
+export const getStudentPayments = async (req, res) => {
   try {
     const { student_id } = req.params;
     const { page = 1, limit = 10 } = req.query;
@@ -578,7 +578,7 @@ const getStudentPayments = async (req, res) => {
 };
 
 // Get a specific payment by ID and type
-const getPaymentById = async (req, res) => {
+export const getPaymentById = async (req, res) => {
   try {
     const { payment_type, payment_id } = req.params;
     
@@ -621,7 +621,7 @@ const getPaymentById = async (req, res) => {
 };
 
 // Get payment statistics (admin only)
-const getPaymentStats = async (req, res) => {
+export const getPaymentStats = async (req, res) => {
   try {
     const [
       totalEnrollments,
@@ -767,7 +767,7 @@ const getPaymentStats = async (req, res) => {
 };
 
 // Generate receipt for existing payment
-const generateReceiptForExistingPayment = async (req, res) => {
+export const generateReceiptForExistingPayment = async (req, res) => {
   try {
     const { payment_type, payment_id } = req.params;
     
@@ -830,7 +830,7 @@ const generateReceiptForExistingPayment = async (req, res) => {
 };
 
 // Resend receipt email
-const resendReceiptEmail = async (req, res) => {
+export const resendReceiptEmail = async (req, res) => {
   try {
     const { payment_type, payment_id } = req.params;
     
@@ -904,7 +904,7 @@ const resendReceiptEmail = async (req, res) => {
 };
 
 // Get all receipts for a student
-const getStudentReceipts = async (req, res) => {
+export const getStudentReceipts = async (req, res) => {
   try {
     const { student_id } = req.params;
     
@@ -950,14 +950,4 @@ const getStudentReceipts = async (req, res) => {
       error: error.message
     });
   }
-};
-
-module.exports = {
-  processPaymentAndEnroll,
-  getStudentPayments,
-  getPaymentById,
-  getPaymentStats,
-  generateReceiptForExistingPayment,
-  resendReceiptEmail,
-  getStudentReceipts
 }; 

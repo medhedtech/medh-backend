@@ -1,11 +1,11 @@
-const Certificate = require("../models/cetificates-model");
-const EnrolledCourse = require("../models/enrolled-courses-model");
-const Course = require("../models/course-model");
-const { generatePdfContentForCertificate } = require("../utils/htmlTemplate");
-const { uploadFile } = require("../utils/uploadFile");
-const PDF = require('html-pdf-chrome');
-const logger = require('../utils/logger');
-const chromeService = require('../utils/chromeService');
+import Certificate from "../models/cetificates-model.js";
+import EnrolledCourse from "../models/enrolled-courses-model.js";
+import Course from "../models/course-model.js";
+import { generatePdfContentForCertificate } from "../utils/htmlTemplate.js";
+import { uploadFile } from "../utils/uploadFile.js";
+import PDF from 'html-pdf-chrome';
+import logger from '../utils/logger.js';
+import { chromeService } from '../utils/chromeService.js';
 
 const pdfOptions = {
   port: 9222, // Chrome debug port
@@ -22,7 +22,7 @@ const pdfOptions = {
   }
 };
 
-exports.getAllCertificates = async (req, res) => {
+export const getAllCertificates = async (req, res) => {
   try {
     const certificates = await EnrolledCourse.find({
       is_completed: true,
@@ -53,7 +53,7 @@ exports.getAllCertificates = async (req, res) => {
   }
 };
 
-exports.createCertificate = async (req, res) => {
+export const createCertificate = async (req, res) => {
   const { student_id, course_id, completion_date, student_name, course_name } = req.body;
 
   try {
@@ -159,7 +159,7 @@ exports.createCertificate = async (req, res) => {
   }
 };
 
-exports.getCertificatesByStudentId = async (req, res) => {
+export const getCertificatesByStudentId = async (req, res) => {
   const { student_id } = req.params;
 
   try {

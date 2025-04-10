@@ -1,6 +1,7 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
+const { Schema } = mongoose;
 
-const bookmarkSchema = new mongoose.Schema({
+const bookmarkSchema = new Schema({
   course: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Course",
@@ -69,4 +70,4 @@ bookmarkSchema.statics.getBookmarksByTags = async function(courseId, studentId, 
 };
 
 const Bookmark = mongoose.model("Bookmark", bookmarkSchema);
-module.exports = Bookmark; 
+export default Bookmark; 

@@ -1,6 +1,7 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
+const { Schema } = mongoose;
 
-const lessonProgressSchema = new mongoose.Schema({
+const lessonProgressSchema = new Schema({
   lessonId: {
     type: String,
     required: [true, 'Lesson ID is required']
@@ -34,7 +35,7 @@ const lessonProgressSchema = new mongoose.Schema({
   }]
 });
 
-const quizProgressSchema = new mongoose.Schema({
+const quizProgressSchema = new Schema({
   quizId: {
     type: String,
     required: [true, 'Quiz ID is required']
@@ -73,7 +74,7 @@ const quizProgressSchema = new mongoose.Schema({
   }
 });
 
-const assignmentProgressSchema = new mongoose.Schema({
+const assignmentProgressSchema = new Schema({
   assignmentId: {
     type: String,
     required: [true, 'Assignment ID is required']
@@ -122,7 +123,7 @@ const assignmentProgressSchema = new mongoose.Schema({
   }
 });
 
-const progressSchema = new mongoose.Schema({
+const progressSchema = new Schema({
   course: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Course',
@@ -256,29 +257,53 @@ progressSchema.methods.updateAssignmentProgress = async function(assignmentId, s
 
 // Method to calculate overall progress
 progressSchema.methods.calculateOverallProgress = async function() {
-  const course = await mongoose.model('Course').findById(this.course);
-  const totalLessons = course.curriculum.reduce((sum, week) => 
-    sum + week.sections.reduce((weekSum, section) => 
-      weekSum + section.lessons.length, 0), 0);
+  const totalLessons = this.course.lessons.length;
+  const totalQuizzes = this.course.quizzes.length;
+  const totalAssignments = this.course.assignments.length;
   
   const completedLessons = this.lessonProgress.filter(p => p.status === 'completed').length;
   const completedQuizzes = this.quizProgress.filter(p => p.status === 'completed').length;
   const completedAssignments = this.assignmentProgress.filter(p => p.status === 'graded').length;
   
+  // Calculate weighted progress
+  const lessonWeight = 0.5;
+  const quizWeight = 0.3;
+  const assignmentWeight = 0.2;
+  
+  const lessonProgress = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
+  const quizProgress = totalQuizzes > 0 ? (completedQuizzes / totalQuizzes) * 100 : 0;
+  const assignmentProgress = totalAssignments > 0 ? (completedAssignments / totalAssignments) * 100 : 0;
+  
+  this.overallProgress = Math.round(
+    (lessonProgress * lessonWeight) +
+    (quizProgress * quizWeight) +
+    (assignmentProgress * assignmentWeight)
+  );
+  
+  // Update meta information
   this.meta.completedLessons = completedLessons;
   this.meta.completedQuizzes = completedQuizzes;
   this.meta.completedAssignments = completedAssignments;
   
-  // Calculate overall progress as weighted average
-  const lessonWeight = 0.6;
-  const quizWeight = 0.2;
-  const assignmentWeight = 0.2;
+  // Calculate average scores
+  const quizScores = this.quizProgress
+    .filter(p => p.attempts.length > 0)
+    .map(p => p.bestScore);
   
-  this.overallProgress = Math.round(
-    (completedLessons / totalLessons) * lessonWeight * 100 +
-    (completedQuizzes / course.quizzes.length) * quizWeight * 100 +
-    (completedAssignments / course.assignments.length) * assignmentWeight * 100
-  );
+  const assignmentScores = this.assignmentProgress
+    .filter(p => p.submissions.some(s => s.score))
+    .map(p => p.bestScore);
+  
+  this.meta.averageQuizScore = quizScores.length > 0
+    ? quizScores.reduce((sum, score) => sum + score, 0) / quizScores.length
+    : 0;
+  
+  this.meta.averageAssignmentScore = assignmentScores.length > 0
+    ? assignmentScores.reduce((sum, score) => sum + score, 0) / assignmentScores.length
+    : 0;
+  
+  // Calculate total time spent
+  this.meta.totalTimeSpent = this.lessonProgress.reduce((total, p) => total + p.timeSpent, 0);
 };
 
 // Static method to get progress by course and student
@@ -290,4 +315,4 @@ progressSchema.statics.getProgress = async function(courseId, studentId) {
 };
 
 const Progress = mongoose.model("Progress", progressSchema);
-module.exports = Progress; 
+export default Progress; 

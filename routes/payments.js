@@ -1,9 +1,9 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const paymentController = require('../controllers/paymentController');
-const authMiddleware = require('../middleware/auth');
-const { body } = require('express-validator');
-const { validateRequest } = require('../middleware/validation');
+import * as paymentController from '../controllers/paymentController.js';
+import authMiddleware from '../middleware/auth.js';
+import { body } from 'express-validator';
+import { validateRequest } from '../middleware/validation.js';
 
 // @route   GET /api/v1/payments/key
 // @desc    Get Razorpay API key
@@ -50,4 +50,4 @@ router.get('/orders', authMiddleware, paymentController.getUserOrders);
 // @access  Private
 router.get('/:paymentId', authMiddleware, paymentController.getPaymentDetails);
 
-module.exports = router; 
+export default router; 

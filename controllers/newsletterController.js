@@ -1,7 +1,7 @@
-const NewsletterModel = require("../models/newsletter-model");
+import NewsletterModel from "../models/newsletter-model.js";
 
 // Add a new subscriber to the newsletter
-const addNewsletter = async (req, res) => {
+export const addNewsletter = async (req, res) => {
   try {
     const { email } = req.body;
     const newSubscriber = new NewsletterModel({ email });
@@ -23,7 +23,7 @@ const addNewsletter = async (req, res) => {
 };
 
 // Get all newsletter subscribers
-const getAllSubscribers = async (req, res) => {
+export const getAllSubscribers = async (req, res) => {
   try {
     const subscribers = await NewsletterModel.find();
     res.status(200).json({
@@ -41,7 +41,7 @@ const getAllSubscribers = async (req, res) => {
 };
 
 // Delete a subscriber by ID
-const deleteSubscriber = async (req, res) => {
+export const deleteSubscriber = async (req, res) => {
   try {
     const deletedSubscriber = await NewsletterModel.findByIdAndDelete(
       req.params.id
@@ -63,10 +63,4 @@ const deleteSubscriber = async (req, res) => {
       error: err.message,
     });
   }
-};
-
-module.exports = {
-  addNewsletter,
-  getAllSubscribers,
-  deleteSubscriber,
 };

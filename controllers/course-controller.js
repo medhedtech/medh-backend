@@ -1,14 +1,14 @@
-const { default: mongoose } = require("mongoose");
-const Course = require("../models/course-model");
-const EnrolledCourse = require("../models/enrolled-courses-model");
-const { validateObjectId } = require("../utils/validation-helpers");
-const Progress = require("../models/progress-model");
-const Note = require("../models/note-model");
-const Bookmark = require("../models/bookmark-model");
-const Enrollment = require("../models/enrollment-model");
-const CourseCreationService = require("../services/courseCreationService");
-const { handleUploadError } = require("../middleware/upload");
-const axios = require("axios");
+import mongoose from "mongoose";
+import Course from "../models/course-model.js";
+import EnrolledCourse from "../models/enrolled-courses-model.js";
+import { validateObjectId } from "../utils/validation-helpers.js";
+import Progress from "../models/progress-model.js";
+import Note from "../models/note-model.js";
+import Bookmark from "../models/bookmark-model.js";
+import Enrollment from "../models/enrollment-model.js";
+import CourseCreationService from "../services/courseCreationService.js";
+import { handleUploadError } from "../middleware/upload.js";
+import axios from "axios";
 
 /* ------------------------------ */
 /* Helper Functions               */
@@ -2686,15 +2686,21 @@ const getCoursesWithFields = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   createCourse,
   getAllCourses,
   getCourseById,
+  getCoorporateCourseById,
   updateCourse,
   deleteCourse,
   getCourseTitles,
   getAllCoursesWithLimits,
   toggleCourseStatus,
+  updateRecordedVideos,
+  getRecordedVideosForUser,
+  getAllRelatedCourses,
+  getNewCoursesWithLimits,
+  downloadBrochure,
   getCourseSections,
   getCourseLessons,
   getLessonDetails,
@@ -2712,19 +2718,11 @@ module.exports = {
   handleUpload,
   handleMultipleUpload,
   getLessonNotes,
-  getLessonBookmarks,
   updateNote,
-  updateBookmark,
   deleteNote,
+  getLessonBookmarks,
+  updateBookmark,
   deleteBookmark,
-  getCoorporateCourseById,
-  updateRecordedVideos,
-  getRecordedVideosForUser,
-  getAllRelatedCourses,
-  getNewCoursesWithLimits,
-  downloadBrochure,
-  getCourseLiveClasses,
-  markLiveClassAttended,
   getCoursePrices,
   updateCoursePrices,
   bulkUpdateCoursePrices,

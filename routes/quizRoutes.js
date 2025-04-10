@@ -1,10 +1,10 @@
-const express = require("express");
-const {
+import express from "express";
+import {
   getAllQuizzes,
   createQuiz,
   uploadQuiz,
   getQuizById,
-} = require("../controllers/quizController");
+} from "../controllers/quizController.js";
 
 const router = express.Router();
 
@@ -12,4 +12,5 @@ router.get("/", getAllQuizzes);
 router.get("/get/:id", getQuizById);
 router.post("/", createQuiz);
 router.post("/upload", uploadQuiz);
-module.exports = router;
+
+export default router;

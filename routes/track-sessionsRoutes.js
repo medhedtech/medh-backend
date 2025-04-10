@@ -1,5 +1,5 @@
-const express = require("express");
-const TrackInstructorController = require("../controllers/track-instructor-controller");
+import express from "express";
+import * as TrackInstructorController from "../controllers/track-instructor-controller.js";
 
 const router = express.Router();
 
@@ -8,4 +8,4 @@ router.get(
   TrackInstructorController.getInstructorCoursesAndClasses
 );
 
-module.exports = router;
+export default router;

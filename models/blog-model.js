@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const blogSchema = new mongoose.Schema(
   {
@@ -258,4 +258,4 @@ blogSchema.statics.getByTag = function(tag, limit = 10) {
 };
 
 const BlogsModel = mongoose.model("blogs", blogSchema);
-module.exports = BlogsModel;
+export default BlogsModel;

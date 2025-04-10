@@ -1,5 +1,5 @@
-const express = require("express");
-const onlineMeetingController = require("../controllers/online-meeting");
+import express from "express";
+import * as onlineMeetingController from "../controllers/online-meeting.js";
 
 const router = express.Router();
 
@@ -23,6 +23,6 @@ router.get(
 router.get(
   "/all-employee-meetings",
   onlineMeetingController.getAllMeetingsForCorporateStudents
-  );
+);
 
-module.exports = router;
+export default router;

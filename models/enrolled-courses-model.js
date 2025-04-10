@@ -1,5 +1,5 @@
-const mongoose = require("mongoose");
-const mongoosePaginate = require('mongoose-paginate-v2');
+import mongoose from "mongoose";
+import mongoosePaginate from 'mongoose-paginate-v2';
 
 // Sub-schemas for better organization
 const paymentDetailsSchema = new mongoose.Schema({
@@ -418,4 +418,4 @@ enrolledCourseSchema.plugin(mongoosePaginate);
 
 const EnrolledCourse = mongoose.model("EnrolledCourse", enrolledCourseSchema);
 
-module.exports = EnrolledCourse;
+export default EnrolledCourse;

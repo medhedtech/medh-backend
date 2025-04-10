@@ -1,4 +1,6 @@
-class AppError extends Error {
+import logger from './logger.js';
+
+export class AppError extends Error {
   constructor(message, statusCode) {
     super(message);
     this.statusCode = statusCode;
@@ -9,37 +11,49 @@ class AppError extends Error {
   }
 }
 
-const handleError = (err, req, res, next) => {
+export const errorHandler = (err, req, res, next) => {
   err.statusCode = err.statusCode || 500;
   err.status = err.status || 'error';
 
-  // Development error response
   if (process.env.NODE_ENV === 'development') {
-    return res.status(err.statusCode).json({
+    logger.error('Error details:', {
+      error: err,
+      stack: err.stack,
+      path: req.path,
+      method: req.method,
+      body: req.body,
+      query: req.query,
+      params: req.params,
+      user: req.user ? req.user.id : 'anonymous'
+    });
+
+    res.status(err.statusCode).json({
       status: err.status,
       error: err,
       message: err.message,
       stack: err.stack
     });
+  } else {
+    // Production error response
+    if (err.isOperational) {
+      res.status(err.statusCode).json({
+        status: err.status,
+        message: err.message
+      });
+    } else {
+      // Programming or unknown errors
+      logger.error('Unexpected error:', {
+        error: err,
+        stack: err.stack,
+        path: req.path,
+        method: req.method,
+        user: req.user ? req.user.id : 'anonymous'
+      });
+
+      res.status(500).json({
+        status: 'error',
+        message: 'Something went wrong'
+      });
+    }
   }
-
-  // Production error response
-  if (err.isOperational) {
-    return res.status(err.statusCode).json({
-      status: err.status,
-      message: err.message
-    });
-  }
-
-  // Programming or unknown errors: don't leak error details
-  console.error('ERROR 💥', err);
-  return res.status(500).json({
-    status: 'error',
-    message: 'Something went wrong'
-  });
-};
-
-module.exports = {
-  AppError,
-  handleError
 }; 
