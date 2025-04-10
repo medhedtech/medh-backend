@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const placementSchema = new mongoose.Schema(
   {
@@ -19,4 +19,4 @@ const placementSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model("Placement", placementSchema);
+export default mongoose.model("Placement", placementSchema);

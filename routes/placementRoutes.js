@@ -1,12 +1,12 @@
-const express = require("express");
-const {
+import express from "express";
+import {
   getAllPlacements,
   addPlacement,
-} = require("../controllers/placementController");
+} from "../controllers/placementController.js";
 
 const router = express.Router();
 
 router.get("/getAll", getAllPlacements);
 router.post("/create", addPlacement);
 
-module.exports = router;
+export default router;

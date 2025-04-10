@@ -1,5 +1,8 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/user-modal');
+import jwt from 'jsonwebtoken';
+import { ENV_VARS } from '../config/envVars.js';
+import { AppError } from '../utils/errorHandler.js';
+import User from '../models/user-modal.js';
+import logger from '../utils/logger.js';
 
 /**
  * Middleware to authenticate user requests
@@ -21,16 +24,15 @@ const authenticateUser = (req, res, next) => {
       });
     }
 
-    console.log('Token received:', token);
-    console.log('JWT Secret Key:', process.env.JWT_SECRET_KEY);
+    logger.debug('Token received:', token);
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
-      console.log('Decoded token:', decoded);
+      const decoded = jwt.verify(token, ENV_VARS.JWT_SECRET_KEY);
+      logger.debug('Decoded token:', decoded);
       req.user = decoded;
       next();
     } catch (jwtError) {
-      console.error('JWT Verification Error:', jwtError);
+      logger.error('JWT Verification Error:', jwtError);
       res.status(401).json({
         success: false,
         message: 'Invalid token',
@@ -42,7 +44,7 @@ const authenticateUser = (req, res, next) => {
       });
     }
   } catch (err) {
-    console.error('General auth error:', err);
+    logger.error('General auth error:', err);
     res.status(401).json({
       success: false,
       message: 'Authentication error',
@@ -115,8 +117,68 @@ const verifyStudentOwnership = async (req, res, next) => {
   }
 };
 
-module.exports = {
-  authenticate: authenticateUser,
+// Verify JWT token
+export const verifyToken = async (req, res, next) => {
+  try {
+    // Get token from header
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    if (!token) {
+      return next(new AppError('No token provided', 401));
+    }
+    
+    // Verify token
+    const decoded = jwt.verify(token, ENV_VARS.JWT_SECRET_KEY);
+    
+    // Get user from database
+    const user = await User.findById(decoded.id).select('-password');
+    
+    if (!user) {
+      return next(new AppError('User not found', 401));
+    }
+    
+    // Add user to request
+    req.user = user;
+    
+    next();
+  } catch (error) {
+    logger.error('Auth error:', error);
+    return next(new AppError('Invalid token', 401));
+  }
+};
+
+// Check if user is admin
+export const isAdmin = (req, res, next) => {
+  if (req.user && req.user.role === 'admin') {
+    next();
+  } else {
+    next(new AppError('Access denied. Admin only.', 403));
+  }
+};
+
+// Check if user is instructor
+export const isInstructor = (req, res, next) => {
+  if (req.user && (req.user.role === 'instructor' || req.user.role === 'admin')) {
+    next();
+  } else {
+    next(new AppError('Access denied. Instructor only.', 403));
+  }
+};
+
+// Check if user is student
+export const isStudent = (req, res, next) => {
+  if (req.user && (req.user.role === 'student' || req.user.role === 'admin')) {
+    next();
+  } else {
+    next(new AppError('Access denied. Student only.', 403));
+  }
+};
+
+export {
+  authenticateUser as authenticate,
   authorize,
   verifyStudentOwnership
-}; 
+};
+
+// Default export for use with authMiddleware reference in routes
+export default authenticateUser; 

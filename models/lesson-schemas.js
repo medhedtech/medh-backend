@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from 'mongoose';
 const { Schema } = mongoose;
 
 // Base lesson options
@@ -103,7 +103,7 @@ const assessmentLessonSchema = new Schema({
   }
 }, lessonOptions);
 
-module.exports = {
+export {
   baseLessonSchema,
   videoLessonSchema,
   quizLessonSchema,

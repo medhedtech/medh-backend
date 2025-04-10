@@ -1,5 +1,5 @@
-const axios = require('axios');
-const colors = require('colors');
+import axios from 'axios';
+import colors from 'colors';
 
 const BASE_URL = 'http://localhost:8080/api/v1';
 let authToken = '';

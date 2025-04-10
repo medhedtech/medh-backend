@@ -1,7 +1,8 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
+const { Schema } = mongoose;
 
 // Sub-schemas for better organization
-const paymentDetailsSchema = new mongoose.Schema({
+const paymentDetailsSchema = new Schema({
   amount: {
     type: Number,
     required: [true, "Payment amount is required"],
@@ -32,7 +33,7 @@ const paymentDetailsSchema = new mongoose.Schema({
   }
 });
 
-const progressSchema = new mongoose.Schema({
+const progressSchema = new Schema({
   overall: {
     type: Number,
     default: 0,
@@ -62,7 +63,7 @@ const progressSchema = new mongoose.Schema({
   }
 });
 
-const certificateSchema = new mongoose.Schema({
+const certificateSchema = new Schema({
   issued: {
     type: Boolean,
     default: false
@@ -87,7 +88,7 @@ const certificateSchema = new mongoose.Schema({
   }
 });
 
-const enrollmentSchema = new mongoose.Schema({
+const enrollmentSchema = new Schema({
   course: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Course",
@@ -350,4 +351,4 @@ enrollmentSchema.statics.getEnrollmentStats = async function(courseId) {
 };
 
 const Enrollment = mongoose.model("Enrollment", enrollmentSchema);
-module.exports = Enrollment; 
+export default Enrollment; 

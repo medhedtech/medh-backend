@@ -1,6 +1,6 @@
-const mongoose = require("mongoose");
-const { ENV_VARS } = require("../config/envVars");
-const logger = require("../utils/logger");
+import mongoose from "mongoose";
+import { ENV_VARS } from "./envVars.js";
+import logger from "../utils/logger.js";
 
 // Set mongoose options
 mongoose.set('strictQuery', false);
@@ -8,7 +8,7 @@ mongoose.set('strictQuery', false);
 // MongoDB connection with retries
 const connectDB = async (retryCount = 0, maxRetries = 5) => {
   try {
-    if (!ENV_VARS.MONGO_URI) {
+    if (!ENV_VARS.MONGODB_URI) {
       throw new Error('MongoDB connection URI is not defined in environment variables');
     }
 
@@ -28,17 +28,23 @@ const connectDB = async (retryCount = 0, maxRetries = 5) => {
     };
 
     // Connect to MongoDB
-    await mongoose.connect(ENV_VARS.MONGO_URI, options);
+    const conn = await mongoose.connect(ENV_VARS.MONGODB_URI, options);
     
-    logger.info("MongoDB connected successfully");
+    logger.info(`MongoDB Connected: ${conn.connection.host}`);
+
+    // Set up mongoose debug mode conditionally based on environment variable
+    if (ENV_VARS.NODE_ENV === 'development' && process.env.MONGOOSE_DEBUG === 'true') {
+      mongoose.set('debug', true);
+      logger.info('Mongoose debugging enabled.');
+    }
 
     // Connection Event Listeners
-    mongoose.connection.on("connected", () => logger.info("Mongoose connected"));
-    mongoose.connection.on("error", (err) => logger.error("Mongoose connection error:", err));
-    mongoose.connection.on("disconnected", () => logger.warn("Mongoose disconnected"));
-    mongoose.connection.on("reconnected", () => logger.info("Mongoose reconnected"));
+    conn.connection.on("connected", () => logger.info("Mongoose connected"));
+    conn.connection.on("error", (err) => logger.error("Mongoose connection error:", err));
+    conn.connection.on("disconnected", () => logger.warn("Mongoose disconnected"));
+    conn.connection.on("reconnected", () => logger.info("Mongoose reconnected"));
 
-    return true;
+    return conn;
   } catch (err) {
     logger.error(`MongoDB connection error: ${err.message}`);
     
@@ -56,7 +62,7 @@ const connectDB = async (retryCount = 0, maxRetries = 5) => {
       logger.error(`Failed to connect to MongoDB after ${maxRetries} attempts`);
       // Don't exit the process - let the app continue running even without DB
       // This allows API endpoints that don't require DB to still function
-      return false;
+      throw err;
     }
   }
 };
@@ -70,4 +76,4 @@ process.on("SIGINT", async () => {
   process.exit(0);
 });
 
-module.exports = connectDB;
+export default connectDB;

@@ -1,4 +1,4 @@
-const logger = require('../utils/logger');
+import logger from '../utils/logger.js';
 
 class ErrorTracker {
   constructor() {
@@ -160,4 +160,4 @@ setInterval(() => {
   errorTracker.clearOldErrors();
 }, 24 * 60 * 60 * 1000);
 
-module.exports = errorTracker; 
+export default errorTracker; 

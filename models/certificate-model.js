@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const certificateSchema = new mongoose.Schema({
   id: {
@@ -151,4 +151,4 @@ certificateSchema.statics.verifyCertificate = async function(certificateNumber) 
 };
 
 const Certificate = mongoose.model("Certificate", certificateSchema);
-module.exports = Certificate; 
+export default Certificate; 

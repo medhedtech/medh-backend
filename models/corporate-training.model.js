@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const corporateFormSchema = new mongoose.Schema(
   {
@@ -22,4 +22,4 @@ const corporateFormSchema = new mongoose.Schema(
 );
 
 const CorporateForm = mongoose.model("Corporate", corporateFormSchema);
-module.exports = CorporateForm;
+export default CorporateForm;

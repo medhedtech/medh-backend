@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const instructorSchema = new mongoose.Schema({
   name: {
@@ -126,4 +126,4 @@ const homeDisplaySchema = new mongoose.Schema({
 // Create model
 const HomeDisplay = mongoose.model('HomeDisplay', homeDisplaySchema);
 
-module.exports = HomeDisplay; 
+export default HomeDisplay; 

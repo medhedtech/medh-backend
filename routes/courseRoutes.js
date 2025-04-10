@@ -1,6 +1,6 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
-const {
+import {
   createCourse,
   getAllCourses,
   getCourseById,
@@ -42,9 +42,9 @@ const {
   bulkUpdateCoursePrices,
   getAllCoursesWithPrices,
   getCoursesWithFields
-} = require("../controllers/course-controller");
-const { authenticate } = require("../middleware/auth");
-const { upload, uploadMultiple, handleUploadError } = require("../middleware/upload");
+} from "../controllers/course-controller.js";
+import { authenticate } from "../middleware/auth.js";
+import { upload, uploadMultiple, handleUploadError } from "../middleware/upload.js";
 
 // Public Routes
 router.get("/get", getAllCourses);
@@ -96,4 +96,4 @@ router.post("/prices/bulk-update", bulkUpdateCoursePrices);
 router.post("/upload", upload.single("file"), handleUploadError, handleUpload);
 router.post("/upload-multiple", uploadMultiple.array("files", 10), handleUploadError, handleMultipleUpload);
 
-module.exports = router;
+export default router;

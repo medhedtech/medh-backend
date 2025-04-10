@@ -1,36 +1,83 @@
-const express = require("express");
-const {
-  registerUser,
-  loginUser,
-  getUserById,
-  updateUser,
-  deleteUser,
-  getAllUsers,
-  updateUserByEmail,
-  toggleStudentStatus,
-  forgotPassword,
-  resetPassword,
-  verifyTemporaryPassword,
-  sendEmail,
-  getAllStudents,
-} = require("../controllers/authController");
-const instructorController = require("../controllers/instructor-controller");
-const corporateController = require("../controllers/corporateController");
-const corporateStudentController = require("../controllers/coorporate-student-controller");
+import express from 'express';
+import authController from '../controllers/authController.js';
+import { authenticate as authMiddleware } from '../middleware/auth.js';
+import * as instructorController from '../controllers/instructor-controller.js';
+import * as corporateController from '../controllers/corporateController.js';
+import * as corporateStudentController from '../controllers/coorporate-student-controller.js';
+
 const router = express.Router();
 
-router.post("/register", registerUser);
-router.post("/login", loginUser);
-router.get("/get-all", getAllUsers);
-router.get("/get-all-students", getAllStudents);
-router.get("/get/:id", getUserById);
-router.post("/toggle-status/:id", toggleStudentStatus);
-router.post("/forgot-password", forgotPassword);
-router.post("/verify-temp-password", verifyTemporaryPassword);
-router.post("/reset-password", resetPassword);
-router.post("/update-by-email", updateUserByEmail);
-router.post("/update/:id", updateUser);
-router.delete("/delete/:id", deleteUser);
+/**
+ * @route   POST /api/v1/auth/register
+ * @desc    Register a new user
+ * @access  Public
+ */
+router.post('/register', authController.registerUser.bind(authController));
+
+/**
+ * @route   POST /api/v1/auth/login
+ * @desc    Login a user and get token
+ * @access  Public
+ */
+router.post('/login', authController.loginUser.bind(authController));
+
+/**
+ * @route   POST /api/v1/auth/forgot-password
+ * @desc    Send temporary password to user's email
+ * @access  Public
+ */
+router.post('/forgot-password', authController.forgotPassword.bind(authController));
+
+/**
+ * @route   GET /api/v1/auth/users
+ * @desc    Get all users
+ * @access  Private (Admin only)
+ */
+router.get('/users', authMiddleware, authController.getAllUsers.bind(authController));
+
+/**
+ * @route   GET /api/v1/auth/get-all-students
+ * @desc    Get all users with the STUDENT role
+ * @access  Private (Admin only - or adjust as needed)
+ */
+router.get('/get-all-students', authMiddleware, authController.getAllStudents.bind(authController));
+
+/**
+ * @route   GET /api/v1/auth/users/:id
+ * @desc    Get user by ID
+ * @access  Private
+ */
+router.get('/users/:id', authMiddleware, authController.getUserById.bind(authController));
+
+/**
+ * @route   PUT /api/v1/auth/users/:id
+ * @desc    Update user by ID
+ * @access  Private
+ */
+router.put('/users/:id', authMiddleware, authController.updateUser.bind(authController));
+
+/**
+ * @route   PUT /api/v1/auth/users/email/:email
+ * @desc    Update user by email
+ * @access  Private
+ */
+router.put('/users/email/:email', authMiddleware, authController.updateUserByEmail.bind(authController));
+
+/**
+ * @route   DELETE /api/v1/auth/users/:id
+ * @desc    Delete user by ID
+ * @access  Private (Admin only)
+ */
+router.delete('/users/:id', authMiddleware, authController.deleteUser.bind(authController));
+
+/**
+ * @route   PUT /api/v1/auth/toggle-status/:id
+ * @desc    Toggle user active/inactive status
+ * @access  Private (Admin only)
+ */
+router.put('/toggle-status/:id', authMiddleware, authController.toggleStudentStatus.bind(authController));
+
+router.post('/reset-password', authController.resetPassword.bind(authController));
 
 router.post("/create", instructorController.createInstructor);
 router.get("/get-all-instructors", instructorController.getAllInstructors);
@@ -87,7 +134,7 @@ router.post("/test-email", async (req, res) => {
       html: "<p>This is a test email to verify the email configuration.</p>"
     };
 
-    await sendEmail(mailOptions);
+    await authController.sendEmail(mailOptions);
     res.status(200).json({
       success: true,
       message: "Test email sent successfully"
@@ -102,4 +149,4 @@ router.post("/test-email", async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

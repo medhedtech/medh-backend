@@ -1,5 +1,5 @@
-const express = require("express");
-const recordedSessionController = require("../controllers/recorded-session-controller");
+import express from "express";
+import * as recordedSessionController from "../controllers/recorded-session-controller.js";
 
 const router = express.Router();
 
@@ -24,4 +24,4 @@ router.delete(
   recordedSessionController.deleteRecordedSession
 );
 
-module.exports = router;
+export default router;

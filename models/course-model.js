@@ -1,5 +1,6 @@
-const mongoose = require("mongoose");
-const { v4: uuidv4 } = require("uuid");
+import mongoose from "mongoose";
+import { v4 as uuidv4 } from "uuid";
+import { baseLessonSchema, videoLessonSchema, quizLessonSchema, assessmentLessonSchema } from './lesson-schemas.js';
 const { Schema } = mongoose;
 
 /* ------------------------------ */
@@ -153,84 +154,6 @@ const lessonResourceSchema = new Schema({
     trim: true 
   }
 });
-
-const baseLessonSchema = new Schema(
-  {
-    id: { 
-      type: String, 
-      required: [true, "Lesson ID is required"]
-    },
-    title: { 
-      type: String, 
-      required: [true, "Lesson title is required"], 
-      trim: true 
-    },
-    description: { 
-      type: String, 
-      default: "", 
-      trim: true 
-    },
-    order: { 
-      type: Number, 
-      default: 0 
-    },
-    lessonType: {
-      type: String,
-      enum: ["video", "quiz", "assessment"],
-      required: [true, "Lesson type is required"]
-    },
-    isPreview: { 
-      type: Boolean, 
-      default: false 
-    },
-    meta: { 
-      type: Schema.Types.Mixed, 
-      default: {} 
-    },
-    resources: [lessonResourceSchema],
-    
-    // Video Lesson specific fields
-    video_url: {
-      type: String,
-      trim: true,
-      validate: {
-        validator: function(v) {
-          return this.lessonType !== "video" || (v && /^(http(s)?:\/\/)/.test(v));
-        },
-        message: "Video URL must be a valid URL for video lessons"
-      }
-    },
-    duration: {
-      type: String,
-      trim: true
-    },
-    
-    // Quiz Lesson specific field
-    quiz_id: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "Quiz",
-      validate: {
-        validator: function(v) {
-          return this.lessonType !== "quiz" || v;
-        },
-        message: "Quiz ID is required for quiz lessons"
-      }
-    },
-    
-    // Assessment Lesson specific field
-    assignment_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Assignment",
-      validate: {
-        validator: function(v) {
-          return this.lessonType !== "assessment" || v;
-        },
-        message: "Assignment ID is required for assessment lessons"
-      }
-    }
-  },
-  { timestamps: true }
-);
 
 /* ------------------------------ */
 /* Curriculum Section Schema      */
@@ -1040,4 +963,5 @@ courseSchema.statics.searchCourses = async function (options = {}) {
 };
 
 const Course = mongoose.model("Course", courseSchema);
-module.exports = Course;
+
+export default Course;

@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const { authenticate, authorize } = require('../middleware/auth');
-const controller = require('../controllers/home-display-controller');
+import { authenticate, authorize } from '../middleware/auth.js';
+import * as controller from '../controllers/home-display-controller.js';
 
 // Public routes - root
 router.get('/', function(req, res) {
@@ -53,4 +53,4 @@ router.post('/', authenticate, authorize('admin'), function(req, res) {
   return controller.createHomeDisplay(req, res);
 });
 
-module.exports = router; 
+export default router; 

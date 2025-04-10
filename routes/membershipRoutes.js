@@ -1,5 +1,5 @@
-const express = require("express");
-const {
+import express from "express";
+import {
   createMembership,
   getAllMemberships,
   getMembershipById,
@@ -9,7 +9,7 @@ const {
   getMembershipCountsByStudentId,
   getMembershipsByStudentId,
   getRenewAmount,
-} = require("../controllers/membershipController");
+} from "../controllers/membershipController.js";
 
 const router = express.Router();
 
@@ -24,4 +24,4 @@ router.post("/update/:id", updateMembership);
 router.delete("/delete/:id", deleteMembership);
 router.get("/get-renew-amount", getRenewAmount);
 
-module.exports = router;
+export default router;

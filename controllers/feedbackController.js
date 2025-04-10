@@ -1,8 +1,8 @@
-const Feedback = require("../models/feedback");
-const InstructorFeedback = require("../models/feedback-instructor");
-const FeedbackCoorporate = require("../models/feedback-coorporate-admin.modal");
+import Feedback from "../models/feedback.js";
+import InstructorFeedback from "../models/feedback-instructor.js";
+import FeedbackCoorporate from "../models/feedback-coorporate-admin.modal.js";
 
-exports.submitFeedback = async (req, res) => {
+export const submitFeedback = async (req, res) => {
   const { userId, feedback_text, feedback_for, feedback_title } = req.body;
   try {
     const feedback = new Feedback({
@@ -19,7 +19,7 @@ exports.submitFeedback = async (req, res) => {
   }
 };
 
-exports.getFeedbackByCourse = async (req, res) => {
+export const getFeedbackByCourse = async (req, res) => {
   try {
     const feedbacks = await Feedback.find({ courseId: req.params.courseId });
     res.status(200).json(feedbacks);
@@ -28,7 +28,7 @@ exports.getFeedbackByCourse = async (req, res) => {
   }
 };
 
-exports.getAllFeedbacks = async (req, res) => {
+export const getAllFeedbacks = async (req, res) => {
   try {
     const feedbacks = await Feedback.find({})
       .populate("userId")
@@ -41,7 +41,7 @@ exports.getAllFeedbacks = async (req, res) => {
 };
 
 // Delete feedback by ID
-exports.deleteFeedback = async (req, res) => {
+export const deleteFeedback = async (req, res) => {
   try {
     const feedbackId = req.params.id;
     const deletedFeedback = await Feedback.findByIdAndDelete(feedbackId);
@@ -57,7 +57,7 @@ exports.deleteFeedback = async (req, res) => {
   }
 };
 
-exports.submitInstructorFeedback = async (req, res) => {
+export const submitInstructorFeedback = async (req, res) => {
   const { userId, feedback_text, feedback_for, feedback_title } = req.body;
   try {
     const feedback = new InstructorFeedback({
@@ -74,7 +74,7 @@ exports.submitInstructorFeedback = async (req, res) => {
   }
 };
 
-exports.getAllInstructorFeedbacks = async (req, res) => {
+export const getAllInstructorFeedbacks = async (req, res) => {
   try {
     const feedbacks = await InstructorFeedback.find({})
       .populate("userId")
@@ -86,7 +86,7 @@ exports.getAllInstructorFeedbacks = async (req, res) => {
 };
 
 // Delete instructor feedback by ID
-exports.deleteInstructorFeedback = async (req, res) => {
+export const deleteInstructorFeedback = async (req, res) => {
   try {
     const feedbackId = req.params.id;
     const deletedFeedback = await InstructorFeedback.findByIdAndDelete(
@@ -107,7 +107,7 @@ exports.deleteInstructorFeedback = async (req, res) => {
   }
 };
 
-exports.submitCoorporateFeedback = async (req, res) => {
+export const submitCoorporateFeedback = async (req, res) => {
   const { userId, feedback_text, feedback_for, feedback_title } = req.body;
   try {
     const feedback = new FeedbackCoorporate({
@@ -124,7 +124,7 @@ exports.submitCoorporateFeedback = async (req, res) => {
   }
 };
 
-exports.getAllCoorporateFeedbacks = async (req, res) => {
+export const getAllCoorporateFeedbacks = async (req, res) => {
   try {
     const feedbacks = await FeedbackCoorporate.find({})
       .populate("userId")
@@ -135,8 +135,9 @@ exports.getAllCoorporateFeedbacks = async (req, res) => {
   }
 };
 
-// Delete feedback by ID
-exports.deleteFeedback = async (req, res) => {
+// Delete Coorporate feedback by ID
+// Renamed function to avoid naming conflict with previous deleteFeedback
+export const deleteCoorporateFeedback = async (req, res) => {
   try {
     const feedbackId = req.params.id;
     const deletedFeedback = await FeedbackCoorporate.findByIdAndDelete(

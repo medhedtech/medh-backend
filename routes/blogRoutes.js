@@ -1,7 +1,8 @@
-const express = require("express");
+import express from "express";
+import * as blogController from "../controllers/blogController.js";
+import { authenticate } from "../middleware/auth.js";
+
 const router = express.Router();
-const blogController = require("../controllers/blogController");
-const { authenticate } = require("../middleware/auth");
 
 // Public routes (no authentication required)
 router.get("/", blogController.getAllBlogs);
@@ -21,4 +22,4 @@ router.post("/:id/like", blogController.likeBlog);
 router.post("/:id/comment", blogController.addComment);
 router.put("/:id/status", blogController.updateBlogStatus);
 
-module.exports = router;
+export default router;

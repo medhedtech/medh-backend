@@ -1,6 +1,6 @@
-const axios = require('axios');
-const crypto = require('crypto');
-const qs = require('querystring');
+import axios from 'axios';
+import crypto from 'crypto';
+import qs from 'querystring';
 
 class ZoomService {
   constructor() {
@@ -587,4 +587,5 @@ class ZoomService {
   }
 }
 
-module.exports = new ZoomService(); 
+const zoomService = new ZoomService();
+export default zoomService; 

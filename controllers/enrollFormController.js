@@ -1,7 +1,7 @@
-const EnrollForm = require("../models/enroll-form-model");
+import EnrollForm from "../models/enroll-form-model.js";
 
 // Create a new enrollment
-const createEnrollment = async (req, res) => {
+export const createEnrollment = async (req, res) => {
   try {
     const {
       full_name,
@@ -47,7 +47,7 @@ const createEnrollment = async (req, res) => {
 };
 
 // Retrieve all enrollments
-const getAllEnrollments = async (req, res) => {
+export const getAllEnrollments = async (req, res) => {
   try {
     const enrollments = await EnrollForm.find();
     res.status(200).json({ success: true, data: enrollments });
@@ -59,7 +59,7 @@ const getAllEnrollments = async (req, res) => {
 };
 
 // Retrieve a single enrollment by ID
-const getEnrollmentById = async (req, res) => {
+export const getEnrollmentById = async (req, res) => {
   try {
     const enrollment = await EnrollForm.findById(req.params.id);
     if (!enrollment)
@@ -76,7 +76,7 @@ const getEnrollmentById = async (req, res) => {
 };
 
 // Update an enrollment by ID
-const updateEnrollment = async (req, res) => {
+export const updateEnrollment = async (req, res) => {
   try {
     const updatedEnrollment = await EnrollForm.findByIdAndUpdate(
       req.params.id,
@@ -98,7 +98,7 @@ const updateEnrollment = async (req, res) => {
 };
 
 // Delete an enrollment by ID
-const deleteEnrollment = async (req, res) => {
+export const deleteEnrollment = async (req, res) => {
   try {
     const deletedEnrollment = await EnrollForm.findByIdAndDelete(req.params.id);
 
@@ -115,12 +115,4 @@ const deleteEnrollment = async (req, res) => {
       .status(500)
       .json({ success: false, message: "Server error", error: err.message });
   }
-};
-
-module.exports = {
-  createEnrollment,
-  getAllEnrollments,
-  getEnrollmentById,
-  updateEnrollment,
-  deleteEnrollment,
 };

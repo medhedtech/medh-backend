@@ -1,17 +1,13 @@
-const mongoose = require("mongoose");
-const { baseLessonSchema, videoLessonSchema, quizLessonSchema, assessmentLessonSchema } = require('./lesson-schemas');
+import mongoose from 'mongoose';
+import { baseLessonSchema, videoLessonSchema, quizLessonSchema, assessmentLessonSchema } from './lesson-schemas.js';
 
-// Create base Lesson model
-const Lesson = mongoose.model("Lesson", baseLessonSchema);
+// Create the base Lesson model
+const Lesson = mongoose.model('Lesson', baseLessonSchema);
 
-// Create discriminator models for different lesson types
-const VideoLesson = Lesson.discriminator('video', videoLessonSchema);
-const QuizLesson = Lesson.discriminator('quiz', quizLessonSchema);
-const AssessmentLesson = Lesson.discriminator('assessment', assessmentLessonSchema);
+// Create specific lesson type models
+const VideoLesson = mongoose.model('VideoLesson', videoLessonSchema);
+const QuizLesson = mongoose.model('QuizLesson', quizLessonSchema);
+const AssessmentLesson = mongoose.model('AssessmentLesson', assessmentLessonSchema);
 
-module.exports = {
-  Lesson,
-  VideoLesson,
-  QuizLesson,
-  AssessmentLesson
-}; 
+export default Lesson;
+export { VideoLesson, QuizLesson, AssessmentLesson }; 

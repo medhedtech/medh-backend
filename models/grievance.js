@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const grievanceSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -13,4 +13,4 @@ const grievanceSchema = new mongoose.Schema({
   resolutionDate: { type: Date },
 });
 
-module.exports = mongoose.model("Grievance", grievanceSchema);
+export default mongoose.model("Grievance", grievanceSchema);

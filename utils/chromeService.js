@@ -1,8 +1,8 @@
-const { exec } = require('child_process');
-const logger = require('./logger');
-const path = require('path');
-const fs = require('fs');
-const os = require('os');
+import { exec } from 'child_process';
+import logger from './logger.js';
+import path from 'path';
+import fs from 'fs';
+import os from 'os';
 
 class ChromeService {
   constructor() {
@@ -136,4 +136,4 @@ process.on('SIGTERM', () => {
   process.exit();
 });
 
-module.exports = chromeService; 
+export { chromeService }; 

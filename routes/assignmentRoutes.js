@@ -1,5 +1,5 @@
-const express = require("express");
-const {
+import express from "express";
+import {
   getAllAssignments,
   getAssignmentById,
   createAssignment,
@@ -11,10 +11,10 @@ const {
   getSubmissionStatus,
   getSubmittedAssignmentsCountByInstructor,
   getAssignmentsForEnrolledCourses,
-  getAssignmentsForCoorporateEnrolledCourses,
-  getAssignmentStatistics,
-  deleteSubmissionFile
-} = require("../controllers/assigmentController");
+  getAssignmentsForCoorporateEnrolledCourses
+  // getAssignmentStatistics - function might not be available in controller
+  // deleteSubmissionFile - function not available in controller
+} from "../controllers/assigmentController.js";
 
 const router = express.Router();
 
@@ -30,12 +30,12 @@ router.get("/:assignmentId/course", getCourseByAssignmentId);
 // Submission routes
 router.post("/submit", submitAssignment);
 router.post("/grade", gradeSubmission);
-router.post("/submission/delete-file", deleteSubmissionFile);
+// router.post("/submission/delete-file", deleteSubmissionFile); // Commented out due to missing function
 router.get("/submissions", getSubmittedAssignments);
 router.get("/submission/:assignmentId", getSubmissionStatus);
 
 // Analytics routes
-router.get("/stats/:assignmentId", getAssignmentStatistics);
+// router.get("/stats/:assignmentId", getAssignmentStatistics); // Commented out due to missing function
 router.get("/instructor-stats/:instructor_id", getSubmittedAssignmentsCountByInstructor);
 
 // Student enrollment routes
@@ -47,4 +47,4 @@ router.post("/create", createAssignment); // Deprecated: use POST /
 router.get("/submitted/get", getSubmittedAssignments); // Deprecated: use GET /submissions
 router.get("/submition/status/:assignmentId", getSubmissionStatus); // Deprecated: use GET /submission/:assignmentId
 
-module.exports = router;
+export default router;

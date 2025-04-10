@@ -1,7 +1,7 @@
-const FAQ = require("../models/freq-questions");
+import FAQ from "../models/freq-questions.js";
 
 // CREATE - Add a new FAQ
-exports.createFAQ = async (req, res) => {
+export const createFAQ = async (req, res) => {
   try {
     const { question, answer, course_id } = req.body;
     const newFAQ = new FAQ({ question, answer, course_id });
@@ -13,7 +13,7 @@ exports.createFAQ = async (req, res) => {
 };
 
 // READ - Get all FAQs
-exports.getAllFAQs = async (req, res) => {
+export const getAllFAQs = async (req, res) => {
   try {
     const faqs = await FAQ.find().populate("course_id"); // Populate course details if needed
     res.status(200).json(faqs);
@@ -23,7 +23,7 @@ exports.getAllFAQs = async (req, res) => {
 };
 
 // READ - Get FAQ by ID
-exports.getFAQById = async (req, res) => {
+export const getFAQById = async (req, res) => {
   try {
     const faq = await FAQ.findById(req.params.id).populate("course_id");
     if (!faq) {
@@ -36,7 +36,7 @@ exports.getFAQById = async (req, res) => {
 };
 
 // UPDATE - Update an existing FAQ by ID
-exports.updateFAQ = async (req, res) => {
+export const updateFAQ = async (req, res) => {
   try {
     const { question, answer, course_id } = req.body;
     const updatedFAQ = await FAQ.findByIdAndUpdate(
@@ -56,7 +56,7 @@ exports.updateFAQ = async (req, res) => {
 };
 
 // DELETE - Delete an FAQ by ID
-exports.deleteFAQ = async (req, res) => {
+export const deleteFAQ = async (req, res) => {
   try {
     const deletedFAQ = await FAQ.findByIdAndDelete(req.params.id);
     if (!deletedFAQ) {

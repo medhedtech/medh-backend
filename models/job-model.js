@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const enrollJobSchema = new mongoose.Schema(
   {
@@ -23,4 +23,4 @@ const enrollJobSchema = new mongoose.Schema(
 );
 
 const JobForm = mongoose.model("JobPost", enrollJobSchema);
-module.exports = JobForm;
+export default JobForm;

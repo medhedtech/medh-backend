@@ -1,6 +1,7 @@
-const axios = require('axios');
-const assert = require('assert');
-require('dotenv').config();
+import axios from 'axios';
+import assert from 'assert';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const BASE_URL = process.env.NODE_ENV === 'production' 
   ? 'https://api.medh.co/api/v1/zoom'

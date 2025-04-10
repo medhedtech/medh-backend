@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const resourceSchema = new mongoose.Schema({
   title: {
@@ -163,4 +163,5 @@ assignmentSchema.methods.calculateStats = function() {
   return this.meta;
 };
 
-module.exports = mongoose.model("Assignment", assignmentSchema);
+const Assignment = mongoose.model("Assignment", assignmentSchema);
+export default Assignment;

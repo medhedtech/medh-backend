@@ -1,14 +1,14 @@
-const EnrolledCourse = require("../models/enrolled-courses-model");
-const OnlineMeeting = require("../models/online-meeting");
-const Student = require("../models/student-model");
-const Course = require("../models/course-model");
-const User = require("../models/user-modal");
-const EnrolledModule = require("../models/enrolled-modules.modal");
-const { handleError } = require("../utils/errorHandler");
-const logger = require("../utils/logger");
+import EnrolledCourse from "../models/enrolled-courses-model.js";
+import OnlineMeeting from "../models/online-meeting.js";
+import Student from "../models/student-model.js";
+import Course from "../models/course-model.js";
+import User from "../models/user-modal.js";
+import EnrolledModule from "../models/enrolled-modules.modal.js";
+import { errorHandler } from "../utils/errorHandler.js";
+import logger from "../utils/logger.js";
 
 // Create a new enrollment
-exports.createEnrolledCourse = async (req, res, next) => {
+export const createEnrolledCourse = async (req, res, next) => {
   try {
     const { 
       student_id, 
@@ -130,12 +130,12 @@ exports.createEnrolledCourse = async (req, res, next) => {
       data: newEnrolledCourse
     });
   } catch (error) {
-    handleError(error, req, res, next);
+    errorHandler(error, req, res, next);
   }
 };
 
 // Get all enrollments with pagination and filters
-exports.getAllEnrolledCourses = async (req, res, next) => {
+export const getAllEnrolledCourses = async (req, res, next) => {
   try {
     const {
       page = 1,
@@ -176,12 +176,12 @@ exports.getAllEnrolledCourses = async (req, res, next) => {
       data: enrollments
     });
   } catch (error) {
-    handleError(error, req, res, next);
+    errorHandler(error, req, res, next);
   }
 };
 
 // Get enrollment by ID with detailed information
-exports.getEnrolledCourseById = async (req, res, next) => {
+export const getEnrolledCourseById = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -207,12 +207,12 @@ exports.getEnrolledCourseById = async (req, res, next) => {
       data: enrollment
     });
   } catch (error) {
-    handleError(error, req, res, next);
+    errorHandler(error, req, res, next);
   }
 };
 
 // Update enrollment with validation
-exports.updateEnrolledCourse = async (req, res, next) => {
+export const updateEnrolledCourse = async (req, res, next) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -272,12 +272,12 @@ exports.updateEnrolledCourse = async (req, res, next) => {
       data: updatedEnrolledCourse
     });
   } catch (error) {
-    handleError(error, req, res, next);
+    errorHandler(error, req, res, next);
   }
 };
 
 // Delete enrollment with related data cleanup
-exports.deleteEnrolledCourse = async (req, res, next) => {
+export const deleteEnrolledCourse = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -301,12 +301,12 @@ exports.deleteEnrolledCourse = async (req, res, next) => {
       message: "Enrollment deleted successfully"
     });
   } catch (error) {
-    handleError(error, req, res, next);
+    errorHandler(error, req, res, next);
   }
 };
 
 // Get enrollments by student ID with detailed information
-exports.getEnrolledCourseByStudentId = async (req, res, next) => {
+export const getEnrolledCourseByStudentId = async (req, res, next) => {
   try {
     const { student_id } = req.params;
     const { status, includeExpired = false } = req.query;
@@ -349,12 +349,12 @@ exports.getEnrolledCourseByStudentId = async (req, res, next) => {
       data: enrollmentsWithPaymentInfo
     });
   } catch (error) {
-    handleError(error, req, res, next);
+    errorHandler(error, req, res, next);
   }
 };
 
 // Get enrolled students by course ID with detailed information
-exports.getEnrolledStudentsByCourseId = async (req, res, next) => {
+export const getEnrolledStudentsByCourseId = async (req, res, next) => {
   try {
     const { course_id } = req.params;
     const { status, includeExpired = false } = req.query;
@@ -401,12 +401,12 @@ exports.getEnrolledStudentsByCourseId = async (req, res, next) => {
       }
     });
   } catch (error) {
-    handleError(error, req, res, next);
+    errorHandler(error, req, res, next);
   }
 };
 
 // Mark course as completed with validation
-exports.markCourseAsCompleted = async (req, res, next) => {
+export const markCourseAsCompleted = async (req, res, next) => {
   try {
     const { student_id, course_id } = req.body;
 
@@ -446,14 +446,14 @@ exports.markCourseAsCompleted = async (req, res, next) => {
       data: enrollment
     });
   } catch (error) {
-    handleError(error, req, res, next);
+    errorHandler(error, req, res, next);
   }
 };
 
 /**
  * Get enrollment counts for a student
  */
-exports.getEnrollmentCountsByStudentId = async (req, res, next) => {
+export const getEnrollmentCountsByStudentId = async (req, res, next) => {
   try {
     const { student_id } = req.params;
 
@@ -607,12 +607,12 @@ exports.getEnrollmentCountsByStudentId = async (req, res, next) => {
     });
 
   } catch (error) {
-    handleError(error, req, res, next);
+    errorHandler(error, req, res, next);
   }
 };
 
 // Get upcoming online meetings for a student's enrolled courses
-exports.getUpcomingMeetingsForStudent = async (req, res, next) => {
+export const getUpcomingMeetingsForStudent = async (req, res, next) => {
   try {
     const { student_id } = req.params;
     const { limit = 10 } = req.query;
@@ -655,12 +655,12 @@ exports.getUpcomingMeetingsForStudent = async (req, res, next) => {
       data: upcomingMeetings
     });
   } catch (error) {
-    handleError(error, req, res, next);
+    errorHandler(error, req, res, next);
   }
 };
 
 // Mark video as watched with progress tracking
-exports.watchVideo = async (req, res, next) => {
+export const watchVideo = async (req, res, next) => {
   try {
     const { id } = req.query;
     const { student_id } = req.body;
@@ -729,12 +729,12 @@ exports.watchVideo = async (req, res, next) => {
       message: "Video marked as watched successfully"
     });
   } catch (error) {
-    handleError(error, req, res, next);
+    errorHandler(error, req, res, next);
   }
 };
 
 // Get all students with enrolled courses
-exports.getAllStudentsWithEnrolledCourses = async (req, res, next) => {
+export const getAllStudentsWithEnrolledCourses = async (req, res, next) => {
   try {
     const { 
       status, 
@@ -825,6 +825,6 @@ exports.getAllStudentsWithEnrolledCourses = async (req, res, next) => {
       }
     });
   } catch (error) {
-    handleError(error, req, res, next);
+    errorHandler(error, req, res, next);
   }
 };

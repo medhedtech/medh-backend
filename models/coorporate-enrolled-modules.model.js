@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const { Schema } = mongoose;
 
@@ -35,4 +35,4 @@ const CoorporateEnrolledModule = mongoose.model(
   coorporateEnrolledModuleSchema
 );
 
-module.exports = CoorporateEnrolledModule;
+export default CoorporateEnrolledModule;

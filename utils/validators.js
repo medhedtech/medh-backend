@@ -1,6 +1,6 @@
-const Joi = require('joi');
+import Joi from 'joi';
 
-const validateBlog = (data) => {
+export const validateBlog = (data) => {
   const schema = Joi.object({
     title: Joi.string().required().max(200),
     description: Joi.string().allow('', null),
@@ -20,7 +20,7 @@ const validateBlog = (data) => {
   return schema.validate(data, { stripUnknown: true });
 };
 
-const validateComment = (data) => {
+export const validateComment = (data) => {
   const schema = Joi.object({
     content: Joi.string().required().min(1).max(1000)
   });
@@ -28,16 +28,10 @@ const validateComment = (data) => {
   return schema.validate(data);
 };
 
-const validateBlogStatus = (data) => {
+export const validateBlogStatus = (data) => {
   const schema = Joi.object({
     status: Joi.string().valid('draft', 'published', 'archived').required()
   });
 
   return schema.validate(data);
-};
-
-module.exports = {
-  validateBlog,
-  validateComment,
-  validateBlogStatus
 }; 

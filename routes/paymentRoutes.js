@@ -1,9 +1,9 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const paymentController = require('../controllers/payment-controller');
-const { authenticate, authorize } = require('../middleware/auth');
-const { validateObjectId } = require('../middleware/validation');
-const { validateEnrollment } = require('../middleware/validators/enrollmentValidator');
+import * as paymentController from '../controllers/payment-controller.js';
+import { authenticate, authorize } from '../middleware/auth.js';
+import { validateObjectId } from '../middleware/validation.js';
+import { validateEnrollment } from '../middleware/validators/enrollmentValidator.js';
 
 // Process payment and create enrollment/subscription
 router.post('/process', authenticate, validateEnrollment, paymentController.processPaymentAndEnroll);
@@ -27,4 +27,4 @@ router.post('/receipt/:payment_type/:payment_id/email', authenticate, validateOb
 // Get all receipts for a student
 router.get('/receipts/student/:student_id', authenticate, validateObjectId('student_id'), paymentController.getStudentReceipts);
 
-module.exports = router; 
+export default router; 

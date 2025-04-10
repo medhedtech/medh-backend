@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const educationSchema = new mongoose.Schema({
   highest_education: { type: String, required: true },
@@ -126,4 +126,4 @@ const placementFormSchema = new mongoose.Schema(
 );
 
 const PlacementForm = mongoose.model("PlacementForm", placementFormSchema);
-module.exports = PlacementForm; 
+export default PlacementForm; 

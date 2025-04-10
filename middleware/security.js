@@ -1,92 +1,93 @@
-const helmet = require('helmet');
-const mongoSanitize = require('express-mongo-sanitize');
-const compression = require('compression');
-const logger = require('../utils/logger');
-const { ENV_VARS } = require('../config/envVars');
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
+import mongoSanitize from 'express-mongo-sanitize';
+import compression from 'compression';
+import logger from '../utils/logger.js';
+import { ENV_VARS } from '../config/envVars.js';
 
-// XSS Protection utility
-const xssProtection = (req, res, next) => {
+// Rate limiting configuration
+export const rateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    logger.warn('Rate limit exceeded', {
+      ip: req.ip,
+      path: req.path
+    });
+    res.status(429).json({
+      status: 'error',
+      message: 'Too many requests from this IP, please try again later'
+    });
+  }
+});
+
+// Security headers configuration
+export const securityHeaders = helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'", 'https://api.medh.org'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'self'"],
+    },
+  },
+  crossOriginEmbedderPolicy: true,
+  crossOriginOpenerPolicy: true,
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  dnsPrefetchControl: true,
+  frameguard: { action: 'deny' },
+  hidePoweredBy: true,
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  },
+  ieNoOpen: true,
+  noSniff: true,
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  xssFilter: true
+});
+
+// Request sanitization middleware
+export const sanitizeRequest = (req, res, next) => {
+  // Sanitize request body
   if (req.body) {
-    req.body = sanitizeObject(req.body);
-  }
-  if (req.query) {
-    req.query = sanitizeObject(req.query);
-  }
-  if (req.params) {
-    req.params = sanitizeObject(req.params);
-  }
-  next();
-};
-
-const sanitizeObject = (obj) => {
-  const clean = {};
-  for (let key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      if (typeof obj[key] === 'string') {
-        clean[key] = sanitizeString(obj[key]);
-      } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-        clean[key] = sanitizeObject(obj[key]);
-      } else {
-        clean[key] = obj[key];
+    Object.keys(req.body).forEach(key => {
+      if (typeof req.body[key] === 'string') {
+        req.body[key] = req.body[key].trim();
       }
-    }
+    });
   }
-  return clean;
-};
-
-const sanitizeString = (str) => {
-  return str
-    .replace(/[&<>"']/g, (match) => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#x27;'
-    })[match])
-    .replace(/javascript:/gi, '')
-    .replace(/on\w+=/gi, '')
-    .replace(/data:/gi, '')
-    .trim();
+  
+  // Sanitize query parameters
+  if (req.query) {
+    Object.keys(req.query).forEach(key => {
+      if (typeof req.query[key] === 'string') {
+        req.query[key] = req.query[key].trim();
+      }
+    });
+  }
+  
+  next();
 };
 
 const securityMiddleware = (app) => {
   // Set security HTTP headers
-  app.use(helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "https:"],
-        connectSrc: ["'self'", "https://api.medh.co", "https://www.medh.co", "https://medh.co", "http://api.medh.co"],
-        fontSrc: ["'self'"],
-        objectSrc: ["'none'"],
-        mediaSrc: ["'self'"],
-        frameSrc: ["'none'"]
-      }
-    },
-    crossOriginEmbedderPolicy: false,
-    crossOriginOpenerPolicy: false,
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-    dnsPrefetchControl: true,
-    frameguard: { action: 'deny' },
-    hidePoweredBy: true,
-    hsts: {
-      maxAge: 31536000,
-      includeSubDomains: true,
-      preload: true
-    },
-    ieNoOpen: true,
-    noSniff: true,
-    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-    xssFilter: true
-  }));
+  app.use(securityHeaders);
 
   // Data sanitization against NoSQL query injection
   app.use(mongoSanitize());
 
   // Custom XSS protection
-  app.use(xssProtection);
+  app.use(sanitizeRequest);
 
   // Compress all responses
   app.use(compression());
@@ -102,4 +103,4 @@ const securityMiddleware = (app) => {
   });
 };
 
-module.exports = securityMiddleware; 
+export default securityMiddleware; 

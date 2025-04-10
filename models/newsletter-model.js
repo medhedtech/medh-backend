@@ -1,7 +1,7 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const newletterSchema = new mongoose.Schema({
   email: { type: String, required: true },
 });
 
-module.exports = mongoose.model("Newsletter", newletterSchema);
+export default mongoose.model("Newsletter", newletterSchema);

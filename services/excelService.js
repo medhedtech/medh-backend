@@ -1,5 +1,5 @@
-const ExcelJS = require('exceljs');
-const logger = require('../utils/logger');
+import ExcelJS from 'exceljs';
+import logger from '../utils/logger.js';
 
 class ExcelService {
   constructor() {
@@ -206,4 +206,4 @@ class ExcelService {
   }
 }
 
-module.exports = new ExcelService(); 
+export default new ExcelService(); 

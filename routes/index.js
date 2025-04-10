@@ -1,43 +1,48 @@
-const router = require("express").Router();
-const { ENV_VARS } = require("../config/envVars");
-const authRoutes = require("./authRoutes");
-const categoryRoutes = require("./categoryRoutes");
-const courseRoutes = require("./courseRoutes");
-const freqRoutes = require("./freqRoutes");
-const faqRoutes = require("./faqRoutes");
-const studentRoutes = require("./studentRoutes");
-const instructorRoutes = require("./instructorRoutes");
-const certificateRoutes = require("./certificateRoutes");
-const onlineMeetingRoutes = require("./online_meetingRoutes");
-const enrolledRoutes = require("./enrolledRoutes");
-const recordedSessionRoutes = require("./recorded-sessionRoutes");
-const uploadRoutes = require("./uploadRoutes");
-const contactRoutes = require("./contactRoutes");
-const blogRoutes = require("./blogRoutes");
-const dashboardRoutes = require("./dashboardRoutes");
-const assignedInstructor = require("./assignInstructorRoute");
-const membership = require("./membershipRoutes");
-const resources = require("./resourcesRoutes");
-const quizes = require("./quizRoutes");
-const feedback = require("./feedbackRoutes");
-const assignment = require("./assignmentRoutes");
-const placements = require("./placementRoutes");
-const complaint = require("./complaintRoute");
-const grievance = require("./grievanceRoute");
-const enrollForm = require("./enroll-formRoute");
-const addJobPost = require("./add-job-postRoutes");
-const jobPost = require("./jobRoutes");
-const subscriptionRoute = require("./subscription-Routes");
-const broucherRoute = require("./broucherRoutes");
-const newsLetterRoute = require("./newsletterRoutes");
-const quizResponseRoutes = require("./quizResponseRoutes");
-const trackSessionRoute = require("./track-sessionsRoutes");
-const assignCoorporateCourse = require("./assign-course-coorporateRoutes");
-const corporateRoute = require("./corporate-traing-Routes");
-const paymentRoutes = require("./paymentRoutes");
-const currencyRoutes = require("./currencyRoutes");
-const homeDisplayRoutes = require("./homeDisplayRoutes");
-const zoomRoutes = require("./zoom");
+import express from 'express';
+import { ENV_VARS } from '../config/envVars.js';
+import logger from '../utils/logger.js';
+
+// Import routes
+import authRoutes from './authRoutes.js';
+import categoryRoutes from './categoryRoutes.js';
+import courseRoutes from './courseRoutes.js';
+import freqRoutes from './freqRoutes.js';
+import faqRoutes from './faqRoutes.js';
+import studentRoutes from './studentRoutes.js';
+import instructorRoutes from './instructorRoutes.js';
+import certificateRoutes from './certificateRoutes.js';
+import onlineMeetingRoutes from './online_meetingRoutes.js';
+import enrolledRoutes from './enrolledRoutes.js';
+import recordedSessionRoutes from './recorded-sessionRoutes.js';
+import uploadRoutes from './uploadRoutes.js';
+import contactRoutes from './contactRoutes.js';
+import blogRoutes from './blogRoutes.js';
+import dashboardRoutes from './dashboardRoutes.js';
+import assignedInstructor from './assignInstructorRoute.js';
+import membership from './membershipRoutes.js';
+import resources from './resourcesRoutes.js';
+import quizes from './quizRoutes.js';
+import feedback from './feedbackRoutes.js';
+import assignment from './assignmentRoutes.js';
+import placements from './placementRoutes.js';
+import complaint from './complaintRoute.js';
+import grievance from './grievanceRoute.js';
+import enrollForm from './enroll-formRoute.js';
+import addJobPost from './add-job-postRoutes.js';
+import jobPost from './jobRoutes.js';
+import subscriptionRoute from './subscription-Routes.js';
+import broucherRoute from './broucherRoutes.js';
+import newsLetterRoute from './newsletterRoutes.js';
+import quizResponseRoutes from './quizResponseRoutes.js';
+import trackSessionRoute from './track-sessionsRoutes.js';
+import assignCoorporateCourse from './assign-course-coorporateRoutes.js';
+import corporateRoute from './corporate-traing-Routes.js';
+import paymentRoutes from './paymentRoutes.js';
+import currencyRoutes from './currencyRoutes.js';
+import homeDisplayRoutes from './homeDisplayRoutes.js';
+import zoomRoutes from './zoom.js';
+
+const router = express.Router();
 
 const moduleRoutes = [
   {
@@ -209,12 +214,12 @@ router.get('/cors-test', (req, res) => {
     headersObj[key] = req.headers[key];
   });
   
-  console.log('CORS Test Request Headers:', headersObj);
-  console.log('Origin:', origin);
+  logger.info('CORS Test Request Headers:', headersObj);
+  logger.info('Origin:', origin);
   
   // Log response headers for debugging
   const responseHeaders = res.getHeaders();
-  console.log('CORS Test Response Headers:', responseHeaders);
+  logger.info('CORS Test Response Headers:', responseHeaders);
   
   return res.status(200).json({
     message: 'CORS test successful',
@@ -230,4 +235,4 @@ router.get('/cors-test', (req, res) => {
   });
 });
 
-module.exports = router;
+export default router;

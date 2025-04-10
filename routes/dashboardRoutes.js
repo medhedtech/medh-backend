@@ -1,7 +1,8 @@
-const express = require("express");
-const { getDashboardCounts } = require("../controllers/dashboardCount");
+import express from "express";
+import { getDashboardCounts } from "../controllers/dashboardCount.js";
+
 const router = express.Router();
 
-router.get("/admin-dashboard-count", getDashboardCounts);
+router.get("/counts", getDashboardCounts);
 
-module.exports = router;
+export default router;

@@ -1,4 +1,4 @@
-const rateLimit = require('express-rate-limit');
+import rateLimit from 'express-rate-limit';
 
 const createRateLimiter = (windowMs = 15 * 60 * 1000, max = 100) => {
   return rateLimit({
@@ -14,10 +14,5 @@ const createRateLimiter = (windowMs = 15 * 60 * 1000, max = 100) => {
 };
 
 // Different rate limiters for different endpoints
-const authLimiter = createRateLimiter(15 * 60 * 1000, 5); // 5 requests per 15 minutes
-const apiLimiter = createRateLimiter(15 * 60 * 1000, 1000); // 100 requests per 15 minutes
-
-module.exports = {
-  authLimiter,
-  apiLimiter
-}; 
+export const authLimiter = createRateLimiter(15 * 60 * 1000, 5); // 5 requests per 15 minutes
+export const apiLimiter = createRateLimiter(15 * 60 * 1000, 1000); // 1000 requests per 15 minutes 

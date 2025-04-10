@@ -1,13 +1,13 @@
-const razorpay = require('../config/razorpay');
-const crypto = require('crypto');
-const Order = require('../models/Order');
+import razorpay from '../config/razorpay.js';
+import crypto from 'crypto';
+import Order from '../models/Order.js';
 
 /**
  * Create a new Razorpay order
  * @param {Object} orderData - Order information
  * @returns {Promise<Object>} Created order details
  */
-const createOrder = async (orderData) => {
+export const createOrder = async (orderData) => {
   try {
     const { amount, currency = 'INR', receipt, notes, userId, productInfo } = orderData;
 
@@ -42,7 +42,7 @@ const createOrder = async (orderData) => {
  * @param {Object} paymentData - Payment verification data
  * @returns {Promise<Object>} Verification result
  */
-const verifyPayment = async (paymentData) => {
+export const verifyPayment = async (paymentData) => {
   try {
     const { orderId, paymentId, signature } = paymentData;
 
@@ -88,7 +88,7 @@ const verifyPayment = async (paymentData) => {
  * @param {string} paymentId - Razorpay payment ID
  * @returns {Promise<Object>} Payment details
  */
-const getPaymentDetails = async (paymentId) => {
+export const getPaymentDetails = async (paymentId) => {
   try {
     const payment = await razorpay.payments.fetch(paymentId);
     return payment;
@@ -102,7 +102,7 @@ const getPaymentDetails = async (paymentId) => {
  * @param {string} userId - User ID
  * @returns {Promise<Array>} List of orders
  */
-const getUserOrders = async (userId) => {
+export const getUserOrders = async (userId) => {
   try {
     const orders = await Order.find({ userId }).sort({ createdAt: -1 });
     return orders;
@@ -116,7 +116,7 @@ const getUserOrders = async (userId) => {
  * @param {string} orderId - Razorpay order ID
  * @returns {Promise<Object>} Order details
  */
-const getOrderById = async (orderId) => {
+export const getOrderById = async (orderId) => {
   try {
     const order = await Order.findOne({ razorpayOrderId: orderId });
     if (!order) {
@@ -126,12 +126,4 @@ const getOrderById = async (orderId) => {
   } catch (error) {
     throw new Error(`Failed to fetch order: ${error.message}`);
   }
-};
-
-module.exports = {
-  createOrder,
-  verifyPayment,
-  getPaymentDetails,
-  getUserOrders,
-  getOrderById
 }; 

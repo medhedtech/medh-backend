@@ -1,6 +1,7 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
+const { Schema } = mongoose;
 
-const optionSchema = new mongoose.Schema({
+const optionSchema = new Schema({
   id: {
     type: String,
     required: [true, 'Option ID is required']
@@ -11,7 +12,7 @@ const optionSchema = new mongoose.Schema({
   }
 });
 
-const questionSchema = new mongoose.Schema({
+const questionSchema = new Schema({
   id: {
     type: String,
     required: [true, 'Question ID is required'],
@@ -48,14 +49,14 @@ const questionSchema = new mongoose.Schema({
   }
 });
 
-const quizSchema = new mongoose.Schema({
+const quizSchema = new Schema({
   id: {
     type: String,
     required: [true, 'Quiz ID is required'],
     unique: true
   },
   course: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: 'Course',
     required: [true, 'Course reference is required']
   },
@@ -162,4 +163,4 @@ quizSchema.statics.getQuizzesByLesson = async function(lessonId) {
 };
 
 const Quiz = mongoose.model("Quiz", quizSchema);
-module.exports = Quiz; 
+export default Quiz; 

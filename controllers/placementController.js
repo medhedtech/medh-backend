@@ -1,6 +1,6 @@
-const Placement = require("../models/placement");
+import Placement from "../models/placement.js";
 
-exports.getAllPlacements = async (req, res) => {
+export const getAllPlacements = async (req, res) => {
   try {
     const placements = await Placement.find().populate("studentId");
     res.status(200).json(placements);
@@ -9,7 +9,7 @@ exports.getAllPlacements = async (req, res) => {
   }
 };
 
-exports.addPlacement = async (req, res) => {
+export const addPlacement = async (req, res) => {
   const {
     studentId,
     full_name,

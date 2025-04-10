@@ -1,7 +1,7 @@
-const FAQ = require("../models/faq-model");
+import FAQ from "../models/faq-model.js";
 
 // CREATE - Add a new FAQ
-exports.createFAQ = async (req, res) => {
+export const createFAQ = async (req, res) => {
   try {
     const { question, answer, category } = req.body;
     
@@ -32,7 +32,7 @@ exports.createFAQ = async (req, res) => {
 };
 
 // READ - Get all FAQs
-exports.getAllFAQs = async (req, res) => {
+export const getAllFAQs = async (req, res) => {
   try {
     const faqs = await FAQ.find().sort({ createdAt: -1 });
     res.status(200).json({ 
@@ -52,7 +52,7 @@ exports.getAllFAQs = async (req, res) => {
 };
 
 // READ - Get FAQs by category
-exports.getFAQsByCategory = async (req, res) => {
+export const getFAQsByCategory = async (req, res) => {
   try {
     const { category } = req.params;
     
@@ -82,7 +82,7 @@ exports.getFAQsByCategory = async (req, res) => {
 };
 
 // READ - Get FAQ by ID
-exports.getFAQById = async (req, res) => {
+export const getFAQById = async (req, res) => {
   try {
     const faq = await FAQ.findById(req.params.id);
     
@@ -109,7 +109,7 @@ exports.getFAQById = async (req, res) => {
 };
 
 // UPDATE - Update an existing FAQ by ID
-exports.updateFAQ = async (req, res) => {
+export const updateFAQ = async (req, res) => {
   try {
     const { question, answer, category } = req.body;
     
@@ -157,7 +157,7 @@ exports.updateFAQ = async (req, res) => {
 };
 
 // DELETE - Delete an FAQ by ID
-exports.deleteFAQ = async (req, res) => {
+export const deleteFAQ = async (req, res) => {
   try {
     const deletedFAQ = await FAQ.findByIdAndDelete(req.params.id);
     
@@ -184,7 +184,7 @@ exports.deleteFAQ = async (req, res) => {
 };
 
 // GET - Get all categories
-exports.getAllCategories = async (req, res) => {
+export const getAllCategories = async (req, res) => {
   try {
     const categories = await FAQ.distinct("category");
     

@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const SubscriptionCourseSchema = new mongoose.Schema(
   {
@@ -33,4 +33,4 @@ const SubscriptionCourse = mongoose.model(
   SubscriptionCourseSchema
 );
 
-module.exports = SubscriptionCourse;
+export default SubscriptionCourse;

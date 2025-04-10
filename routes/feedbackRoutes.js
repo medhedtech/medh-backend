@@ -1,5 +1,5 @@
-const express = require("express");
-const {
+import express from "express";
+import {
   submitFeedback,
   getFeedbackByCourse,
   getAllFeedbacks,
@@ -9,7 +9,7 @@ const {
   deleteInstructorFeedback,
   submitCoorporateFeedback,
   getAllCoorporateFeedbacks,
-} = require("../controllers/feedbackController");
+} from "../controllers/feedbackController.js";
 const router = express.Router();
 
 router.post("/", submitFeedback);
@@ -23,4 +23,4 @@ router.delete("/delete-feedback/:id", deleteFeedback);
 router.delete("/delete-coorporate/:id", deleteFeedback);
 router.delete("/instructor/:id", deleteInstructorFeedback);
 
-module.exports = router;
+export default router;

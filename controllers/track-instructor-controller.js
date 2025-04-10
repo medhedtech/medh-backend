@@ -1,7 +1,7 @@
-const OnlineMeeting = require("../models/online-meeting");
-const Course = require("../models/course-model");
+import OnlineMeeting from "../models/online-meeting.js";
+import Course from "../models/course-model.js";
 
-const getInstructorCoursesAndClasses = async (req, res) => {
+export const getInstructorCoursesAndClasses = async (req, res) => {
   try {
     const { instructorId } = req.params;
     const { startDate, endDate } = req.query;
@@ -88,8 +88,4 @@ const getInstructorCoursesAndClasses = async (req, res) => {
       error: error.message,
     });
   }
-};
-
-module.exports = {
-  getInstructorCoursesAndClasses,
 };

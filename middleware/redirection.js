@@ -3,8 +3,8 @@
  * For preflight requests (OPTIONS), this middleware ensures we respond directly 
  * without redirecting, as browsers do not allow redirections for preflight requests.
  */
-const logger = require('../utils/logger');
-const { ENV_VARS } = require('../config/envVars');
+import logger from '../utils/logger.js';
+import { ENV_VARS } from '../config/envVars.js';
 
 const redirectionMiddleware = (req, res, next) => {
   // If this is a preflight request, we need to avoid redirects
@@ -86,4 +86,4 @@ const redirectionMiddleware = (req, res, next) => {
   next();
 };
 
-module.exports = redirectionMiddleware; 
+export default redirectionMiddleware; 

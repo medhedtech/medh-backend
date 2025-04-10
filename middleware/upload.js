@@ -1,6 +1,11 @@
-const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+// Get the directory name in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Create uploads directory if it doesn't exist
 const uploadDir = path.join(__dirname, '../uploads');
@@ -58,7 +63,7 @@ const uploadMultiple = multer({
 });
 
 // Error handling middleware
-const handleUploadError = (err, req, res, next) => {
+export const handleUploadError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({
@@ -84,8 +89,4 @@ const handleUploadError = (err, req, res, next) => {
   next();
 };
 
-module.exports = {
-  upload,
-  uploadMultiple,
-  handleUploadError
-}; 
+export { upload, uploadMultiple }; 

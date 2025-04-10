@@ -1,5 +1,5 @@
 // A simple script to test the brochure download endpoint using GET method
-const axios = require('axios');
+import axios from 'axios';
 
 const testBrochureDownload = async () => {
   const courseId = '67bd596b8a56e7688dd02274'; // Valid course ID from our database

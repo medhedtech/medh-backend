@@ -1,6 +1,7 @@
-const router = require('express').Router();
-const { authenticate } = require('../middleware/auth');
-const { upload, handleUpload, handleBase64Upload, handleMultipleUpload } = require('../controllers/upload/uploadController');
+import express from 'express';
+const router = express.Router();
+import { authenticate } from '../middleware/auth.js';
+import { upload, handleUpload, handleBase64Upload, handleMultipleUpload } from '../controllers/upload/uploadController.js';
 
 /**
  * @route POST /api/v1/upload
@@ -37,4 +38,4 @@ router.post('/base64',
   handleBase64Upload
 );
 
-module.exports = router; 
+export default router; 

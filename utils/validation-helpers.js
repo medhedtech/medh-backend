@@ -1,11 +1,11 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 /**
  * Validates if a string is a valid MongoDB ObjectId
  * @param {string} id - The id to validate
  * @returns {boolean} True if valid, false otherwise
  */
-const validateObjectId = (id) => {
+export const validateObjectId = (id) => {
   return mongoose.Types.ObjectId.isValid(id);
 };
 
@@ -14,7 +14,7 @@ const validateObjectId = (id) => {
  * @param {object} courseData - The course data to validate
  * @returns {object} Object containing validation result and errors if any
  */
-const validateCourseData = (courseData) => {
+export const validateCourseData = (courseData) => {
   const errors = {};
   const requiredFields = [
     'course_title',
@@ -121,7 +121,7 @@ const validateCourseData = (courseData) => {
  * @param {object} courseData - The course data to sanitize
  * @returns {object} Sanitized course data
  */
-const sanitizeCourseData = (courseData) => {
+export const sanitizeCourseData = (courseData) => {
   const sanitized = { ...courseData };
   
   // Trim string fields
@@ -139,10 +139,4 @@ const sanitizeCourseData = (courseData) => {
   }
   
   return sanitized;
-};
-
-module.exports = {
-  validateObjectId,
-  validateCourseData,
-  sanitizeCourseData
 }; 

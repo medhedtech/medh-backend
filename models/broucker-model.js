@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const BroucherSchema = new mongoose.Schema(
   {
@@ -61,4 +61,4 @@ BroucherSchema.pre('save', async function(next) {
 });
 
 const BroucherModel = mongoose.model("Broucher", BroucherSchema);
-module.exports = BroucherModel;
+export default BroucherModel;

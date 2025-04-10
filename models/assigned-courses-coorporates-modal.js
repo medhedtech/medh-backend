@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const coorporateAssignCourseSchema = new mongoose.Schema(
   {
@@ -24,4 +24,4 @@ const CoorporateAssignCourse = mongoose.model(
   coorporateAssignCourseSchema
 );
 
-module.exports = CoorporateAssignCourse;
+export default CoorporateAssignCourse;

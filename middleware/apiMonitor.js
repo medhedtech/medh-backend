@@ -1,5 +1,6 @@
-const logger = require('../utils/logger');
-const { performance } = require('perf_hooks');
+import logger from '../utils/logger.js';
+import { performance } from 'perf_hooks';
+import crypto from 'crypto';
 
 class APIMetrics {
   constructor() {
@@ -53,7 +54,7 @@ const apiMetrics = new APIMetrics();
 
 const apiMonitor = (req, res, next) => {
   // Add request ID and timestamp
-  req.id = require('crypto').randomUUID();
+  req.id = crypto.randomUUID();
   req.timestamp = new Date();
   req.startTime = performance.now();
 
@@ -203,7 +204,7 @@ const getAPIMetrics = (req, res) => {
   });
 };
 
-module.exports = {
+export {
   apiMonitor,
   getAPIMetrics
 }; 

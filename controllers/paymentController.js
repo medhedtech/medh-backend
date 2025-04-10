@@ -1,14 +1,14 @@
-const razorpayService = require('../services/razorpayService');
-const paymentProcessor = require('./payment-controller');
-const { v4: uuidv4 } = require('uuid');
-const logger = require('../utils/logger');
+import razorpayService from '../services/razorpayService.js';
+import paymentProcessor from './payment-controller.js';
+import { v4 as uuidv4 } from 'uuid';
+import logger from '../utils/logger.js';
 
 /**
  * @description Create a new order for payment
  * @route POST /api/v1/payments/create-order
  * @access Private
  */
-const createOrder = async (req, res) => {
+export const createOrder = async (req, res) => {
   try {
     const { 
       amount, 
@@ -106,7 +106,7 @@ const createOrder = async (req, res) => {
  * @route POST /api/v1/payments/verify-payment
  * @access Private
  */
-const verifyPayment = async (req, res) => {
+export const verifyPayment = async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
@@ -168,7 +168,7 @@ const verifyPayment = async (req, res) => {
  * @route GET /api/v1/payments/:paymentId
  * @access Private
  */
-const getPaymentDetails = async (req, res) => {
+export const getPaymentDetails = async (req, res) => {
   try {
     const { paymentId } = req.params;
     
@@ -202,7 +202,7 @@ const getPaymentDetails = async (req, res) => {
  * @route GET /api/v1/payments/orders
  * @access Private
  */
-const getUserOrders = async (req, res) => {
+export const getUserOrders = async (req, res) => {
   try {
     const userId = req.user.id; // Assuming req.user is set by auth middleware
     
@@ -230,7 +230,7 @@ const getUserOrders = async (req, res) => {
  * @route GET /api/v1/payments/key
  * @access Public
  */
-const getRazorpayKey = (req, res) => {
+export const getRazorpayKey = (req, res) => {
   try {
     // Only expose the public key, never expose the secret key
     res.status(200).json({
@@ -248,12 +248,4 @@ const getRazorpayKey = (req, res) => {
       message: 'Failed to fetch Razorpay key'
     });
   }
-};
-
-module.exports = {
-  createOrder,
-  verifyPayment,
-  getPaymentDetails,
-  getUserOrders,
-  getRazorpayKey
 }; 

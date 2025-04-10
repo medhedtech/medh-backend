@@ -1,51 +1,32 @@
-const cors = require('cors');
-const { ENV_VARS } = require('./envVars');
-const logger = require('../utils/logger');
-
-// Ensure we always include the medh.co domains
-const allowedOrigins = [
-  'https://medh.co',
-  'https://www.medh.co',
-  'https://api.medh.co',
-  'http://localhost:3000',
-  'http://localhost:3001'
-];
-
-// If environment variables have additional domains, add them
-if (ENV_VARS.ALLOWED_ORIGINS && ENV_VARS.ALLOWED_ORIGINS.length > 0) {
-  ENV_VARS.ALLOWED_ORIGINS.forEach(origin => {
-    if (!allowedOrigins.includes(origin)) {
-      allowedOrigins.push(origin);
-    }
-  });
-}
+import cors from 'cors';
+import { ENV_VARS } from './envVars.js';
+import logger from '../utils/logger.js';
 
 // CORS configuration
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman or curl requests)
-    if (!origin) {
-      if (ENV_VARS.NODE_ENV === 'production') {
-        logger.warn('Request without origin header in production');
-      }
-      return callback(null, true);
-    }
+export const corsOptions = {
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://medh.org',
+      'https://www.medh.org',
+      'https://admin.medh.org',
+      'https://api.medh.org'
+    ];
     
-    if (allowedOrigins.includes(origin) || ENV_VARS.NODE_ENV === 'development') {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || ENV_VARS.NODE_ENV === 'development') {
       callback(null, true);
     } else {
-      logger.warn(`Blocked request from unauthorized origin: ${origin}`);
-      // Return an error for unauthorized origins
-      callback(new Error(`Not allowed by CORS: ${origin} is not allowed`));
+      callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'x-access-token'],
-  exposedHeaders: ['Content-Length', 'Date'], // Explicitly expose headers that might be needed by the client
-  credentials: true, // Allow credentials (cookies, authorization headers, etc.)
-  maxAge: 86400, // Cache preflight requests for 24 hours
-  optionsSuccessStatus: 204, // Important for preflight requests
-  preflightContinue: false // Don't pass the OPTIONS request to the next handler
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-access-token'],
+  credentials: true,
+  maxAge: 86400 // 24 hours
 };
 
 // Create CORS middleware
@@ -53,10 +34,24 @@ const corsMiddleware = cors(corsOptions);
 
 // Middleware to handle preflight requests for all routes
 const handlePreflight = (req, res, next) => {
+  // Define the list of allowed origins within this scope
+  const definedAllowedOrigins = ENV_VARS.ALLOWED_ORIGINS && ENV_VARS.ALLOWED_ORIGINS.length > 0
+    ? ENV_VARS.ALLOWED_ORIGINS
+    : [ // Fallback list (using the one defined in corsOptions for consistency here)
+        'http://localhost:3000',
+        'http://localhost:3001',
+        'https://medh.co',
+        'https://www.medh.co',
+        'https://admin.medh.co',
+        'https://api.medh.co',
+        'https://staging.medh.co',
+        'https://api2.medh.co'
+      ];
+
   // First, set basic CORS headers for all requests as a fallback
-  // This ensures that even if other middleware fails, CORS headers are sent
   const origin = req.headers.origin;
-  if (origin && (allowedOrigins.includes(origin) || ENV_VARS.NODE_ENV === 'development')) {
+  // Use the correctly defined list here
+  if (origin && (definedAllowedOrigins.includes(origin) || ENV_VARS.NODE_ENV === 'development')) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
     res.header('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, x-access-token');
@@ -81,4 +76,4 @@ const handlePreflight = (req, res, next) => {
   return corsMiddleware(req, res, next);
 };
 
-module.exports = handlePreflight; 
+export default handlePreflight; 

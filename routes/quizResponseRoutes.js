@@ -1,15 +1,16 @@
-const express = require("express");
-const {
-  createResponse,
-  getQuizResponses,
-  getResponseById,
-  deleteResponse,
-} = require("../controllers/quizResponseController");
+import express from "express";
+import {
+  submitQuizResponse,
+  getQuizResponsesByUser,
+  getQuizResponsesByQuiz,
+  getQuizResponseById
+} from "../controllers/quizResponseController.js";
+
 const router = express.Router();
 
-router.post("/", createResponse);
-router.get("/responses/:quizId?", getQuizResponses);
-router.get("/:id", getResponseById);
-router.delete("/:id", deleteResponse);
+router.post("/submit", submitQuizResponse);
+router.get("/user/:userId", getQuizResponsesByUser);
+router.get("/quiz/:quizId", getQuizResponsesByQuiz);
+router.get("/:id", getQuizResponseById);
 
-module.exports = router;
+export default router;

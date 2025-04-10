@@ -1,10 +1,10 @@
-const User = require("../models/user-modal");
-const Course = require("../models/course-model");
-const Instructor = require("../models/instructor-model");
-const EnrolledCourse = require("../models/enrolled-courses-model");
+import User from "../models/user-modal.js";
+import Course from "../models/course-model.js";
+import Instructor from "../models/instructor-model.js";
+import EnrolledCourse from "../models/enrolled-courses-model.js";
 
 // Get all counts
-exports.getDashboardCounts = async (req, res) => {
+export const getDashboardCounts = async (req, res) => {
   try {
     const enrolledCourses = await EnrolledCourse.countDocuments();
     const activeStudents = await User.countDocuments({

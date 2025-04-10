@@ -1,13 +1,13 @@
-const { uploadFile, uploadBase64File, UploadError } = require('../../utils/uploadFile');
-const multer = require('multer');
-const { UPLOAD_CONSTANTS } = require('../../config/aws-config');
+import { uploadFile, uploadBase64File, UploadError } from '../../utils/uploadFile.js';
+import multer from 'multer';
+import { ENV_VARS } from '../../config/envVars.js';
 
 // Configure multer for memory storage
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: UPLOAD_CONSTANTS.MAX_FILE_SIZE,
-    files: UPLOAD_CONSTANTS.MAX_FILES
+    fileSize: ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE,
+    files: ENV_VARS.UPLOAD_CONSTANTS.MAX_FILES
   },
   fileFilter: (req, file, cb) => {
     try {
@@ -23,9 +23,9 @@ const upload = multer({
         throw new UploadError('File mimetype is missing', 'INVALID_MIME_TYPE');
       }
 
-      if (!UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES[file.mimetype]) {
+      if (!ENV_VARS.UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES[file.mimetype]) {
         throw new UploadError(
-          `Invalid file type: ${file.mimetype}. Allowed types: ${Object.keys(UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES).join(', ')}`,
+          `Invalid file type: ${file.mimetype}. Allowed types: ${Object.keys(ENV_VARS.UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES).join(', ')}`,
           'INVALID_FILE_TYPE'
         );
       }
@@ -37,22 +37,22 @@ const upload = multer({
   }
 });
 
-const handleUpload = async (req, res) => {
+export const handleUpload = async (req, res) => {
   try {
     if (!req.file) {
       throw new UploadError('No file uploaded', 'NO_FILE');
     }
 
     // Validate file size
-    if (req.file.size > UPLOAD_CONSTANTS.MAX_FILE_SIZE) {
+    if (req.file.size > ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE) {
       throw new UploadError(
-        `File size exceeds maximum limit of ${UPLOAD_CONSTANTS.MAX_FILE_SIZE / (1024 * 1024)}MB`,
+        `File size exceeds maximum limit of ${ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE / (1024 * 1024)}MB`,
         'FILE_TOO_LARGE'
       );
     }
 
     const fileType = req.file.mimetype.split('/')[0];
-    const ext = UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES[req.file.mimetype];
+    const ext = ENV_VARS.UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES[req.file.mimetype];
     const key = `${fileType}s/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
 
     const uploadParams = {
@@ -79,7 +79,7 @@ const handleUpload = async (req, res) => {
   }
 };
 
-const handleBase64Upload = async (req, res) => {
+export const handleBase64Upload = async (req, res) => {
   try {
     // Explicitly set CORS headers for the upload endpoint
     const origin = req.headers.origin;
@@ -205,25 +205,25 @@ const handleBase64Upload = async (req, res) => {
   }
 };
 
-const handleMultipleUpload = async (req, res) => {
+export const handleMultipleUpload = async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       throw new UploadError('No files uploaded', 'NO_FILES');
     }
 
     // Validate total number of files
-    if (req.files.length > UPLOAD_CONSTANTS.MAX_FILES) {
+    if (req.files.length > ENV_VARS.UPLOAD_CONSTANTS.MAX_FILES) {
       throw new UploadError(
-        `Too many files. Maximum allowed is ${UPLOAD_CONSTANTS.MAX_FILES}`,
+        `Too many files. Maximum allowed is ${ENV_VARS.UPLOAD_CONSTANTS.MAX_FILES}`,
         'TOO_MANY_FILES'
       );
     }
 
     // Validate each file
     for (const file of req.files) {
-      if (file.size > UPLOAD_CONSTANTS.MAX_FILE_SIZE) {
+      if (file.size > ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE) {
         throw new UploadError(
-          `File "${file.originalname}" exceeds maximum size limit of ${UPLOAD_CONSTANTS.MAX_FILE_SIZE / (1024 * 1024)}MB`,
+          `File "${file.originalname}" exceeds maximum size limit of ${ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE / (1024 * 1024)}MB`,
           'FILE_TOO_LARGE'
         );
       }
@@ -231,7 +231,7 @@ const handleMultipleUpload = async (req, res) => {
 
     const uploadPromises = req.files.map(async (file) => {
       const fileType = file.mimetype.split('/')[0];
-      const ext = UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES[file.mimetype];
+      const ext = ENV_VARS.UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES[file.mimetype];
       const key = `${fileType}s/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
 
       const uploadParams = {
@@ -261,9 +261,5 @@ const handleMultipleUpload = async (req, res) => {
   }
 };
 
-module.exports = {
-  upload,
-  handleUpload,
-  handleBase64Upload,
-  handleMultipleUpload
-}; 
+// Export the multer instance to be used in routes
+export { upload }; 

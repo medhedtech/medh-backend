@@ -1,10 +1,10 @@
-const Membership = require("../models/membership-model");
-const Course = require("../models/course-model");
-const EnrolledCourse = require("../models/enrolled-courses-model");
-const Category = require("../models/category-model");
+import Membership from "../models/membership-model.js";
+import Course from "../models/course-model.js";
+import EnrolledCourse from "../models/enrolled-courses-model.js";
+import Category from "../models/category-model.js";
 
 // Create a new membership
-const createMembership = async (req, res) => {
+export const createMembership = async (req, res) => {
   try {
     const { student_id, category_ids, amount, plan_type, duration } = req.body;
 
@@ -70,7 +70,7 @@ const createMembership = async (req, res) => {
 };
 
 // Get all memberships
-const getAllMemberships = async (req, res) => {
+export const getAllMemberships = async (req, res) => {
   try {
     const memberships = await Membership.find()
       .populate("student_id", "full_name email phone_number")
@@ -85,7 +85,7 @@ const getAllMemberships = async (req, res) => {
 };
 
 // Get a single membership by ID
-const getMembershipById = async (req, res) => {
+export const getMembershipById = async (req, res) => {
   try {
     const membership = await Membership.findById(req.params.id)
       .populate("student_id", "full_name email phone_number")
@@ -105,7 +105,7 @@ const getMembershipById = async (req, res) => {
 };
 
 // Renew a membership
-const renewMembership = async (req, res) => {
+export const renewMembership = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -162,7 +162,7 @@ const renewMembership = async (req, res) => {
 };
 
 // Update a membership
-const updateMembership = async (req, res) => {
+export const updateMembership = async (req, res) => {
   try {
     const updatedMembership = await Membership.findByIdAndUpdate(
       req.params.id,
@@ -194,7 +194,7 @@ const updateMembership = async (req, res) => {
 };
 
 // Delete a membership by ID
-const deleteMembership = async (req, res) => {
+export const deleteMembership = async (req, res) => {
   try {
     const deletedMembership = await Membership.findByIdAndDelete(req.params.id);
 
@@ -215,7 +215,7 @@ const deleteMembership = async (req, res) => {
 };
 
 // Get the count of memberships taken by a student
-const getMembershipCountsByStudentId = async (req, res) => {
+export const getMembershipCountsByStudentId = async (req, res) => {
   try {
     const { student_id } = req.params;
     const totalSelfPacedMemberships = await EnrolledCourse.countDocuments({
@@ -255,7 +255,8 @@ const getMembershipCountsByStudentId = async (req, res) => {
   }
 };
 
-const getMembershipsByStudentId = async (req, res) => {
+// Get memberships by student ID, including course details
+export const getMembershipsByStudentId = async (req, res) => {
   try {
     const { student_id } = req.params;
 
@@ -309,7 +310,8 @@ const getMembershipsByStudentId = async (req, res) => {
   }
 };
 
-const getRenewAmount = async (req, res) => {
+// Get the renew amount based on plan type
+export const getRenewAmount = async (req, res) => {
   try {
     const { category, user_id } = req.query;
     const categoryData = await Category.findOne({ category_name: category });
@@ -352,16 +354,4 @@ const getRenewAmount = async (req, res) => {
       error: error.message,
     });
   }
-};
-
-module.exports = {
-  createMembership,
-  getAllMemberships,
-  getMembershipById,
-  renewMembership,
-  updateMembership,
-  deleteMembership,
-  getMembershipCountsByStudentId,
-  getMembershipsByStudentId,
-  getRenewAmount,
 };

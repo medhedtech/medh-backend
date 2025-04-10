@@ -1,11 +1,12 @@
-const HomeDisplay = require('../models/home-display');
+import HomeDisplay from '../models/home-display.js';
+import logger from '../utils/logger.js';
 
 /**
  * @desc    Get all home display items
  * @route   GET /api/v1/home-display
  * @access  Public
  */
-const getAllHomeDisplays = async (req, res) => {
+export const getAllHomeDisplays = async (req, res) => {
   try {
     const { active } = req.query;
     const filter = {};
@@ -39,7 +40,7 @@ const getAllHomeDisplays = async (req, res) => {
  * @route   GET /api/v1/home-display/fields
  * @access  Public
  */
-const getHomeDisplayWithFields = async (req, res) => {
+export const getHomeDisplayWithFields = async (req, res) => {
   try {
     const { fields, filters = {}, sort = 'display_order', page = 1, limit = 10, currency } = req.query;
     
@@ -223,7 +224,7 @@ const getHomeDisplayWithFields = async (req, res) => {
  * @route   GET /api/v1/home-display/:id
  * @access  Public
  */
-const getHomeDisplayById = async (req, res) => {
+export const getHomeDisplayById = async (req, res) => {
   try {
     const homeDisplay = await HomeDisplay.findOne({ id: req.params.id }).lean();
     
@@ -253,7 +254,7 @@ const getHomeDisplayById = async (req, res) => {
  * @route   POST /api/v1/home-display
  * @access  Private/Admin
  */
-const createHomeDisplay = async (req, res) => {
+export const createHomeDisplay = async (req, res) => {
   try {
     // Check if id already exists
     const existingDisplay = await HomeDisplay.findOne({ id: req.body.id });
@@ -286,7 +287,7 @@ const createHomeDisplay = async (req, res) => {
  * @route   PUT /api/v1/home-display/:id
  * @access  Private/Admin
  */
-const updateHomeDisplay = async (req, res) => {
+export const updateHomeDisplay = async (req, res) => {
   try {
     const homeDisplay = await HomeDisplay.findOneAndUpdate(
       { id: req.params.id },
@@ -320,7 +321,7 @@ const updateHomeDisplay = async (req, res) => {
  * @route   DELETE /api/v1/home-display/:id
  * @access  Private/Admin
  */
-const deleteHomeDisplay = async (req, res) => {
+export const deleteHomeDisplay = async (req, res) => {
   try {
     const homeDisplay = await HomeDisplay.findOneAndDelete({ id: req.params.id });
     
@@ -350,7 +351,7 @@ const deleteHomeDisplay = async (req, res) => {
  * @route   PUT /api/v1/home-display/order
  * @access  Private/Admin
  */
-const updateDisplayOrder = async (req, res) => {
+export const updateDisplayOrder = async (req, res) => {
   try {
     const { items } = req.body;
     
@@ -397,7 +398,7 @@ const updateDisplayOrder = async (req, res) => {
  * @route   POST /api/v1/home-display/seed
  * @access  Private/Admin
  */
-const seedHomeDisplayData = async (req, res) => {
+export const seedHomeDisplayData = async (req, res) => {
   try {
     // Use data from request body if provided, otherwise use default data
     const seedData = req.body && req.body.items && req.body.items.length > 0 
@@ -624,7 +625,7 @@ const seedHomeDisplayData = async (req, res) => {
  * @route   GET /api/v1/home-display/:id/prices
  * @access  Public
  */
-const getHomeDisplayPrices = async (req, res) => {
+export const getHomeDisplayPrices = async (req, res) => {
   try {
     const homeDisplay = await HomeDisplay.findOne({ id: req.params.id }).lean();
     
@@ -683,7 +684,7 @@ const getHomeDisplayPrices = async (req, res) => {
  * @route   GET /api/v1/home-display/prices
  * @access  Public
  */
-const getAllHomeDisplaysWithPrices = async (req, res) => {
+export const getAllHomeDisplaysWithPrices = async (req, res) => {
   try {
     const { 
       category, 
@@ -893,7 +894,7 @@ const getAllHomeDisplaysWithPrices = async (req, res) => {
  * @route   POST /api/v1/home-display/prices/bulk-update
  * @access  Private/Admin
  */
-const bulkUpdateHomeDisplayPrices = async (req, res) => {
+export const bulkUpdateHomeDisplayPrices = async (req, res) => {
   try {
     const { updates } = req.body;
     
@@ -937,29 +938,12 @@ const bulkUpdateHomeDisplayPrices = async (req, res) => {
   }
 };
 
-console.log('Home Display Controller functions:');
-console.log('getAllHomeDisplays:', typeof getAllHomeDisplays);
-console.log('getHomeDisplayById:', typeof getHomeDisplayById);
-console.log('createHomeDisplay:', typeof createHomeDisplay);
-console.log('updateHomeDisplay:', typeof updateHomeDisplay);
-console.log('deleteHomeDisplay:', typeof deleteHomeDisplay);
-console.log('updateDisplayOrder:', typeof updateDisplayOrder);
-console.log('seedHomeDisplayData:', typeof seedHomeDisplayData);
-console.log('getHomeDisplayWithFields:', typeof getHomeDisplayWithFields);
-console.log('getHomeDisplayPrices:', typeof getHomeDisplayPrices);
-console.log('getAllHomeDisplaysWithPrices:', typeof getAllHomeDisplaysWithPrices);
-console.log('bulkUpdateHomeDisplayPrices:', typeof bulkUpdateHomeDisplayPrices);
+// Debug log to show controller is loaded (changed to logger.debug)
+logger.debug('Home Display Controller functions loaded.'); 
 
-module.exports = {
-  getAllHomeDisplays,
-  getHomeDisplayById,
-  createHomeDisplay,
-  updateHomeDisplay,
-  deleteHomeDisplay,
-  updateDisplayOrder,
-  seedHomeDisplayData,
-  getHomeDisplayWithFields,
-  getHomeDisplayPrices,
-  getAllHomeDisplaysWithPrices,
-  bulkUpdateHomeDisplayPrices
-}; 
+// Example of how you might log the exported functions if needed for debug
+// logger.debug('Exported Home Display Functions:', {
+//   getAllHomeDisplays: typeof getAllHomeDisplays,
+//   getHomeDisplayById: typeof getHomeDisplayById,
+//   // ... add other exported functions ...
+// }); 

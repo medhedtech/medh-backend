@@ -1,6 +1,6 @@
-const User = require("../models/user-modal");
-const nodemailer = require("nodemailer");
-const bcrypt = require("bcryptjs");
+import User from "../models/user-modal.js";
+import nodemailer from "nodemailer";
+import bcrypt from "bcryptjs";
 
 // Set up the email transporter
 const transporter = nodemailer.createTransport({
@@ -12,7 +12,7 @@ const transporter = nodemailer.createTransport({
 });
 
 // Create Corporate User
-const createCorporate = async (req, res) => {
+export const createCorporate = async (req, res) => {
   const {
     full_name,
     email,
@@ -101,7 +101,7 @@ const createCorporate = async (req, res) => {
 };
 
 // Get All Corporate Users
-const getAllCorporateUsers = async (req, res) => {
+export const getAllCorporateUsers = async (req, res) => {
   try {
     const corporateUsers = await User.find({ role: "coorporate" });
     res.status(200).json({ success: true, data: corporateUsers });
@@ -111,7 +111,7 @@ const getAllCorporateUsers = async (req, res) => {
 };
 
 // Get Corporate User by ID
-const getCorporateById = async (req, res) => {
+export const getCorporateById = async (req, res) => {
   try {
     const { id } = req.params;
     const corporateUser = await User.findOne({ _id: id, role: "coorporate" });
@@ -127,7 +127,7 @@ const getCorporateById = async (req, res) => {
 };
 
 // Update Corporate User
-const updateCorporate = async (req, res) => {
+export const updateCorporate = async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -149,7 +149,7 @@ const updateCorporate = async (req, res) => {
 };
 
 // Delete Corporate User
-const deleteCorporate = async (req, res) => {
+export const deleteCorporate = async (req, res) => {
   try {
     const { id } = req.params;
     const deletedCorporateUser = await User.findOneAndDelete({
@@ -168,7 +168,7 @@ const deleteCorporate = async (req, res) => {
 };
 
 // Toggle Corporate User Status
-const toggleCorporateStatus = async (req, res) => {
+export const toggleCorporateStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const corporateUser = await User.findOne({ _id: id, role: "coorporate" });
@@ -190,13 +190,4 @@ const toggleCorporateStatus = async (req, res) => {
       .status(500)
       .json({ message: "Error toggling corporate user status", error });
   }
-};
-
-module.exports = {
-  createCorporate,
-  getAllCorporateUsers,
-  getCorporateById,
-  updateCorporate,
-  deleteCorporate,
-  toggleCorporateStatus,
 };

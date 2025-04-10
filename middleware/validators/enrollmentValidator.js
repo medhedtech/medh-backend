@@ -1,10 +1,10 @@
-const { body, validationResult } = require('express-validator');
+import { body, validationResult } from 'express-validator';
 
 /**
  * Validates enrollment data
  * @returns {Array} Array of validation middleware functions
  */
-const validateEnrollment = [
+export const validateEnrollment = [
   // Required fields validation
   body('student_id')
     .notEmpty()
@@ -91,8 +91,4 @@ const validateEnrollment = [
     }
     next();
   }
-];
-
-module.exports = {
-  validateEnrollment
-}; 
+]; 

@@ -1,8 +1,8 @@
-const { getAPIMetrics } = require('../middleware/apiMonitor');
-const errorTracker = require('../services/errorTracker');
-const logger = require('../utils/logger');
+import { getAPIMetrics } from '../middleware/apiMonitor.js';
+import errorTracker from '../services/errorTracker.js';
+import logger from '../utils/logger.js';
 
-exports.getMetrics = (req, res) => {
+export const getMetrics = (req, res) => {
   try {
     const metrics = getAPIMetrics();
     res.json(metrics);
@@ -20,7 +20,7 @@ exports.getMetrics = (req, res) => {
   }
 };
 
-exports.getErrorStats = (req, res) => {
+export const getErrorStats = (req, res) => {
   try {
     const stats = errorTracker.getErrorStats();
     res.json({
@@ -41,7 +41,7 @@ exports.getErrorStats = (req, res) => {
   }
 };
 
-exports.getErrorSummary = (req, res) => {
+export const getErrorSummary = (req, res) => {
   try {
     const summary = errorTracker.getErrorSummary();
     res.json({
@@ -63,7 +63,7 @@ exports.getErrorSummary = (req, res) => {
   }
 };
 
-exports.getSystemHealth = (req, res) => {
+export const getSystemHealth = (req, res) => {
   try {
     const metrics = getAPIMetrics();
     const errorStats = errorTracker.getErrorStats();

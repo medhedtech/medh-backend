@@ -1,7 +1,7 @@
-const JobForm = require("../models/job-model");
+import JobForm from "../models/job-model.js";
 
 // Create a new job form entry
-const createJobForm = async (req, res) => {
+export const createJobForm = async (req, res) => {
   try {
     const {
       full_name,
@@ -45,7 +45,7 @@ const createJobForm = async (req, res) => {
 };
 
 // Retrieve all job form entries
-const getAllJobForms = async (req, res) => {
+export const getAllJobForms = async (req, res) => {
   try {
     const jobForms = await JobForm.find().sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: jobForms });
@@ -57,7 +57,7 @@ const getAllJobForms = async (req, res) => {
 };
 
 // Retrieve a single job form entry by ID
-const getJobFormById = async (req, res) => {
+export const getJobFormById = async (req, res) => {
   try {
     const jobForm = await JobForm.findById(req.params.id);
     if (!jobForm) {
@@ -75,7 +75,7 @@ const getJobFormById = async (req, res) => {
 };
 
 // Update a job form entry by ID
-const updateJobForm = async (req, res) => {
+export const updateJobForm = async (req, res) => {
   try {
     const updatedJobForm = await JobForm.findByIdAndUpdate(
       req.params.id,
@@ -98,7 +98,7 @@ const updateJobForm = async (req, res) => {
 };
 
 // Delete a job form entry by ID
-const deleteJobForm = async (req, res) => {
+export const deleteJobForm = async (req, res) => {
   try {
     const deletedJobForm = await JobForm.findByIdAndDelete(req.params.id);
 
@@ -116,12 +116,4 @@ const deleteJobForm = async (req, res) => {
       .status(500)
       .json({ success: false, message: "Server error", error: err.message });
   }
-};
-
-module.exports = {
-  createJobForm,
-  getAllJobForms,
-  getJobFormById,
-  updateJobForm,
-  deleteJobForm,
 };

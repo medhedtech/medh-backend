@@ -1,9 +1,9 @@
-const ExcelJS = require('exceljs');
-const logger = require('../utils/logger');
-const Quiz = require('../models/quiz-model');
-const { AppError } = require('../utils/errorHandler');
+import ExcelJS from 'exceljs';
+import logger from '../utils/logger.js';
+import Quiz from '../models/quiz-model.js';
+import { AppError } from '../utils/errorHandler.js';
 
-exports.getAllQuizzes = async (req, res) => {
+export const getAllQuizzes = async (req, res) => {
   try {
     const { class_id, created_by, isActive } = req.query;
     
@@ -40,7 +40,7 @@ exports.getAllQuizzes = async (req, res) => {
   }
 };
 
-exports.createQuiz = async (req, res) => {
+export const createQuiz = async (req, res) => {
   try {
     const {
       created_by,
@@ -94,7 +94,7 @@ exports.createQuiz = async (req, res) => {
   }
 };
 
-exports.uploadQuiz = async (req, res) => {
+export const uploadQuiz = async (req, res) => {
   try {
     if (!req.files || !req.files.file) {
       throw new AppError('No file uploaded', 400);
@@ -206,7 +206,7 @@ exports.uploadQuiz = async (req, res) => {
   }
 };
 
-exports.getQuizById = async (req, res) => {
+export const getQuizById = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.id)
       .populate('created_by', 'full_name email')
@@ -240,7 +240,7 @@ exports.getQuizById = async (req, res) => {
   }
 };
 
-exports.importQuizFromExcel = async (req, res) => {
+export const importQuizFromExcel = async (req, res) => {
   try {
     if (!req.files || !req.files.file) {
       throw new AppError('No file uploaded', 400);
@@ -296,7 +296,7 @@ exports.importQuizFromExcel = async (req, res) => {
   }
 };
 
-exports.exportQuizToExcel = async (req, res) => {
+export const exportQuizToExcel = async (req, res) => {
   try {
     const quiz = await Quiz.findById(req.params.id);
     if (!quiz) {

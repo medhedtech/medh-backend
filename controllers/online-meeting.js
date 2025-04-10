@@ -1,10 +1,10 @@
-const moment = require("moment");
-const OnlineMeeting = require("../models/online-meeting");
-const Course = require("../models/course-model");
-const User = require("../models/user-modal");
-const CoorporateAssignCourse = require("../models/assigned-courses-coorporates-modal");
+import moment from "moment";
+import OnlineMeeting from "../models/online-meeting.js";
+import Course from "../models/course-model.js";
+import User from "../models/user-modal.js";
+import CoorporateAssignCourse from "../models/assigned-courses-coorporates-modal.js";
 
-exports.createOnlineMeeting = async (req, res) => {
+export const createOnlineMeeting = async (req, res) => {
   try {
     const {
       course_name,
@@ -82,7 +82,7 @@ exports.createOnlineMeeting = async (req, res) => {
 };
 
 // Get all online meetings
-exports.getAllOnlineMeetings = async (req, res) => {
+export const getAllOnlineMeetings = async (req, res) => {
   try {
     const { page = 1, limit = 5 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -102,7 +102,7 @@ exports.getAllOnlineMeetings = async (req, res) => {
 };
 
 // Get online meeting by ID
-exports.getOnlineMeetingById = async (req, res) => {
+export const getOnlineMeetingById = async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -122,7 +122,7 @@ exports.getOnlineMeetingById = async (req, res) => {
 };
 
 // Update online meeting by ID
-exports.updateOnlineMeeting = async (req, res) => {
+export const updateOnlineMeeting = async (req, res) => {
   try {
     const { id } = req.params;
     const { course_name, meet_link, meet_title, meeting_tag, time, date } =
@@ -145,7 +145,7 @@ exports.updateOnlineMeeting = async (req, res) => {
 };
 
 // Delete online meeting by ID
-exports.deleteOnlineMeeting = async (req, res) => {
+export const deleteOnlineMeeting = async (req, res) => {
   try {
     const { id } = req.params;
     const deletedMeeting = await OnlineMeeting.findByIdAndDelete(id);
@@ -160,7 +160,7 @@ exports.deleteOnlineMeeting = async (req, res) => {
   }
 };
 
-exports.getOnlineMeetingByStudentId = async (req, res) => {
+export const getOnlineMeetingByStudentId = async (req, res) => {
   try {
     const studentId = req.params.student_id;
     const { show_all_upcoming } = req.query;
@@ -209,7 +209,7 @@ exports.getOnlineMeetingByStudentId = async (req, res) => {
 };
 
 // Fetch upcoming classes for an instructor by ID
-exports.getUpcomingClassesByInstructorId = async (req, res) => {
+export const getUpcomingClassesByInstructorId = async (req, res) => {
   try {
     const { instructor_id } = req.params;
 
@@ -258,7 +258,7 @@ exports.getUpcomingClassesByInstructorId = async (req, res) => {
   }
 };
 
-exports.getOngoingClassesByInstructorId = async (req, res) => {
+export const getOngoingClassesByInstructorId = async (req, res) => {
   try {
     const { instructor_id } = req.params;
 
@@ -315,7 +315,7 @@ exports.getOngoingClassesByInstructorId = async (req, res) => {
   }
 };
 
-exports.getAllMeetingsForCorporateStudents = async (req, res) => {
+export const getAllMeetingsForCorporateStudents = async (req, res) => {
   try {
     // Step 1: Fetch all corporate students (users with role "coorporate-student" and status "Active")
     const { student_id } = req.query;

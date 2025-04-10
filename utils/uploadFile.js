@@ -1,6 +1,9 @@
-const { s3Client, UPLOAD_CONSTANTS } = require('../config/aws-config');
+import { s3 } from '../config/aws-config.js';
+import { ENV_VARS } from '../config/envVars.js'; // Import ENV_VARS
 
-class UploadError extends Error {
+// Removed local upload constants
+
+export class UploadError extends Error {
   constructor(message, code = 'UPLOAD_ERROR') {
     super(message);
     this.name = 'UploadError';
@@ -9,9 +12,9 @@ class UploadError extends Error {
 }
 
 const validateFileType = (mimeType) => {
-  if (!UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES[mimeType]) {
+  if (!ENV_VARS.UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES[mimeType]) { // Use ENV_VARS
     throw new UploadError(
-      `Invalid file type. Allowed types: ${Object.keys(UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES).join(', ')}`,
+      `Invalid file type. Allowed types: ${Object.keys(ENV_VARS.UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES).join(', ')}`,
       'INVALID_FILE_TYPE'
     );
   }
@@ -19,16 +22,16 @@ const validateFileType = (mimeType) => {
 };
 
 const validateFileSize = (size) => {
-  if (size > UPLOAD_CONSTANTS.MAX_FILE_SIZE) {
+  if (size > ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE) { // Use ENV_VARS
     throw new UploadError(
-      `File size exceeds maximum limit of ${UPLOAD_CONSTANTS.MAX_FILE_SIZE / (1024 * 1024)}MB`,
+      `File size exceeds maximum limit of ${ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE / (1024 * 1024)}MB`,
       'FILE_TOO_LARGE'
     );
   }
   return true;
 };
 
-const uploadFile = async (uploadData) => {
+export const uploadFile = async (uploadData) => {
   try {
     // Validate file type
     if (uploadData.contentType) {
@@ -41,13 +44,13 @@ const uploadFile = async (uploadData) => {
     }
 
     const uploadParams = {
-      Bucket: uploadData.bucketName || UPLOAD_CONSTANTS.BUCKET_NAME,
+      Bucket: uploadData.bucketName || ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME, // Use ENV_VARS
       Key: uploadData.key,
       Body: uploadData.file,
       ContentType: uploadData.contentType
     };
 
-    const result = await s3Client.upload(uploadParams).promise();
+    const result = await s3.upload(uploadParams).promise();
     
     return {
       success: true,
@@ -67,7 +70,7 @@ const uploadFile = async (uploadData) => {
   }
 };
 
-const uploadBase64File = async (base64String, fileType, folder) => {
+export const uploadBase64File = async (base64String, fileType, folder) => {
   try {
     // Extract MIME type and base64 data
     const mimeTypeMatch = base64String.match(/^data:(.*?);base64,/);
@@ -85,7 +88,7 @@ const uploadBase64File = async (base64String, fileType, folder) => {
     const file = Buffer.from(base64Data, 'base64');
 
     // Generate S3 key
-    const fileExtension = UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES[mimeType];
+    const fileExtension = ENV_VARS.UPLOAD_CONSTANTS.ALLOWED_MIME_TYPES[mimeType]; // Use ENV_VARS
     const key = `${folder}/${Date.now()}.${fileExtension}`;
 
     // Upload parameters
@@ -100,10 +103,4 @@ const uploadBase64File = async (base64String, fileType, folder) => {
     console.error('Base64 upload error:', error);
     throw error;
   }
-};
-
-module.exports = {
-  uploadFile,
-  uploadBase64File,
-  UploadError
 };

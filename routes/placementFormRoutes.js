@@ -1,5 +1,5 @@
-const express = require("express");
-const {
+import express from "express";
+import {
   getAllPlacementForms,
   getPlacementFormById,
   createPlacementForm,
@@ -7,7 +7,7 @@ const {
   deletePlacementForm,
   updateApplicationStatus,
   bulkUpdateCourseFees
-} = require("../controllers/placementFormController");
+} from "../controllers/placementFormController.js";
 
 const router = express.Router();
 
@@ -32,4 +32,4 @@ router.patch("/:id/status", updateApplicationStatus);
 // Route for bulk updating course fees
 router.post("/bulk-update-fees", bulkUpdateCourseFees);
 
-module.exports = router; 
+export default router; 

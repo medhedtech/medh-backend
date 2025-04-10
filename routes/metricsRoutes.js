@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const metricsController = require('../controllers/metricsController');
-const { apiLimiter } = require('../middleware/rateLimiter');
+import * as metricsController from '../controllers/metricsController';
+import { apiLimiter } from '../middleware/rateLimiter';
 
 // Apply rate limiting to all metrics routes
 router.use(apiLimiter);
@@ -16,4 +16,4 @@ router.get('/errors/summary', metricsController.getErrorSummary);
 // System Health
 router.get('/health', metricsController.getSystemHealth);
 
-module.exports = router; 
+export default router; 

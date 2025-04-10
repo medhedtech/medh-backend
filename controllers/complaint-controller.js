@@ -1,6 +1,6 @@
-const Complaint = require("../models/complaint");
+import Complaint from "../models/complaint.js";
 
-exports.getAllComplaints = async (req, res) => {
+export const getAllComplaints = async (req, res) => {
   try {
     const complaints = await Complaint.find()
       .populate("userId")
@@ -11,7 +11,7 @@ exports.getAllComplaints = async (req, res) => {
   }
 };
 
-exports.createComplaint = async (req, res) => {
+export const createComplaint = async (req, res) => {
   const { userId, name, description } = req.body;
   try {
     const newComplaint = new Complaint({
@@ -27,7 +27,7 @@ exports.createComplaint = async (req, res) => {
   }
 };
 
-exports.updateComplaint = async (req, res) => {
+export const updateComplaint = async (req, res) => {
   const { status, resolutionDate } = req.body;
   try {
     const updatedComplaint = await Complaint.findByIdAndUpdate(
@@ -42,7 +42,7 @@ exports.updateComplaint = async (req, res) => {
 };
 
 // Delete complaint by ID
-exports.deleteComplaint = async (req, res) => {
+export const deleteComplaint = async (req, res) => {
   try {
     const complaintId = req.params.id;
     const deletedComplaint = await Complaint.findByIdAndDelete(complaintId);
@@ -58,7 +58,7 @@ exports.deleteComplaint = async (req, res) => {
   }
 };
 
-exports.getComplaintsByStatus = async (req, res) => {
+export const getComplaintsByStatus = async (req, res) => {
   try {
     const complaints = await Complaint.find({
       status: req.params.status,
@@ -69,7 +69,7 @@ exports.getComplaintsByStatus = async (req, res) => {
   }
 };
 
-exports.updateComplaintStatus = async (req, res) => {
+export const updateComplaintStatus = async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
@@ -99,7 +99,7 @@ exports.updateComplaintStatus = async (req, res) => {
   }
 };
 
-exports.getAllInstructorComplaints = async (req, res) => {
+export const getAllInstructorComplaints = async (req, res) => {
   try {
     const complaints = await Complaint.find()
       .populate("userId")
@@ -110,7 +110,7 @@ exports.getAllInstructorComplaints = async (req, res) => {
   }
 };
 
-exports.createInstructorComplaints = async (req, res) => {
+export const createInstructorComplaints = async (req, res) => {
   const { userId, name, description } = req.body;
   try {
     const newComplaint = new Complaint({
@@ -126,7 +126,7 @@ exports.createInstructorComplaints = async (req, res) => {
   }
 };
 
-exports.getAllEmployeeComplaints = async (req, res) => {
+export const getAllEmployeeComplaints = async (req, res) => {
   try {
     const complaints = await Complaint.find()
       .populate("userId")
@@ -137,7 +137,7 @@ exports.getAllEmployeeComplaints = async (req, res) => {
   }
 };
 
-exports.createEmployeeComplaints = async (req, res) => {
+export const createEmployeeComplaints = async (req, res) => {
   const { userId, name, description } = req.body;
   try {
     const newComplaint = new Complaint({

@@ -160,7 +160,4 @@ const generatePdfContentForCertificate = (subscription) => {
     `;
 };
 
-module.exports = {
-  generatePdfContentForSubscription,
-  generatePdfContentForCertificate,
-};
+export { generatePdfContentForSubscription, generatePdfContentForCertificate };

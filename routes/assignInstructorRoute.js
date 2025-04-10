@@ -1,13 +1,14 @@
-const express = require("express");
-const router = express.Router();
-const {
+import express from "express";
+import {
   createOrUpdateInstructorAssignment,
   getAllInstructorAssignments,
   getInstructorAssignmentById,
   updateInstructorAssignment,
   deleteInstructorAssignment,
   getAssignedCoursesByInstructorId,
-} = require("../controllers/assignInstructorController");
+} from "../controllers/assignInstructorController.js";
+
+const router = express.Router();
 
 // router.post("/assign-instructor", createInstructorAssignment);
 router.post("/create", createOrUpdateInstructorAssignment);
@@ -17,4 +18,4 @@ router.get("/get/:id", getInstructorAssignmentById);
 router.post("/update/:id", updateInstructorAssignment);
 router.delete("/delete/:id", deleteInstructorAssignment);
 
-module.exports = router;
+export default router;
