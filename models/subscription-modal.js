@@ -25,12 +25,12 @@ const SubscriptionCourseSchema = new mongoose.Schema(
       required: false,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const SubscriptionCourse = mongoose.model(
   "Subscription",
-  SubscriptionCourseSchema
+  SubscriptionCourseSchema,
 );
 
 export default SubscriptionCourse;

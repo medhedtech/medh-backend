@@ -1,8 +1,9 @@
 import moment from "moment";
-import OnlineMeeting from "../models/online-meeting.js";
-import Course from "../models/course-model.js";
-import User from "../models/user-modal.js";
+
 import CoorporateAssignCourse from "../models/assigned-courses-coorporates-modal.js";
+import Course from "../models/course-model.js";
+import OnlineMeeting from "../models/online-meeting.js";
+import User from "../models/user-modal.js";
 
 export const createOnlineMeeting = async (req, res) => {
   try {
@@ -131,7 +132,7 @@ export const updateOnlineMeeting = async (req, res) => {
     const updatedMeeting = await OnlineMeeting.findByIdAndUpdate(
       id,
       { course_name, meet_link, meet_title, meeting_tag, time, date },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!updatedMeeting) {
@@ -239,7 +240,7 @@ export const getUpcomingClassesByInstructorId = async (req, res) => {
     // Step 3: Map each meeting to its full course details
     const enrichedMeetings = upcomingMeetings.map((meeting) => {
       const courseDetails = courses.find(
-        (course) => course.course_title === meeting.course_name
+        (course) => course.course_title === meeting.course_name,
       );
       return {
         ...meeting._doc,
@@ -289,7 +290,7 @@ export const getOngoingClassesByInstructorId = async (req, res) => {
     // Step 5: Enrich meetings with course details
     const enrichedMeetings = ongoingMeetings.map((meeting) => {
       const courseDetails = courses.find(
-        (course) => course.course_title === meeting.course_name
+        (course) => course.course_title === meeting.course_name,
       );
       return {
         ...meeting._doc,
@@ -338,7 +339,7 @@ export const getAllMeetingsForCorporateStudents = async (req, res) => {
     const currentTime = moment();
     console.log(
       new Date(new Date().setHours(0, 0, 0, 0)),
-      new Date(new Date().setHours(23, 59, 59, 999))
+      new Date(new Date().setHours(23, 59, 59, 999)),
     );
     const oneHourAgo = moment().subtract(1, "hours");
 

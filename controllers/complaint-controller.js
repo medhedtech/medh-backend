@@ -33,7 +33,7 @@ export const updateComplaint = async (req, res) => {
     const updatedComplaint = await Complaint.findByIdAndUpdate(
       req.params.id,
       { status, resolutionDate },
-      { new: true }
+      { new: true },
     );
     res.status(200).json(updatedComplaint);
   } catch (error) {
@@ -83,7 +83,7 @@ export const updateComplaintStatus = async (req, res) => {
     const updatedComplaint = await Complaint.findByIdAndUpdate(
       id,
       { status },
-      { new: true }
+      { new: true },
     );
 
     if (!updatedComplaint) {

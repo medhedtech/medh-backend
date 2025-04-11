@@ -23,33 +23,34 @@ npm install --save razorpay
 ### Step 2: Create a Payment Component
 
 ```jsx
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from "react";
+import axios from "axios";
 
-const RazorpayCheckout = ({ 
-  amount, 
-  courseId, 
+const RazorpayCheckout = ({
+  amount,
+  courseId,
   enrollmentType,
   planId,
   planName,
   durationType,
   paymentType,
   isSelfPaced = false,
-  onSuccess, 
-  onError 
+  onSuccess,
+  onError,
 }) => {
   const [loading, setLoading] = useState(false);
-  const [razorpayKey, setRazorpayKey] = useState('');
+  const [razorpayKey, setRazorpayKey] = useState("");
 
   useEffect(() => {
     // Fetch Razorpay key from backend
-    axios.get('/api/v1/payments/key')
-      .then(response => {
+    axios
+      .get("/api/v1/payments/key")
+      .then((response) => {
         setRazorpayKey(response.data.data.key);
       })
-      .catch(error => {
-        console.error('Failed to fetch Razorpay key:', error);
-        onError && onError('Failed to fetch payment gateway configuration');
+      .catch((error) => {
+        console.error("Failed to fetch Razorpay key:", error);
+        onError && onError("Failed to fetch payment gateway configuration");
       });
   }, []);
 
@@ -60,39 +61,48 @@ const RazorpayCheckout = ({
       // Prepare payload based on payment type
       let payload = {
         amount,
-        currency: 'INR',
+        currency: "INR",
         payment_type: paymentType,
         productInfo: {
           // Common product info for tracking
-          item_name: paymentType === 'course' ? 'Course Enrollment' : 'Subscription Plan',
-          description: paymentType === 'course' ? `Enrollment for course ${courseId}` : `Subscription plan: ${planName}`
-        }
+          item_name:
+            paymentType === "course"
+              ? "Course Enrollment"
+              : "Subscription Plan",
+          description:
+            paymentType === "course"
+              ? `Enrollment for course ${courseId}`
+              : `Subscription plan: ${planName}`,
+        },
       };
 
       // Add payment type specific fields
-      if (paymentType === 'course') {
+      if (paymentType === "course") {
         payload = {
           ...payload,
           course_id: courseId,
           enrollment_type: enrollmentType,
-          is_self_paced: isSelfPaced
+          is_self_paced: isSelfPaced,
         };
-      } else if (paymentType === 'subscription') {
+      } else if (paymentType === "subscription") {
         payload = {
           ...payload,
           plan_id: planId,
           plan_name: planName,
-          duration_months: durationType
+          duration_months: durationType,
         };
       }
 
       // Create an order
-      const orderResponse = await axios.post('/api/v1/payments/create-order', payload);
+      const orderResponse = await axios.post(
+        "/api/v1/payments/create-order",
+        payload,
+      );
       const { id: orderId, amount: orderAmount } = orderResponse.data.data;
 
       // Load the Razorpay SDK
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
       script.async = true;
       document.body.appendChild(script);
 
@@ -100,62 +110,65 @@ const RazorpayCheckout = ({
         const options = {
           key: razorpayKey,
           amount: orderAmount, // Amount in smallest currency unit (paise)
-          currency: 'INR',
-          name: 'MEDH Learning Platform',
-          description: paymentType === 'course' ? 'Course Enrollment' : 'Subscription Plan',
+          currency: "INR",
+          name: "MEDH Learning Platform",
+          description:
+            paymentType === "course"
+              ? "Course Enrollment"
+              : "Subscription Plan",
           order_id: orderId,
           handler: function (response) {
             // Handle payment success
             verifyPayment(response);
           },
           prefill: {
-            name: 'Student Name', // Can be dynamically populated
-            email: 'student@example.com',
-            contact: '+91XXXXXXXXXX'
+            name: "Student Name", // Can be dynamically populated
+            email: "student@example.com",
+            contact: "+91XXXXXXXXXX",
           },
           theme: {
-            color: '#3399cc'
-          }
+            color: "#3399cc",
+          },
         };
 
         const paymentObject = new window.Razorpay(options);
         paymentObject.open();
-        paymentObject.on('payment.failed', function (response) {
+        paymentObject.on("payment.failed", function (response) {
           setLoading(false);
-          onError && onError('Payment failed: ' + response.error.description);
+          onError && onError("Payment failed: " + response.error.description);
         });
       };
     } catch (error) {
       setLoading(false);
-      console.error('Payment initialization failed:', error);
-      onError && onError('Failed to initialize payment');
+      console.error("Payment initialization failed:", error);
+      onError && onError("Failed to initialize payment");
     }
   };
 
   const verifyPayment = async (paymentResponse) => {
     try {
-      const response = await axios.post('/api/v1/payments/verify-payment', {
+      const response = await axios.post("/api/v1/payments/verify-payment", {
         razorpay_payment_id: paymentResponse.razorpay_payment_id,
         razorpay_order_id: paymentResponse.razorpay_order_id,
-        razorpay_signature: paymentResponse.razorpay_signature
+        razorpay_signature: paymentResponse.razorpay_signature,
       });
 
       setLoading(false);
       onSuccess && onSuccess(response.data);
     } catch (error) {
       setLoading(false);
-      console.error('Payment verification failed:', error);
-      onError && onError('Payment verification failed');
+      console.error("Payment verification failed:", error);
+      onError && onError("Payment verification failed");
     }
   };
 
   return (
-    <button 
-      onClick={handlePayment} 
+    <button
+      onClick={handlePayment}
       disabled={loading || !razorpayKey}
       className="payment-button"
     >
-      {loading ? 'Processing...' : 'Pay Now'}
+      {loading ? "Processing..." : "Pay Now"}
     </button>
   );
 };
@@ -219,7 +232,6 @@ RAZORPAY_KEY_ID=your_razorpay_key_id
 RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 ```
 
-
 ## Testing
 
 For testing, you can use Razorpay's test mode and the following test card:
@@ -236,4 +248,4 @@ If you encounter issues:
 1. Check that Razorpay keys are correctly configured
 2. Verify that the amount is in the smallest currency unit (paise for INR)
 3. Ensure your server is correctly handling the verification callback
-4. Check the network requests for any error responses 
+4. Check the network requests for any error responses

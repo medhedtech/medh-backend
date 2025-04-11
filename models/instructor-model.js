@@ -30,7 +30,7 @@ const instructorSchema = new mongoose.Schema(
       default: "Active",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const Instructor = mongoose.model("Instructor", instructorSchema);

@@ -31,9 +31,9 @@ const currencySchema = new Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 const Currency = mongoose.model("Currency", currencySchema);
 
-export default Currency; 
+export default Currency;

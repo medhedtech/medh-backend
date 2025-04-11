@@ -1,8 +1,8 @@
-import CoorporateEnrolledModule from "../models/coorporate-enrolled-modules.model.js";
 import CoorporateAssignCourse from "../models/assigned-courses-coorporates-modal.js";
+import CoorporateEnrolledModule from "../models/coorporate-enrolled-modules.model.js";
 import Course from "../models/course-model.js";
-import User from "../models/user-modal.js";
 import OnlineMeeting from "../models/online-meeting.js";
+import User from "../models/user-modal.js";
 
 export const createCoorporateAssignCourse = async (req, res) => {
   try {
@@ -71,7 +71,7 @@ export const createCoorporateAssignCourse = async (req, res) => {
         // Skip the student if they are already enrolled
         if (existingEnrollment) {
           console.log(
-            `Student ${corporateStudent.full_name} is already enrolled in the course.`
+            `Student ${corporateStudent.full_name} is already enrolled in the course.`,
           );
           continue;
         }
@@ -84,7 +84,7 @@ export const createCoorporateAssignCourse = async (req, res) => {
             enrollment_id: existingAssignment._id,
             video_url,
             ...(expiry_date && { expiry_date }),
-          }))
+          })),
         );
       }
 
@@ -92,7 +92,7 @@ export const createCoorporateAssignCourse = async (req, res) => {
       if (enrolledModules.length > 0) {
         await CoorporateEnrolledModule.insertMany(enrolledModules);
         console.log(
-          `Enrolled ${enrolledModules.length} students to the course ${course_id}`
+          `Enrolled ${enrolledModules.length} students to the course ${course_id}`,
         );
       } else {
         console.log("No new enrollments, all students are already enrolled.");
@@ -152,9 +152,8 @@ export const deleteCoorporateAssignCourse = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const deletedAssignment = await CoorporateAssignCourse.findByIdAndDelete(
-      id
-    );
+    const deletedAssignment =
+      await CoorporateAssignCourse.findByIdAndDelete(id);
     if (!deletedAssignment) {
       return res.status(404).json({ message: "Assignment not found" });
     }
@@ -237,7 +236,7 @@ export const watchCoorporateVideo = async (req, res) => {
         {
           is_completed: true,
           completed_on: new Date(),
-        }
+        },
       );
     }
 
@@ -283,12 +282,12 @@ export const getCoursesByCorporateStudentId = async (req, res) => {
         if (course.assigned_instructor) {
           const instructor = await User.findOne(
             { _id: course.assigned_instructor, role: "instructor" },
-            "full_name email"
+            "full_name email",
           );
           return { ...course._doc, assigned_instructor: instructor || null };
         }
         return course;
-      })
+      }),
     );
 
     res.status(200).json({
@@ -363,12 +362,12 @@ export const getEnrollmentCountsByCoorporateStudentId = async (req, res) => {
 
     // Count live courses
     const liveCoursesCount = enrollments.filter(
-      (enrollment) => enrollment.course_id.course_category === "Live Courses"
+      (enrollment) => enrollment.course_id.course_category === "Live Courses",
     ).length;
 
     // Count self-paced courses dynamically
     const selfPacedCoursesCount = enrollments.filter(
-      (enrollment) => enrollment.course_id.course_category === "Self-Paced"
+      (enrollment) => enrollment.course_id.course_category === "Self-Paced",
     ).length;
 
     // Send response with all counts

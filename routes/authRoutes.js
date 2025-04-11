@@ -1,9 +1,10 @@
-import express from 'express';
-import authController from '../controllers/authController.js';
-import { authenticate as authMiddleware } from '../middleware/auth.js';
-import * as instructorController from '../controllers/instructor-controller.js';
-import * as corporateController from '../controllers/corporateController.js';
-import * as corporateStudentController from '../controllers/coorporate-student-controller.js';
+import express from "express";
+
+import authController from "../controllers/authController.js";
+import * as corporateStudentController from "../controllers/coorporate-student-controller.js";
+import * as corporateController from "../controllers/corporateController.js";
+import * as instructorController from "../controllers/instructor-controller.js";
+import { authenticate as authMiddleware } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -12,72 +13,106 @@ const router = express.Router();
  * @desc    Register a new user
  * @access  Public
  */
-router.post('/register', authController.registerUser.bind(authController));
+router.post("/register", authController.registerUser.bind(authController));
 
 /**
  * @route   POST /api/v1/auth/login
  * @desc    Login a user and get token
  * @access  Public
  */
-router.post('/login', authController.loginUser.bind(authController));
+router.post("/login", authController.loginUser.bind(authController));
 
 /**
  * @route   POST /api/v1/auth/forgot-password
  * @desc    Send temporary password to user's email
  * @access  Public
  */
-router.post('/forgot-password', authController.forgotPassword.bind(authController));
+router.post(
+  "/forgot-password",
+  authController.forgotPassword.bind(authController),
+);
 
 /**
  * @route   GET /api/v1/auth/users
  * @desc    Get all users
  * @access  Private (Admin only)
  */
-router.get('/users', authMiddleware, authController.getAllUsers.bind(authController));
+router.get(
+  "/users",
+  authMiddleware,
+  authController.getAllUsers.bind(authController),
+);
 
 /**
  * @route   GET /api/v1/auth/get-all-students
  * @desc    Get all users with the STUDENT role
  * @access  Private (Admin only - or adjust as needed)
  */
-router.get('/get-all-students', authMiddleware, authController.getAllStudents.bind(authController));
+router.get(
+  "/get-all-students",
+  authMiddleware,
+  authController.getAllStudents.bind(authController),
+);
 
 /**
  * @route   GET /api/v1/auth/users/:id
  * @desc    Get user by ID
  * @access  Private
  */
-router.get('/users/:id', authMiddleware, authController.getUserById.bind(authController));
+router.get(
+  "/users/:id",
+  authMiddleware,
+  authController.getUserById.bind(authController),
+);
 
 /**
  * @route   PUT /api/v1/auth/users/:id
  * @desc    Update user by ID
  * @access  Private
  */
-router.put('/users/:id', authMiddleware, authController.updateUser.bind(authController));
+router.put(
+  "/users/:id",
+  authMiddleware,
+  authController.updateUser.bind(authController),
+);
 
 /**
  * @route   PUT /api/v1/auth/users/email/:email
  * @desc    Update user by email
  * @access  Private
  */
-router.put('/users/email/:email', authMiddleware, authController.updateUserByEmail.bind(authController));
+router.put(
+  "/users/email/:email",
+  authMiddleware,
+  authController.updateUserByEmail.bind(authController),
+);
 
 /**
  * @route   DELETE /api/v1/auth/users/:id
  * @desc    Delete user by ID
  * @access  Private (Admin only)
  */
-router.delete('/users/:id', authMiddleware, authController.deleteUser.bind(authController));
+router.delete(
+  "/users/:id",
+  authMiddleware,
+  authController.deleteUser.bind(authController),
+);
 
 /**
  * @route   PUT /api/v1/auth/toggle-status/:id
  * @desc    Toggle user active/inactive status
  * @access  Private (Admin only)
  */
-router.put('/toggle-status/:id', authMiddleware, authController.toggleStudentStatus.bind(authController));
+router.put(
+  "/toggle-status/:id",
+  authMiddleware,
+  authController.toggleStudentStatus.bind(authController),
+);
 
-router.post('/reset-password', authController.resetPassword.bind(authController));
+router.post(
+  "/reset-password",
+  authController.resetPassword.bind(authController),
+);
 
 router.post("/create", instructorController.createInstructor);
 router.get("/get-all-instructors", instructorController.getAllInstructors);
@@ -86,7 +121,7 @@ router.get("/get-instructor/:id", instructorController.getInstructorById);
 router.post("/updateInstrucor/:id", instructorController.updateInstructor);
 router.post(
   "/toggle-status-instrucor/:id",
-  instructorController.toggleInstructorStatus
+  instructorController.toggleInstructorStatus,
 );
 router.delete("/delete-instrucor/:id", instructorController.deleteInstructor);
 
@@ -96,55 +131,55 @@ router.get("/get-coorporate/:id", corporateController.getCorporateById);
 router.post("/update-coorporate/:id", corporateController.updateCorporate);
 router.post(
   "/toggle-coorporate-status/:id",
-  corporateController.toggleCorporateStatus
+  corporateController.toggleCorporateStatus,
 );
 router.delete("/delete-coorporate/:id", corporateController.deleteCorporate);
 
 router.post(
   "/add-coorporate-student",
-  corporateStudentController.createCorporateStudent
+  corporateStudentController.createCorporateStudent,
 );
 router.get(
   "/get-all-coorporate-students",
-  corporateStudentController.getAllCorporateStudents
+  corporateStudentController.getAllCorporateStudents,
 );
 router.get(
   "/get-coorporate-student/:id",
-  corporateStudentController.getCorporateStudentById
+  corporateStudentController.getCorporateStudentById,
 );
 router.post(
   "/update-coorporate-student/:id",
-  corporateStudentController.updateCorporateStudent
+  corporateStudentController.updateCorporateStudent,
 );
 router.post(
   "/toggle-coorporate-student-status/:id",
-  corporateStudentController.toggleCorporateStudentStatus
+  corporateStudentController.toggleCorporateStudentStatus,
 );
 router.delete(
   "/delete-coorporate-student/:id",
-  corporateStudentController.deleteCorporateStudent
+  corporateStudentController.deleteCorporateStudent,
 );
 
 router.post("/test-email", async (req, res) => {
   try {
     const mailOptions = {
-      from: `"Medh Care" <care@medh.co>`,
+      from: '"Medh Care" <care@medh.co>',
       to: "care@medh.co",
       subject: "Test Email",
-      html: "<p>This is a test email to verify the email configuration.</p>"
+      html: "<p>This is a test email to verify the email configuration.</p>",
     };
 
     await authController.sendEmail(mailOptions);
     res.status(200).json({
       success: true,
-      message: "Test email sent successfully"
+      message: "Test email sent successfully",
     });
   } catch (error) {
     console.error("Test email error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to send test email",
-      error: error.message
+      error: error.message,
     });
   }
 });

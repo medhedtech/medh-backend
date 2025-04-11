@@ -8,12 +8,12 @@ const trackInstructorSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const TrackInstructor = mongoose.model(
   "TrackInstructor",
-  trackInstructorSchema
+  trackInstructorSchema,
 );
 
 export default TrackInstructor;

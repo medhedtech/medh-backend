@@ -71,9 +71,7 @@ const generatePdfContentForSubscription = (subscription) => {
                 <strong>Amount:</strong> ₹${amount}
               </div>
               <div class="details">
-                <strong>Subscription Date:</strong> ${new Date(
-                  date
-                ).toLocaleDateString()}
+                <strong>Subscription Date:</strong> ${new Date(date).toLocaleDateString()}
               </div>
             </div>
             <div class="invoice-footer">

@@ -1,9 +1,10 @@
 import express from "express";
+
 import {
   submitQuizResponse,
   getQuizResponsesByUser,
   getQuizResponsesByQuiz,
-  getQuizResponseById
+  getQuizResponseById,
 } from "../controllers/quizResponseController.js";
 
 const router = express.Router();

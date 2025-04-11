@@ -10,34 +10,34 @@ graph TD
     User --> |creates| Blog
     User --> |submits| PlacementForm
     User --> |creates| Order
-    
+
     Course[Course] --> |contains| Section
     Section --> |contains| Lesson
     Course --> |has many| Enrollment
     Course --> |has| FAQ
     Course --> |has many| Feedback
-    
+
     Enrollment[Enrollment] --> |tracks| Progress
     Enrollment --> |issues| Certificate
     Enrollment --> |has many| Meeting
-    
+
     Lesson[Lesson] --> |contains| Quiz
     Lesson --> |has many| Resource
     Lesson --> |has many| Assignment
-    
+
     Meeting[Online Meeting] --> |records| RecordedSession
-    
+
     Instructor[Instructor/User] --> |teaches| Course
     Instructor --> |conducts| Meeting
-    
+
     Corporate[Corporate Training] --> |assigns| Course
     Corporate --> |has many| CorporateStudent
-    
+
     CorporateStudent[Corporate Student/User] --> |enrolls in| Enrollment
-    
+
     Assignment[Assignment] --> |has many| Submission
     Quiz[Quiz] --> |has many| QuizResponse
-    
+
     Job[Job Post] --> |created by| User
     Job --> |receives| JobApplication
 ```
@@ -54,22 +54,22 @@ sequenceDiagram
     participant Enrollment
     participant Meeting
     participant Certificate
-    
+
     Student->>Auth: Register/Login
     Auth-->>Student: Authentication Token
-    
+
     Student->>Course: Browse Courses
     Course-->>Student: Available Courses
-    
+
     Student->>Enrollment: Enroll in Course
     Enrollment-->>Student: Enrollment Confirmation
-    
+
     Student->>Course: Access Course Materials
     Course-->>Student: Lessons, Quizzes, Assignments
-    
+
     Student->>Meeting: Join Online Sessions
     Meeting-->>Student: Live Classes
-    
+
     Student->>Enrollment: Complete Course
     Enrollment->>Certificate: Generate Certificate
     Certificate-->>Student: Course Completion Certificate
@@ -78,6 +78,7 @@ sequenceDiagram
 ## Core Model Details
 
 ### User Model
+
 - Connected to: Enrollment, Blog, PlacementForm, Order, Job
 - Key fields:
   - `_id`: Unique identifier
@@ -89,6 +90,7 @@ sequenceDiagram
   - `status`: Active or Inactive
 
 ### Course Model
+
 - Connected to: Lesson, Enrollment, FAQ, Feedback, Section
 - Key fields:
   - `_id`: Unique identifier
@@ -102,6 +104,7 @@ sequenceDiagram
   - `rating`: Average rating from feedback
 
 ### Enrollment Model
+
 - Connected to: User, Course, Progress, Certificate, Meeting
 - Key fields:
   - `_id`: Unique identifier
@@ -112,6 +115,7 @@ sequenceDiagram
   - `payment_status`: Paid, Pending, or Free
 
 ### Lesson Model
+
 - Connected to: Course, Quiz, Resource, Assignment
 - Key fields:
   - `_id`: Unique identifier
@@ -137,7 +141,7 @@ graph LR
     Controller[Controller] --> |request| AuthService
     AuthService --> |validates user| UserService
     UserService --> |accesses| UserModel[User Model]
-    
+
     Controller --> |request| CourseService
     CourseService --> |accesses| CourseModel[Course Model]
     CourseService --> |enrolls user| EnrollmentService
@@ -154,4 +158,4 @@ graph LR
 4. **Optimize queries**: Use population strategically to avoid excessive database queries.
 5. **Maintain consistency**: Ensure that operations maintain data consistency across related models.
 
-By following these patterns and understanding the model relationships, developers can efficiently build new features and maintain the existing codebase. 
+By following these patterns and understanding the model relationships, developers can efficiently build new features and maintain the existing codebase.

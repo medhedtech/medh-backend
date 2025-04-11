@@ -1,22 +1,23 @@
-import express from 'express';
-import bodyParser from 'body-parser';
-import fileUpload from 'express-fileupload';
-import cron from 'node-cron';
-import helmet from 'helmet';
-import compression from 'compression';
-import mongoSanitize from 'express-mongo-sanitize';
-import mongoose from 'mongoose';
-import path from 'path';
-import morgan from 'morgan';
+// import path from 'path';
 
-import { ENV_VARS } from './config/envVars.js';
-import logger from './utils/logger.js';
-import securityMiddleware from './middleware/security.js';
-import redirectionMiddleware from './middleware/redirection.js';
-import corsMiddleware from './config/cors.js';
-import router from './routes/index.js';
-import connectDB from './config/db.js';
-import { statusUpdater } from './cronjob/inactive-meetings.js';
+import bodyParser from "body-parser";
+import compression from "compression";
+import express from "express";
+import fileUpload from "express-fileupload";
+import mongoSanitize from "express-mongo-sanitize";
+// import helmet from 'helmet';
+import mongoose from "mongoose";
+import morgan from "morgan";
+// import cron from 'node-cron';
+
+import corsMiddleware from "./config/cors.js";
+import connectDB from "./config/db.js";
+import { ENV_VARS } from "./config/envVars.js";
+// import { statusUpdater } from './cronjob/inactive-meetings.js';
+import redirectionMiddleware from "./middleware/redirection.js";
+import securityMiddleware from "./middleware/security.js";
+import router from "./routes/index.js";
+import logger from "./utils/logger.js";
 
 const app = express();
 
@@ -27,8 +28,8 @@ app.use(corsMiddleware);
 securityMiddleware(app);
 
 // Use morgan for HTTP request logging in development
-if (ENV_VARS.NODE_ENV === 'development') {
-  app.use(morgan('dev'));
+if (ENV_VARS.NODE_ENV === "development") {
+  app.use(morgan("dev"));
 }
 
 // Apply compression for better performance
@@ -37,30 +38,47 @@ app.use(mongoSanitize()); // Prevent MongoDB operator injection
 
 // Basic Middleware
 app.use(express.static("public"));
-app.use(express.urlencoded({ extended: true, limit: '10gb' }));
+app.use(express.urlencoded({ extended: true, limit: "10gb" }));
 app.use(bodyParser.json({ limit: "10gb", extended: true }));
-app.use(express.json({ limit: '10gb' }));
-app.use(fileUpload({
-  limits: { fileSize: 1024 * 1024 * 10 * 1024 }, // 10GB max file size
-  useTempFiles: true,
-  tempFileDir: '/tmp/'
-}));
+app.use(express.json({ limit: "10gb" }));
+app.use(
+  fileUpload({
+    limits: { fileSize: 1024 * 1024 * 10 * 1024 }, // 10GB max file size
+    useTempFiles: true,
+    tempFileDir: "/tmp/",
+  }),
+);
 
 // Add middleware to handle upload/base64 requests specially
-app.use('/api/v1/upload/base64', (req, res, next) => {
+app.use("/api/v1/upload/base64", (req, res, next) => {
   // Always set CORS headers for this specific endpoint
   const origin = req.headers.origin;
-  const allowedOrigins = ENV_VARS.ALLOWED_ORIGINS.length > 0 
-    ? ENV_VARS.ALLOWED_ORIGINS 
-    : ['http://localhost:3000', 'http://localhost:3001', 'https://medh.co', 'https://www.medh.co'];
-    
-  if (origin && (allowedOrigins.includes(origin) || ENV_VARS.NODE_ENV === 'development')) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, x-access-token');
-    res.header('Access-Control-Allow-Credentials', 'true');
+  const allowedOrigins =
+    ENV_VARS.ALLOWED_ORIGINS.length > 0
+      ? ENV_VARS.ALLOWED_ORIGINS
+      : [
+          "http://localhost:3000",
+          "http://localhost:3001",
+          "https://medh.co",
+          "https://www.medh.co",
+        ];
+
+  if (
+    origin &&
+    (allowedOrigins.includes(origin) || ENV_VARS.NODE_ENV === "development")
+  ) {
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+    );
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Requested-With, Accept, x-access-token",
+    );
+    res.header("Access-Control-Allow-Credentials", "true");
   }
-  
+
   // Continue to next middleware
   next();
 });
@@ -71,16 +89,31 @@ app.use(redirectionMiddleware);
 // CORS headers for all routes as a fallback
 app.use((req, res, next) => {
   if (req.headers.origin) {
-    const allowedOrigins = ENV_VARS.ALLOWED_ORIGINS.length > 0 
-      ? ENV_VARS.ALLOWED_ORIGINS 
-      : ['http://localhost:3000', 'http://localhost:3001', 'https://medh.co', 'https://www.medh.co'];
-    
+    const allowedOrigins =
+      ENV_VARS.ALLOWED_ORIGINS.length > 0
+        ? ENV_VARS.ALLOWED_ORIGINS
+        : [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "https://medh.co",
+            "https://www.medh.co",
+          ];
+
     const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin) || ENV_VARS.NODE_ENV === 'development') {
-      res.header('Access-Control-Allow-Origin', origin);
-      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-      res.header('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, Accept, x-access-token');
-      res.header('Access-Control-Allow-Credentials', 'true');
+    if (
+      allowedOrigins.includes(origin) ||
+      ENV_VARS.NODE_ENV === "development"
+    ) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header(
+        "Access-Control-Allow-Methods",
+        "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+      );
+      res.header(
+        "Access-Control-Allow-Headers",
+        "X-Requested-With, Content-Type, Authorization, Accept, x-access-token",
+      );
+      res.header("Access-Control-Allow-Credentials", "true");
     }
   }
   next();
@@ -120,18 +153,18 @@ const moduleRoutesPaths = [
   "/add-job-post",
   "/job-post",
   "/subscription",
-  "/broucher", 
+  "/broucher",
   "/newsletter",
   "/quiz-response",
   "/track-sessions",
   "/assign-corporate-course",
   "/corporate-training",
   "/payments",
-  "/home-display"
+  "/home-display",
 ];
 
 // Set up direct access middleware for each path
-moduleRoutesPaths.forEach(path => {
+moduleRoutesPaths.forEach((path) => {
   app.use(path, (req, res) => {
     const newUrl = `/api/v1${path}${req.url}`;
     logger.info(`Redirecting ${req.url} to ${newUrl}`);
@@ -152,14 +185,15 @@ app.use((req, res) => {
 // });
 
 // Global error handler
-app.use((err, req, res, next) => {
-  logger.error('Unhandled error:', err);
+app.use((err, req, res) => {
+  logger.error("Unhandled error:", err);
   res.status(err.status || 500).json({
-    status: 'error',
+    status: "error",
     success: false,
-    message: ENV_VARS.NODE_ENV === 'production' 
-      ? 'Internal server error' 
-      : err.message
+    message:
+      ENV_VARS.NODE_ENV === "production"
+        ? "Internal server error"
+        : err.message,
   });
 });
 
@@ -174,26 +208,28 @@ const server = app.listen(PORT, () => {
 
 // Graceful shutdown handling
 const gracefulShutdown = () => {
-  logger.info('Received shutdown signal. Starting graceful shutdown...');
+  logger.info("Received shutdown signal. Starting graceful shutdown...");
   server.close(async () => {
-    logger.info('Closed express server');
+    logger.info("Closed express server");
     try {
       await mongoose.connection.close();
-      logger.info('Closed MongoDB connection');
+      logger.info("Closed MongoDB connection");
       process.exit(0);
     } catch (err) {
-      logger.error('Error during shutdown:', err);
+      logger.error("Error during shutdown:", err);
       process.exit(1);
     }
   });
 
   // Force shutdown after 30 seconds
   setTimeout(() => {
-    logger.error('Could not close connections in time, forcefully shutting down');
+    logger.error(
+      "Could not close connections in time, forcefully shutting down",
+    );
     process.exit(1);
   }, 30000);
 };
 
 // Listen for termination signals
-process.on('SIGTERM', gracefulShutdown);
-process.on('SIGINT', gracefulShutdown);
+process.on("SIGTERM", gracefulShutdown);
+process.on("SIGINT", gracefulShutdown);

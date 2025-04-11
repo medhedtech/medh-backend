@@ -17,7 +17,7 @@ const complaintSchema = new mongoose.Schema(
       default: ["coorporate-student"],
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model("Complaint", complaintSchema);

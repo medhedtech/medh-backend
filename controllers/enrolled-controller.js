@@ -1,36 +1,42 @@
+import Course from "../models/course-model.js";
 import EnrolledCourse from "../models/enrolled-courses-model.js";
+import EnrolledModule from "../models/enrolled-modules.modal.js";
 import OnlineMeeting from "../models/online-meeting.js";
 import Student from "../models/student-model.js";
-import Course from "../models/course-model.js";
 import User from "../models/user-modal.js";
-import EnrolledModule from "../models/enrolled-modules.modal.js";
 import { errorHandler } from "../utils/errorHandler.js";
 import logger from "../utils/logger.js";
+
+// Unused imports (kept for future reference)
+const _Student = Student;
+const _logger = logger;
 
 // Create a new enrollment
 export const createEnrolledCourse = async (req, res, next) => {
   try {
-    const { 
-      student_id, 
-      course_id, 
-      expiry_date, 
+    const {
+      student_id,
+      course_id,
+      expiry_date,
       is_self_paced,
       enrollment_type,
-      batch_size,
       payment_status,
       status,
       paymentResponse,
       currencyCode,
       activePricing,
       getFinalPrice,
-      metadata
+      metadata,
     } = req.body;
+
+    // Unused variable but kept for future implementation
+    const _batch_size = req.body.batch_size;
 
     // Validate required fields
     if (!student_id || !course_id) {
       return res.status(400).json({
         success: false,
-        message: "Student ID and Course ID are required"
+        message: "Student ID and Course ID are required",
       });
     }
 
@@ -39,7 +45,7 @@ export const createEnrolledCourse = async (req, res, next) => {
     if (!student) {
       return res.status(404).json({
         success: false,
-        message: "Student not found"
+        message: "Student not found",
       });
     }
 
@@ -48,20 +54,20 @@ export const createEnrolledCourse = async (req, res, next) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: "Course not found"
+        message: "Course not found",
       });
     }
 
     // Check for existing enrollment
     const existingEnrollment = await EnrolledCourse.findOne({
       student_id,
-      course_id
+      course_id,
     });
 
     if (existingEnrollment) {
       return res.status(400).json({
         success: false,
-        message: "Student is already enrolled in this course"
+        message: "Student is already enrolled in this course",
       });
     }
 
@@ -71,17 +77,20 @@ export const createEnrolledCourse = async (req, res, next) => {
       course_id,
       is_self_paced: is_self_paced || false,
       enrollment_type,
-      batch_size: enrollment_type === 'batch' && activePricing ? activePricing.min_batch_size : 1,
-      payment_status: payment_status || 'completed',
+      batch_size:
+        enrollment_type === "batch" && activePricing
+          ? activePricing.min_batch_size
+          : 1,
+      payment_status: payment_status || "completed",
       enrollment_date: new Date(),
       course_progress: 0,
-      status: status || 'active',
+      status: status || "active",
       metadata: {
-        deviceInfo: req.headers['user-agent'],
+        deviceInfo: req.headers["user-agent"],
         ipAddress: req.ip,
-        enrollmentSource: req.headers.referer || 'direct',
-        ...metadata
-      }
+        enrollmentSource: req.headers.referer || "direct",
+        ...metadata,
+      },
     };
 
     // Handle expiry date based on course type and is_self_paced flag
@@ -99,13 +108,16 @@ export const createEnrolledCourse = async (req, res, next) => {
     // Add payment details if available
     if (paymentResponse) {
       enrollmentData.payment_details = {
-        payment_id: paymentResponse.razorpay_payment_id || '',
-        payment_signature: paymentResponse.razorpay_signature || '',
-        payment_order_id: paymentResponse.razorpay_order_id || '',
-        payment_method: 'razorpay',
-        amount: typeof getFinalPrice === 'function' ? getFinalPrice() : paymentResponse.amount || 0,
-        currency: currencyCode || 'INR',
-        payment_date: new Date()
+        payment_id: paymentResponse.razorpay_payment_id || "",
+        payment_signature: paymentResponse.razorpay_signature || "",
+        payment_order_id: paymentResponse.razorpay_order_id || "",
+        payment_method: "razorpay",
+        amount:
+          typeof getFinalPrice === "function"
+            ? getFinalPrice()
+            : paymentResponse.amount || 0,
+        currency: currencyCode || "INR",
+        payment_date: new Date(),
       };
     }
 
@@ -127,7 +139,7 @@ export const createEnrolledCourse = async (req, res, next) => {
     res.status(201).json({
       success: true,
       message: "Student enrolled successfully",
-      data: newEnrolledCourse
+      data: newEnrolledCourse,
     });
   } catch (error) {
     errorHandler(error, req, res, next);
@@ -143,19 +155,19 @@ export const getAllEnrolledCourses = async (req, res, next) => {
       status,
       payment_status,
       enrollment_type,
-      search
+      search,
     } = req.query;
 
     const query = {};
-    
+
     // Apply filters
     if (status) query.status = status;
     if (payment_status) query.payment_status = payment_status;
     if (enrollment_type) query.enrollment_type = enrollment_type;
     if (search) {
       query.$or = [
-        { 'student_id.name': { $regex: search, $options: 'i' } },
-        { 'course_id.course_title': { $regex: search, $options: 'i' } }
+        { "student_id.name": { $regex: search, $options: "i" } },
+        { "course_id.course_title": { $regex: search, $options: "i" } },
       ];
     }
 
@@ -165,15 +177,15 @@ export const getAllEnrolledCourses = async (req, res, next) => {
       sort: { enrollment_date: -1 },
       populate: [
         { path: "student_id", select: "name email role" },
-        { path: "course_id", select: "course_title description thumbnail" }
-      ]
+        { path: "course_id", select: "course_title description thumbnail" },
+      ],
     };
 
     const enrollments = await EnrolledCourse.paginate(query, options);
 
     res.status(200).json({
       success: true,
-      data: enrollments
+      data: enrollments,
     });
   } catch (error) {
     errorHandler(error, req, res, next);
@@ -194,7 +206,7 @@ export const getEnrolledCourseById = async (req, res, next) => {
     if (!enrollment) {
       return res.status(404).json({
         success: false,
-        message: "Enrollment not found"
+        message: "Enrollment not found",
       });
     }
 
@@ -204,7 +216,7 @@ export const getEnrolledCourseById = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: enrollment
+      data: enrollment,
     });
   } catch (error) {
     errorHandler(error, req, res, next);
@@ -222,7 +234,7 @@ export const updateEnrolledCourse = async (req, res, next) => {
     if (!enrollment) {
       return res.status(404).json({
         success: false,
-        message: "Enrollment not found"
+        message: "Enrollment not found",
       });
     }
 
@@ -232,7 +244,7 @@ export const updateEnrolledCourse = async (req, res, next) => {
       if (!student) {
         return res.status(404).json({
           success: false,
-          message: "Student not found"
+          message: "Student not found",
         });
       }
     }
@@ -243,14 +255,14 @@ export const updateEnrolledCourse = async (req, res, next) => {
       if (!course) {
         return res.status(404).json({
           success: false,
-          message: "Course not found"
+          message: "Course not found",
         });
       }
     }
 
     // Update fields
-    Object.keys(updateData).forEach(key => {
-      if (key !== 'student_id' && key !== 'course_id') {
+    Object.keys(updateData).forEach((key) => {
+      if (key !== "student_id" && key !== "course_id") {
         enrollment[key] = updateData[key];
       }
     });
@@ -260,7 +272,7 @@ export const updateEnrolledCourse = async (req, res, next) => {
       enrollment.is_completed = updateData.is_completed;
       enrollment.completed_on = updateData.is_completed ? new Date() : null;
       if (updateData.is_completed) {
-        enrollment.status = 'completed';
+        enrollment.status = "completed";
       }
     }
 
@@ -269,7 +281,7 @@ export const updateEnrolledCourse = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: "Enrollment updated successfully",
-      data: updatedEnrolledCourse
+      data: updatedEnrolledCourse,
     });
   } catch (error) {
     errorHandler(error, req, res, next);
@@ -286,7 +298,7 @@ export const deleteEnrolledCourse = async (req, res, next) => {
     if (!enrollment) {
       return res.status(404).json({
         success: false,
-        message: "Enrollment not found"
+        message: "Enrollment not found",
       });
     }
 
@@ -298,7 +310,7 @@ export const deleteEnrolledCourse = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: "Enrollment deleted successfully"
+      message: "Enrollment deleted successfully",
     });
   } catch (error) {
     errorHandler(error, req, res, next);
@@ -313,7 +325,7 @@ export const getEnrolledCourseByStudentId = async (req, res, next) => {
 
     const query = { student_id };
     if (!includeExpired) {
-      query.status = { $ne: 'expired' };
+      query.status = { $ne: "expired" };
     }
     if (status) {
       query.status = status;
@@ -333,20 +345,20 @@ export const getEnrolledCourseByStudentId = async (req, res, next) => {
     if (!enrollments.length) {
       return res.status(404).json({
         success: false,
-        message: "No enrollments found for this student"
+        message: "No enrollments found for this student",
       });
     }
 
     // Transform the data
-    const enrollmentsWithPaymentInfo = enrollments.map(enrollment => {
+    const enrollmentsWithPaymentInfo = enrollments.map((enrollment) => {
       const enrollmentObj = enrollment.toObject();
-      enrollmentObj.payment_type = 'course';
+      enrollmentObj.payment_type = "course";
       return enrollmentObj;
     });
 
     res.status(200).json({
       success: true,
-      data: enrollmentsWithPaymentInfo
+      data: enrollmentsWithPaymentInfo,
     });
   } catch (error) {
     errorHandler(error, req, res, next);
@@ -361,7 +373,7 @@ export const getEnrolledStudentsByCourseId = async (req, res, next) => {
 
     const query = { course_id };
     if (!includeExpired) {
-      query.status = { $ne: 'expired' };
+      query.status = { $ne: "expired" };
     }
     if (status) {
       query.status = status;
@@ -374,19 +386,20 @@ export const getEnrolledStudentsByCourseId = async (req, res, next) => {
     if (!studentsEnrolled.length) {
       return res.status(404).json({
         success: false,
-        message: "No students enrolled for this course"
+        message: "No students enrolled for this course",
       });
     }
 
     // Filter students with role "student"
     const filteredStudents = studentsEnrolled.filter(
-      (enrollment) => enrollment.student_id && enrollment.student_id.role.includes("student")
+      (enrollment) =>
+        enrollment.student_id && enrollment.student_id.role.includes("student"),
     );
 
     if (!filteredStudents.length) {
       return res.status(404).json({
         success: false,
-        message: "No students with role 'student' enrolled for this course"
+        message: "No students with role 'student' enrolled for this course",
       });
     }
 
@@ -397,8 +410,8 @@ export const getEnrolledStudentsByCourseId = async (req, res, next) => {
       success: true,
       data: {
         students: filteredStudents,
-        statistics: stats
-      }
+        statistics: stats,
+      },
     });
   } catch (error) {
     errorHandler(error, req, res, next);
@@ -413,7 +426,7 @@ export const markCourseAsCompleted = async (req, res, next) => {
     if (!student_id || !course_id) {
       return res.status(400).json({
         success: false,
-        message: "Student ID and Course ID are required"
+        message: "Student ID and Course ID are required",
       });
     }
 
@@ -421,7 +434,7 @@ export const markCourseAsCompleted = async (req, res, next) => {
     if (!enrollment) {
       return res.status(404).json({
         success: false,
-        message: "Enrollment not found"
+        message: "Enrollment not found",
       });
     }
 
@@ -429,21 +442,21 @@ export const markCourseAsCompleted = async (req, res, next) => {
     if (enrollment.is_completed) {
       return res.status(400).json({
         success: false,
-        message: "Course is already marked as completed"
+        message: "Course is already marked as completed",
       });
     }
 
     // Update completion status
     enrollment.is_completed = true;
     enrollment.completed_on = new Date();
-    enrollment.status = 'completed';
+    enrollment.status = "completed";
 
     await enrollment.save();
 
     res.status(200).json({
       success: true,
       message: "Course marked as completed successfully",
-      data: enrollment
+      data: enrollment,
     });
   } catch (error) {
     errorHandler(error, req, res, next);
@@ -461,38 +474,51 @@ export const getEnrollmentCountsByStudentId = async (req, res, next) => {
     if (!student_id) {
       return res.status(400).json({
         success: false,
-        message: 'Student ID is required'
+        message: "Student ID is required",
       });
     }
 
     // Get all enrollments for the student with populated course information
-    const enrollments = await EnrolledCourse.find({ student_id })
-      .populate('course_id', 'course_title class_type description thumbnail duration');
+    const enrollments = await EnrolledCourse.find({ student_id }).populate(
+      "course_id",
+      "course_title class_type description thumbnail duration",
+    );
 
     // Calculate counts
     const counts = {
       total: enrollments.length,
-      active: enrollments.filter(e => e.status === 'active').length,
-      completed: enrollments.filter(e => e.status === 'completed').length,
-      pending: enrollments.filter(e => e.status === 'pending').length,
-      cancelled: enrollments.filter(e => e.status === 'cancelled').length,
-      expired: enrollments.filter(e => e.status === 'expired').length,
+      active: enrollments.filter((e) => e.status === "active").length,
+      completed: enrollments.filter((e) => e.status === "completed").length,
+      pending: enrollments.filter((e) => e.status === "pending").length,
+      cancelled: enrollments.filter((e) => e.status === "cancelled").length,
+      expired: enrollments.filter((e) => e.status === "expired").length,
       byPaymentStatus: {
-        paid: enrollments.filter(e => e.payment_status === 'paid').length,
-        pending: enrollments.filter(e => e.payment_status === 'pending').length,
-        failed: enrollments.filter(e => e.payment_status === 'failed').length,
-        refunded: enrollments.filter(e => e.payment_status === 'refunded').length
+        paid: enrollments.filter((e) => e.payment_status === "paid").length,
+        pending: enrollments.filter((e) => e.payment_status === "pending")
+          .length,
+        failed: enrollments.filter((e) => e.payment_status === "failed").length,
+        refunded: enrollments.filter((e) => e.payment_status === "refunded")
+          .length,
       },
       byEnrollmentType: {
-        individual: enrollments.filter(e => e.enrollment_type === 'individual').length,
-        batch: enrollments.filter(e => e.enrollment_type === 'batch').length,
-        corporate: enrollments.filter(e => e.enrollment_type === 'corporate').length
+        individual: enrollments.filter(
+          (e) => e.enrollment_type === "individual",
+        ).length,
+        batch: enrollments.filter((e) => e.enrollment_type === "batch").length,
+        corporate: enrollments.filter((e) => e.enrollment_type === "corporate")
+          .length,
       },
       byCourseType: {
-        live: enrollments.filter(e => e.course_id?.class_type === 'Live Courses').length,
-        blended: enrollments.filter(e => e.course_id?.class_type === 'Blended Courses').length,
-        selfPaced: enrollments.filter(e => e.course_id?.class_type === 'Self Paced').length
-      }
+        live: enrollments.filter(
+          (e) => e.course_id?.class_type === "Live Courses",
+        ).length,
+        blended: enrollments.filter(
+          (e) => e.course_id?.class_type === "Blended Courses",
+        ).length,
+        selfPaced: enrollments.filter(
+          (e) => e.course_id?.class_type === "Self Paced",
+        ).length,
+      },
     };
 
     // Calculate progress statistics
@@ -503,8 +529,8 @@ export const getEnrollmentCountsByStudentId = async (req, res, next) => {
       byCourseType: {
         live: { inProgress: 0, completed: 0, averageProgress: 0 },
         blended: { inProgress: 0, completed: 0, averageProgress: 0 },
-        selfPaced: { inProgress: 0, completed: 0, averageProgress: 0 }
-      }
+        selfPaced: { inProgress: 0, completed: 0, averageProgress: 0 },
+      },
     };
 
     if (enrollments.length > 0) {
@@ -515,21 +541,21 @@ export const getEnrollmentCountsByStudentId = async (req, res, next) => {
       progressStats.averageProgress = totalProgress / enrollments.length;
 
       // Calculate progress by course type
-      enrollments.forEach(enrollment => {
+      enrollments.forEach((enrollment) => {
         const courseType = enrollment.course_id?.class_type;
         const progress = enrollment.progress?.overall || 0;
-        
+
         if (courseType) {
           let typeKey;
           switch (courseType) {
-            case 'Live Courses':
-              typeKey = 'live';
+            case "Live Courses":
+              typeKey = "live";
               break;
-            case 'Blended Courses':
-              typeKey = 'blended';
+            case "Blended Courses":
+              typeKey = "blended";
               break;
-            case 'Self Paced':
-              typeKey = 'selfPaced';
+            case "Self Paced":
+              typeKey = "selfPaced";
               break;
             default:
               return; // Skip unknown course types
@@ -545,52 +571,53 @@ export const getEnrollmentCountsByStudentId = async (req, res, next) => {
       });
 
       // Calculate averages for each course type
-      Object.keys(progressStats.byCourseType).forEach(type => {
-        const total = progressStats.byCourseType[type].inProgress + 
-                     progressStats.byCourseType[type].completed;
+      Object.keys(progressStats.byCourseType).forEach((type) => {
+        const total =
+          progressStats.byCourseType[type].inProgress +
+          progressStats.byCourseType[type].completed;
         if (total > 0) {
           progressStats.byCourseType[type].averageProgress /= total;
         }
       });
 
-      progressStats.coursesInProgress = enrollments.filter(e => 
-        e.status === 'active' && e.progress?.overall < 100
+      progressStats.coursesInProgress = enrollments.filter(
+        (e) => e.status === "active" && e.progress?.overall < 100,
       ).length;
 
-      progressStats.coursesCompleted = enrollments.filter(e => 
-        e.status === 'completed' || e.progress?.overall === 100
+      progressStats.coursesCompleted = enrollments.filter(
+        (e) => e.status === "completed" || e.progress?.overall === 100,
       ).length;
     }
 
     // Get upcoming courses with detailed information
     const upcomingCourses = enrollments
-      .filter(e => e.status === 'active' && e.expiry_date > new Date())
+      .filter((e) => e.status === "active" && e.expiry_date > new Date())
       .sort((a, b) => a.expiry_date - b.expiry_date)
       .slice(0, 5)
-      .map(e => ({
+      .map((e) => ({
         course_id: e.course_id?._id,
-        course_title: e.course_id?.course_title || 'Unknown Course',
-        class_type: e.course_id?.class_type || 'Unknown Type',
+        course_title: e.course_id?.course_title || "Unknown Course",
+        class_type: e.course_id?.class_type || "Unknown Type",
         thumbnail: e.course_id?.thumbnail,
         duration: e.course_id?.duration,
         expiry_date: e.expiry_date,
         progress: e.progress?.overall || 0,
-        status: e.status
+        status: e.status,
       }));
 
     // Get recent activity with detailed information
     const recentActivity = enrollments
       .sort((a, b) => b.updated_at - a.updated_at)
       .slice(0, 5)
-      .map(e => ({
+      .map((e) => ({
         course_id: e.course_id?._id,
-        course_title: e.course_id?.course_title || 'Unknown Course',
-        class_type: e.course_id?.class_type || 'Unknown Type',
+        course_title: e.course_id?.course_title || "Unknown Course",
+        class_type: e.course_id?.class_type || "Unknown Type",
         thumbnail: e.course_id?.thumbnail,
         status: e.status,
         last_activity: e.updated_at,
         progress: e.progress?.overall || 0,
-        payment_status: e.payment_status
+        payment_status: e.payment_status,
       }));
 
     // Prepare response data
@@ -598,14 +625,13 @@ export const getEnrollmentCountsByStudentId = async (req, res, next) => {
       counts,
       progress: progressStats,
       upcoming_courses: upcomingCourses,
-      recent_activity: recentActivity
+      recent_activity: recentActivity,
     };
 
     return res.status(200).json({
       success: true,
-      data: responseData
+      data: responseData,
     });
-
   } catch (error) {
     errorHandler(error, req, res, next);
   }
@@ -618,41 +644,41 @@ export const getUpcomingMeetingsForStudent = async (req, res, next) => {
     const { limit = 10 } = req.query;
 
     // Find all active enrollments
-    const enrollments = await EnrolledCourse.find({ 
+    const enrollments = await EnrolledCourse.find({
       student_id,
-      status: 'active'
+      status: "active",
     }).populate("course_id", "course_title");
 
     if (!enrollments.length) {
       return res.status(404).json({
         success: false,
-        message: "No active enrollments found for this student"
+        message: "No active enrollments found for this student",
       });
     }
 
     // Get enrolled course names
     const enrolledCourseNames = enrollments.map(
-      (enrollment) => enrollment.course_id.course_title
+      (enrollment) => enrollment.course_id.course_title,
     );
 
     // Fetch upcoming meetings
     const upcomingMeetings = await OnlineMeeting.find({
       course_name: { $in: enrolledCourseNames },
-      date: { $gte: new Date() }
+      date: { $gte: new Date() },
     })
-    .sort({ date: 1, time: 1 })
-    .limit(parseInt(limit));
+      .sort({ date: 1, time: 1 })
+      .limit(parseInt(limit));
 
     if (!upcomingMeetings.length) {
       return res.status(404).json({
         success: false,
-        message: "No upcoming meetings found for the student's courses"
+        message: "No upcoming meetings found for the student's courses",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: upcomingMeetings
+      data: upcomingMeetings,
     });
   } catch (error) {
     errorHandler(error, req, res, next);
@@ -668,7 +694,7 @@ export const watchVideo = async (req, res, next) => {
     if (!id || !student_id) {
       return res.status(400).json({
         success: false,
-        message: "Video ID and Student ID are required"
+        message: "Video ID and Student ID are required",
       });
     }
 
@@ -676,7 +702,7 @@ export const watchVideo = async (req, res, next) => {
     if (!enrolledModule) {
       return res.status(404).json({
         success: false,
-        message: "Enrolled module not found"
+        message: "Enrolled module not found",
       });
     }
 
@@ -684,7 +710,7 @@ export const watchVideo = async (req, res, next) => {
     if (enrolledModule.student_id.toString() !== student_id) {
       return res.status(403).json({
         success: false,
-        message: "Unauthorized access to this video"
+        message: "Unauthorized access to this video",
       });
     }
 
@@ -697,7 +723,7 @@ export const watchVideo = async (req, res, next) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: "Course not found"
+        message: "Course not found",
       });
     }
 
@@ -705,7 +731,7 @@ export const watchVideo = async (req, res, next) => {
     const enrolledModules = await EnrolledModule.find({
       course_id: course._id,
       student_id,
-      is_watched: true
+      is_watched: true,
     });
 
     // Check if all videos are watched
@@ -714,19 +740,19 @@ export const watchVideo = async (req, res, next) => {
         {
           course_id: course._id,
           student_id,
-          is_completed: false
+          is_completed: false,
         },
         {
           is_completed: true,
           completed_on: new Date(),
-          status: 'completed'
-        }
+          status: "completed",
+        },
       );
     }
 
     res.status(200).json({
       success: true,
-      message: "Video marked as watched successfully"
+      message: "Video marked as watched successfully",
     });
   } catch (error) {
     errorHandler(error, req, res, next);
@@ -736,17 +762,17 @@ export const watchVideo = async (req, res, next) => {
 // Get all students with enrolled courses
 export const getAllStudentsWithEnrolledCourses = async (req, res, next) => {
   try {
-    const { 
-      status, 
+    const {
+      status,
       includeExpired = false,
       page = 1,
       limit = 10,
-      search
+      search,
     } = req.query;
 
     const query = { course_id: { $exists: true } };
     if (!includeExpired) {
-      query.status = { $ne: 'expired' };
+      query.status = { $ne: "expired" };
     }
     if (status) {
       query.status = status;
@@ -755,9 +781,9 @@ export const getAllStudentsWithEnrolledCourses = async (req, res, next) => {
     // Add search functionality
     if (search) {
       query.$or = [
-        { 'student_id.full_name': { $regex: search, $options: 'i' } },
-        { 'student_id.email': { $regex: search, $options: 'i' } },
-        { 'course_id.course_title': { $regex: search, $options: 'i' } }
+        { "student_id.full_name": { $regex: search, $options: "i" } },
+        { "student_id.email": { $regex: search, $options: "i" } },
+        { "course_id.course_title": { $regex: search, $options: "i" } },
       ];
     }
 
@@ -770,27 +796,28 @@ export const getAllStudentsWithEnrolledCourses = async (req, res, next) => {
           path: "student_id",
           match: { role: "student" },
           model: "User",
-          select: "full_name email phone_numbers role role_description status facebook_link instagram_link linkedin_link user_image meta age_group"
+          select:
+            "full_name email phone_numbers role role_description status facebook_link instagram_link linkedin_link user_image meta age_group",
         },
         {
           path: "course_id",
           model: "Course",
-          select: "course_title description thumbnail"
-        }
-      ]
+          select: "course_title description thumbnail",
+        },
+      ],
     };
 
     const enrollments = await EnrolledCourse.paginate(query, options);
 
     // Filter out invalid enrollments
     const filteredDocs = enrollments.docs.filter(
-      (enrollment) => enrollment.student_id && enrollment.course_id
+      (enrollment) => enrollment.student_id && enrollment.course_id,
     );
 
     if (!filteredDocs.length) {
       return res.status(404).json({
         success: false,
-        message: "No students enrolled in courses found"
+        message: "No students enrolled in courses found",
       });
     }
 
@@ -800,7 +827,7 @@ export const getAllStudentsWithEnrolledCourses = async (req, res, next) => {
       if (!acc[studentId]) {
         acc[studentId] = {
           student: enrollment.student_id,
-          enrollments: []
+          enrollments: [],
         };
       }
       acc[studentId].enrollments.push(enrollment);
@@ -820,9 +847,9 @@ export const getAllStudentsWithEnrolledCourses = async (req, res, next) => {
           hasPrevPage: enrollments.hasPrevPage,
           hasNextPage: enrollments.hasNextPage,
           prevPage: enrollments.prevPage,
-          nextPage: enrollments.nextPage
-        }
-      }
+          nextPage: enrollments.nextPage,
+        },
+      },
     });
   } catch (error) {
     errorHandler(error, req, res, next);

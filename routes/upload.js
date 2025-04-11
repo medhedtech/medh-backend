@@ -4,7 +4,7 @@
 // const { authenticate } = require('../middleware/auth');
 
 // // Upload single file
-// router.post('/uploadMedia', 
+// router.post('/uploadMedia',
 //   authenticate,
 //   (req, res, next) => {
 //     console.log('Upload request received');
@@ -132,4 +132,4 @@
 //   }
 // );
 
-// module.exports = router; 
+// module.exports = router;

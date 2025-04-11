@@ -1,4 +1,5 @@
 import express from "express";
+
 import {
   getAllAssignments,
   getAssignmentById,
@@ -11,7 +12,7 @@ import {
   getSubmissionStatus,
   getSubmittedAssignmentsCountByInstructor,
   getAssignmentsForEnrolledCourses,
-  getAssignmentsForCoorporateEnrolledCourses
+  getAssignmentsForCoorporateEnrolledCourses,
   // getAssignmentStatistics - function might not be available in controller
   // deleteSubmissionFile - function not available in controller
 } from "../controllers/assigmentController.js";
@@ -36,11 +37,17 @@ router.get("/submission/:assignmentId", getSubmissionStatus);
 
 // Analytics routes
 // router.get("/stats/:assignmentId", getAssignmentStatistics); // Commented out due to missing function
-router.get("/instructor-stats/:instructor_id", getSubmittedAssignmentsCountByInstructor);
+router.get(
+  "/instructor-stats/:instructor_id",
+  getSubmittedAssignmentsCountByInstructor,
+);
 
 // Student enrollment routes
 router.get("/student/:studentId", getAssignmentsForEnrolledCourses);
-router.get("/corporate/:coorporateId", getAssignmentsForCoorporateEnrolledCourses);
+router.get(
+  "/corporate/:coorporateId",
+  getAssignmentsForCoorporateEnrolledCourses,
+);
 
 // Legacy routes (for backward compatibility)
 router.post("/create", createAssignment); // Deprecated: use POST /

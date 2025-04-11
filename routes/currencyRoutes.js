@@ -1,4 +1,5 @@
 import express from "express";
+
 import {
   createCurrency,
   getAllCurrencies,
@@ -7,7 +8,7 @@ import {
   deleteCurrency,
   toggleCurrencyStatus,
   getCurrencyByCountryCode,
-  getAllCurrencyCountryCodes
+  getAllCurrencyCountryCodes,
 } from "../controllers/currency-controller.js";
 import { authenticate } from "../middleware/auth.js";
 
@@ -26,4 +27,4 @@ router.put("/:id", updateCurrency);
 router.delete("/:id", deleteCurrency);
 router.patch("/:id/toggle-status", toggleCurrencyStatus);
 
-export default router; 
+export default router;

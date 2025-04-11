@@ -4,22 +4,23 @@ The issue appears to be that your frontend is using an invalid or incomplete cou
 
 ```javascript
 // Valid example
-const courseId = '67bd596b8a56e7688dd02274'; // Must be a complete, valid MongoDB ObjectId
+const courseId = "67bd596b8a56e7688dd02274"; // Must be a complete, valid MongoDB ObjectId
 const url = `http://localhost:8080/api/v1/broucher/download/${courseId}`;
 const data = {
-  full_name: 'User Name',
-  email: 'user@example.com',
-  phone_number: '1234567890'
+  full_name: "User Name",
+  email: "user@example.com",
+  phone_number: "1234567890",
 };
 
 // Make a POST request (not GET) with the required data
-axios.post(url, data)
-  .then(response => {
-    console.log('Success!', response.data);
+axios
+  .post(url, data)
+  .then((response) => {
+    console.log("Success!", response.data);
     // Handle success - you'll get brochureUrl in response.data.data.brochureUrl
   })
-  .catch(error => {
-    console.error('Error:', error);
+  .catch((error) => {
+    console.error("Error:", error);
   });
 ```
 
@@ -42,4 +43,4 @@ axios.post(url, data)
     "recordId": "67cc03e9898b77e1782f3943"
   }
 }
-``` 
+```

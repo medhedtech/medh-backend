@@ -19,12 +19,12 @@ const instructorAssignmentSchema = new mongoose.Schema(
       ref: "User",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const InstructorAssignment = mongoose.model(
   "AssignedInstructor",
-  instructorAssignmentSchema
+  instructorAssignmentSchema,
 );
 
 export default InstructorAssignment;

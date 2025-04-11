@@ -1,6 +1,7 @@
-import User from "../models/user-modal.js";
-import nodemailer from "nodemailer";
 import bcrypt from "bcryptjs";
+import nodemailer from "nodemailer";
+
+import User from "../models/user-modal.js";
 
 // Set up the email transporter
 const transporter = nodemailer.createTransport({
@@ -109,7 +110,7 @@ export const updateInstructor = async (req, res) => {
     const updatedInstructor = await User.findOneAndUpdate(
       { _id: id, role: "instructor" },
       updates,
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!updatedInstructor) {

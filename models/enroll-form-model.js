@@ -24,7 +24,7 @@ const enrollFormSchema = new mongoose.Schema(
     message: { type: String },
     accept: { type: Boolean },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const EnrollForm = mongoose.model("EnrollForm", enrollFormSchema);

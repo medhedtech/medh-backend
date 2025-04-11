@@ -1,5 +1,6 @@
-import logger from '../utils/logger.js';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
+
+import logger from "../utils/logger.js";
 
 class UITracker {
   constructor() {
@@ -12,18 +13,18 @@ class UITracker {
     const timestamp = new Date().toISOString();
 
     const pageView = {
-      type: 'PAGE_VIEW',
+      type: "PAGE_VIEW",
       activityId,
       timestamp,
       ...data,
-      duration: 0 // Will be updated on page leave
+      duration: 0, // Will be updated on page leave
     };
 
     this.activities.set(activityId, pageView);
 
-    logger.info('Page View', {
+    logger.info("Page View", {
       ...pageView,
-      sessionId: data.sessionId
+      sessionId: data.sessionId,
     });
 
     return activityId;
@@ -39,14 +40,14 @@ class UITracker {
       ...pageView,
       duration,
       leaveTimestamp: new Date().toISOString(),
-      ...data
+      ...data,
     };
 
     this.activities.set(activityId, updatedPageView);
 
-    logger.info('Page Leave', {
+    logger.info("Page Leave", {
       ...updatedPageView,
-      sessionId: data.sessionId
+      sessionId: data.sessionId,
     });
   }
 
@@ -55,17 +56,17 @@ class UITracker {
     const timestamp = new Date().toISOString();
 
     const interaction = {
-      type: 'USER_INTERACTION',
+      type: "USER_INTERACTION",
       activityId,
       timestamp,
-      ...data
+      ...data,
     };
 
     this.activities.set(activityId, interaction);
 
-    logger.info('User Interaction', {
+    logger.info("User Interaction", {
       ...interaction,
-      sessionId: data.sessionId
+      sessionId: data.sessionId,
     });
 
     return activityId;
@@ -76,23 +77,23 @@ class UITracker {
     const timestamp = new Date().toISOString();
 
     const submission = {
-      type: 'FORM_SUBMISSION',
+      type: "FORM_SUBMISSION",
       activityId,
       timestamp,
-      ...data
+      ...data,
     };
 
     // Sanitize form data before logging
     const sanitizedData = {
       ...submission,
-      formData: this.sanitizeFormData(submission.formData)
+      formData: this.sanitizeFormData(submission.formData),
     };
 
     this.activities.set(activityId, sanitizedData);
 
-    logger.info('Form Submission', {
+    logger.info("Form Submission", {
       ...sanitizedData,
-      sessionId: data.sessionId
+      sessionId: data.sessionId,
     });
 
     return activityId;
@@ -103,17 +104,17 @@ class UITracker {
     const timestamp = new Date().toISOString();
 
     const error = {
-      type: 'UI_ERROR',
+      type: "UI_ERROR",
       activityId,
       timestamp,
-      ...data
+      ...data,
     };
 
     this.activities.set(activityId, error);
 
-    logger.error('UI Error', {
+    logger.error("UI Error", {
       ...error,
-      sessionId: data.sessionId
+      sessionId: data.sessionId,
     });
 
     return activityId;
@@ -124,17 +125,17 @@ class UITracker {
     const timestamp = new Date().toISOString();
 
     const performance = {
-      type: 'PERFORMANCE',
+      type: "PERFORMANCE",
       activityId,
       timestamp,
-      ...data
+      ...data,
     };
 
     this.activities.set(activityId, performance);
 
-    logger.info('UI Performance', {
+    logger.info("UI Performance", {
       ...performance,
-      sessionId: data.sessionId
+      sessionId: data.sessionId,
     });
 
     return activityId;
@@ -149,12 +150,12 @@ class UITracker {
       userId,
       startTime: timestamp,
       lastActivity: timestamp,
-      metadata
+      metadata,
     };
 
     this.sessions.set(sessionId, session);
 
-    logger.info('Session Started', session);
+    logger.info("Session Started", session);
 
     return sessionId;
   }
@@ -166,12 +167,12 @@ class UITracker {
     const updatedSession = {
       ...session,
       lastActivity: new Date().toISOString(),
-      metadata: { ...session.metadata, ...metadata }
+      metadata: { ...session.metadata, ...metadata },
     };
 
     this.sessions.set(sessionId, updatedSession);
 
-    logger.info('Session Updated', updatedSession);
+    logger.info("Session Updated", updatedSession);
   }
 
   endSession(sessionId, metadata = {}) {
@@ -185,32 +186,32 @@ class UITracker {
       ...session,
       endTime,
       duration,
-      metadata: { ...session.metadata, ...metadata }
+      metadata: { ...session.metadata, ...metadata },
     };
 
     this.sessions.delete(sessionId);
 
-    logger.info('Session Ended', endedSession);
+    logger.info("Session Ended", endedSession);
   }
 
   sanitizeFormData(formData) {
     if (!formData) return formData;
-    
+
     const sanitized = { ...formData };
     const sensitiveFields = [
-      'password',
-      'token',
-      'apiKey',
-      'secret',
-      'creditCard',
-      'ssn',
-      'cvv',
-      'pin'
+      "password",
+      "token",
+      "apiKey",
+      "secret",
+      "creditCard",
+      "ssn",
+      "cvv",
+      "pin",
     ];
 
-    sensitiveFields.forEach(field => {
+    sensitiveFields.forEach((field) => {
       if (sanitized[field]) {
-        sanitized[field] = '[REDACTED]';
+        sanitized[field] = "[REDACTED]";
       }
     });
 
@@ -219,13 +220,13 @@ class UITracker {
 
   getSessionActivities(sessionId) {
     const activities = [];
-    this.activities.forEach(activity => {
+    this.activities.forEach((activity) => {
       if (activity.sessionId === sessionId) {
         activities.push(activity);
       }
     });
-    return activities.sort((a, b) => 
-      new Date(a.timestamp) - new Date(b.timestamp)
+    return activities.sort(
+      (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
     );
   }
 
@@ -233,12 +234,14 @@ class UITracker {
     const activities = this.getSessionActivities(sessionId);
     return {
       totalActivities: activities.length,
-      pageViews: activities.filter(a => a.type === 'PAGE_VIEW').length,
-      interactions: activities.filter(a => a.type === 'USER_INTERACTION').length,
-      formSubmissions: activities.filter(a => a.type === 'FORM_SUBMISSION').length,
-      errors: activities.filter(a => a.type === 'UI_ERROR').length
+      pageViews: activities.filter((a) => a.type === "PAGE_VIEW").length,
+      interactions: activities.filter((a) => a.type === "USER_INTERACTION")
+        .length,
+      formSubmissions: activities.filter((a) => a.type === "FORM_SUBMISSION")
+        .length,
+      errors: activities.filter((a) => a.type === "UI_ERROR").length,
     };
   }
 }
 
-export default new UITracker(); 
+export default new UITracker();

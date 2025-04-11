@@ -1,4 +1,5 @@
 import express from "express";
+
 import {
   createSubscription,
   getAllSubscriptions,
@@ -13,7 +14,7 @@ import {
   getActiveSubscriptions,
   getExpiredSubscriptions,
   getUpcomingSubscriptions,
-  getSubscriptionStats
+  getSubscriptionStats,
 } from "../controllers/subscription-controller.js";
 
 const router = express.Router();
@@ -29,7 +30,10 @@ router.get("/user/:userId", getSubscriptionByUserId);
 router.get("/:id", getSubscriptionById);
 router.get("/get-subscription/:student_id", getSubscriptionsByStudentId);
 router.get("/enrollStatus", getEnrollmentStatus);
-router.get("/corporate-employee-enroll-status", getCoorporateEmployeeEnrollmentStatus);
+router.get(
+  "/corporate-employee-enroll-status",
+  getCoorporateEmployeeEnrollmentStatus,
+);
 router.get("/coorporate-enrollStatus", getCoorporateEnrollmentStatus);
 router.patch("/:id", updateSubscription);
 router.delete("/:id", deleteSubscription);

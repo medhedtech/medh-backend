@@ -72,7 +72,10 @@ export const updateContact = async (req, res) => {
     const updatedContact = await ContactForm.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+      },
     );
     if (!updatedContact)
       return res

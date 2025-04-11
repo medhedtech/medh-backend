@@ -43,19 +43,19 @@ const MembershipSchema = new mongoose.Schema(
       default: "pending",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // Middleware to validate the number of courses based on plan type
 MembershipSchema.pre("save", function (next) {
   if (this.plan_type === "silver" && this.category_ids.length > 1) {
     return next(
-      new Error("Silver plan allows only one course to be selected.")
+      new Error("Silver plan allows only one course to be selected."),
     );
   }
   if (this.plan_type === "gold" && this.category_ids.length > 3) {
     return next(
-      new Error("Gold plan allows a maximum of three courses to be selected.")
+      new Error("Gold plan allows a maximum of three courses to be selected."),
     );
   }
 

@@ -99,12 +99,14 @@ See `docs/model-relationships.md` for detailed diagrams and explanations.
 ### Installation
 
 1. Clone the repository
+
 ```bash
 git clone https://github.com/your-org/medh-backend.git
 cd medh-backend
 ```
 
 2. Install dependencies
+
 ```bash
 npm install
 # or
@@ -112,12 +114,14 @@ yarn install
 ```
 
 3. Configure environment variables
+
 ```bash
 cp .env.example .env
 # Edit .env with your configuration
 ```
 
 4. Start the development server
+
 ```bash
 npm run dev
 # or
@@ -161,4 +165,4 @@ This project is licensed under the ISC License - see the LICENSE file for detail
 
 - Express.js team
 - MongoDB team
-- All contributors who have helped shape this project 
+- All contributors who have helped shape this project

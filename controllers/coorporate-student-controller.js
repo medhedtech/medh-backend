@@ -1,9 +1,10 @@
-import User from "../models/user-modal.js";
-import nodemailer from "nodemailer";
 import bcrypt from "bcryptjs";
-import Course from "../models/course-model.js";
+import nodemailer from "nodemailer";
+
 import CoorporateAssignCourse from "../models/assigned-courses-coorporates-modal.js";
 import CoorporateEnrolledModule from "../models/coorporate-enrolled-modules.model.js";
+import Course from "../models/course-model.js";
+import User from "../models/user-modal.js";
 
 // Set up the email transporter
 const transporter = nodemailer.createTransport({
@@ -87,19 +88,19 @@ export const createCorporateStudent = async (req, res) => {
             enrollment_id: course._id,
             video_url,
             expiry_date: course.expiry_date || null,
-          })
+          }),
         );
 
         // Insert enrolled modules in bulk
         try {
           await CoorporateEnrolledModule.insertMany(enrolledModules);
           console.log(
-            `Enrolled ${corporateUser._id} to course ${course.course_id}`
+            `Enrolled ${corporateUser._id} to course ${course.course_id}`,
           );
         } catch (err) {
           console.error(
             `Error enrolling user to course ${course.course_id}:`,
-            err.message
+            err.message,
           );
         }
       }
@@ -181,7 +182,7 @@ export const updateCorporateStudent = async (req, res) => {
     const updatedCorporateUser = await User.findOneAndUpdate(
       { _id: id, role: "coorporate-student" },
       updates,
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!updatedCorporateUser) {

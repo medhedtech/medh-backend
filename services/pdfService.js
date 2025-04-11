@@ -1,5 +1,6 @@
-import PDF from 'html-pdf-chrome';
-import logger from '../utils/logger.js';
+import PDF from "html-pdf-chrome";
+
+import logger from "../utils/logger.js";
 
 const options = {
   port: 9222, // Chrome debug port
@@ -10,8 +11,8 @@ const options = {
     marginLeft: 0,
     marginRight: 0,
     paperWidth: 8.27, // A4 width in inches
-    paperHeight: 11.69 // A4 height in inches
-  }
+    paperHeight: 11.69, // A4 height in inches
+  },
 };
 
 class PDFService {
@@ -21,20 +22,20 @@ class PDFService {
         ...options,
         printOptions: {
           ...options.printOptions,
-          ...customOptions
-        }
+          ...customOptions,
+        },
       };
 
       const pdf = await PDF.create(html, mergedOptions);
       return pdf.toBuffer();
     } catch (error) {
-      logger.error('PDF Generation Error', {
+      logger.error("PDF Generation Error", {
         error: {
           message: error.message,
-          stack: error.stack
-        }
+          stack: error.stack,
+        },
       });
-      throw new Error('Failed to generate PDF');
+      throw new Error("Failed to generate PDF");
     }
   }
 
@@ -44,23 +45,23 @@ class PDFService {
         ...options,
         printOptions: {
           ...options.printOptions,
-          ...customOptions
-        }
+          ...customOptions,
+        },
       };
 
       const pdf = await PDF.create(url, mergedOptions);
       return pdf.toBuffer();
     } catch (error) {
-      logger.error('PDF Generation Error', {
+      logger.error("PDF Generation Error", {
         error: {
           message: error.message,
-          stack: error.stack
+          stack: error.stack,
         },
-        url
+        url,
       });
-      throw new Error('Failed to generate PDF from URL');
+      throw new Error("Failed to generate PDF from URL");
     }
   }
 }
 
-export default new PDFService(); 
+export default new PDFService();

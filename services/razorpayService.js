@@ -1,6 +1,7 @@
-import razorpay from '../config/razorpay.js';
-import crypto from 'crypto';
-import Order from '../models/Order.js';
+import crypto from "crypto";
+
+import razorpay from "../config/razorpay.js";
+import Order from "../models/Order.js";
 
 /**
  * Create a new Razorpay order
@@ -9,14 +10,21 @@ import Order from '../models/Order.js';
  */
 export const createOrder = async (orderData) => {
   try {
-    const { amount, currency = 'INR', receipt, notes, userId, productInfo } = orderData;
+    const {
+      amount,
+      currency = "INR",
+      receipt,
+      notes,
+      userId,
+      productInfo,
+    } = orderData;
 
     // Create order in Razorpay
     const razorpayOrder = await razorpay.orders.create({
       amount: amount * 100, // Amount in paise (Razorpay uses smallest currency unit)
       currency,
       receipt,
-      notes
+      notes,
     });
 
     // Store order in database
@@ -27,7 +35,7 @@ export const createOrder = async (orderData) => {
       currency,
       receipt,
       notes,
-      productInfo
+      productInfo,
     });
 
     await order.save();
@@ -49,15 +57,15 @@ export const verifyPayment = async (paymentData) => {
     // Find the order in our database
     const order = await Order.findOne({ razorpayOrderId: orderId });
     if (!order) {
-      throw new Error('Order not found');
+      throw new Error("Order not found");
     }
 
     // Verify signature
-    const body = orderId + '|' + paymentId;
+    const body = orderId + "|" + paymentId;
     const expectedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(body)
-      .digest('hex');
+      .digest("hex");
 
     const isSignatureValid = expectedSignature === signature;
 
@@ -65,18 +73,18 @@ export const verifyPayment = async (paymentData) => {
       // Update order status
       order.razorpayPaymentId = paymentId;
       order.razorpaySignature = signature;
-      order.status = 'paid';
+      order.status = "paid";
       await order.save();
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         order,
-        productInfo: order.productInfo 
+        productInfo: order.productInfo,
       };
     } else {
-      order.status = 'failed';
+      order.status = "failed";
       await order.save();
-      throw new Error('Invalid payment signature');
+      throw new Error("Invalid payment signature");
     }
   } catch (error) {
     throw new Error(`Payment verification failed: ${error.message}`);
@@ -120,10 +128,10 @@ export const getOrderById = async (orderId) => {
   try {
     const order = await Order.findOne({ razorpayOrderId: orderId });
     if (!order) {
-      throw new Error('Order not found');
+      throw new Error("Order not found");
     }
     return order;
   } catch (error) {
     throw new Error(`Failed to fetch order: ${error.message}`);
   }
-}; 
+};

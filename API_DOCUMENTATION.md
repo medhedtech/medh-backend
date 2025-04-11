@@ -53,11 +53,13 @@ This document provides information on how to interact with the MEDH API, includi
 ## Base URL
 
 For development environment:
+
 ```
 http://localhost:8080/api/v1
 ```
 
 For production environment:
+
 ```
 https://api.medh.co/api/v1
 ```
@@ -82,6 +84,7 @@ Accept: application/json
 ```
 
 For file uploads:
+
 ```
 Content-Type: multipart/form-data
 ```
@@ -89,6 +92,7 @@ Content-Type: multipart/form-data
 ## Rate Limiting
 
 The API implements rate limiting to prevent abuse. Limits are:
+
 - 100 requests per minute for authenticated users
 - 30 requests per minute for non-authenticated users
 
@@ -105,6 +109,7 @@ POST /auth/register
 ```
 
 **Request Body:**
+
 ```json
 {
   "email": "user@example.com",
@@ -121,6 +126,7 @@ POST /auth/register
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -135,6 +141,7 @@ POST /auth/login
 ```
 
 **Request Body:**
+
 ```json
 {
   "email": "user@example.com",
@@ -143,6 +150,7 @@ POST /auth/login
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -162,6 +170,7 @@ GET /categories/getAll
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -170,7 +179,7 @@ GET /categories/getAll
       "_id": "category_id",
       "name": "Category Name",
       "description": "Category Description",
-      "slug": "category-name",
+      "slug": "category-name"
       // Other category fields
     }
   ]
@@ -186,6 +195,7 @@ GET /courses/get
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -194,7 +204,7 @@ GET /courses/get
       "_id": "course_id",
       "title": "Course Title",
       "description": "Course Description",
-      "category": "category_id",
+      "category": "category_id"
       // Other course fields
     }
   ]
@@ -210,6 +220,7 @@ GET /faq/getAll
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -230,6 +241,7 @@ GET /faq/:id
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -250,6 +262,7 @@ GET /freq/get
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -268,11 +281,13 @@ GET /students/get
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -280,7 +295,7 @@ Authorization: Bearer <token>
     {
       "_id": "student_id",
       "full_name": "Student Name",
-      "email": "student@example.com",
+      "email": "student@example.com"
       // Other student fields
     }
   ]
@@ -296,6 +311,7 @@ GET /instructors/get
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -303,7 +319,7 @@ GET /instructors/get
     {
       "_id": "instructor_id",
       "full_name": "Instructor Name",
-      "email": "instructor@example.com",
+      "email": "instructor@example.com"
       // Other instructor fields
     }
   ]
@@ -319,11 +335,13 @@ GET /certificates/get
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -332,7 +350,7 @@ Authorization: Bearer <token>
       "_id": "certificate_id",
       "student": "student_id",
       "course": "course_id",
-      "issue_date": "2023-01-01T00:00:00.000Z",
+      "issue_date": "2023-01-01T00:00:00.000Z"
       // Other certificate fields
     }
   ]
@@ -348,11 +366,13 @@ GET /online-meetings/get
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -363,7 +383,7 @@ Authorization: Bearer <token>
       "description": "Meeting Description",
       "start_time": "2023-01-01T10:00:00.000Z",
       "end_time": "2023-01-01T11:00:00.000Z",
-      "meeting_link": "https://meeting-platform.com/join/123456",
+      "meeting_link": "https://meeting-platform.com/join/123456"
       // Other meeting fields
     }
   ]
@@ -379,11 +399,13 @@ GET /enrolled/get
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -392,7 +414,7 @@ Authorization: Bearer <token>
       "_id": "enrollment_id",
       "student": "student_id",
       "course": "course_id",
-      "enrollment_date": "2023-01-01T00:00:00.000Z",
+      "enrollment_date": "2023-01-01T00:00:00.000Z"
       // Other enrollment fields
     }
   ]
@@ -408,11 +430,13 @@ GET /recorded-sessions/get
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -421,7 +445,7 @@ Authorization: Bearer <token>
       "_id": "session_id",
       "title": "Session Title",
       "description": "Session Description",
-      "video_url": "https://video-storage.com/video/12345",
+      "video_url": "https://video-storage.com/video/12345"
       // Other session fields
     }
   ]
@@ -437,18 +461,21 @@ POST /upload
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 Content-Type: multipart/form-data
 ```
 
 **Form Data:**
+
 ```
 file: <file_to_upload>
 type: "profile" | "document" | "assignment" | "resource"
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -465,6 +492,7 @@ POST /contact/submit
 ```
 
 **Request Body:**
+
 ```json
 {
   "name": "Contact Name",
@@ -475,6 +503,7 @@ POST /contact/submit
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -491,6 +520,7 @@ GET /blogs/get
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -500,7 +530,7 @@ GET /blogs/get
       "title": "Blog Title",
       "content": "Blog Content",
       "author": "author_id",
-      "publish_date": "2023-01-01T00:00:00.000Z",
+      "publish_date": "2023-01-01T00:00:00.000Z"
       // Other blog fields
     }
   ]
@@ -516,18 +546,20 @@ GET /dashboard/stats
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
   "data": {
     "total_students": 100,
     "total_courses": 20,
-    "total_instructors": 10,
+    "total_instructors": 10
     // Other dashboard statistics
   }
 }
@@ -542,11 +574,13 @@ POST /assign-instructor
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Request Body:**
+
 ```json
 {
   "course_id": "course_id",
@@ -555,6 +589,7 @@ Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -571,6 +606,7 @@ GET /membership/plans
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -580,7 +616,7 @@ GET /membership/plans
       "name": "Plan Name",
       "description": "Plan Description",
       "price": 99.99,
-      "duration": 30,
+      "duration": 30
       // Other plan fields
     }
   ]
@@ -596,6 +632,7 @@ GET /resources
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -604,7 +641,7 @@ GET /resources
       "_id": "resource_id",
       "title": "Resource Title",
       "description": "Resource Description",
-      "file_url": "https://storage.cloudprovider.com/path/to/resource",
+      "file_url": "https://storage.cloudprovider.com/path/to/resource"
       // Other resource fields
     }
   ]
@@ -620,11 +657,13 @@ GET /quizes
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -639,7 +678,7 @@ Authorization: Bearer <token>
           "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
           "correct_answer": 0
         }
-      ],
+      ]
       // Other quiz fields
     }
   ]
@@ -655,11 +694,13 @@ POST /feedback/submit
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Request Body:**
+
 ```json
 {
   "course_id": "course_id",
@@ -669,6 +710,7 @@ Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -685,11 +727,13 @@ GET /assignment
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -698,7 +742,7 @@ Authorization: Bearer <token>
       "_id": "assignment_id",
       "title": "Assignment Title",
       "description": "Assignment Description",
-      "due_date": "2023-01-15T00:00:00.000Z",
+      "due_date": "2023-01-15T00:00:00.000Z"
       // Other assignment fields
     }
   ]
@@ -714,6 +758,7 @@ GET /placements
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -722,7 +767,7 @@ GET /placements
       "_id": "placement_id",
       "company_name": "Company Name",
       "position": "Position Title",
-      "description": "Job Description",
+      "description": "Job Description"
       // Other placement fields
     }
   ]
@@ -738,11 +783,13 @@ POST /complaint/submit
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Request Body:**
+
 ```json
 {
   "subject": "Complaint Subject",
@@ -752,6 +799,7 @@ Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -769,11 +817,13 @@ POST /grievance/submit
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Request Body:**
+
 ```json
 {
   "subject": "Grievance Subject",
@@ -783,6 +833,7 @@ Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -800,6 +851,7 @@ POST /enroll-form/submit
 ```
 
 **Request Body:**
+
 ```json
 {
   "name": "Applicant Name",
@@ -812,6 +864,7 @@ POST /enroll-form/submit
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -828,6 +881,7 @@ GET /job-post
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -838,7 +892,7 @@ GET /job-post
       "company": "Company Name",
       "description": "Job Description",
       "requirements": ["Requirement 1", "Requirement 2"],
-      "location": "Job Location",
+      "location": "Job Location"
       // Other job fields
     }
   ]
@@ -852,11 +906,13 @@ POST /add-job-post
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Request Body:**
+
 ```json
 {
   "title": "Job Title",
@@ -872,6 +928,7 @@ Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -888,6 +945,7 @@ POST /subscription/subscribe
 ```
 
 **Request Body:**
+
 ```json
 {
   "email": "subscriber@example.com",
@@ -897,6 +955,7 @@ POST /subscription/subscribe
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -913,6 +972,7 @@ GET /broucher
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -920,7 +980,7 @@ GET /broucher
     {
       "_id": "brochure_id",
       "title": "Brochure Title",
-      "file_url": "https://storage.cloudprovider.com/path/to/brochure.pdf",
+      "file_url": "https://storage.cloudprovider.com/path/to/brochure.pdf"
       // Other brochure fields
     }
   ]
@@ -936,6 +996,7 @@ GET /newsletter
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -944,7 +1005,7 @@ GET /newsletter
       "_id": "newsletter_id",
       "title": "Newsletter Title",
       "content": "Newsletter Content",
-      "publish_date": "2023-01-01T00:00:00.000Z",
+      "publish_date": "2023-01-01T00:00:00.000Z"
       // Other newsletter fields
     }
   ]
@@ -960,11 +1021,13 @@ POST /quiz-response/submit
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Request Body:**
+
 ```json
 {
   "quiz_id": "quiz_id",
@@ -974,6 +1037,7 @@ Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -992,11 +1056,13 @@ POST /track-sessions/record
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Request Body:**
+
 ```json
 {
   "session_id": "session_id",
@@ -1007,6 +1073,7 @@ Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -1023,11 +1090,13 @@ POST /assign-corporate-course
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Request Body:**
+
 ```json
 {
   "corporate_id": "corporate_id",
@@ -1039,6 +1108,7 @@ Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -1055,6 +1125,7 @@ GET /corporate-training
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -1080,11 +1151,13 @@ POST /payments/process
 ```
 
 **Headers Required:**
+
 ```
 Authorization: Bearer <token>
 ```
 
 **Request Body:**
+
 ```json
 {
   "amount": 999.99,
@@ -1098,6 +1171,7 @@ Authorization: Bearer <token>
 ```
 
 **Response (Success):**
+
 ```json
 {
   "success": true,
@@ -1116,11 +1190,16 @@ GET /cors-test
 ```
 
 **Response (Success):**
+
 ```json
 {
   "message": "CORS test successful",
   "origin": "https://example.com",
-  "allowedOrigins": ["https://medh.co", "https://www.medh.co", "http://localhost:3000"],
+  "allowedOrigins": [
+    "https://medh.co",
+    "https://www.medh.co",
+    "http://localhost:3000"
+  ],
   "environment": "development",
   "timestamp": "2023-01-01T00:00:00.000Z"
 }

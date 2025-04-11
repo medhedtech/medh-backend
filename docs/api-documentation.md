@@ -1,17 +1,21 @@
 # MEDH Backend API Documentation
 
 ## Base URL
+
 ```
 https://api.medh.io/v1
 ```
 
 ## Authentication
+
 Most endpoints require authentication using JWT token. Include the token in the Authorization header:
+
 ```
 Authorization: Bearer <your_jwt_token>
 ```
 
 ## Rate Limiting
+
 - Public Routes: 200 requests per 15 minutes
 - Admin Routes: 100 requests per 15 minutes
 - Newsletter/Contact: 50 requests per 15 minutes
@@ -21,6 +25,7 @@ Authorization: Bearer <your_jwt_token>
 ### Authentication & User Management
 
 #### Authentication
+
 - **POST** `/auth/login`
   - Body:
     ```json
@@ -42,11 +47,14 @@ Authorization: Bearer <your_jwt_token>
     ```
 
 #### Password Management
+
 - **POST** `/auth/forgot-password`
+
   - Body: `{ "email": "string" }`
   - Description: Sends a system-generated temporary password to the user's email
 
 - **POST** `/auth/reset-password`
+
   - Body:
     ```json
     {
@@ -70,12 +78,15 @@ Authorization: Bearer <your_jwt_token>
 ### Courses
 
 #### Public Endpoints
+
 - **GET** `/courses/get`
+
   - Get all courses without pagination
   - Query: None
   - Access: Public
 
 - **GET** `/courses/search`
+
   - Search courses with filters
   - Query Parameters:
     - `page`: number
@@ -87,6 +98,7 @@ Authorization: Bearer <your_jwt_token>
     - `sort`: string (options: "price_asc", "price_desc", "date_asc", "date_desc")
 
 - **GET** `/courses/new`
+
   - Get new courses
   - Query Parameters:
     - `page`: number
@@ -98,7 +110,9 @@ Authorization: Bearer <your_jwt_token>
     - `id`: Course ID
 
 #### Admin Endpoints
+
 - **POST** `/courses/create` (Admin)
+
   - Body:
     ```json
     {
@@ -118,9 +132,11 @@ Authorization: Bearer <your_jwt_token>
     ```
 
 - **POST** `/courses/update/:id` (Admin)
+
   - Same body as create
 
 - **DELETE** `/courses/delete/:id` (Super Admin)
+
   - Hard delete course
 
 - **POST** `/courses/soft-delete/:id` (Admin)
@@ -129,7 +145,9 @@ Authorization: Bearer <your_jwt_token>
 ### Students
 
 #### Registration & Profile
+
 - **POST** `/students/register`
+
   - Body:
     ```json
     {
@@ -154,7 +172,9 @@ Authorization: Bearer <your_jwt_token>
 ### Enrollments
 
 #### Course Enrollment
+
 - **POST** `/enrolled/enroll`
+
   - Enroll in a course
   - Requires Authentication
   - Body:
@@ -176,6 +196,7 @@ Authorization: Bearer <your_jwt_token>
 ### Learning Resources
 
 #### Course Resources
+
 - **GET** `/resources/course/:courseId`
   - Get course resources
   - Requires Authentication
@@ -183,6 +204,7 @@ Authorization: Bearer <your_jwt_token>
     - `courseId`: Course ID
 
 #### Recorded Sessions
+
 - **GET** `/recorded-sessions/course/:courseId`
   - Get recorded sessions
   - Requires Authentication
@@ -190,6 +212,7 @@ Authorization: Bearer <your_jwt_token>
     - `courseId`: Course ID
 
 #### Online Meetings
+
 - **GET** `/online-meeting/upcoming`
   - Get upcoming live sessions
   - Requires Authentication
@@ -197,7 +220,9 @@ Authorization: Bearer <your_jwt_token>
 ### Assignments & Quizzes
 
 #### Assignments
+
 - **GET** `/assignments/course/:courseId`
+
   - Get course assignments
   - Requires Authentication
 
@@ -214,7 +239,9 @@ Authorization: Bearer <your_jwt_token>
     ```
 
 #### Quizzes
+
 - **GET** `/quizes/course/:courseId`
+
   - Get course quizzes
   - Requires Authentication
 
@@ -225,6 +252,7 @@ Authorization: Bearer <your_jwt_token>
 ### Feedback & Support
 
 #### Feedback
+
 - **POST** `/feedback`
   - Submit course feedback
   - Requires Authentication
@@ -238,6 +266,7 @@ Authorization: Bearer <your_jwt_token>
     ```
 
 #### Grievance
+
 - **POST** `/grievance/submit`
   - Submit grievance
   - Requires Authentication
@@ -253,7 +282,9 @@ Authorization: Bearer <your_jwt_token>
 ### Corporate Training
 
 #### Corporate Courses
+
 - **GET** `/corporate-training/courses`
+
   - Get corporate training courses
   - Requires Authentication (Corporate)
 
@@ -264,6 +295,7 @@ Authorization: Bearer <your_jwt_token>
 ### Additional Features
 
 #### Blog
+
 - **GET** `/blogs`
   - Get all blogs
   - Query Parameters:
@@ -272,10 +304,12 @@ Authorization: Bearer <your_jwt_token>
     - `category`: string
 
 #### Newsletter
+
 - **POST** `/newsletter/subscribe`
   - Body: `{ "email": "string" }`
 
 #### Contact
+
 - **POST** `/contact`
   - Body:
     ```json
@@ -288,7 +322,9 @@ Authorization: Bearer <your_jwt_token>
     ```
 
 ## Error Handling
+
 All endpoints follow a standard error response format:
+
 ```json
 {
   "status": "error",
@@ -299,6 +335,7 @@ All endpoints follow a standard error response format:
 ```
 
 Common HTTP Status Codes:
+
 - 200: Success
 - 201: Created
 - 400: Bad Request
@@ -309,6 +346,7 @@ Common HTTP Status Codes:
 - 500: Internal Server Error
 
 ## Security
+
 1. JWT Authentication required for protected routes
 2. Role-based access control (Student, Instructor, Admin, Super Admin)
 3. Rate limiting on all endpoints
@@ -317,7 +355,9 @@ Common HTTP Status Codes:
 6. Protected routes for sensitive operations
 
 ## Support
+
 For API support, contact:
+
 - Email: api-support@medh.io
 - Documentation: https://docs.medh.io
-- Technical Support: https://support.medh.io 
+- Technical Support: https://support.medh.io

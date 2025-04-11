@@ -16,12 +16,12 @@ const coorporateAssignCourseSchema = new mongoose.Schema(
       type: Date,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const CoorporateAssignCourse = mongoose.model(
   "CoorporateAssignCourse",
-  coorporateAssignCourseSchema
+  coorporateAssignCourseSchema,
 );
 
 export default CoorporateAssignCourse;

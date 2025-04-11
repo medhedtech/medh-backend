@@ -25,12 +25,12 @@ const recordedSessionSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const RecordedSession = mongoose.model(
   "RecordedSession",
-  recordedSessionSchema
+  recordedSessionSchema,
 );
 
 export default RecordedSession;

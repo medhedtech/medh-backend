@@ -1,4 +1,5 @@
 import express from "express";
+
 const router = express.Router();
 import {
   createCourse,
@@ -41,10 +42,14 @@ import {
   updateCoursePrices,
   bulkUpdateCoursePrices,
   getAllCoursesWithPrices,
-  getCoursesWithFields
+  getCoursesWithFields,
 } from "../controllers/course-controller.js";
 import { authenticate } from "../middleware/auth.js";
-import { upload, uploadMultiple, handleUploadError } from "../middleware/upload.js";
+import {
+  upload,
+  uploadMultiple,
+  handleUploadError,
+} from "../middleware/upload.js";
 
 // Public Routes
 router.get("/get", getAllCourses);
@@ -70,20 +75,39 @@ router.get("/:courseId/quizzes", getCourseQuizzes);
 router.post("/:courseId/quizzes/:quizId/submit", submitQuiz);
 router.get("/:courseId/quizzes/:quizId/results", getQuizResults);
 router.get("/:courseId/lessons/:lessonId/resources", getLessonResources);
-router.get("/:courseId/lessons/:lessonId/resources/:resourceId/download", downloadResource);
+router.get(
+  "/:courseId/lessons/:lessonId/resources/:resourceId/download",
+  downloadResource,
+);
 router.get("/:courseId/lessons/:lessonId/notes", getLessonNotes);
 router.post("/:courseId/lessons/:lessonId/notes", addLessonNote);
 router.put("/:courseId/lessons/:lessonId/notes/:noteId", updateNote);
 router.delete("/:courseId/lessons/:lessonId/notes/:noteId", deleteNote);
 router.get("/:courseId/lessons/:lessonId/bookmarks", getLessonBookmarks);
 router.post("/:courseId/lessons/:lessonId/bookmarks", addLessonBookmark);
-router.put("/:courseId/lessons/:lessonId/bookmarks/:bookmarkId", updateBookmark);
-router.delete("/:courseId/lessons/:lessonId/bookmarks/:bookmarkId", deleteBookmark);
+router.put(
+  "/:courseId/lessons/:lessonId/bookmarks/:bookmarkId",
+  updateBookmark,
+);
+router.delete(
+  "/:courseId/lessons/:lessonId/bookmarks/:bookmarkId",
+  deleteBookmark,
+);
 router.post("/broucher/download/:courseId", downloadBrochure);
 
 // Admin Routes (Protected)
-router.post("/create", upload.single("course_image"), handleUploadError, createCourse);
-router.put("/:id", upload.single("course_image"), handleUploadError, updateCourse);
+router.post(
+  "/create",
+  upload.single("course_image"),
+  handleUploadError,
+  createCourse,
+);
+router.put(
+  "/:id",
+  upload.single("course_image"),
+  handleUploadError,
+  updateCourse,
+);
 router.delete("/:id", deleteCourse);
 router.patch("/:id/toggle-status", toggleCourseStatus);
 router.post("/:id/recorded-videos", updateRecordedVideos);
@@ -94,6 +118,11 @@ router.post("/prices/bulk-update", bulkUpdateCoursePrices);
 
 // File Upload Routes (Protected)
 router.post("/upload", upload.single("file"), handleUploadError, handleUpload);
-router.post("/upload-multiple", uploadMultiple.array("files", 10), handleUploadError, handleMultipleUpload);
+router.post(
+  "/upload-multiple",
+  uploadMultiple.array("files", 10),
+  handleUploadError,
+  handleMultipleUpload,
+);
 
 export default router;

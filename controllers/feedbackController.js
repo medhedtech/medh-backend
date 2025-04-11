@@ -1,6 +1,6 @@
-import Feedback from "../models/feedback.js";
-import InstructorFeedback from "../models/feedback-instructor.js";
 import FeedbackCoorporate from "../models/feedback-coorporate-admin.modal.js";
+import InstructorFeedback from "../models/feedback-instructor.js";
+import Feedback from "../models/feedback.js";
 
 export const submitFeedback = async (req, res) => {
   const { userId, feedback_text, feedback_for, feedback_title } = req.body;
@@ -89,9 +89,8 @@ export const getAllInstructorFeedbacks = async (req, res) => {
 export const deleteInstructorFeedback = async (req, res) => {
   try {
     const feedbackId = req.params.id;
-    const deletedFeedback = await InstructorFeedback.findByIdAndDelete(
-      feedbackId
-    );
+    const deletedFeedback =
+      await InstructorFeedback.findByIdAndDelete(feedbackId);
     if (!deletedFeedback) {
       return res.status(404).json({ message: "Feedback not found" });
     }
@@ -140,9 +139,8 @@ export const getAllCoorporateFeedbacks = async (req, res) => {
 export const deleteCoorporateFeedback = async (req, res) => {
   try {
     const feedbackId = req.params.id;
-    const deletedFeedback = await FeedbackCoorporate.findByIdAndDelete(
-      feedbackId
-    );
+    const deletedFeedback =
+      await FeedbackCoorporate.findByIdAndDelete(feedbackId);
     if (!deletedFeedback) {
       return res.status(404).json({ message: "Feedback not found" });
     }

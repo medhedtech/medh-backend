@@ -1,25 +1,26 @@
+import PDF from "html-pdf-chrome";
+
 import Certificate from "../models/cetificates-model.js";
-import EnrolledCourse from "../models/enrolled-courses-model.js";
 import Course from "../models/course-model.js";
+import EnrolledCourse from "../models/enrolled-courses-model.js";
+import { chromeService } from "../utils/chromeService.js";
 import { generatePdfContentForCertificate } from "../utils/htmlTemplate.js";
+import logger from "../utils/logger.js";
 import { uploadFile } from "../utils/uploadFile.js";
-import PDF from 'html-pdf-chrome';
-import logger from '../utils/logger.js';
-import { chromeService } from '../utils/chromeService.js';
 
 const pdfOptions = {
   port: 9222, // Chrome debug port
   printOptions: {
     landscape: true,
-    format: 'A4',
+    format: "A4",
     printBackground: true,
     margin: {
-      top: '1cm',
-      bottom: '1cm',
-      left: '1cm',
-      right: '1cm'
-    }
-  }
+      top: "1cm",
+      bottom: "1cm",
+      left: "1cm",
+      right: "1cm",
+    },
+  },
 };
 
 export const getAllCertificates = async (req, res) => {
@@ -43,18 +44,19 @@ export const getAllCertificates = async (req, res) => {
 
     res.status(200).json(certificates);
   } catch (error) {
-    logger.error('Error fetching certificates', {
+    logger.error("Error fetching certificates", {
       error: {
         message: error.message,
-        stack: error.stack
-      }
+        stack: error.stack,
+      },
     });
     res.status(500).json({ message: "Failed to fetch certificates" });
   }
 };
 
 export const createCertificate = async (req, res) => {
-  const { student_id, course_id, completion_date, student_name, course_name } = req.body;
+  const { student_id, course_id, completion_date, student_name, course_name } =
+    req.body;
 
   try {
     // Ensure student has completed the course
@@ -66,7 +68,9 @@ export const createCertificate = async (req, res) => {
     });
 
     if (!enrollment) {
-      return res.status(400).json({ message: "Student has not completed this course" });
+      return res
+        .status(400)
+        .json({ message: "Student has not completed this course" });
     }
 
     const course = await Course.findById(course_id);
@@ -106,54 +110,57 @@ export const createCertificate = async (req, res) => {
               course_id: course_id,
               course_name: course_name,
               completion_date: completion_date,
-              certificateUrl: url
+              certificateUrl: url,
             });
 
             await certificate.save();
             await EnrolledCourse.updateOne(
               { _id: enrollment._id },
-              { $set: { is_certifiled: true } }
+              { $set: { is_certifiled: true } },
             );
 
             res.status(201).json({
-              message: "Certificate created and enrollment updated successfully",
+              message:
+                "Certificate created and enrollment updated successfully",
               certificate,
             });
           } catch (dbError) {
-            logger.error('Database error while saving certificate', {
+            logger.error("Database error while saving certificate", {
               error: {
                 message: dbError.message,
-                stack: dbError.stack
-              }
+                stack: dbError.stack,
+              },
             });
-            res.status(500).json({ message: "Failed to save certificate details" });
+            res
+              .status(500)
+              .json({ message: "Failed to save certificate details" });
           }
         },
         (uploadError) => {
-          logger.error('Error uploading PDF to S3', {
+          logger.error("Error uploading PDF to S3", {
             error: {
               message: uploadError.message,
-              stack: uploadError.stack
-            }
+              stack: uploadError.stack,
+            },
           });
           res.status(500).json({ message: "Failed to upload certificate" });
-        }
+        },
       );
     } catch (pdfError) {
-      logger.error('Error generating PDF', {
+      logger.error("Error generating PDF", {
         error: {
           message: pdfError.message,
-          stack: pdfError.stack
-        }
+          stack: pdfError.stack,
+        },
       });
       res.status(500).json({ message: "Failed to generate certificate PDF" });
     }
   } catch (error) {
-    logger.error('Error in certificate creation process', {
+    logger.error("Error in certificate creation process", {
       error: {
         message: error.message,
-        stack: error.stack
-      }
+        stack: error.stack,
+      },
     });
     res.status(500).json({ message: "Failed to create certificate" });
   }
@@ -165,23 +172,26 @@ export const getCertificatesByStudentId = async (req, res) => {
   try {
     const certificates = await Certificate.find({ student_id })
       .populate("student_id", "full_name")
-      .populate("course_id", "course_title assigned_instructor course_image certificateUrl")
+      .populate(
+        "course_id",
+        "course_title assigned_instructor course_image certificateUrl",
+      )
       .exec();
 
     if (!certificates || certificates.length === 0) {
-      return res.status(404).json({ 
-        message: "No certificates found for the given student ID" 
+      return res.status(404).json({
+        message: "No certificates found for the given student ID",
       });
     }
 
     res.status(200).json(certificates);
   } catch (error) {
-    logger.error('Error fetching student certificates', {
+    logger.error("Error fetching student certificates", {
       error: {
         message: error.message,
-        stack: error.stack
+        stack: error.stack,
       },
-      studentId: student_id
+      studentId: student_id,
     });
     res.status(500).json({ message: "Failed to fetch student certificates" });
   }

@@ -1,7 +1,7 @@
-import User from "../models/user-modal.js";
 import Course from "../models/course-model.js";
-import Instructor from "../models/instructor-model.js";
 import EnrolledCourse from "../models/enrolled-courses-model.js";
+import Instructor from "../models/instructor-model.js";
+import User from "../models/user-modal.js";
 
 // Get all counts
 export const getDashboardCounts = async (req, res) => {

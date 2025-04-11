@@ -1,9 +1,13 @@
-const logger = require('../utils/logger');
+import crypto from "crypto";
+
+import morgan from "morgan";
+
+import logger from "../utils/logger.js";
 
 const requestLogger = (req, res, next) => {
   // Add request ID for tracking
-  req.requestId = require('crypto').randomUUID();
-  
+  req.requestId = crypto.randomUUID();
+
   // Log request
   logger.logAPIRequest(req, { requestId: req.requestId });
 
@@ -12,20 +16,20 @@ const requestLogger = (req, res, next) => {
 
   // Override res.json to intercept and log response
   const originalJson = res.json;
-  res.json = function(body) {
+  res.json = function (body) {
     const responseTime = Date.now() - req.startTime;
-    
+
     logger.logAPIResponse(req, res, responseTime, {
       requestId: req.requestId,
-      responseSize: JSON.stringify(body).length
+      responseSize: JSON.stringify(body).length,
     });
 
     // Log slow responses (over 1000ms)
     if (responseTime > 1000) {
-      logger.logPerformance('Slow API Response', responseTime, {
+      logger.logPerformance("Slow API Response", responseTime, {
         method: req.method,
         url: req.originalUrl,
-        requestId: req.requestId
+        requestId: req.requestId,
       });
     }
 
@@ -33,23 +37,23 @@ const requestLogger = (req, res, next) => {
   };
 
   // Handle errors
-  res.on('error', (error) => {
+  res.on("error", (error) => {
     logger.logError(error, {
       requestId: req.requestId,
       method: req.method,
-      url: req.originalUrl
+      url: req.originalUrl,
     });
   });
 
   // Handle close/finish
-  res.on('finish', () => {
+  res.on("finish", () => {
     // Log 4xx and 5xx responses
     if (res.statusCode >= 400) {
       logger.logError(new Error(`HTTP ${res.statusCode}`), {
         requestId: req.requestId,
         method: req.method,
         url: req.originalUrl,
-        statusCode: res.statusCode
+        statusCode: res.statusCode,
       });
     }
   });
@@ -57,4 +61,4 @@ const requestLogger = (req, res, next) => {
   next();
 };
 
-module.exports = requestLogger; 
+module.exports = requestLogger;

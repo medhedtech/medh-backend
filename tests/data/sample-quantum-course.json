@@ -74,18 +74,18 @@
       "id": "week_1",
       "weekTitle": "Introduction to Quantum Computing",
       "weekDescription": "Understanding the basics of quantum computing and its significance in modern technology",
-      "topics": ["Quantum Mechanics Basics", "Classical vs Quantum Computing", "Quantum Applications"],
+      "topics": [
+        "Quantum Mechanics Basics",
+        "Classical vs Quantum Computing",
+        "Quantum Applications"
+      ],
       "sections": [
         {
           "id": "section_1_1",
           "title": "Fundamentals of Quantum Computing",
           "description": "Introduction to quantum computing concepts and principles",
           "order": 1,
-          "lessons": [
-            "lesson_1_1_1",
-            "lesson_1_1_2",
-            "lesson_1_1_3"
-          ],
+          "lessons": ["lesson_1_1_1", "lesson_1_1_2", "lesson_1_1_3"],
           "resources": [
             {
               "title": "Quantum Computing Overview",
@@ -100,11 +100,7 @@
           "title": "Quantum Mechanics Basics",
           "description": "Understanding the fundamental principles of quantum mechanics",
           "order": 2,
-          "lessons": [
-            "lesson_1_2_1",
-            "lesson_1_2_2",
-            "lesson_1_2_3"
-          ],
+          "lessons": ["lesson_1_2_1", "lesson_1_2_2", "lesson_1_2_3"],
           "resources": [
             {
               "title": "Quantum Mechanics Guide",
@@ -119,11 +115,7 @@
           "title": "Quantum Applications",
           "description": "Exploring real-world applications of quantum computing",
           "order": 3,
-          "lessons": [
-            "lesson_1_3_1",
-            "lesson_1_3_2",
-            "lesson_1_3_3"
-          ],
+          "lessons": ["lesson_1_3_1", "lesson_1_3_2", "lesson_1_3_3"],
           "resources": [
             {
               "title": "Quantum Applications Overview",
@@ -146,11 +138,7 @@
           "title": "Introduction to Qiskit",
           "description": "Getting started with IBM's quantum computing framework",
           "order": 1,
-          "lessons": [
-            "lesson_2_1_1",
-            "lesson_2_1_2",
-            "lesson_2_1_3"
-          ],
+          "lessons": ["lesson_2_1_1", "lesson_2_1_2", "lesson_2_1_3"],
           "resources": [
             {
               "title": "Qiskit Installation Guide",
@@ -165,11 +153,7 @@
           "title": "Quantum Circuits",
           "description": "Understanding and building quantum circuits",
           "order": 2,
-          "lessons": [
-            "lesson_2_2_1",
-            "lesson_2_2_2",
-            "lesson_2_2_3"
-          ],
+          "lessons": ["lesson_2_2_1", "lesson_2_2_2", "lesson_2_2_3"],
           "resources": [
             {
               "title": "Quantum Circuits Guide",
@@ -184,11 +168,7 @@
           "title": "Quantum Gates",
           "description": "Working with quantum gates and operations",
           "order": 3,
-          "lessons": [
-            "lesson_2_3_1",
-            "lesson_2_3_2",
-            "lesson_2_3_3"
-          ],
+          "lessons": ["lesson_2_3_1", "lesson_2_3_2", "lesson_2_3_3"],
           "resources": [
             {
               "title": "Quantum Gates Reference",
@@ -204,18 +184,18 @@
       "id": "week_3",
       "weekTitle": "Quantum Algorithms",
       "weekDescription": "Understanding and implementing fundamental quantum algorithms",
-      "topics": ["Grover's Algorithm", "Shor's Algorithm", "Quantum Error Correction"],
+      "topics": [
+        "Grover's Algorithm",
+        "Shor's Algorithm",
+        "Quantum Error Correction"
+      ],
       "sections": [
         {
           "id": "section_3_1",
           "title": "Grover's Algorithm",
           "description": "Understanding and implementing quantum search",
           "order": 1,
-          "lessons": [
-            "lesson_3_1_1",
-            "lesson_3_1_2",
-            "lesson_3_1_3"
-          ],
+          "lessons": ["lesson_3_1_1", "lesson_3_1_2", "lesson_3_1_3"],
           "resources": [
             {
               "title": "Grover's Algorithm Guide",
@@ -230,11 +210,7 @@
           "title": "Shor's Algorithm",
           "description": "Understanding quantum factorization",
           "order": 2,
-          "lessons": [
-            "lesson_3_2_1",
-            "lesson_3_2_2",
-            "lesson_3_2_3"
-          ],
+          "lessons": ["lesson_3_2_1", "lesson_3_2_2", "lesson_3_2_3"],
           "resources": [
             {
               "title": "Shor's Algorithm Guide",
@@ -249,11 +225,7 @@
           "title": "Quantum Error Correction",
           "description": "Understanding and implementing error correction",
           "order": 3,
-          "lessons": [
-            "lesson_3_3_1",
-            "lesson_3_3_2",
-            "lesson_3_3_3"
-          ],
+          "lessons": ["lesson_3_3_1", "lesson_3_3_2", "lesson_3_3_3"],
           "resources": [
             {
               "title": "Quantum Error Correction Guide",

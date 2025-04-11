@@ -1,6 +1,12 @@
-import BlogsModel from "../models/blog-model.js";
 import slugify from "slugify";
-import { validateBlog, validateComment, validateBlogStatus } from "../utils/validators.js";
+
+import BlogsModel from "../models/blog-model.js";
+import {
+  validateBlog,
+  validateComment,
+  validateBlogStatus,
+} from "../utils/validators.js";
+
 import { handleBase64Upload } from "./upload/uploadController.js";
 
 // Create a new blog post
@@ -14,64 +20,67 @@ export const createBlog = async (req, res) => {
       });
     }
 
-    const { 
-      title, 
-      content, 
-      description, 
-      blog_link, 
-      upload_image, 
-      categories, 
-      tags, 
-      meta_title, 
-      meta_description 
+    const {
+      title,
+      content,
+      description,
+      blog_link,
+      upload_image,
+      categories,
+      tags,
+      meta_title,
+      meta_description,
     } = req.body;
 
     // Handle image upload if it's a base64 string
     let imageUrl = upload_image;
-    if (upload_image && typeof upload_image === 'string') {
+    if (upload_image && typeof upload_image === "string") {
       // Only attempt base64 processing if it looks like a base64 string
-      if (upload_image.startsWith('data:image')) {
+      if (upload_image.startsWith("data:image")) {
         try {
-          console.log('Processing base64 image upload, length:', upload_image.length);
-          
+          console.log(
+            "Processing base64 image upload, length:",
+            upload_image.length,
+          );
+
           // Create a mock request and response object for the upload controller
           const mockReq = {
             body: {
               base64String: upload_image,
-              fileType: 'image'
+              fileType: "image",
             },
-            user: req.user // Pass the authenticated user
+            user: req.user, // Pass the authenticated user
           };
-          
+
           const mockRes = {
-            status: function(code) {
+            status: function (code) {
               this.statusCode = code;
               return this;
             },
-            json: function(data) {
+            json: function (data) {
               if (data.success) {
                 // Extract the URL and remove any extra quotes
-                imageUrl = data.data.url.replace(/^"|"$/g, '');
-                console.log('Image upload successful, URL:', imageUrl);
+                imageUrl = data.data.url.replace(/^"|"$/g, "");
+                console.log("Image upload successful, URL:", imageUrl);
               } else {
-                console.error('Image upload failed:', data.message);
+                console.error("Image upload failed:", data.message);
                 throw new Error(data.message);
               }
-            }
+            },
           };
 
           await handleBase64Upload(mockReq, mockRes);
         } catch (error) {
-          console.error('Error uploading image:', error);
+          console.error("Error uploading image:", error);
           return res.status(400).json({
             success: false,
             message: "Failed to upload image",
-            error: error.message
+            error: error.message,
           });
         }
       } else {
         // Not a base64 string, assume it's a direct URL
-        console.log('Using direct image URL:', upload_image);
+        console.log("Using direct image URL:", upload_image);
       }
     } else if (!upload_image) {
       return res.status(400).json({
@@ -79,33 +88,33 @@ export const createBlog = async (req, res) => {
         message: "upload_image is required",
       });
     }
-    
+
     // Detailed logging of the request and user object
-    console.log('Request headers:', req.headers);
-    console.log('Request user:', JSON.stringify(req.user, null, 2));
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
-    
+    console.log("Request headers:", req.headers);
+    console.log("Request user:", JSON.stringify(req.user, null, 2));
+    console.log("Request body:", JSON.stringify(req.body, null, 2));
+
     // Extract author ID from the authenticated user
     let authorId;
     if (req.user && req.user.user && req.user.user.id) {
       authorId = req.user.user.id;
-      console.log('Using author ID from user.user.id:', authorId);
+      console.log("Using author ID from user.user.id:", authorId);
     } else if (req.user && req.user._id) {
       authorId = req.user._id;
-      console.log('Using author ID from user._id:', authorId);
+      console.log("Using author ID from user._id:", authorId);
     } else if (req.user && req.user.id) {
       authorId = req.user.id;
-      console.log('Using author ID from user.id:', authorId);
+      console.log("Using author ID from user.id:", authorId);
     } else {
-      console.log('No valid user ID found in request');
+      console.log("No valid user ID found in request");
       return res.status(401).json({
         success: false,
         message: "Authentication required",
         error: "User ID not found in request",
         debug: {
           user: req.user,
-          headers: req.headers
-        }
+          headers: req.headers,
+        },
       });
     }
 
@@ -121,15 +130,15 @@ export const createBlog = async (req, res) => {
       meta_title,
       meta_description,
       author: authorId,
-      status: 'published'
+      status: "published",
     });
-    
-    console.log('Creating blog with data:', JSON.stringify(newBlog, null, 2));
-    
+
+    console.log("Creating blog with data:", JSON.stringify(newBlog, null, 2));
+
     await newBlog.save();
 
     // Populate the categories and author
-    await newBlog.populate(['categories', 'author']);
+    await newBlog.populate(["categories", "author"]);
 
     res.status(201).json({
       success: true,
@@ -145,8 +154,8 @@ export const createBlog = async (req, res) => {
       error: err.message,
       debug: {
         stack: err.stack,
-        user: req.user
-      }
+        user: req.user,
+      },
     });
   }
 };
@@ -154,30 +163,33 @@ export const createBlog = async (req, res) => {
 // Get all blog posts with pagination and filters
 export const getAllBlogs = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
+    const {
+      page = 1,
+      limit = 10,
       status, // Default to published only
-      sort_by = 'createdAt',
-      sort_order = 'desc',
-      with_content = 'false', // Default to false for public routes
-      count_only = 'false'
+      sort_by = "createdAt",
+      sort_order = "desc",
+      with_content = "false", // Default to false for public routes
+      count_only = "false",
     } = req.query;
-    
+
     const skip = (page - 1) * limit;
     const sort = {};
-    sort[sort_by] = sort_order === 'desc' ? -1 : 1;
+    sort[sort_by] = sort_order === "desc" ? -1 : 1;
 
     // Build query
     const query = { status }; // Always filter by status for public routes
-    
+
     // Build projection based on with_content parameter
-    const projection = with_content === 'false' ? {
-      content: 0
-    } : {};
+    const projection =
+      with_content === "false"
+        ? {
+            content: 0,
+          }
+        : {};
 
     // If count_only is true, just return the count
-    if (count_only === 'true') {
+    if (count_only === "true") {
       const total = await BlogsModel.countDocuments(query);
       return res.status(200).json({
         success: true,
@@ -185,15 +197,15 @@ export const getAllBlogs = async (req, res) => {
         pagination: {
           total,
           page: parseInt(page),
-          pages: Math.ceil(total / limit)
-        }
+          pages: Math.ceil(total / limit),
+        },
       });
     }
 
     const blogs = await BlogsModel.find(query)
       .select(projection)
-      .populate('author', 'name email')
-      .populate('categories', 'category_name category_image')
+      .populate("author", "name email")
+      .populate("categories", "category_name category_image")
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit));
@@ -206,8 +218,8 @@ export const getAllBlogs = async (req, res) => {
       pagination: {
         total,
         page: parseInt(page),
-        pages: Math.ceil(total / limit)
-      }
+        pages: Math.ceil(total / limit),
+      },
     });
   } catch (err) {
     console.error("Error fetching blogs:", err.message);
@@ -226,20 +238,20 @@ export const searchBlogs = async (req, res) => {
     if (!query) {
       return res.status(400).json({
         success: false,
-        message: "Search query is required"
+        message: "Search query is required",
       });
     }
 
     const blogs = await BlogsModel.find(
-      { 
+      {
         $text: { $search: query },
-        status: 'published' // Only search published blogs
+        status: "published", // Only search published blogs
       },
-      { score: { $meta: "textScore" } }
+      { score: { $meta: "textScore" } },
     )
-    .sort({ score: { $meta: "textScore" } })
-    .populate('author', 'name email')
-    .populate('categories', 'category_name category_image');
+      .sort({ score: { $meta: "textScore" } })
+      .populate("author", "name email")
+      .populate("categories", "category_name category_image");
 
     res.status(200).json({
       success: true,
@@ -258,14 +270,14 @@ export const searchBlogs = async (req, res) => {
 // Get featured blogs
 export const getFeaturedBlogs = async (req, res) => {
   try {
-    const blogs = await BlogsModel.find({ 
+    const blogs = await BlogsModel.find({
       featured: true,
-      status: 'published'
+      status: "published",
     })
-    .populate('author', 'name email')
-    .populate('categories', 'category_name category_image')
-    .sort({ createdAt: -1 })
-    .limit(5);
+      .populate("author", "name email")
+      .populate("categories", "category_name category_image")
+      .sort({ createdAt: -1 })
+      .limit(5);
 
     res.status(200).json({
       success: true,
@@ -286,14 +298,14 @@ export const getBlogBySlug = async (req, res) => {
   try {
     // First find the blog without updating it
     const blog = await BlogsModel.findOne({ slug: req.params.slug })
-      .populate('author', 'name email')
-      .populate('categories', 'category_name category_image')
-      .populate('comments.user', 'name email');
+      .populate("author", "name email")
+      .populate("categories", "category_name category_image")
+      .populate("comments.user", "name email");
 
     if (!blog) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -305,12 +317,19 @@ export const getBlogBySlug = async (req, res) => {
 
     // Increment views in a separate operation that doesn't affect the response
     try {
-      await BlogsModel.findByIdAndUpdate(blog._id, { $inc: { views: 1 } }, { 
-        new: false,
-        runValidators: false // Skip validation when updating views
-      });
+      await BlogsModel.findByIdAndUpdate(
+        blog._id,
+        { $inc: { views: 1 } },
+        {
+          new: false,
+          runValidators: false, // Skip validation when updating views
+        },
+      );
     } catch (viewErr) {
-      console.error("Error incrementing views (non-critical):", viewErr.message);
+      console.error(
+        "Error incrementing views (non-critical):",
+        viewErr.message,
+      );
     }
   } catch (err) {
     console.error("Error fetching blog:", err.message);
@@ -327,14 +346,14 @@ export const getBlogById = async (req, res) => {
   try {
     // First find the blog without updating it
     const blog = await BlogsModel.findById(req.params.id)
-      .populate('author', 'name email')
-      .populate('categories', 'category_name category_image')
-      .populate('comments.user', 'name email');
+      .populate("author", "name email")
+      .populate("categories", "category_name category_image")
+      .populate("comments.user", "name email");
 
     if (!blog) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -346,12 +365,19 @@ export const getBlogById = async (req, res) => {
 
     // Increment views in a separate operation that doesn't affect the response
     try {
-      await BlogsModel.findByIdAndUpdate(req.params.id, { $inc: { views: 1 } }, { 
-        new: false,
-        runValidators: false // Skip validation when updating views
-      });
+      await BlogsModel.findByIdAndUpdate(
+        req.params.id,
+        { $inc: { views: 1 } },
+        {
+          new: false,
+          runValidators: false, // Skip validation when updating views
+        },
+      );
     } catch (viewErr) {
-      console.error("Error incrementing views (non-critical):", viewErr.message);
+      console.error(
+        "Error incrementing views (non-critical):",
+        viewErr.message,
+      );
     }
   } catch (err) {
     console.error("Error fetching blog:", err.message);
@@ -368,11 +394,11 @@ export const getBlogsByCategory = async (req, res) => {
   try {
     const blogs = await BlogsModel.find({
       categories: req.params.category,
-      status: 'published'
+      status: "published",
     })
-    .populate('author', 'name email')
-    .populate('categories', 'category_name category_image')
-    .sort({ createdAt: -1 });
+      .populate("author", "name email")
+      .populate("categories", "category_name category_image")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -393,11 +419,11 @@ export const getBlogsByTag = async (req, res) => {
   try {
     const blogs = await BlogsModel.find({
       tags: req.params.tag,
-      status: 'published'
+      status: "published",
     })
-    .populate('author', 'name email')
-    .populate('categories', 'category_name category_image')
-    .sort({ createdAt: -1 });
+      .populate("author", "name email")
+      .populate("categories", "category_name category_image")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -430,7 +456,7 @@ export const updateBlogStatus = async (req, res) => {
     if (!blog) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -438,7 +464,7 @@ export const updateBlogStatus = async (req, res) => {
     if (blog.author.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: "Not authorized to update this blog"
+        message: "Not authorized to update this blog",
       });
     }
 
@@ -468,7 +494,7 @@ export const toggleFeatured = async (req, res) => {
     if (!blog) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -498,7 +524,7 @@ export const likeBlog = async (req, res) => {
     if (!blog) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -537,13 +563,13 @@ export const addComment = async (req, res) => {
     if (!blog) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
     blog.comments.push({
       user: req.user._id,
-      content
+      content,
     });
 
     await blog.save();
@@ -571,7 +597,7 @@ export const deleteComment = async (req, res) => {
     if (!blog) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -579,16 +605,18 @@ export const deleteComment = async (req, res) => {
     if (!comment) {
       return res.status(404).json({
         success: false,
-        message: "Comment not found"
+        message: "Comment not found",
       });
     }
 
     // Check if user is the comment author or blog author
-    if (comment.user.toString() !== req.user._id.toString() && 
-        blog.author.toString() !== req.user._id.toString()) {
+    if (
+      comment.user.toString() !== req.user._id.toString() &&
+      blog.author.toString() !== req.user._id.toString()
+    ) {
       return res.status(403).json({
         success: false,
-        message: "Not authorized to delete this comment"
+        message: "Not authorized to delete this comment",
       });
     }
 
@@ -626,7 +654,7 @@ export const updateBlog = async (req, res) => {
     if (!blog) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -634,13 +662,13 @@ export const updateBlog = async (req, res) => {
     if (blog.author.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: "Not authorized to update this blog"
+        message: "Not authorized to update this blog",
       });
     }
 
     // Update fields
-    Object.keys(req.body).forEach(key => {
-      if (key === 'title') {
+    Object.keys(req.body).forEach((key) => {
+      if (key === "title") {
         blog.slug = slugify(req.body[key], { lower: true, strict: true });
       }
       blog[key] = req.body[key];
@@ -671,7 +699,7 @@ export const deleteBlog = async (req, res) => {
     if (!blog) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
@@ -679,7 +707,7 @@ export const deleteBlog = async (req, res) => {
     if (blog.author.toString() !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,
-        message: "Not authorized to delete this blog"
+        message: "Not authorized to delete this blog",
       });
     }
 
