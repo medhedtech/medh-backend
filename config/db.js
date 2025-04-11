@@ -34,7 +34,16 @@ const connectDB = async (retryCount = 0, maxRetries = 5) => {
     // Connect to MongoDB
     const conn = await mongoose.connect(ENV_VARS.MONGODB_URI, options);
 
-    logger.info(`MongoDB Connected: ${conn.connection.host}`);
+    // Extract the host and database from the connection
+    const host = conn.connection.host;
+    const database = conn.connection.name;
+
+    // Use the new connection status formatter
+    logger.connection.success("MongoDB", {
+      host,
+      database,
+      port: conn.connection.port || 27017,
+    });
 
     // Set up mongoose debug mode conditionally based on environment variable
     if (
@@ -46,20 +55,38 @@ const connectDB = async (retryCount = 0, maxRetries = 5) => {
     }
 
     // Connection Event Listeners
-    conn.connection.on("connected", () => logger.info("Mongoose connected"));
-    conn.connection.on("error", (err) =>
-      logger.error("Mongoose connection error:", err),
-    );
-    conn.connection.on("disconnected", () =>
-      logger.warn("Mongoose disconnected"),
-    );
-    conn.connection.on("reconnected", () =>
-      logger.info("Mongoose reconnected"),
-    );
+    conn.connection.on("connected", () => {
+      logger.connection.success("MongoDB", {
+        host: conn.connection.host,
+        database: conn.connection.name,
+      });
+    });
+
+    conn.connection.on("error", (err) => {
+      logger.connection.error("MongoDB", err);
+    });
+
+    conn.connection.on("disconnected", () => {
+      logger.connection.closed("MongoDB");
+    });
+
+    conn.connection.on("reconnected", () => {
+      logger.connection.success("MongoDB", {
+        host: conn.connection.host,
+        database: conn.connection.name,
+        message: "Reconnected successfully",
+      });
+    });
 
     return conn;
   } catch (err) {
-    logger.error(`MongoDB connection error: ${err.message}`);
+    logger.connection.error("MongoDB", err, {
+      uri: ENV_VARS.MONGODB_URI
+        ? ENV_VARS.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, "//***:***@")
+        : "undefined", // Mask credentials
+      attempt: retryCount + 1,
+      maxRetries,
+    });
 
     // Implement retry logic with exponential backoff
     if (retryCount < maxRetries) {
@@ -74,7 +101,16 @@ const connectDB = async (retryCount = 0, maxRetries = 5) => {
         }, retryDelay);
       });
     } else {
-      logger.error(`Failed to connect to MongoDB after ${maxRetries} attempts`);
+      logger.connection.error(
+        "MongoDB",
+        new Error(`Failed to connect after ${maxRetries} attempts`),
+        {
+          uri: ENV_VARS.MONGODB_URI
+            ? ENV_VARS.MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, "//***:***@")
+            : "undefined", // Mask credentials
+          attempts: maxRetries,
+        },
+      );
       // Don't exit the process - let the app continue running even without DB
       // This allows API endpoints that don't require DB to still function
       throw err;
@@ -87,7 +123,10 @@ process.on("SIGINT", async () => {
   if (mongoose.connection.readyState !== 0) {
     // 0 = disconnected
     await mongoose.connection.close();
-    logger.info("MongoDB connection closed due to app termination");
+    logger.connection.closed("MongoDB", {
+      reason: "Application termination",
+      graceful: true,
+    });
   }
   process.exit(0);
 });

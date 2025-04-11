@@ -19,7 +19,7 @@ This project has been refactored to use modern JavaScript (ES6+) standards and i
 - Student and instructor management
 - Payment processing
 - File upload and management
-- Email notifications
+- Email notifications with templating, queueing, and error recovery
 - API documentation
 - Comprehensive error handling
 - Logging and monitoring
@@ -31,6 +31,9 @@ This project has been refactored to use modern JavaScript (ES6+) standards and i
 - **MongoDB/Mongoose**: Database and ODM
 - **JWT**: Authentication
 - **Nodemailer**: Email service
+- **Bull**: Queue management
+- **Handlebars**: Email templating
+- **Redis**: Queue storage
 - **Winston**: Logging
 - **AWS SDK**: S3 file storage
 - **Jest**: Testing framework
@@ -45,6 +48,7 @@ medh-backend/
 ├── services/        # Business logic
 ├── routes/          # API routes
 ├── middleware/      # Express middleware
+├── templates/       # Email templates
 ├── utils/           # Utility functions
 ├── validations/     # Request validation
 ├── tests/           # Test files
@@ -166,3 +170,61 @@ This project is licensed under the ISC License - see the LICENSE file for detail
 - Express.js team
 - MongoDB team
 - All contributors who have helped shape this project
+
+## 📧 Email System
+
+The platform uses a robust email system with the following features:
+
+### Features
+
+- **Templating**: Handlebars templates for consistent and maintainable email layouts
+- **Queuing**: Bull queue integration for reliable email delivery and retry mechanism
+- **Rate Limiting**: Prevents sending too many emails too quickly
+- **Error Recovery**: Automatic retries with exponential backoff for failed emails
+- **Admin Notifications**: Alerts administrators about persistent email failures
+- **Plain Text Fallback**: Automatically generates plain text versions of HTML emails
+- **Template Caching**: Improves performance for frequently sent emails
+- **Bulk Email Support**: Efficiently send emails to multiple recipients
+- **Email Analytics**: Track email sending status and performance
+
+### Template System
+
+Email templates are stored in the `templates/` directory as `.hbs` files, making it easy to maintain consistent branding and layouts across all emails.
+
+```html
+<!-- Example: templates/welcome.hbs -->
+<h2>Welcome, {{name}}!</h2>
+<p>Thank you for registering with us.</p>
+```
+
+### Usage Examples
+
+```javascript
+// Send a welcome email (queued with high priority)
+await emailService.sendWelcomeEmail("user@example.com", "John Doe", {
+  additionalData,
+});
+
+// Send a password reset email
+await emailService.sendPasswordResetEmail(
+  "user@example.com",
+  "John Doe",
+  "temp123pwd",
+);
+
+// Send a notification using a template
+await emailService.sendNotificationEmail(
+  "user@example.com",
+  "Course Completed",
+  "course-completion",
+  { courseName: "JavaScript 101" },
+);
+
+// Send bulk emails
+await emailService.sendBulkEmail(
+  ["user1@example.com", "user2@example.com"],
+  "New Course Available",
+  "new-course",
+  { courseName: "Advanced React" },
+);
+```

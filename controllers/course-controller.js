@@ -9,9 +9,9 @@ import Enrollment from "../models/enrollment-model.js";
 import Note from "../models/note-model.js";
 import Progress from "../models/progress-model.js";
 import catchAsync from "../utils/catchAsync.js";
-import AppError from "../utils/errorHandler.js";
+import { AppError } from "../utils/errorHandler.js";
 import logger from "../utils/logger.js";
-import responseFormatter from "../utils/responseFormatter.js";
+import { responseFormatter } from "../utils/responseFormatter.js";
 import {
   getFileStream,
   createPresignedPost,
