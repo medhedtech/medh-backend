@@ -48,6 +48,7 @@ class AuthController {
         password = "",
         agree_terms,
         meta = { gender: "Male", upload_resume: [] },
+        role = [USER_ROLES.STUDENT], // Allow role to be specified during registration
       } = value;
 
       // Check if user already exists
@@ -60,14 +61,14 @@ class AuthController {
         });
       }
 
-      // Create user with default student role
+      // Create user with specified role or default student role
       const user = new User({
         full_name,
         email,
         phone_numbers,
         password,
         agree_terms,
-        role: [USER_ROLES.STUDENT],
+        role: role,
         status: "Active",
         meta: meta || {
           gender: "Male",
@@ -112,6 +113,12 @@ class AuthController {
       return res.status(201).json({
         success: true,
         message: "User registered successfully, and email sent to the user.",
+        data: {
+          id: user._id,
+          email: user.email,
+          full_name: user.full_name,
+          role: user.role,
+        },
       });
     } catch (err) {
       logger.auth.error("Registration failed", {
@@ -179,11 +186,16 @@ class AuthController {
         });
       }
 
-      // Generate JWT token
+      // Update last login time and count
+      await user.updateLastLogin();
+
+      // Generate JWT token with enhanced payload
       const payload = {
         user: {
           id: user.id,
           role: user.role,
+          admin_role: user.admin_role,
+          permissions: user.permissions,
         },
       };
 
@@ -208,9 +220,15 @@ class AuthController {
         success: true,
         message: "User logged in successfully",
         token,
-        id: user.id,
-        role: user.admin_role,
-        permissions,
+        data: {
+          id: user.id,
+          full_name: user.full_name,
+          email: user.email,
+          role: user.role,
+          admin_role: user.admin_role,
+          permissions,
+          status: user.status,
+        },
       });
     } catch (err) {
       logger.auth.error("Login failed", {
@@ -226,17 +244,61 @@ class AuthController {
   }
 
   /**
-   * Get all users
+   * Get all users with pagination and filtering
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
   async getAllUsers(req, res) {
     try {
-      const users = await User.find().select("-password");
+      const { 
+        page = 1, 
+        limit = 10, 
+        role, 
+        status, 
+        admin_role,
+        search,
+        sortBy = 'createdAt',
+        sortOrder = 'desc'
+      } = req.query;
+
+      // Build query based on filters
+      const query = {};
+      
+      if (role) query.role = role;
+      if (status) query.status = status;
+      if (admin_role) query.admin_role = admin_role;
+      
+      // Search by name or email if search parameter is provided
+      if (search) {
+        query.$or = [
+          { full_name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      // Calculate pagination
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      
+      // Build sort object
+      const sort = {};
+      sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+      // Execute query with pagination and sorting
+      const users = await User.find(query)
+        .select("-password")
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit));
+      
+      // Get total count for pagination
+      const total = await User.countDocuments(query);
 
       return res.status(200).json({
         success: true,
         count: users.length,
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+        currentPage: parseInt(page),
         data: users,
       });
     } catch (err) {
@@ -250,13 +312,50 @@ class AuthController {
   }
 
   /**
-   * Get all users with the STUDENT role
+   * Get all users with the STUDENT role with pagination and filtering
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
   async getAllStudents(req, res) {
     try {
-      const students = await User.find({ role: USER_ROLES.STUDENT });
+      const { 
+        page = 1, 
+        limit = 10, 
+        status,
+        search,
+        sortBy = 'createdAt',
+        sortOrder = 'desc'
+      } = req.query;
+
+      // Build query
+      const query = { role: USER_ROLES.STUDENT };
+      
+      if (status) query.status = status;
+      
+      // Search by name or email if search parameter is provided
+      if (search) {
+        query.$or = [
+          { full_name: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ];
+      }
+
+      // Calculate pagination
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      
+      // Build sort object
+      const sort = {};
+      sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+
+      // Execute query with pagination and sorting
+      const students = await User.find(query)
+        .select("-password")
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit));
+      
+      // Get total count for pagination
+      const total = await User.countDocuments(query);
 
       if (!students || students.length === 0) {
         return res.status(404).json({
@@ -268,6 +367,9 @@ class AuthController {
       res.status(200).json({
         success: true,
         count: students.length,
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+        currentPage: parseInt(page),
         data: students,
       });
     } catch (err) {
@@ -311,17 +413,14 @@ class AuthController {
   }
 
   /**
-   * Update a user
+   * Get user by email
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
-  async updateUser(req, res) {
+  async getUserByEmail(req, res) {
     try {
-      const user = await User.findByIdAndUpdate(
-        req.params.id,
-        { $set: req.body },
-        { new: true, runValidators: true },
-      );
+      const { email } = req.params;
+      const user = await User.findOne({ email }).select("-password");
 
       if (!user) {
         return res.status(404).json({
@@ -332,6 +431,52 @@ class AuthController {
 
       return res.status(200).json({
         success: true,
+        data: user,
+      });
+    } catch (err) {
+      logger.error("Error getting user by email:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Server error",
+        error: err.message,
+      });
+    }
+  }
+
+  /**
+   * Update a user
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async updateUser(req, res) {
+    try {
+      const userId = req.params.id;
+      const updateData = req.body;
+
+      // Prevent password update via this endpoint
+      if (updateData.password) {
+        delete updateData.password;
+      }
+
+      // Find user first to check if it exists
+      const existingUser = await User.findById(userId);
+      if (!existingUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Update user
+      const user = await User.findByIdAndUpdate(
+        userId,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      ).select("-password");
+
+      return res.status(200).json({
+        success: true,
+        message: "User updated successfully",
         data: user,
       });
     } catch (err) {
@@ -359,25 +504,155 @@ class AuthController {
         delete updateData.password;
       }
 
-      const user = await User.findOneAndUpdate(
-        { email },
-        { $set: updateData },
-        { new: true, runValidators: true },
-      );
-
-      if (!user) {
+      // Find user first to check if it exists
+      const existingUser = await User.findOne({ email });
+      if (!existingUser) {
         return res.status(404).json({
           success: false,
           message: "User not found",
         });
       }
 
+      // Update user
+      const user = await User.findOneAndUpdate(
+        { email },
+        { $set: updateData },
+        { new: true, runValidators: true }
+      ).select("-password");
+
       return res.status(200).json({
         success: true,
+        message: "User updated successfully",
         data: user,
       });
     } catch (err) {
       logger.error("Error updating user by email:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Server error",
+        error: err.message,
+      });
+    }
+  }
+
+  /**
+   * Update user role
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async updateUserRole(req, res) {
+    try {
+      const { id } = req.params;
+      const { role, admin_role } = req.body;
+
+      // Validate role
+      if (role && !Object.values(USER_ROLES).includes(role)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid role",
+        });
+      }
+
+      // Validate admin role
+      if (admin_role && !Object.values(USER_ADMIN_ROLES).includes(admin_role)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid admin role",
+        });
+      }
+
+      // Find user first to check if it exists
+      const existingUser = await User.findById(id);
+      if (!existingUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Update user role
+      const updateData = {};
+      if (role) updateData.role = [role];
+      if (admin_role) updateData.admin_role = admin_role;
+
+      const user = await User.findByIdAndUpdate(
+        id,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      ).select("-password");
+
+      return res.status(200).json({
+        success: true,
+        message: "User role updated successfully",
+        data: user,
+      });
+    } catch (err) {
+      logger.error("Error updating user role:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Server error",
+        error: err.message,
+      });
+    }
+  }
+
+  /**
+   * Update user permissions
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async updateUserPermissions(req, res) {
+    try {
+      const { id } = req.params;
+      const { permissions } = req.body;
+
+      // Validate permissions
+      if (permissions && !Array.isArray(permissions)) {
+        return res.status(400).json({
+          success: false,
+          message: "Permissions must be an array",
+        });
+      }
+
+      // Check if all permissions are valid
+      if (permissions) {
+        const validPermissions = Object.values(USER_PERMISSIONS);
+        const invalidPermissions = permissions.filter(
+          (permission) => !validPermissions.includes(permission)
+        );
+
+        if (invalidPermissions.length > 0) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid permissions",
+            invalidPermissions,
+          });
+        }
+      }
+
+      // Find user first to check if it exists
+      const existingUser = await User.findById(id);
+      if (!existingUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Update user permissions
+      const user = await User.findByIdAndUpdate(
+        id,
+        { $set: { permissions } },
+        { new: true, runValidators: true }
+      ).select("-password");
+
+      return res.status(200).json({
+        success: true,
+        message: "User permissions updated successfully",
+        data: user,
+      });
+    } catch (err) {
+      logger.error("Error updating user permissions:", err);
       return res.status(500).json({
         success: false,
         message: "Server error",
@@ -421,7 +696,7 @@ class AuthController {
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
-  async toggleStudentStatus(req, res) {
+  async toggleUserStatus(req, res) {
     try {
       const user = await User.findById(req.params.id);
 
@@ -601,6 +876,73 @@ class AuthController {
       return res.status(500).json({
         success: false,
         message: "Server error during password reset.",
+        error: err.message,
+      });
+    }
+  }
+
+  /**
+   * Change password for authenticated user
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async changePassword(req, res) {
+    try {
+      const { currentPassword, newPassword } = req.body;
+      const userId = req.user.id; // Assuming middleware sets req.user
+
+      // Validate input
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Current password and new password are required.",
+        });
+      }
+
+      // Basic password validation
+      if (newPassword.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: "New password must be at least 6 characters long.",
+        });
+      }
+
+      // Find user
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Verify current password
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) {
+        return res.status(400).json({
+          success: false,
+          message: "Current password is incorrect",
+        });
+      }
+
+      // Hash the new password
+      const salt = await bcrypt.genSalt(10);
+      user.password = await bcrypt.hash(newPassword, salt);
+
+      // Save the updated user
+      await user.save();
+
+      logger.info(`Password successfully changed for user: ${user.email}`);
+
+      return res.status(200).json({
+        success: true,
+        message: "Password has been changed successfully.",
+      });
+    } catch (err) {
+      logger.error("Error in change password process:", err);
+      return res.status(500).json({
+        success: false,
+        message: "Server error during password change.",
         error: err.message,
       });
     }

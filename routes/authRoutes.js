@@ -106,7 +106,7 @@ router.delete(
 router.put(
   "/toggle-status/:id",
   authMiddleware,
-  authController.toggleStudentStatus.bind(authController),
+  authController.toggleUserStatus.bind(authController),
 );
 
 router.post(

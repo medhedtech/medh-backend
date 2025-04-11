@@ -1,4 +1,11 @@
-import { s3 } from "../config/aws-config.js";
+import { 
+  s3Client, 
+  getPresignedUrl as getS3PresignedUrl, 
+  getPresignedPost, 
+  deleteS3Object as s3DeleteObject 
+} from "../config/aws-config.js";
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { Readable } from "stream";
 import { ENV_VARS } from "../config/envVars.js";
 
 import logger from "./logger.js";
@@ -8,7 +15,7 @@ const BUCKET_NAME = ENV_VARS.AWS_S3_BUCKET_NAME;
 /**
  * Gets a readable stream for an S3 object.
  * @param {string} key - The key of the S3 object.
- * @returns {Promise<AWS.S3.GetObjectOutput.Body>} A readable stream of the object body.
+ * @returns {Promise<Readable>} A readable stream of the object body.
  * @throws {Error} If the bucket name is not configured or S3 retrieval fails.
  */
 export const getFileStream = async (key) => {
@@ -28,15 +35,24 @@ export const getFileStream = async (key) => {
     logger.info(
       `Attempting to get S3 stream for key: ${key} in bucket: ${BUCKET_NAME}`,
     );
-    // Use createReadStream() for AWS SDK v2
-    const stream = s3.getObject(params).createReadStream();
-
-    stream.on("error", (err) => {
-      // Log stream-specific errors
-      logger.error(`S3 stream error for key ${key}:`, err);
-    });
-
-    return stream;
+    
+    // AWS SDK v3 approach
+    const command = new GetObjectCommand(params);
+    const response = await s3Client.send(command);
+    
+    // Return the body as a stream
+    const stream = response.Body;
+    
+    if (stream instanceof Readable) {
+      stream.on("error", (err) => {
+        // Log stream-specific errors
+        logger.error(`S3 stream error for key ${key}:`, err);
+      });
+      
+      return stream;
+    } else {
+      throw new Error("Response body is not a readable stream");
+    }
   } catch (error) {
     logger.error(`Failed to get S3 object stream for key ${key}:`, error);
     throw new Error(`Failed to retrieve file from S3: ${error.message}`);
@@ -59,24 +75,18 @@ export const createPresignedPost = async (key, options = {}) => {
     Bucket: BUCKET_NAME,
     Key: key,
     Expires: options.expires || 3600, // Default 1 hour
-    ContentType: options.contentType,
     Conditions: options.conditions || [],
   };
 
+  if (options.contentType) {
+    params.ContentType = options.contentType;
+  }
+
   try {
     logger.info(`Creating presigned POST for key: ${key}`);
-
-    // For AWS SDK v2
-    return new Promise((resolve, reject) => {
-      s3.createPresignedPost(params, (err, data) => {
-        if (err) {
-          logger.error(`Failed to create presigned POST for key ${key}:`, err);
-          reject(new Error(`Failed to create presigned POST: ${err.message}`));
-        } else {
-          resolve(data);
-        }
-      });
-    });
+    
+    // Using the helper from aws-config.js
+    return await getPresignedPost(params);
   } catch (error) {
     logger.error(`Failed to create presigned POST for key ${key}:`, error);
     throw new Error(`Failed to create presigned POST: ${error.message}`);
@@ -103,7 +113,6 @@ export const getPresignedUrl = async (
   const params = {
     Bucket: BUCKET_NAME,
     Key: key,
-    Expires: expiresIn,
   };
 
   try {
@@ -111,17 +120,8 @@ export const getPresignedUrl = async (
       `Getting presigned URL for operation ${operation} on key: ${key}`,
     );
 
-    // For AWS SDK v2
-    return new Promise((resolve, reject) => {
-      s3.getSignedUrl(operation, params, (err, url) => {
-        if (err) {
-          logger.error(`Failed to get presigned URL for key ${key}:`, err);
-          reject(new Error(`Failed to get presigned URL: ${err.message}`));
-        } else {
-          resolve(url);
-        }
-      });
-    });
+    // Using the helper from aws-config.js
+    return await getS3PresignedUrl(operation, params, expiresIn);
   } catch (error) {
     logger.error(`Failed to get presigned URL for key ${key}:`, error);
     throw new Error(`Failed to get presigned URL: ${error.message}`);
@@ -146,7 +146,7 @@ export const deleteS3Object = async (key) => {
 
   try {
     logger.info(`Deleting S3 object with key: ${key}`);
-    return await s3.deleteObject(params).promise();
+    return await s3DeleteObject(params);
   } catch (error) {
     logger.error(`Failed to delete S3 object with key ${key}:`, error);
     throw new Error(`Failed to delete S3 object: ${error.message}`);
