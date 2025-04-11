@@ -250,38 +250,38 @@ class AuthController {
    */
   async getAllUsers(req, res) {
     try {
-      const { 
-        page = 1, 
-        limit = 10, 
-        role, 
-        status, 
+      const {
+        page = 1,
+        limit = 10,
+        role,
+        status,
         admin_role,
         search,
-        sortBy = 'createdAt',
-        sortOrder = 'desc'
+        sortBy = "createdAt",
+        sortOrder = "desc",
       } = req.query;
 
       // Build query based on filters
       const query = {};
-      
+
       if (role) query.role = role;
       if (status) query.status = status;
       if (admin_role) query.admin_role = admin_role;
-      
+
       // Search by name or email if search parameter is provided
       if (search) {
         query.$or = [
-          { full_name: { $regex: search, $options: 'i' } },
-          { email: { $regex: search, $options: 'i' } }
+          { full_name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
         ];
       }
 
       // Calculate pagination
       const skip = (parseInt(page) - 1) * parseInt(limit);
-      
+
       // Build sort object
       const sort = {};
-      sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+      sort[sortBy] = sortOrder === "asc" ? 1 : -1;
 
       // Execute query with pagination and sorting
       const users = await User.find(query)
@@ -289,7 +289,7 @@ class AuthController {
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit));
-      
+
       // Get total count for pagination
       const total = await User.countDocuments(query);
 
@@ -318,34 +318,34 @@ class AuthController {
    */
   async getAllStudents(req, res) {
     try {
-      const { 
-        page = 1, 
-        limit = 10, 
+      const {
+        page = 1,
+        limit = 10,
         status,
         search,
-        sortBy = 'createdAt',
-        sortOrder = 'desc'
+        sortBy = "createdAt",
+        sortOrder = "desc",
       } = req.query;
 
       // Build query
       const query = { role: USER_ROLES.STUDENT };
-      
+
       if (status) query.status = status;
-      
+
       // Search by name or email if search parameter is provided
       if (search) {
         query.$or = [
-          { full_name: { $regex: search, $options: 'i' } },
-          { email: { $regex: search, $options: 'i' } }
+          { full_name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
         ];
       }
 
       // Calculate pagination
       const skip = (parseInt(page) - 1) * parseInt(limit);
-      
+
       // Build sort object
       const sort = {};
-      sort[sortBy] = sortOrder === 'asc' ? 1 : -1;
+      sort[sortBy] = sortOrder === "asc" ? 1 : -1;
 
       // Execute query with pagination and sorting
       const students = await User.find(query)
@@ -353,7 +353,7 @@ class AuthController {
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit));
-      
+
       // Get total count for pagination
       const total = await User.countDocuments(query);
 
@@ -471,7 +471,7 @@ class AuthController {
       const user = await User.findByIdAndUpdate(
         userId,
         { $set: updateData },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       ).select("-password");
 
       return res.status(200).json({
@@ -517,7 +517,7 @@ class AuthController {
       const user = await User.findOneAndUpdate(
         { email },
         { $set: updateData },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       ).select("-password");
 
       return res.status(200).json({
@@ -578,7 +578,7 @@ class AuthController {
       const user = await User.findByIdAndUpdate(
         id,
         { $set: updateData },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       ).select("-password");
 
       return res.status(200).json({
@@ -618,7 +618,7 @@ class AuthController {
       if (permissions) {
         const validPermissions = Object.values(USER_PERMISSIONS);
         const invalidPermissions = permissions.filter(
-          (permission) => !validPermissions.includes(permission)
+          (permission) => !validPermissions.includes(permission),
         );
 
         if (invalidPermissions.length > 0) {
@@ -643,7 +643,7 @@ class AuthController {
       const user = await User.findByIdAndUpdate(
         id,
         { $set: { permissions } },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       ).select("-password");
 
       return res.status(200).json({

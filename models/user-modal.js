@@ -264,7 +264,10 @@ userSchema.methods.hasRole = function (role) {
 
 // Add a method to check if user is an admin
 userSchema.methods.isAdmin = function () {
-  return this.admin_role === ADMIN_ROLES.ADMIN || this.admin_role === ADMIN_ROLES.SUPER_ADMIN;
+  return (
+    this.admin_role === ADMIN_ROLES.ADMIN ||
+    this.admin_role === ADMIN_ROLES.SUPER_ADMIN
+  );
 };
 
 // Add a method to check if user is a super admin
@@ -326,7 +329,9 @@ userSchema.statics.findInactiveUsers = function () {
 };
 
 userSchema.statics.findAdmins = function () {
-  return this.find({ admin_role: { $in: [ADMIN_ROLES.ADMIN, ADMIN_ROLES.SUPER_ADMIN] } });
+  return this.find({
+    admin_role: { $in: [ADMIN_ROLES.ADMIN, ADMIN_ROLES.SUPER_ADMIN] },
+  });
 };
 
 userSchema.statics.findSuperAdmins = function () {
