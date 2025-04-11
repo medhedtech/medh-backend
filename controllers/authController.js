@@ -2,7 +2,6 @@ import crypto from "crypto";
 
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import nodemailer from "nodemailer";
 
 import { ENV_VARS } from "../config/envVars.js";
 import User, {
@@ -10,75 +9,11 @@ import User, {
   USER_PERMISSIONS,
   USER_ADMIN_ROLES,
 } from "../models/user-modal.js";
+import EmailService from "../services/emailService.js";
 import logger from "../utils/logger.js";
 import userValidation from "../validations/userValidation.js";
 
-/**
- * Email Service Configuration
- */
-class EmailService {
-  constructor() {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
-      secure: process.env.EMAIL_SECURE === "true" || true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
-    this.verifyConnection();
-  }
-
-  verifyConnection() {
-    this.transporter.verify((_error, _success) => {
-      if (_error) {
-        logger.error("Email configuration error:", _error);
-        this.handleConnectionError(_error);
-      } else {
-        logger.info("Email server is ready to send messages");
-      }
-    });
-  }
-
-  handleConnectionError(error) {
-    if (error.code === "EAUTH") {
-      logger.error("Authentication failed. Please check your credentials.");
-      logger.error("If using Gmail, make sure to:");
-      logger.error("1. Enable 2-Step Verification in your Google Account");
-      logger.error("2. Generate an App Password from Google Account settings");
-      logger.error("3. Use the App Password instead of your regular password");
-    } else if (error.code === "EDNS") {
-      logger.error(
-        "DNS lookup failed. Please check your internet connection and SMTP server settings.",
-      );
-    }
-  }
-
-  async sendEmail(mailOptions) {
-    try {
-      const info = await this.transporter.sendMail(mailOptions);
-      logger.info("Email sent successfully:", info.messageId);
-      return true;
-    } catch (error) {
-      logger.error("Email sending failed:", error);
-
-      if (error.code === "EAUTH") {
-        throw new Error(
-          "Email authentication failed. Please check your email credentials.",
-        );
-      } else if (error.code === "ESOCKET") {
-        throw new Error(
-          "Email connection failed. Please check your internet connection.",
-        );
-      } else {
-        throw new Error("Failed to send email. Please try again later.");
-      }
-    }
-  }
-}
-
+// Initialize email service
 const emailService = new EmailService();
 
 /**
@@ -96,8 +31,10 @@ class AuthController {
       const { error, value } = userValidation.validate(req.body);
 
       if (error) {
-        logger.warn("Validation Error:", error.details[0].message);
-        logger.debug("Request Body:", req.body);
+        logger.auth.warn("Validation error during registration", {
+          error: error.details[0].message,
+          requestBody: req.body,
+        });
         return res.status(400).json({
           success: false,
           message: error.details[0].message,
@@ -116,6 +53,7 @@ class AuthController {
       // Check if user already exists
       const existingUser = await User.findOne({ email });
       if (existingUser) {
+        logger.auth.warn("Registration attempt with existing email", { email });
         return res.status(400).json({
           success: false,
           message: "User already exists",
@@ -146,17 +84,28 @@ class AuthController {
       const salt = await bcrypt.genSalt(10);
       user.password = await bcrypt.hash(password, salt);
 
-      // Log the user object before saving for debugging
-      logger.debug("User object before saving:", JSON.stringify(user, null, 2));
+      logger.auth.debug("User prepared for registration", {
+        email,
+        role: user.role,
+        status: user.status,
+      });
 
       // Save the user to database
       await user.save();
+
+      logger.auth.info("User registered successfully", {
+        userId: user._id,
+        email,
+      });
 
       // Send welcome email to the user
       try {
         await this.sendWelcomeEmail(email, full_name, password);
       } catch (emailError) {
-        logger.error("Email sending failed:", emailError);
+        logger.auth.error("Welcome email sending failed", {
+          error: emailError,
+          email,
+        });
         // Continue registration even if email sending fails
       }
 
@@ -165,7 +114,10 @@ class AuthController {
         message: "User registered successfully, and email sent to the user.",
       });
     } catch (err) {
-      logger.error("Registration Error:", err);
+      logger.auth.error("Registration failed", {
+        error: err,
+        stack: err.stack,
+      });
       return res.status(500).json({
         success: false,
         message: "Server error",
@@ -181,22 +133,12 @@ class AuthController {
    * @param {string} password - User's password
    */
   async sendWelcomeEmail(email, fullName, password) {
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Welcome to Medh Learning Platform",
-      html: `
-        <h2>Welcome, ${fullName}!</h2>
-        <p>Thank you for registering with us. Here are your login credentials:</p>
-        <ul>
-          <li><strong>Username:</strong> ${email}</li>
-          <li><strong>Password:</strong> ${password}</li>
-        </ul>
-        <p>Please keep this information secure. If you did not request this, please contact us immediately.</p>
-      `,
-    };
-
-    return emailService.sendEmail(mailOptions);
+    try {
+      return await emailService.sendWelcomeEmail(email, fullName, { password });
+    } catch (error) {
+      logger.auth.error("Failed to send welcome email", { error, email });
+      throw error;
+    }
   }
 
   /**
@@ -208,9 +150,15 @@ class AuthController {
     try {
       const { email, password } = req.body;
 
+      logger.auth.debug("Login attempt", { email, ip: req.ip });
+
       // Find the user by email
       const user = await User.findOne({ email });
       if (!user) {
+        logger.auth.warn("Login failed - user not found", {
+          email,
+          ip: req.ip,
+        });
         return res.status(400).json({
           success: false,
           message: "Invalid credentials.",
@@ -220,6 +168,11 @@ class AuthController {
       // Verify password
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) {
+        logger.auth.warn("Login failed - invalid password", {
+          userId: user._id,
+          email,
+          ip: req.ip,
+        });
         return res.status(400).json({
           success: false,
           message: "Invalid credentials",
@@ -244,6 +197,13 @@ class AuthController {
           ? Object.values(USER_PERMISSIONS)
           : user.permissions || [];
 
+      logger.auth.info("User logged in successfully", {
+        userId: user._id,
+        email,
+        roles: user.role,
+        ip: req.ip,
+      });
+
       return res.status(200).json({
         success: true,
         message: "User logged in successfully",
@@ -253,7 +213,10 @@ class AuthController {
         permissions,
       });
     } catch (err) {
-      logger.error("Login Error:", err);
+      logger.auth.error("Login failed", {
+        error: err,
+        stack: err.stack,
+      });
       return res.status(500).json({
         success: false,
         message: "Server error",
@@ -489,7 +452,7 @@ class AuthController {
   }
 
   /**
-   * Handle forgot password request
+   * Handle forgot password process
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
@@ -500,68 +463,59 @@ class AuthController {
       // Find the user
       const user = await User.findOne({ email });
       if (!user) {
-        // It's generally better not to reveal if an email exists for security reasons
-        // Send a generic success message regardless
-        logger.warn(
-          `Password reset requested for non-existent email: ${email}`,
-        );
-        return res.status(200).json({
-          success: true,
-          message:
-            "If an account with that email exists, a password reset link has been sent.",
+        logger.auth.warn("Forgot password attempt for non-existent user", {
+          email,
+        });
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
         });
       }
 
-      // Generate secure reset token (plain text version)
-      const resetToken = crypto.randomBytes(32).toString("hex");
-
-      // Hash the token before storing it in the database
+      // Generate reset token
+      const resetToken = crypto.randomBytes(20).toString("hex");
       const resetPasswordToken = crypto
         .createHash("sha256")
         .update(resetToken)
         .digest("hex");
 
-      // Set token expiry time (e.g., 1 hour from now)
-      const resetPasswordExpires = Date.now() + 3600000; // 1 hour in milliseconds
+      // Set token expiry time (1 hour)
+      const resetPasswordExpires = Date.now() + 3600000; // 1 hour
 
-      // Update user with hashed reset token and expiry
+      // Update user with reset token info
       user.resetPasswordToken = resetPasswordToken;
       user.resetPasswordExpires = resetPasswordExpires;
       await user.save();
 
-      // Construct the password reset URL (Replace with your frontend URL)
-      const resetUrl = `${ENV_VARS.FRONTEND_URL || "http://localhost:3000"}/reset-password?token=${resetToken}`;
+      // Generate temporary password
+      const tempPassword = crypto.randomBytes(4).toString("hex");
 
-      // Send email with the reset link
+      // Hash the temporary password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(tempPassword, salt);
+
+      // Update user password with temporary password
+      user.password = hashedPassword;
+      await user.save();
+
+      // Send email with temporary password using the improved email service
       try {
-        const mailOptions = {
-          from: process.env.EMAIL_USER,
-          to: email,
-          subject: "Password Reset Request",
-          html: `
-            <h2>Password Reset Request</h2>
-            <p>You (or someone else) requested a password reset for your account.</p>
-            <p>Click the link below to set a new password:</p>
-            <p><a href="${resetUrl}" target="_blank">Reset Password</a></p>
-            <p>This link will expire in 1 hour.</p>
-            <p>If you did not request this, please ignore this email and your password will remain unchanged.</p>
-          `,
-        };
+        await emailService.sendPasswordResetEmail(
+          email,
+          user.full_name,
+          tempPassword,
+        );
 
-        await emailService.sendEmail(mailOptions);
-
+        logger.auth.info("Password reset email sent", { email });
         return res.status(200).json({
           success: true,
-          message:
-            "If an account with that email exists, a password reset link has been sent.",
+          message: "Password reset email sent",
         });
       } catch (emailError) {
-        logger.error("Error sending password reset email:", emailError);
-        // Clear the token if email fails to prevent misuse
-        user.resetPasswordToken = undefined;
-        user.resetPasswordExpires = undefined;
-        await user.save();
-
+        logger.auth.error("Failed to send password reset email", {
+          error: emailError,
+          email,
+        });
         return res.status(500).json({
           success: false,
           message: "Failed to send password reset email",
@@ -569,7 +523,10 @@ class AuthController {
         });
       }
     } catch (err) {
-      logger.error("Error in forgot password process:", err);
+      logger.auth.error("Forgot password process failed", {
+        error: err,
+        stack: err.stack,
+      });
       return res.status(500).json({
         success: false,
         message: "Server error",

@@ -1,6 +1,7 @@
 import express from "express";
 
 import { ENV_VARS } from "../config/envVars.js";
+import cache from "../utils/cache.js";
 import logger from "../utils/logger.js";
 
 // Import routes
@@ -202,6 +203,122 @@ const moduleRoutes = [
 
 moduleRoutes.forEach((route) => {
   router.use(route.path, route.route);
+});
+
+// Add monitoring endpoints
+router.get("/system/health", (req, res) => {
+  try {
+    // Get Redis status
+    const redisStatus = cache.getConnectionStatus();
+
+    // Log the health check
+    logger.info("Health check performed", {
+      redis: redisStatus,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Prepare response
+    const healthStatus = {
+      status: "ok",
+      timestamp: new Date().toISOString(),
+      services: {
+        redis: {
+          enabled: redisStatus.enabled,
+          connected: redisStatus.connected,
+          status: redisStatus.connected
+            ? "healthy"
+            : redisStatus.enabled
+              ? "unhealthy"
+              : "disabled",
+        },
+      },
+      environment: ENV_VARS.NODE_ENV,
+    };
+
+    // Send appropriate status code
+    const statusCode =
+      redisStatus.enabled && !redisStatus.connected ? 503 : 200;
+    return res.status(statusCode).json(healthStatus);
+  } catch (error) {
+    logger.error("Health check failed", { error: error.message });
+    return res.status(500).json({
+      status: "error",
+      message: "Health check failed",
+      error:
+        ENV_VARS.NODE_ENV === "production"
+          ? "Internal server error"
+          : error.message,
+    });
+  }
+});
+
+// API dashboard route - displays API metrics in the console and returns data as JSON
+router.get("/system/api-metrics", (req, res) => {
+  try {
+    const metrics = logger.apiDashboard.metrics;
+
+    // Display dashboard in console for admins
+    logger.apiDashboard.show();
+
+    // Return metrics data
+    const apiMetrics = {
+      totalRequests: metrics.totalRequests,
+      totalErrors: metrics.totalErrors,
+      slowResponses: metrics.slowResponses,
+      uptime: Date.now() - metrics.lastReset,
+      topEndpoints: Array.from(metrics.requests.entries())
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 10)
+        .map(([key, stat]) => {
+          const [method, endpoint] = key.split(":");
+          return {
+            endpoint,
+            method,
+            calls: stat.count,
+            avgResponseTime: (stat.totalDuration / stat.count).toFixed(2),
+            errors: stat.errors,
+            slowResponses: stat.slow,
+            errorRate: ((stat.errors / stat.count) * 100).toFixed(2) + "%",
+          };
+        }),
+    };
+
+    return res.status(200).json({
+      status: "success",
+      data: apiMetrics,
+    });
+  } catch (error) {
+    logger.error("API metrics failed", { error: error.message });
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to retrieve API metrics",
+      error:
+        ENV_VARS.NODE_ENV === "production"
+          ? "Internal server error"
+          : error.message,
+    });
+  }
+});
+
+// Reset API metrics
+router.post("/system/reset-metrics", (req, res) => {
+  try {
+    logger.apiDashboard.reset();
+    return res.status(200).json({
+      status: "success",
+      message: "API metrics reset successfully",
+    });
+  } catch (error) {
+    logger.error("Failed to reset API metrics", { error: error.message });
+    return res.status(500).json({
+      status: "error",
+      message: "Failed to reset API metrics",
+      error:
+        ENV_VARS.NODE_ENV === "production"
+          ? "Internal server error"
+          : error.message,
+    });
+  }
 });
 
 // Add a test endpoint for diagnosing CORS issues

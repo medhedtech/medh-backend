@@ -29,7 +29,29 @@ securityMiddleware(app);
 
 // Use morgan for HTTP request logging in development
 if (ENV_VARS.NODE_ENV === "development") {
-  app.use(morgan("dev"));
+  // Configure morgan to use our custom API logging
+  app.use(
+    morgan(function (tokens, req, res) {
+      // Don't log static file requests
+      if (req.originalUrl.startsWith("/public")) {
+        return null;
+      }
+
+      // Use our API logger
+      const method = req.method;
+      const url = req.originalUrl || req.url;
+      const status = res.statusCode;
+      const responseTime = tokens["response-time"](req, res);
+
+      // Use our custom API formatter
+      logger.api.response(req, res, parseFloat(responseTime), {
+        contentLength: tokens.res(req, res, "content-length"),
+      });
+
+      // Return empty string since we're handling the logging separately
+      return "";
+    }),
+  );
 }
 
 // Apply compression for better performance
@@ -210,13 +232,22 @@ const server = app.listen(PORT, () => {
 const gracefulShutdown = () => {
   logger.info("Received shutdown signal. Starting graceful shutdown...");
   server.close(async () => {
-    logger.info("Closed express server");
+    logger.connection.closed("Express Server", {
+      port: PORT,
+      environment: ENV_VARS.NODE_ENV,
+    });
+
     try {
       await mongoose.connection.close();
-      logger.info("Closed MongoDB connection");
+      logger.connection.closed("MongoDB", {
+        reason: "Application shutdown",
+        graceful: true,
+      });
       process.exit(0);
     } catch (err) {
-      logger.error("Error during shutdown:", err);
+      logger.connection.error("MongoDB", err, {
+        context: "shutdown",
+      });
       process.exit(1);
     }
   });

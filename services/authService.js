@@ -92,22 +92,14 @@ class AuthService {
    * @param {string} password - User's password
    */
   async sendWelcomeEmail(email, fullName, password) {
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Welcome to Medh Learning Platform",
-      html: `
-        <h2>Welcome, ${fullName}!</h2>
-        <p>Thank you for registering with us. Here are your login credentials:</p>
-        <ul>
-          <li><strong>Username:</strong> ${email}</li>
-          <li><strong>Password:</strong> ${password}</li>
-        </ul>
-        <p>Please keep this information secure. If you did not request this, please contact us immediately.</p>
-      `,
-    };
-
-    return this.emailService.sendEmail(mailOptions);
+    try {
+      return await this.emailService.sendWelcomeEmail(email, fullName, {
+        password,
+      });
+    } catch (error) {
+      logger.error("Failed to send welcome email", { error, email });
+      throw error;
+    }
   }
 
   /**
@@ -294,24 +286,18 @@ class AuthService {
     user.password = hashedPassword;
     await user.save();
 
-    // Send email with temporary password
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Password Reset - Temporary Password",
-      html: `
-        <h2>Password Reset</h2>
-        <p>You have requested to reset your password. Here is your temporary password:</p>
-        <p><strong>${tempPassword}</strong></p>
-        <p>Please use this temporary password to log in, then change your password immediately.</p>
-        <p>This temporary password will expire in 1 hour.</p>
-        <p>If you did not request this, please ignore this email and your password will remain unchanged.</p>
-      `,
-    };
-
-    await this.emailService.sendEmail(mailOptions);
-
-    return true;
+    try {
+      // Send password reset email using improved email service
+      await this.emailService.sendPasswordResetEmail(
+        email,
+        user.full_name,
+        tempPassword,
+      );
+      return true;
+    } catch (error) {
+      logger.error("Failed to send password reset email", { error, email });
+      throw new Error(`Failed to send password reset email: ${error.message}`);
+    }
   }
 }
 
