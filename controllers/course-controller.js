@@ -334,13 +334,15 @@ const getAllCoursesWithLimits = async (req, res) => {
 
     if (status) {
       const decodedStatus = fullyDecodeURIComponent(status);
-      filter.status = decodedStatus.includes(",")
-        ? {
-            $in: decodedStatus
-              .split(",")
-              .map((s) => createSafeRegex("^" + s.trim() + "$")),
-          }
-        : createSafeRegex("^" + decodedStatus + "$");
+      if (decodedStatus.includes(",")) {
+        // If multiple statuses are provided, use $in with exact string values
+        filter.status = {
+          $in: decodedStatus.split(",").map(s => s.trim())
+        };
+      } else {
+        // For single status, use exact string match
+        filter.status = decodedStatus;
+      }
     }
 
     if (price_range) {
