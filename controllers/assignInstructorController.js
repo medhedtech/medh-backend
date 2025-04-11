@@ -1,6 +1,6 @@
-import User from "../models/user-modal.js";
 import InstructorAssignment from "../models/assign-instructor-model.js";
 import Course from "../models/course-model.js";
+import User from "../models/user-modal.js";
 
 export const createOrUpdateInstructorAssignment = async (req, res) => {
   try {
@@ -179,7 +179,7 @@ export const getAssignedCoursesByInstructorId = async (req, res) => {
     // Find all courses assigned to the given instructor
     const courses = await Course.find({ assigned_instructor: id }).populate(
       "assigned_instructor",
-      "full_name email"
+      "full_name email",
     );
 
     if (!courses || courses.length === 0) {

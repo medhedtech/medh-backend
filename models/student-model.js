@@ -47,7 +47,7 @@ const studentSchema = new mongoose.Schema(
       ref: "Plan",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const Student = mongoose.model("Student", studentSchema);

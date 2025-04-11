@@ -44,7 +44,7 @@ export const getAllSubscribers = async (req, res) => {
 export const deleteSubscriber = async (req, res) => {
   try {
     const deletedSubscriber = await NewsletterModel.findByIdAndDelete(
-      req.params.id
+      req.params.id,
     );
     if (!deletedSubscriber) {
       return res

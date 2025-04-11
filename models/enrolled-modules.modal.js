@@ -27,7 +27,7 @@ const enrolledModuleSchema = new Schema(
       default: false,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const EnrolledModule = mongoose.model("EnrolledModule", enrolledModuleSchema);

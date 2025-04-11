@@ -1,6 +1,7 @@
-import logger from '../utils/logger.js';
-import { performance } from 'perf_hooks';
-import crypto from 'crypto';
+import crypto from "crypto";
+import { performance } from "perf_hooks";
+
+import logger from "../utils/logger.js";
 
 class APIMetrics {
   constructor() {
@@ -15,7 +16,7 @@ class APIMetrics {
         totalDuration: 0,
         errors: 0,
         lastAccessed: null,
-        statusCodes: new Map()
+        statusCodes: new Map(),
       });
     }
 
@@ -23,7 +24,7 @@ class APIMetrics {
     metric.count++;
     metric.totalDuration += duration;
     metric.lastAccessed = new Date();
-    
+
     const statusCodeCount = metric.statusCodes.get(statusCode) || 0;
     metric.statusCodes.set(statusCode, statusCodeCount + 1);
 
@@ -35,7 +36,7 @@ class APIMetrics {
   getMetrics() {
     const result = [];
     this.metrics.forEach((value, key) => {
-      const [method, endpoint] = key.split(':');
+      const [method, endpoint] = key.split(":");
       result.push({
         endpoint,
         method,
@@ -43,7 +44,7 @@ class APIMetrics {
         averageDuration: value.totalDuration / value.count,
         errorRate: (value.errors / value.count) * 100,
         lastAccessed: value.lastAccessed,
-        statusCodeDistribution: Object.fromEntries(value.statusCodes)
+        statusCodeDistribution: Object.fromEntries(value.statusCodes),
       });
     });
     return result;
@@ -59,10 +60,10 @@ const apiMonitor = (req, res, next) => {
   req.startTime = performance.now();
 
   // Normalize the endpoint path (replace IDs with placeholders)
-  req.normalizedPath = req.path.replace(/\/[0-9a-fA-F]{24}\b/g, '/:id');
+  req.normalizedPath = req.path.replace(/\/[0-9a-fA-F]{24}\b/g, "/:id");
 
   // Log the incoming request
-  logger.info('API Request', {
+  logger.info("API Request", {
     requestId: req.id,
     method: req.method,
     path: req.path,
@@ -71,13 +72,13 @@ const apiMonitor = (req, res, next) => {
     body: sanitizeRequestBody(req.body),
     headers: sanitizeHeaders(req.headers),
     ip: req.ip,
-    userAgent: req.get('user-agent'),
-    timestamp: req.timestamp
+    userAgent: req.get("user-agent"),
+    timestamp: req.timestamp,
   });
 
   // Override res.json to capture response
   const originalJson = res.json;
-  res.json = function(body) {
+  res.json = function (body) {
     const duration = performance.now() - req.startTime;
     const responseBody = sanitizeResponseBody(body);
 
@@ -86,11 +87,11 @@ const apiMonitor = (req, res, next) => {
       req.normalizedPath,
       req.method,
       duration,
-      res.statusCode
+      res.statusCode,
     );
 
     // Log the response
-    logger.info('API Response', {
+    logger.info("API Response", {
       requestId: req.id,
       method: req.method,
       path: req.path,
@@ -98,17 +99,17 @@ const apiMonitor = (req, res, next) => {
       statusCode: res.statusCode,
       duration: `${duration.toFixed(2)}ms`,
       responseSize: JSON.stringify(responseBody).length,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
 
     // Log slow responses
     if (duration > 1000) {
-      logger.warn('Slow API Response', {
+      logger.warn("Slow API Response", {
         requestId: req.id,
         method: req.method,
         path: req.path,
         duration: `${duration.toFixed(2)}ms`,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
     }
 
@@ -117,7 +118,7 @@ const apiMonitor = (req, res, next) => {
 
   // Handle errors
   const errorHandler = (error) => {
-    logger.error('API Error', {
+    logger.error("API Error", {
       requestId: req.id,
       method: req.method,
       path: req.path,
@@ -126,27 +127,27 @@ const apiMonitor = (req, res, next) => {
         name: error.name,
         message: error.message,
         stack: error.stack,
-        code: error.code
+        code: error.code,
       },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   };
 
-  res.on('error', errorHandler);
+  res.on("error", errorHandler);
 
   // Monitor response finish
-  res.on('finish', () => {
+  res.on("finish", () => {
     const duration = performance.now() - req.startTime;
 
     // Log non-200 responses
     if (res.statusCode >= 400) {
-      logger.warn('Non-200 Response', {
+      logger.warn("Non-200 Response", {
         requestId: req.id,
         method: req.method,
         path: req.path,
         statusCode: res.statusCode,
         duration: `${duration.toFixed(2)}ms`,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
     }
   });
@@ -158,41 +159,47 @@ const apiMonitor = (req, res, next) => {
 const sanitizeRequestBody = (body) => {
   if (!body) return body;
   const sanitized = { ...body };
-  const sensitiveFields = ['password', 'token', 'secret', 'apiKey', 'creditCard'];
-  
-  sensitiveFields.forEach(field => {
+  const sensitiveFields = [
+    "password",
+    "token",
+    "secret",
+    "apiKey",
+    "creditCard",
+  ];
+
+  sensitiveFields.forEach((field) => {
     if (sanitized[field]) {
-      sanitized[field] = '[REDACTED]';
+      sanitized[field] = "[REDACTED]";
     }
   });
-  
+
   return sanitized;
 };
 
 const sanitizeResponseBody = (body) => {
   if (!body) return body;
   const sanitized = { ...body };
-  const sensitiveFields = ['token', 'secret', 'apiKey'];
-  
-  sensitiveFields.forEach(field => {
+  const sensitiveFields = ["token", "secret", "apiKey"];
+
+  sensitiveFields.forEach((field) => {
     if (sanitized[field]) {
-      sanitized[field] = '[REDACTED]';
+      sanitized[field] = "[REDACTED]";
     }
   });
-  
+
   return sanitized;
 };
 
 const sanitizeHeaders = (headers) => {
   const sanitized = { ...headers };
-  const sensitiveHeaders = ['authorization', 'cookie', 'x-api-key'];
-  
-  sensitiveHeaders.forEach(header => {
+  const sensitiveHeaders = ["authorization", "cookie", "x-api-key"];
+
+  sensitiveHeaders.forEach((header) => {
     if (sanitized[header]) {
-      sanitized[header] = '[REDACTED]';
+      sanitized[header] = "[REDACTED]";
     }
   });
-  
+
   return sanitized;
 };
 
@@ -200,11 +207,8 @@ const sanitizeHeaders = (headers) => {
 const getAPIMetrics = (req, res) => {
   res.json({
     timestamp: new Date(),
-    metrics: apiMetrics.getMetrics()
+    metrics: apiMetrics.getMetrics(),
   });
 };
 
-export {
-  apiMonitor,
-  getAPIMetrics
-}; 
+export { apiMonitor, getAPIMetrics };

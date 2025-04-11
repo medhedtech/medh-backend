@@ -1,7 +1,7 @@
-import Membership from "../models/membership-model.js";
+import Category from "../models/category-model.js";
 import Course from "../models/course-model.js";
 import EnrolledCourse from "../models/enrolled-courses-model.js";
-import Category from "../models/category-model.js";
+import Membership from "../models/membership-model.js";
 
 // Create a new membership
 export const createMembership = async (req, res) => {
@@ -170,7 +170,7 @@ export const updateMembership = async (req, res) => {
       {
         new: true,
         runValidators: true,
-      }
+      },
     );
 
     if (!updatedMembership) {
@@ -180,7 +180,7 @@ export const updateMembership = async (req, res) => {
     }
 
     const populatedUpdatedMembership = await Membership.findById(
-      updatedMembership._id
+      updatedMembership._id,
     )
       .populate("student_id", "full_name email phone_number")
       .populate("course_ids", "course_title course_fee");
@@ -230,12 +230,12 @@ export const getMembershipCountsByStudentId = async (req, res) => {
 
     // Calculate active memberships based on expiry_date
     const activeMembershipsCount = memberships.filter(
-      (membership) => membership.expiry_date > new Date()
+      (membership) => membership.expiry_date > new Date(),
     ).length;
 
     // Calculate expired memberships based on expiry_date
     const expiredMembershipsCount = memberships.filter(
-      (membership) => membership.expiry_date <= new Date()
+      (membership) => membership.expiry_date <= new Date(),
     ).length;
 
     // Return the counts as a response
@@ -275,7 +275,7 @@ export const getMembershipsByStudentId = async (req, res) => {
 
     // Step 2: Fetch all category names
     const categoryNames = memberships.flatMap((membership) =>
-      membership.category_ids.map((category) => category.category_name)
+      membership.category_ids.map((category) => category.category_name),
     );
 
     // Step 3: Fetch all courses for these category names
@@ -291,7 +291,7 @@ export const getMembershipsByStudentId = async (req, res) => {
       is_self_paced: true,
     }).populate(
       "course_id",
-      "course_title assigned_instructor category resource_videos resource_pdfs course_image"
+      "course_title assigned_instructor category resource_videos resource_pdfs course_image",
     );
 
     // Step 6: Include enrolled courses in the response

@@ -19,7 +19,7 @@ const enrollJobSchema = new mongoose.Schema(
       type: String,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const JobForm = mongoose.model("JobPost", enrollJobSchema);

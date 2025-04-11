@@ -42,7 +42,7 @@ export const updateFAQ = async (req, res) => {
     const updatedFAQ = await FAQ.findByIdAndUpdate(
       req.params.id,
       { question, answer, course_id },
-      { new: true } // Return the updated document
+      { new: true }, // Return the updated document
     );
     if (!updatedFAQ) {
       return res.status(404).json({ message: "FAQ not found" });

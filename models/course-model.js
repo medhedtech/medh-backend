@@ -1,6 +1,12 @@
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
-import { baseLessonSchema, videoLessonSchema, quizLessonSchema, assessmentLessonSchema } from './lesson-schemas.js';
+
+import {
+  baseLessonSchema,
+  videoLessonSchema,
+  quizLessonSchema,
+  assessmentLessonSchema,
+} from "./lesson-schemas.js";
 const { Schema } = mongoose;
 
 /* ------------------------------ */
@@ -8,11 +14,13 @@ const { Schema } = mongoose;
 /* ------------------------------ */
 
 const isValidPdfUrl = (v) => {
-  return /\.pdf($|\?|#)/.test(v) ||
-         /\/pdf\//.test(v) ||
-         /documents.*\.amazonaws\.com/.test(v) ||
-         /drive\.google\.com/.test(v) ||
-         /dropbox\.com/.test(v);
+  return (
+    /\.pdf($|\?|#)/.test(v) ||
+    /\/pdf\//.test(v) ||
+    /documents.*\.amazonaws\.com/.test(v) ||
+    /drive\.google\.com/.test(v) ||
+    /dropbox\.com/.test(v)
+  );
 };
 
 const generateSlug = (title) => {
@@ -29,7 +37,7 @@ const generateSlug = (title) => {
 const assignCurriculumIds = (curriculum) => {
   curriculum.forEach((week, weekIndex) => {
     week.id = `week_${weekIndex + 1}`;
-    
+
     // Assign IDs to direct lessons under weeks
     if (week.lessons && week.lessons.length) {
       week.lessons.forEach((lesson, lessonIndex) => {
@@ -41,7 +49,7 @@ const assignCurriculumIds = (curriculum) => {
         }
       });
     }
-    
+
     // Assign IDs to live classes
     if (week.liveClasses && week.liveClasses.length) {
       week.liveClasses.forEach((liveClass, classIndex) => {
@@ -50,7 +58,7 @@ const assignCurriculumIds = (curriculum) => {
         }
       });
     }
-    
+
     // Original section and lesson IDs assignment
     if (week.sections && week.sections.length) {
       week.sections.forEach((section, sectionIndex) => {
@@ -76,39 +84,40 @@ const assignCurriculumIds = (curriculum) => {
 
 /** PDF Resource Schema **/
 const pdfResourceSchema = new Schema({
-  title: { 
-    type: String, 
-    required: [true, "PDF title is required"], 
-    trim: true 
+  title: {
+    type: String,
+    required: [true, "PDF title is required"],
+    trim: true,
   },
-  url: { 
+  url: {
     type: String,
     required: [true, "PDF URL is required"],
     validate: {
       validator: isValidPdfUrl,
-      message: props => `${props.value} is not a valid PDF URL. It must end with .pdf or be from a supported provider.`
-    }
+      message: (props) =>
+        `${props.value} is not a valid PDF URL. It must end with .pdf or be from a supported provider.`,
+    },
   },
-  description: { 
-    type: String, 
+  description: {
+    type: String,
     default: "",
-    trim: true 
+    trim: true,
   },
-  size_mb: { 
-    type: Number, 
+  size_mb: {
+    type: Number,
     min: [0, "PDF size cannot be negative"],
     max: [50, "PDF size cannot exceed 50MB"],
-    default: null 
+    default: null,
   },
-  pages: { 
-    type: Number, 
+  pages: {
+    type: Number,
     min: [1, "PDF must have at least 1 page"],
-    default: null 
+    default: null,
   },
-  upload_date: { 
-    type: Date, 
-    default: Date.now 
-  }
+  upload_date: {
+    type: Date,
+    default: Date.now,
+  },
 });
 
 /** FAQ Schema **/
@@ -116,43 +125,43 @@ const faqSchema = new Schema({
   question: {
     type: String,
     required: [true, "FAQ question is required"],
-    trim: true
+    trim: true,
   },
   answer: {
     type: String,
     required: [true, "FAQ answer is required"],
-    trim: true
-  }
+    trim: true,
+  },
 });
 
 /* ------------------------------ */
 /* Lesson Schemas (Embedded)      */
 /* ------------------------------ */
 const lessonResourceSchema = new Schema({
-  id: { 
-    type: String, 
-    required: [true, "Resource ID is required"]
+  id: {
+    type: String,
+    required: [true, "Resource ID is required"],
   },
-  title: { 
-    type: String, 
-    required: [true, "Resource title is required"], 
-    trim: true 
+  title: {
+    type: String,
+    required: [true, "Resource title is required"],
+    trim: true,
   },
-  url: { 
-    type: String, 
-    required: [true, "Resource URL is required"], 
-    trim: true 
+  url: {
+    type: String,
+    required: [true, "Resource URL is required"],
+    trim: true,
   },
-  type: { 
-    type: String, 
+  type: {
+    type: String,
     enum: ["pdf", "document", "link", "other"],
-    required: [true, "Resource type is required"]
+    required: [true, "Resource type is required"],
   },
-  description: { 
-    type: String, 
-    default: "", 
-    trim: true 
-  }
+  description: {
+    type: String,
+    default: "",
+    trim: true,
+  },
 });
 
 /* ------------------------------ */
@@ -162,48 +171,50 @@ const curriculumSectionSchema = new Schema(
   {
     id: {
       type: String,
-      required: [true, "Section ID is required"]
+      required: [true, "Section ID is required"],
     },
     title: {
       type: String,
       required: [true, "Section title is required"],
-      trim: true
+      trim: true,
     },
     description: {
       type: String,
       default: "",
-      trim: true
+      trim: true,
     },
     order: {
       type: Number,
       required: [true, "Section order is required"],
-      min: [0, "Order cannot be negative"]
+      min: [0, "Order cannot be negative"],
     },
     // Now using embedded lessons instead of references
     lessons: [baseLessonSchema],
-    resources: [{
-      title: {
-        type: String,
-        required: [true, "Resource title is required"],
-        trim: true
+    resources: [
+      {
+        title: {
+          type: String,
+          required: [true, "Resource title is required"],
+          trim: true,
+        },
+        description: {
+          type: String,
+          trim: true,
+        },
+        fileUrl: {
+          type: String,
+          required: [true, "Resource file URL is required"],
+          trim: true,
+        },
+        type: {
+          type: String,
+          enum: ["pdf", "document", "video", "audio", "link"],
+          required: [true, "Resource type is required"],
+        },
       },
-      description: {
-        type: String,
-        trim: true
-      },
-      fileUrl: {
-        type: String,
-        required: [true, "Resource file URL is required"],
-        trim: true
-      },
-      type: {
-        type: String,
-        enum: ["pdf", "document", "video", "audio", "link"],
-        required: [true, "Resource type is required"]
-      }
-    }]
+    ],
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 /* ------------------------------ */
@@ -214,91 +225,97 @@ const curriculumWeekSchema = new Schema(
     id: {
       type: String,
       required: [true, "Week ID is required"],
-      unique: true
+      unique: true,
     },
     weekTitle: {
       type: String,
       required: [true, "Week title is required"],
-      trim: true
+      trim: true,
     },
     weekDescription: {
       type: String,
       default: "",
-      trim: true
+      trim: true,
     },
-    topics: [{
-      type: String,
-      trim: true
-    }],
+    topics: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
     // Support for direct lessons without sections
     lessons: {
       type: [baseLessonSchema],
-      default: []
+      default: [],
     },
     // Live classes specific to this week
     liveClasses: {
-      type: [{
-        title: {
-          type: String,
-          required: [true, "Live class title is required"],
-          trim: true
-        },
-        description: {
-          type: String,
-          default: "",
-          trim: true
-        },
-        scheduledDate: {
-          type: Date,
-          required: [true, "Live class scheduled date is required"]
-        },
-        duration: {
-          type: Number,
-          min: [15, "Live class duration must be at least 15 minutes"],
-          required: [true, "Live class duration is required"]
-        },
-        meetingLink: {
-          type: String,
-          trim: true
-        },
-        instructor: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Instructor"
-        },
-        recordingUrl: {
-          type: String,
-          trim: true
-        },
-        isRecorded: {
-          type: Boolean,
-          default: false
-        },
-        materials: [{
+      type: [
+        {
           title: {
             type: String,
-            required: [true, "Material title is required"],
-            trim: true
+            required: [true, "Live class title is required"],
+            trim: true,
           },
-          url: {
+          description: {
             type: String,
-            required: [true, "Material URL is required"],
-            trim: true
+            default: "",
+            trim: true,
           },
-          type: {
+          scheduledDate: {
+            type: Date,
+            required: [true, "Live class scheduled date is required"],
+          },
+          duration: {
+            type: Number,
+            min: [15, "Live class duration must be at least 15 minutes"],
+            required: [true, "Live class duration is required"],
+          },
+          meetingLink: {
             type: String,
-            enum: ["pdf", "document", "presentation", "code", "other"],
-            default: "other"
-          }
-        }]
-      }],
-      default: []
+            trim: true,
+          },
+          instructor: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Instructor",
+          },
+          recordingUrl: {
+            type: String,
+            trim: true,
+          },
+          isRecorded: {
+            type: Boolean,
+            default: false,
+          },
+          materials: [
+            {
+              title: {
+                type: String,
+                required: [true, "Material title is required"],
+                trim: true,
+              },
+              url: {
+                type: String,
+                required: [true, "Material URL is required"],
+                trim: true,
+              },
+              type: {
+                type: String,
+                enum: ["pdf", "document", "presentation", "code", "other"],
+                default: "other",
+              },
+            },
+          ],
+        },
+      ],
+      default: [],
     },
     sections: {
       type: [curriculumSectionSchema],
-      default: []
-    }
+      default: [],
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 /* ------------------------------ */
@@ -308,26 +325,33 @@ const toolTechnologySchema = new Schema({
   name: {
     type: String,
     required: [true, "Tool/technology name is required"],
-    trim: true
+    trim: true,
   },
   category: {
     type: String,
     enum: {
-      values: ["programming_language", "framework", "library", "tool", "platform", "other"],
-      message: "{VALUE} is not a valid tool category"
+      values: [
+        "programming_language",
+        "framework",
+        "library",
+        "tool",
+        "platform",
+        "other",
+      ],
+      message: "{VALUE} is not a valid tool category",
     },
-    default: "other"
+    default: "other",
   },
   description: {
     type: String,
     default: "",
-    trim: true
+    trim: true,
   },
   logo_url: {
     type: String,
     default: "",
-    trim: true
-  }
+    trim: true,
+  },
 });
 
 /* ------------------------------ */
@@ -336,60 +360,62 @@ const toolTechnologySchema = new Schema({
 const bonusModuleSchema = new Schema({
   title: {
     type: String,
-    trim: true
+    trim: true,
   },
   description: {
     type: String,
     default: "",
-    trim: true
+    trim: true,
   },
   resources: {
-    type: [{
-      title: { 
-        type: String, 
-        required: [true, "Resource title is required"], 
-        trim: true 
-      },
-      type: { 
-        type: String, 
-        enum: {
-          values: ["video", "pdf", "link", "other"],
-          message: "{VALUE} is not a valid resource type"
+    type: [
+      {
+        title: {
+          type: String,
+          required: [true, "Resource title is required"],
+          trim: true,
         },
-        required: [true, "Resource type is required"]
-      },
-      url: { 
-        type: String,
-        required: [true, "Resource URL is required"],
-        validate: {
-          validator: function(v) {
-            if (this.type === "pdf") {
-              return isValidPdfUrl(v);
-            }
-            return true;
+        type: {
+          type: String,
+          enum: {
+            values: ["video", "pdf", "link", "other"],
+            message: "{VALUE} is not a valid resource type",
           },
-          message: props => `${props.value} is not a valid PDF URL.`
-        }
+          required: [true, "Resource type is required"],
+        },
+        url: {
+          type: String,
+          required: [true, "Resource URL is required"],
+          validate: {
+            validator: function (v) {
+              if (this.type === "pdf") {
+                return isValidPdfUrl(v);
+              }
+              return true;
+            },
+            message: (props) => `${props.value} is not a valid PDF URL.`,
+          },
+        },
+        description: { type: String, default: "", trim: true },
+        size_mb: {
+          type: Number,
+          min: [0, "PDF size cannot be negative"],
+          max: [50, "PDF size cannot exceed 50MB"],
+          default: null,
+        },
+        pages: {
+          type: Number,
+          min: [1, "PDF must have at least 1 page"],
+          default: null,
+        },
+        upload_date: {
+          type: Date,
+          default: Date.now,
+        },
       },
-      description: { type: String, default: "", trim: true },
-      size_mb: { 
-        type: Number, 
-        min: [0, "PDF size cannot be negative"],
-        max: [50, "PDF size cannot exceed 50MB"],
-        default: null 
-      },
-      pages: { 
-        type: Number, 
-        min: [1, "PDF must have at least 1 page"],
-        default: null 
-      },
-      upload_date: { 
-        type: Date, 
-        default: Date.now 
-      }
-    }],
-    default: []
-  }
+    ],
+    default: [],
+  },
 });
 
 /* ------------------------------ */
@@ -402,52 +428,53 @@ const priceSchema = new Schema({
     trim: true,
     enum: {
       values: ["USD", "EUR", "INR", "GBP", "AUD", "CAD"],
-      message: "{VALUE} is not a supported currency"
+      message: "{VALUE} is not a supported currency",
     },
-    uppercase: true
+    uppercase: true,
   },
   individual: {
     type: Number,
     min: [0, "Individual price cannot be negative"],
-    default: 0
+    default: 0,
   },
   batch: {
     type: Number,
     min: [0, "Batch price cannot be negative"],
-    default: 0
+    default: 0,
   },
   min_batch_size: {
     type: Number,
     min: [2, "Minimum batch size must be at least 2"],
-    default: 2
+    default: 2,
   },
   max_batch_size: {
     type: Number,
     min: [2, "Maximum batch size must be at least 2"],
     default: 10,
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         return v >= this.min_batch_size;
       },
-      message: "Maximum batch size must be greater than or equal to minimum batch size"
-    }
+      message:
+        "Maximum batch size must be greater than or equal to minimum batch size",
+    },
   },
   early_bird_discount: {
     type: Number,
     min: [0, "Early bird discount cannot be negative"],
     max: [100, "Early bird discount cannot exceed 100%"],
-    default: 0
+    default: 0,
   },
   group_discount: {
     type: Number,
     min: [0, "Group discount cannot be negative"],
     max: [100, "Group discount cannot exceed 100%"],
-    default: 0
+    default: 0,
   },
   is_active: {
     type: Boolean,
-    default: true
-  }
+    default: true,
+  },
 });
 
 /* ------------------------------ */
@@ -459,196 +486,203 @@ const courseSchema = new Schema(
       type: String,
       required: [true, "Course category is required"],
       trim: true,
-      index: true
+      index: true,
     },
     course_subcategory: {
       type: String,
-      trim: true
+      trim: true,
     },
     course_title: {
       type: String,
       required: [true, "Course title is required"],
       trim: true,
-      index: true
+      index: true,
     },
     course_subtitle: {
       type: String,
-      trim: true
+      trim: true,
     },
     course_tag: {
       type: String,
-      index: true
+      index: true,
     },
     course_description: {
       type: {
         program_overview: {
           type: String,
           required: [true, "Program overview is required"],
-          trim: true
+          trim: true,
         },
         benefits: {
           type: String,
           required: [true, "Benefits description is required"],
-          trim: true
+          trim: true,
         },
         learning_objectives: {
           type: [String],
-          default: []
+          default: [],
         },
         course_requirements: {
           type: [String],
-          default: []
+          default: [],
         },
         target_audience: {
           type: [String],
-          default: []
-        }
+          default: [],
+        },
       },
-      required: [true, "Course description is required"]
+      required: [true, "Course description is required"],
     },
     course_level: {
-      type: String
+      type: String,
     },
     language: {
       type: String,
-      default: "English"
+      default: "English",
     },
     subtitle_languages: {
       type: [String],
-      default: []
+      default: [],
     },
     no_of_Sessions: {
       type: Number,
       min: [1, "Number of sessions must be at least 1"],
-      required: [true, "Number of sessions is required"]
+      required: [true, "Number of sessions is required"],
     },
     course_duration: {
       type: String,
       required: [true, "Course duration is required"],
-      trim: true
+      trim: true,
     },
     session_duration: {
       type: String,
-      trim: true
+      trim: true,
     },
     course_fee: {
       type: Number,
       min: [0, "Course fee cannot be negative"],
       default: 0,
-      index: true
+      index: true,
     },
     prices: {
       type: [priceSchema],
       default: [],
       validate: {
-        validator: function(prices) {
+        validator: function (prices) {
           if (prices.length === 0) return true;
-          const currencies = prices.map(p => p.currency);
+          const currencies = prices.map((p) => p.currency);
           return new Set(currencies).size === currencies.length;
         },
-        message: "Duplicate currencies are not allowed in prices array"
-      }
+        message: "Duplicate currencies are not allowed in prices array",
+      },
     },
     brochures: {
       type: [String],
       default: [],
       validate: {
-        validator: function(urls) {
-          return urls.every(url =>
-            url && url.trim().length > 0 && (
-              /\.pdf($|\?|#)/.test(url) ||
-              /\/pdf\//.test(url) ||
-              /documents.*\.amazonaws\.com/.test(url) ||
-              /drive\.google\.com/.test(url) ||
-              /dropbox\.com/.test(url)
-            )
+        validator: function (urls) {
+          return urls.every(
+            (url) =>
+              url &&
+              url.trim().length > 0 &&
+              (/\.pdf($|\?|#)/.test(url) ||
+                /\/pdf\//.test(url) ||
+                /documents.*\.amazonaws\.com/.test(url) ||
+                /drive\.google\.com/.test(url) ||
+                /dropbox\.com/.test(url)),
           );
         },
-        message: "Brochures must be valid PDF files"
-      }
+        message: "Brochures must be valid PDF files",
+      },
     },
     status: {
       type: String,
       enum: {
         values: ["Published", "Upcoming", "Draft"],
-        message: "{VALUE} is not a valid status"
+        message: "{VALUE} is not a valid status",
       },
       default: "Draft",
-      index: true
+      index: true,
     },
     category_type: {
       type: String,
       enum: {
         values: ["Free", "Paid", "Live", "Hybrid", "Pre-Recorded"],
-        message: "{VALUE} is not a valid category type"
+        message: "{VALUE} is not a valid category type",
       },
       default: "Paid",
       required: [true, "Category type is required"],
-      index: true
+      index: true,
     },
     isFree: {
       type: Boolean,
       default: false,
-      index: true
+      index: true,
     },
     assigned_instructor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "AssignedInstructor",
-      default: null
+      default: null,
     },
     specifications: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
-      default: null
+      default: null,
     },
     unique_key: {
       type: String,
       unique: true,
-      immutable: true
+      immutable: true,
     },
     slug: {
       type: String,
       lowercase: true,
-      trim: true
+      trim: true,
     },
     course_image: {
       type: String,
       required: [true, "Course image URL is required"],
-      trim: true
+      trim: true,
     },
     course_grade: {
       type: String,
-      trim: true
+      trim: true,
     },
     resource_pdfs: {
       type: [pdfResourceSchema],
-      default: []
+      default: [],
     },
     curriculum: {
       type: [curriculumWeekSchema],
-      default: []
+      default: [],
     },
     faqs: {
       type: [faqSchema],
-      default: []
+      default: [],
     },
     tools_technologies: {
       type: [toolTechnologySchema],
-      default: []
+      default: [],
     },
     bonus_modules: {
       type: [bonusModuleSchema],
-      default: []
+      default: [],
     },
     final_evaluation: {
       final_faqs: { type: [faqSchema], default: [] },
       final_quizzes: [{ type: mongoose.Schema.Types.ObjectId, ref: "Quiz" }],
-      final_assessments: [{ type: mongoose.Schema.Types.ObjectId, ref: "Assessment" }],
-      certification: { type: mongoose.Schema.Types.ObjectId, ref: "Certificate", default: null }
+      final_assessments: [
+        { type: mongoose.Schema.Types.ObjectId, ref: "Assessment" },
+      ],
+      certification: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Certificate",
+        default: null,
+      },
     },
     efforts_per_Week: {
       type: String,
-      trim: true
+      trim: true,
     },
     class_type: {
       type: String,
@@ -661,98 +695,102 @@ const courseSchema = new Schema(
           "Virtual Learning",
           "Online Classes",
           "Hybrid",
-          "Pre-Recorded"
+          "Pre-Recorded",
         ],
-        message: "{VALUE} is not a valid class type"
+        message: "{VALUE} is not a valid class type",
       },
       required: [true, "Class type is required"],
-      index: true
+      index: true,
     },
     is_Certification: {
       type: String,
       enum: {
         values: ["Yes", "No"],
-        message: "{VALUE} is not a valid certification option"
+        message: "{VALUE} is not a valid certification option",
       },
-      required: [true, "Certification status is required"]
+      required: [true, "Certification status is required"],
     },
     is_Assignments: {
       type: String,
       enum: {
         values: ["Yes", "No"],
-        message: "{VALUE} is not a valid assignments option"
+        message: "{VALUE} is not a valid assignments option",
       },
-      required: [true, "Assignments status is required"]
+      required: [true, "Assignments status is required"],
     },
     is_Projects: {
       type: String,
       enum: {
         values: ["Yes", "No"],
-        message: "{VALUE} is not a valid projects option"
+        message: "{VALUE} is not a valid projects option",
       },
-      required: [true, "Projects status is required"]
+      required: [true, "Projects status is required"],
     },
     is_Quizes: {
       type: String,
       enum: {
         values: ["Yes", "No"],
-        message: "{VALUE} is not a valid quizzes option"
+        message: "{VALUE} is not a valid quizzes option",
       },
-      required: [true, "Quizzes status is required"]
+      required: [true, "Quizzes status is required"],
     },
     related_courses: {
       type: [String],
-      default: []
+      default: [],
     },
     min_hours_per_week: {
       type: Number,
-      min: [0, "Minimum hours per week cannot be negative"]
+      min: [0, "Minimum hours per week cannot be negative"],
     },
     max_hours_per_week: {
       type: Number,
       min: [0, "Maximum hours per week cannot be negative"],
       validate: {
-        validator: function(v) {
-          return this.min_hours_per_week === undefined || v >= this.min_hours_per_week;
+        validator: function (v) {
+          return (
+            this.min_hours_per_week === undefined ||
+            v >= this.min_hours_per_week
+          );
         },
-        message: "Maximum hours per week must be greater than or equal to minimum hours per week"
-      }
+        message:
+          "Maximum hours per week must be greater than or equal to minimum hours per week",
+      },
     },
     meta: {
       views: {
         type: Number,
         default: 0,
-        min: 0
+        min: 0,
       },
       ratings: {
         average: {
           type: Number,
           default: 0,
           min: 0,
-          max: 5
+          max: 5,
         },
         count: {
           type: Number,
           default: 0,
-          min: 0
-        }
+          min: 0,
+        },
       },
       enrollments: {
         type: Number,
         default: 0,
-        min: 0
+        min: 0,
       },
       lastUpdated: {
         type: Date,
-        default: Date.now
-      }
-    }
+        default: Date.now,
+      },
+    },
   },
-  { 
+  {
     timestamps: true,
     toJSON: { virtuals: true },
-    toObject: { virtuals: true }
-  }
+    toObject: { virtuals: true },
+  },
 );
 
 /* ------------------------------ */
@@ -764,7 +802,7 @@ courseSchema.index(
     course_category: "text",
     "course_description.program_overview": "text",
     "course_description.benefits": "text",
-    course_tag: "text"
+    course_tag: "text",
   },
   {
     weights: {
@@ -772,10 +810,10 @@ courseSchema.index(
       course_category: 5,
       "course_description.program_overview": 3,
       "course_description.benefits": 2,
-      course_tag: 1
+      course_tag: 1,
     },
-    name: "CourseSearchIndex"
-  }
+    name: "CourseSearchIndex",
+  },
 );
 courseSchema.index({ category_type: 1, status: 1, course_fee: 1 });
 courseSchema.index({ course_category: 1, isFree: 1 });
@@ -799,17 +837,17 @@ courseSchema.virtual("priceDisplay").get(function () {
 courseSchema.virtual("quizzes", {
   ref: "Quiz",
   localField: "_id",
-  foreignField: "course"
+  foreignField: "course",
 });
 courseSchema.virtual("assignments", {
   ref: "Assignment",
   localField: "_id",
-  foreignField: "course"
+  foreignField: "course",
 });
 courseSchema.virtual("certificates", {
   ref: "Certificate",
   localField: "_id",
-  foreignField: "course"
+  foreignField: "course",
 });
 
 /* ------------------------------ */
@@ -826,7 +864,11 @@ courseSchema.pre("save", function (next) {
   // Set isFree flag based on category_type
   this.isFree = this.category_type === "Free";
   // Automate efforts per week if not provided
-  if (!this.efforts_per_Week && this.min_hours_per_week && this.max_hours_per_week) {
+  if (
+    !this.efforts_per_Week &&
+    this.min_hours_per_week &&
+    this.max_hours_per_week
+  ) {
     this.efforts_per_Week = `${this.min_hours_per_week} - ${this.max_hours_per_week} hours / week`;
   }
   // Always set course_fee equal to the first pricing option's batch price (if available)
@@ -859,20 +901,25 @@ courseSchema.methods.getStatistics = async function () {
       { $group: { _id: null, total: { $sum: "$meta.views" } } },
     ]),
   ]);
-  
+
   // Count total lessons including both direct lessons and section lessons
   const totalLessons = this.curriculum.reduce((sum, week) => {
     const directLessons = week.lessons ? week.lessons.length : 0;
-    const sectionLessons = week.sections ? 
-      week.sections.reduce((weekSum, section) => weekSum + (section.lessons ? section.lessons.length : 0), 0) : 0;
+    const sectionLessons = week.sections
+      ? week.sections.reduce(
+          (weekSum, section) =>
+            weekSum + (section.lessons ? section.lessons.length : 0),
+          0,
+        )
+      : 0;
     return sum + directLessons + sectionLessons;
   }, 0);
-  
+
   // Count total live classes
   const totalLiveClasses = this.curriculum.reduce((sum, week) => {
     return sum + (week.liveClasses ? week.liveClasses.length : 0);
   }, 0);
-  
+
   return {
     totalStudents,
     averageRating: averageRating[0]?.avg || 0,
@@ -880,8 +927,12 @@ courseSchema.methods.getStatistics = async function () {
     totalLessons,
     totalLiveClasses,
     totalQuizzes: await this.model("Quiz").countDocuments({ course: this._id }),
-    totalAssignments: await this.model("Assignment").countDocuments({ course: this._id }),
-    totalCertificates: await this.model("Certificate").countDocuments({ course: this._id }),
+    totalAssignments: await this.model("Assignment").countDocuments({
+      course: this._id,
+    }),
+    totalCertificates: await this.model("Certificate").countDocuments({
+      course: this._id,
+    }),
   };
 };
 
@@ -892,9 +943,15 @@ courseSchema.methods.getStudentProgress = async function (studentId) {
   ]);
   if (!enrollment || !progress) return null;
   const lessons = await this.model("Lesson").find({ course: this._id });
-  const completedLessons = progress.lessonProgress.filter((p) => p.status === "completed");
-  const completedQuizzes = progress.quizProgress.filter((p) => p.status === "completed");
-  const completedAssignments = progress.assignmentProgress.filter((p) => p.status === "graded");
+  const completedLessons = progress.lessonProgress.filter(
+    (p) => p.status === "completed",
+  );
+  const completedQuizzes = progress.quizProgress.filter(
+    (p) => p.status === "completed",
+  );
+  const completedAssignments = progress.assignmentProgress.filter(
+    (p) => p.status === "graded",
+  );
   return {
     enrollment,
     progress: {
@@ -909,7 +966,9 @@ courseSchema.methods.getStudentProgress = async function (studentId) {
         completed: completedQuizzes.length,
       },
       assignments: {
-        total: await this.model("Assignment").countDocuments({ course: this._id }),
+        total: await this.model("Assignment").countDocuments({
+          course: this._id,
+        }),
         completed: completedAssignments.length,
       },
       certificate: await this.model("Certificate").findOne({

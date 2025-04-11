@@ -6,7 +6,7 @@ const educationSchema = new mongoose.Schema({
   degree: { type: String, required: true },
   field_of_study: { type: String, required: true },
   graduation_year: { type: String, required: true },
-  gpa: { type: String, required: true }
+  gpa: { type: String, required: true },
 });
 
 const workExperienceSchema = new mongoose.Schema({
@@ -18,7 +18,7 @@ const workExperienceSchema = new mongoose.Schema({
   current: { type: Boolean, default: false },
   description: { type: String, required: true },
   technologies: { type: String },
-  achievements: { type: String }
+  achievements: { type: String },
 });
 
 const internshipSchema = new mongoose.Schema({
@@ -26,7 +26,7 @@ const internshipSchema = new mongoose.Schema({
   company: { type: String, required: true },
   startDate: { type: String, required: true },
   endDate: { type: String, required: true },
-  description: { type: String, required: true }
+  description: { type: String, required: true },
 });
 
 const projectSchema = new mongoose.Schema({
@@ -40,7 +40,7 @@ const projectSchema = new mongoose.Schema({
   current: { type: Boolean, default: false },
   role: { type: String },
   highlights: { type: String },
-  isOpenSource: { type: Boolean, default: false }
+  isOpenSource: { type: Boolean, default: false },
 });
 
 const achievementSchema = new mongoose.Schema({
@@ -48,7 +48,7 @@ const achievementSchema = new mongoose.Schema({
   issuer: { type: String },
   date: { type: String, required: true },
   description: { type: String },
-  url: { type: String }
+  url: { type: String },
 });
 
 const certificationSchema = new mongoose.Schema({
@@ -57,7 +57,7 @@ const certificationSchema = new mongoose.Schema({
   date: { type: String, required: true },
   expiry: { type: String },
   credentialID: { type: String },
-  url: { type: String }
+  url: { type: String },
 });
 
 const referenceSchema = new mongoose.Schema({
@@ -66,14 +66,14 @@ const referenceSchema = new mongoose.Schema({
   company: { type: String },
   email: { type: String },
   phone: { type: String },
-  relationship: { type: String }
+  relationship: { type: String },
 });
 
 const placementFormSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User"
+      ref: "User",
     },
     firstname: { type: String, required: true },
     lastname: { type: String, required: true },
@@ -84,21 +84,21 @@ const placementFormSchema = new mongoose.Schema(
     github_profile: { type: String },
     portfolio_url: { type: String },
     website: { type: String },
-    
+
     // Education details
     education: { type: educationSchema, required: true },
     skills: [{ type: String }],
     languages_known: { type: String, required: true },
-    
+
     // Experience details
     work_experience: [workExperienceSchema],
     internships: [internshipSchema],
-    
+
     // Projects and achievements
     projects: [projectSchema],
     achievements: [achievementSchema],
     certifications: [certificationSchema],
-    
+
     // Preferences and additional info
     preferred_location: { type: String },
     preferred_job_type: { type: String },
@@ -110,20 +110,29 @@ const placementFormSchema = new mongoose.Schema(
     message: { type: String, required: true },
     willing_to_relocate: { type: Boolean, required: true },
     availability_date: { type: String },
-    
+
     // Application status
     status: {
       type: String,
-      enum: ['submitted', 'under_review', 'shortlisted', 'interviewed', 'offered', 'rejected', 'accepted', 'withdrawn'],
-      default: 'submitted'
+      enum: [
+        "submitted",
+        "under_review",
+        "shortlisted",
+        "interviewed",
+        "offered",
+        "rejected",
+        "accepted",
+        "withdrawn",
+      ],
+      default: "submitted",
     },
     application_notes: { type: String },
     interview_date: { type: Date },
     interviewer: { type: String },
-    interview_feedback: { type: String }
+    interview_feedback: { type: String },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const PlacementForm = mongoose.model("PlacementForm", placementFormSchema);
-export default PlacementForm; 
+export default PlacementForm;

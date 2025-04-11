@@ -57,7 +57,10 @@ export const updateJobPost = async (req, res) => {
     const updatedJobPost = await JobPost.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+      },
     );
 
     if (!updatedJobPost) {

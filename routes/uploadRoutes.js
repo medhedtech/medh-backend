@@ -1,7 +1,13 @@
-import express from 'express';
+import express from "express";
+
 const router = express.Router();
-import { authenticate } from '../middleware/auth.js';
-import { upload, handleUpload, handleBase64Upload, handleMultipleUpload } from '../controllers/upload/uploadController.js';
+import {
+  upload,
+  handleUpload,
+  handleBase64Upload,
+  handleMultipleUpload,
+} from "../controllers/upload/uploadController.js";
+import { authenticate } from "../middleware/auth.js";
 
 /**
  * @route POST /api/v1/upload
@@ -9,11 +15,7 @@ import { upload, handleUpload, handleBase64Upload, handleMultipleUpload } from '
  * @access Private
  * @body multipart/form-data with field 'file'
  */
-router.post('/', 
-  authenticate,
-  upload.single('file'),
-  handleUpload
-);
+router.post("/", authenticate, upload.single("file"), handleUpload);
 
 /**
  * @route POST /api/v1/upload/multiple
@@ -21,10 +23,11 @@ router.post('/',
  * @access Private
  * @body multipart/form-data with field 'files'
  */
-router.post('/multiple',
+router.post(
+  "/multiple",
   authenticate,
-  upload.array('files', 10),
-  handleMultipleUpload
+  upload.array("files", 10),
+  handleMultipleUpload,
 );
 
 /**
@@ -33,9 +36,6 @@ router.post('/multiple',
  * @access Private
  * @body { base64String: string, fileType: 'image' | 'document' }
  */
-router.post('/base64',
-  authenticate,
-  handleBase64Upload
-);
+router.post("/base64", authenticate, handleBase64Upload);
 
-export default router; 
+export default router;

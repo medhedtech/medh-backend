@@ -1,4 +1,4 @@
-import { body, validationResult } from 'express-validator';
+import { body, validationResult } from "express-validator";
 
 /**
  * Validates enrollment data
@@ -6,78 +6,78 @@ import { body, validationResult } from 'express-validator';
  */
 export const validateEnrollment = [
   // Required fields validation
-  body('student_id')
+  body("student_id")
     .notEmpty()
-    .withMessage('Student ID is required')
+    .withMessage("Student ID is required")
     .isMongoId()
-    .withMessage('Invalid Student ID format'),
+    .withMessage("Invalid Student ID format"),
 
-  body('course_id')
+  body("course_id")
     .notEmpty()
-    .withMessage('Course ID is required')
+    .withMessage("Course ID is required")
     .isMongoId()
-    .withMessage('Invalid Course ID format'),
+    .withMessage("Invalid Course ID format"),
 
   // Optional fields validation
-  body('expiry_date')
+  body("expiry_date")
     .optional()
     .isISO8601()
-    .withMessage('Invalid expiry date format')
+    .withMessage("Invalid expiry date format")
     .custom((value) => {
       const date = new Date(value);
       if (date <= new Date()) {
-        throw new Error('Expiry date must be in the future');
+        throw new Error("Expiry date must be in the future");
       }
       return true;
     }),
 
-  body('is_self_paced')
+  body("is_self_paced")
     .optional()
     .isBoolean()
-    .withMessage('is_self_paced must be a boolean'),
+    .withMessage("is_self_paced must be a boolean"),
 
-  body('enrollment_type')
+  body("enrollment_type")
     .optional()
-    .isIn(['individual', 'batch', 'corporate'])
-    .withMessage('Invalid enrollment type'),
+    .isIn(["individual", "batch", "corporate"])
+    .withMessage("Invalid enrollment type"),
 
-  body('batch_size')
+  body("batch_size")
     .optional()
     .isInt({ min: 1 })
-    .withMessage('Batch size must be a positive integer'),
+    .withMessage("Batch size must be a positive integer"),
 
-  body('payment_status')
+  body("payment_status")
     .optional()
-    .isIn(['pending', 'completed', 'failed', 'refunded', 'partial'])
-    .withMessage('Invalid payment status'),
+    .isIn(["pending", "completed", "failed", "refunded", "partial"])
+    .withMessage("Invalid payment status"),
 
-  body('status')
+  body("status")
     .optional()
-    .isIn(['active', 'completed', 'dropped', 'suspended', 'expired'])
-    .withMessage('Invalid status'),
+    .isIn(["active", "completed", "dropped", "suspended", "expired"])
+    .withMessage("Invalid status"),
 
   // Payment details validation
-  body('paymentResponse')
+  body("paymentResponse")
     .optional()
     .isObject()
-    .withMessage('Payment response must be an object'),
+    .withMessage("Payment response must be an object"),
 
-  body('currencyCode')
+  body("currencyCode")
     .optional()
     .isString()
     .isLength({ min: 3, max: 3 })
-    .withMessage('Currency code must be a 3-letter code'),
+    .withMessage("Currency code must be a 3-letter code"),
 
-  body('activePricing')
+  body("activePricing")
     .optional()
     .isObject()
-    .withMessage('Active pricing must be an object'),
+    .withMessage("Active pricing must be an object"),
 
   // Metadata validation
-  body('metadata')
+  body("metadata")
     .optional()
     .isObject()
-    .withMessage('Metadata must be an object'),
+    .withMessage("Metadata must be an object"),
 
   // Validation result handler
   (req, res, next) => {
@@ -85,10 +85,10 @@ export const validateEnrollment = [
     if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        message: 'Validation failed',
-        errors: errors.array()
+        message: "Validation failed",
+        errors: errors.array(),
       });
     }
     next();
-  }
-]; 
+  },
+];

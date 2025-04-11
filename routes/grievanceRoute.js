@@ -1,11 +1,12 @@
 import express from "express";
+
 import {
   createGrievance,
   getAllGrievances,
   getGrievanceById,
   updateGrievance,
   deleteGrievance,
-  getGrievancesByUser
+  getGrievancesByUser,
 } from "../controllers/grievance-controller.js";
 
 const router = express.Router();

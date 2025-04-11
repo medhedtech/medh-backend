@@ -18,7 +18,7 @@ const corporateFormSchema = new mongoose.Schema(
     message: { type: String },
     accept: { type: Boolean },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const CorporateForm = mongoose.model("Corporate", corporateFormSchema);

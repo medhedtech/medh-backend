@@ -32,7 +32,7 @@ const certificateSchema = new mongoose.Schema(
       type: String,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const Certificate = mongoose.model("Certificate", certificateSchema);

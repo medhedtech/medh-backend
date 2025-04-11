@@ -1,5 +1,5 @@
-import OnlineMeeting from "../models/online-meeting.js";
 import Course from "../models/course-model.js";
+import OnlineMeeting from "../models/online-meeting.js";
 
 export const getInstructorCoursesAndClasses = async (req, res) => {
   try {
@@ -49,7 +49,7 @@ export const getInstructorCoursesAndClasses = async (req, res) => {
     // Calculate total working hours for the fetched meetings
     for (let meeting of inactiveMeetings) {
       const course = assignedCourses.find(
-        (course) => course.course_title === meeting.course_name
+        (course) => course.course_title === meeting.course_name,
       );
 
       if (course && course.session_duration) {
@@ -80,7 +80,7 @@ export const getInstructorCoursesAndClasses = async (req, res) => {
   } catch (error) {
     console.error(
       "Error fetching instructor courses, inactive classes, and working hours:",
-      error
+      error,
     );
     res.status(500).json({
       message:

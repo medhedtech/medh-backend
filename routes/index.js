@@ -1,46 +1,47 @@
-import express from 'express';
-import { ENV_VARS } from '../config/envVars.js';
-import logger from '../utils/logger.js';
+import express from "express";
+
+import { ENV_VARS } from "../config/envVars.js";
+import logger from "../utils/logger.js";
 
 // Import routes
-import authRoutes from './authRoutes.js';
-import categoryRoutes from './categoryRoutes.js';
-import courseRoutes from './courseRoutes.js';
-import freqRoutes from './freqRoutes.js';
-import faqRoutes from './faqRoutes.js';
-import studentRoutes from './studentRoutes.js';
-import instructorRoutes from './instructorRoutes.js';
-import certificateRoutes from './certificateRoutes.js';
-import onlineMeetingRoutes from './online_meetingRoutes.js';
-import enrolledRoutes from './enrolledRoutes.js';
-import recordedSessionRoutes from './recorded-sessionRoutes.js';
-import uploadRoutes from './uploadRoutes.js';
-import contactRoutes from './contactRoutes.js';
-import blogRoutes from './blogRoutes.js';
-import dashboardRoutes from './dashboardRoutes.js';
-import assignedInstructor from './assignInstructorRoute.js';
-import membership from './membershipRoutes.js';
-import resources from './resourcesRoutes.js';
-import quizes from './quizRoutes.js';
-import feedback from './feedbackRoutes.js';
-import assignment from './assignmentRoutes.js';
-import placements from './placementRoutes.js';
-import complaint from './complaintRoute.js';
-import grievance from './grievanceRoute.js';
-import enrollForm from './enroll-formRoute.js';
-import addJobPost from './add-job-postRoutes.js';
-import jobPost from './jobRoutes.js';
-import subscriptionRoute from './subscription-Routes.js';
-import broucherRoute from './broucherRoutes.js';
-import newsLetterRoute from './newsletterRoutes.js';
-import quizResponseRoutes from './quizResponseRoutes.js';
-import trackSessionRoute from './track-sessionsRoutes.js';
-import assignCoorporateCourse from './assign-course-coorporateRoutes.js';
-import corporateRoute from './corporate-traing-Routes.js';
-import paymentRoutes from './paymentRoutes.js';
-import currencyRoutes from './currencyRoutes.js';
-import homeDisplayRoutes from './homeDisplayRoutes.js';
-import zoomRoutes from './zoom.js';
+import addJobPost from "./add-job-postRoutes.js";
+import assignCoorporateCourse from "./assign-course-coorporateRoutes.js";
+import assignedInstructor from "./assignInstructorRoute.js";
+import assignment from "./assignmentRoutes.js";
+import authRoutes from "./authRoutes.js";
+import blogRoutes from "./blogRoutes.js";
+import broucherRoute from "./broucherRoutes.js";
+import categoryRoutes from "./categoryRoutes.js";
+import certificateRoutes from "./certificateRoutes.js";
+import complaint from "./complaintRoute.js";
+import contactRoutes from "./contactRoutes.js";
+import corporateRoute from "./corporate-traing-Routes.js";
+import courseRoutes from "./courseRoutes.js";
+import currencyRoutes from "./currencyRoutes.js";
+import dashboardRoutes from "./dashboardRoutes.js";
+import enrollForm from "./enroll-formRoute.js";
+import enrolledRoutes from "./enrolledRoutes.js";
+import faqRoutes from "./faqRoutes.js";
+import feedback from "./feedbackRoutes.js";
+import freqRoutes from "./freqRoutes.js";
+import grievance from "./grievanceRoute.js";
+import homeDisplayRoutes from "./homeDisplayRoutes.js";
+import instructorRoutes from "./instructorRoutes.js";
+import jobPost from "./jobRoutes.js";
+import membership from "./membershipRoutes.js";
+import newsLetterRoute from "./newsletterRoutes.js";
+import onlineMeetingRoutes from "./online_meetingRoutes.js";
+import paymentRoutes from "./paymentRoutes.js";
+import placements from "./placementRoutes.js";
+import quizResponseRoutes from "./quizResponseRoutes.js";
+import quizes from "./quizRoutes.js";
+import recordedSessionRoutes from "./recorded-sessionRoutes.js";
+import resources from "./resourcesRoutes.js";
+import studentRoutes from "./studentRoutes.js";
+import subscriptionRoute from "./subscription-Routes.js";
+import trackSessionRoute from "./track-sessionsRoutes.js";
+import uploadRoutes from "./uploadRoutes.js";
+import zoomRoutes from "./zoom.js";
 
 const router = express.Router();
 
@@ -196,7 +197,7 @@ const moduleRoutes = [
   {
     path: "/zoom",
     route: zoomRoutes,
-  }
+  },
 ];
 
 moduleRoutes.forEach((route) => {
@@ -204,34 +205,40 @@ moduleRoutes.forEach((route) => {
 });
 
 // Add a test endpoint for diagnosing CORS issues
-router.get('/cors-test', (req, res) => {
+router.get("/cors-test", (req, res) => {
   // Record the origin of the request
-  const origin = req.headers.origin || 'No origin header';
-  
+  const origin = req.headers.origin || "No origin header";
+
   // Log all headers for debugging
   const headersObj = {};
-  Object.keys(req.headers).forEach(key => {
+  Object.keys(req.headers).forEach((key) => {
     headersObj[key] = req.headers[key];
   });
-  
-  logger.info('CORS Test Request Headers:', headersObj);
-  logger.info('Origin:', origin);
-  
+
+  logger.info("CORS Test Request Headers:", headersObj);
+  logger.info("Origin:", origin);
+
   // Log response headers for debugging
   const responseHeaders = res.getHeaders();
-  logger.info('CORS Test Response Headers:', responseHeaders);
-  
+  logger.info("CORS Test Response Headers:", responseHeaders);
+
   return res.status(200).json({
-    message: 'CORS test successful',
+    message: "CORS test successful",
     origin: origin,
     // Include the current CORS configuration
-    allowedOrigins: ENV_VARS.ALLOWED_ORIGINS.length > 0 
-      ? ENV_VARS.ALLOWED_ORIGINS 
-      : ['http://localhost:3000', 'http://localhost:3001', 'https://medh.co', 'https://www.medh.co'],
+    allowedOrigins:
+      ENV_VARS.ALLOWED_ORIGINS.length > 0
+        ? ENV_VARS.ALLOWED_ORIGINS
+        : [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "https://medh.co",
+            "https://www.medh.co",
+          ],
     environment: ENV_VARS.NODE_ENV,
     requestHeaders: headersObj,
     responseHeaders: responseHeaders,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 

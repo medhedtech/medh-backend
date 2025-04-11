@@ -1,16 +1,16 @@
-import createError from 'http-errors';
+// import createError from 'http-errors';
 
-const errorHandler = (err, req, res, next) => {
+const errorHandler = (err, req, res, _next) => {
   // Log error for debugging
   console.error(err.stack);
 
   // Handle Mongoose validation errors
-  if (err.name === 'ValidationError') {
-    const messages = Object.values(err.errors).map(val => val.message);
+  if (err.name === "ValidationError") {
+    const messages = Object.values(err.errors).map((val) => val.message);
     return res.status(400).json({
       success: false,
-      message: 'Validation Error',
-      errors: messages
+      message: "Validation Error",
+      errors: messages,
     });
   }
 
@@ -18,31 +18,31 @@ const errorHandler = (err, req, res, next) => {
   if (err.code === 11000) {
     return res.status(400).json({
       success: false,
-      message: 'Duplicate field value entered'
+      message: "Duplicate field value entered",
     });
   }
 
   // Handle JWT errors
-  if (err.name === 'JsonWebTokenError') {
+  if (err.name === "JsonWebTokenError") {
     return res.status(401).json({
       success: false,
-      message: 'Invalid token'
+      message: "Invalid token",
     });
   }
 
-  if (err.name === 'TokenExpiredError') {
+  if (err.name === "TokenExpiredError") {
     return res.status(401).json({
       success: false,
-      message: 'Token expired'
+      message: "Token expired",
     });
   }
 
   // Handle file upload errors
-  if (err.name === 'MulterError') {
+  if (err.name === "MulterError") {
     return res.status(400).json({
       success: false,
-      message: 'File upload error',
-      error: err.message
+      message: "File upload error",
+      error: err.message,
     });
   }
 
@@ -50,16 +50,16 @@ const errorHandler = (err, req, res, next) => {
   if (err.status) {
     return res.status(err.status).json({
       success: false,
-      message: err.message
+      message: err.message,
     });
   }
 
   // Handle other errors
   res.status(500).json({
     success: false,
-    message: 'Internal Server Error',
-    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    message: "Internal Server Error",
+    error: process.env.NODE_ENV === "development" ? err.message : undefined,
   });
 };
 
-export default errorHandler; 
+export default errorHandler;

@@ -1,6 +1,8 @@
-import AWS from 'aws-sdk';
-import { ENV_VARS } from './envVars.js';
-import logger from '../utils/logger.js';
+import AWS from "aws-sdk";
+
+import logger from "../utils/logger.js";
+
+import { ENV_VARS } from "./envVars.js";
 
 // Configure AWS
 AWS.config.update({
@@ -22,17 +24,17 @@ const ses = new AWS.SES();
 const testAWSConnection = async () => {
   try {
     await s3.listBuckets().promise();
-    logger.info('AWS S3 connection successful');
-    
+    logger.info("AWS S3 connection successful");
+
     await sns.listTopics().promise();
-    logger.info('AWS SNS connection successful');
-    
+    logger.info("AWS SNS connection successful");
+
     await ses.getSendQuota().promise();
-    logger.info('AWS SES connection successful');
-    
+    logger.info("AWS SES connection successful");
+
     return true;
   } catch (error) {
-    logger.error('AWS connection error:', error);
+    logger.error("AWS connection error:", error);
     return false;
   }
 };

@@ -80,7 +80,10 @@ export const updateJobForm = async (req, res) => {
     const updatedJobForm = await JobForm.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+      },
     );
 
     if (!updatedJobForm) {

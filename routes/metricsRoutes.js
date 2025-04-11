@@ -1,19 +1,20 @@
-import express from 'express';
+import express from "express";
+
 const router = express.Router();
-import * as metricsController from '../controllers/metricsController';
-import { apiLimiter } from '../middleware/rateLimiter';
+import metricsController from "../controllers/metricsController.js";
+import rateLimiter from "../middleware/rateLimiter.js";
 
 // Apply rate limiting to all metrics routes
-router.use(apiLimiter);
+router.use(rateLimiter);
 
 // API Metrics
-router.get('/api/metrics', metricsController.getMetrics);
+router.get("/api/metrics", metricsController.getMetrics);
 
 // Error Tracking
-router.get('/errors/stats', metricsController.getErrorStats);
-router.get('/errors/summary', metricsController.getErrorSummary);
+router.get("/errors/stats", metricsController.getErrorStats);
+router.get("/errors/summary", metricsController.getErrorSummary);
 
 // System Health
-router.get('/health', metricsController.getSystemHealth);
+router.get("/health", metricsController.getSystemHealth);
 
-export default router; 
+export default router;

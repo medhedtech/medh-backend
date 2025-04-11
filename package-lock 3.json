@@ -1010,9 +1010,7 @@
       "hasInstallScript": true,
       "license": "MIT",
       "optional": true,
-      "os": [
-        "darwin"
-      ],
+      "os": ["darwin"],
       "engines": {
         "node": "^8.16.0 || ^10.6.0 || >=11.0.0"
       }
@@ -1551,9 +1549,7 @@
       "version": "2.1.1",
       "resolved": "https://registry.npmjs.org/lambdafs/-/lambdafs-2.1.1.tgz",
       "integrity": "sha512-x5k8JcoJWkWLvCVBzrl4pzvkEHSgSBqFjg3Dpsc4AcTMq7oUMym4cL/gRTZ6VM4mUMY+M0dIbQ+V1c1tsqqanQ==",
-      "bundleDependencies": [
-        "tar-fs"
-      ],
+      "bundleDependencies": ["tar-fs"],
       "license": "MIT",
       "dependencies": {
         "tar-fs": "*"

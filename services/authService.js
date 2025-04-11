@@ -1,11 +1,17 @@
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
+import crypto from "crypto";
 
-import User, { USER_ROLES, USER_PERMISSIONS, USER_ADMIN_ROLES } from '../models/user-modal.js';
-import { ENV_VARS } from '../config/envVars.js';
-import logger from '../utils/logger.js';
-import EmailService from './emailService.js';
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+
+import { ENV_VARS } from "../config/envVars.js";
+import User, {
+  USER_ROLES,
+  USER_PERMISSIONS,
+  USER_ADMIN_ROLES,
+} from "../models/user-modal.js";
+import logger from "../utils/logger.js";
+
+import EmailService from "./emailService.js";
 
 /**
  * Authentication Service
@@ -29,13 +35,13 @@ class AuthService {
       password,
       agree_terms,
       status = "Active",
-      meta = { gender: "Male", upload_resume: [] }
+      meta = { gender: "Male", upload_resume: [] },
     } = userData;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      throw new Error('User already exists');
+      throw new Error("User already exists");
     }
 
     // Create user with default student role
@@ -47,18 +53,24 @@ class AuthService {
       agree_terms,
       role: [USER_ROLES.STUDENT],
       status: "Active",
-      meta: meta || { gender: "Male", upload_resume: [], age: "", age_group: "", category: "" },
+      meta: meta || {
+        gender: "Male",
+        upload_resume: [],
+        age: "",
+        age_group: "",
+        category: "",
+      },
       assign_department: [],
-      permissions: []
+      permissions: [],
     });
 
     // Hash the password before saving
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(password, salt);
-    
+
     // Log the user object before saving for debugging
-    logger.debug('User object before saving:', JSON.stringify(user, null, 2));
-    
+    logger.debug("User object before saving:", JSON.stringify(user, null, 2));
+
     // Save the user to database
     await user.save();
 
@@ -66,7 +78,7 @@ class AuthService {
     try {
       await this.sendWelcomeEmail(email, full_name, password);
     } catch (error) {
-      logger.error('Failed to send welcome email:', error);
+      logger.error("Failed to send welcome email:", error);
       // Continue even if email sending fails
     }
 
@@ -92,7 +104,7 @@ class AuthService {
           <li><strong>Password:</strong> ${password}</li>
         </ul>
         <p>Please keep this information secure. If you did not request this, please contact us immediately.</p>
-      `
+      `,
     };
 
     return this.emailService.sendEmail(mailOptions);
@@ -108,37 +120,38 @@ class AuthService {
     // Find the user by email
     const user = await User.findOne({ email });
     if (!user) {
-      throw new Error('Invalid credentials');
+      throw new Error("Invalid credentials");
     }
 
     // Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      throw new Error('Invalid credentials');
+      throw new Error("Invalid credentials");
     }
 
     // Generate JWT token
-    const payload = { 
-      user: { 
-        id: user.id, 
-        role: user.role 
-      } 
+    const payload = {
+      user: {
+        id: user.id,
+        role: user.role,
+      },
     };
-    
+
     const token = jwt.sign(payload, ENV_VARS.JWT_SECRET_KEY, {
-      expiresIn: "24h"
+      expiresIn: "24h",
     });
 
     // Determine permissions based on admin role
-    const permissions = user.admin_role === USER_ADMIN_ROLES.SUPER_ADMIN
-      ? Object.values(USER_PERMISSIONS)
-      : user.permissions || [];
+    const permissions =
+      user.admin_role === USER_ADMIN_ROLES.SUPER_ADMIN
+        ? Object.values(USER_PERMISSIONS)
+        : user.permissions || [];
 
     return {
       token,
       id: user.id,
       role: user.admin_role,
-      permissions
+      permissions,
     };
   }
 
@@ -148,7 +161,7 @@ class AuthService {
    * @returns {Array} List of users
    */
   async getAllUsers(filters = {}) {
-    return User.find(filters).select('-password');
+    return User.find(filters).select("-password");
   }
 
   /**
@@ -157,9 +170,9 @@ class AuthService {
    * @returns {Object} User data
    */
   async getUserById(userId) {
-    const user = await User.findById(userId).select('-password');
+    const user = await User.findById(userId).select("-password");
     if (!user) {
-      throw new Error('User not found');
+      throw new Error("User not found");
     }
     return user;
   }
@@ -174,13 +187,13 @@ class AuthService {
     const user = await User.findByIdAndUpdate(
       userId,
       { $set: updateData },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
-    
+
     if (!user) {
-      throw new Error('User not found');
+      throw new Error("User not found");
     }
-    
+
     return user;
   }
 
@@ -195,17 +208,17 @@ class AuthService {
     if (updateData.password) {
       delete updateData.password;
     }
-    
+
     const user = await User.findOneAndUpdate(
       { email },
       { $set: updateData },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
-    
+
     if (!user) {
-      throw new Error('User not found');
+      throw new Error("User not found");
     }
-    
+
     return user;
   }
 
@@ -216,11 +229,11 @@ class AuthService {
    */
   async deleteUser(userId) {
     const user = await User.findByIdAndDelete(userId);
-    
+
     if (!user) {
-      throw new Error('User not found');
+      throw new Error("User not found");
     }
-    
+
     return true;
   }
 
@@ -231,15 +244,15 @@ class AuthService {
    */
   async toggleUserStatus(userId) {
     const user = await User.findById(userId);
-    
+
     if (!user) {
-      throw new Error('User not found');
+      throw new Error("User not found");
     }
-    
+
     // Toggle the status
     user.status = user.status === "Active" ? "Inactive" : "Active";
     await user.save();
-    
+
     return user;
   }
 
@@ -252,35 +265,35 @@ class AuthService {
     // Find the user
     const user = await User.findOne({ email });
     if (!user) {
-      throw new Error('User not found');
+      throw new Error("User not found");
     }
-    
+
     // Generate reset token
-    const resetToken = crypto.randomBytes(20).toString('hex');
+    const resetToken = crypto.randomBytes(20).toString("hex");
     const resetPasswordToken = crypto
-      .createHash('sha256')
+      .createHash("sha256")
       .update(resetToken)
-      .digest('hex');
-    
+      .digest("hex");
+
     // Set token expiry time (1 hour)
     const resetPasswordExpires = Date.now() + 3600000; // 1 hour
-    
+
     // Update user with reset token info
     user.resetPasswordToken = resetPasswordToken;
     user.resetPasswordExpires = resetPasswordExpires;
     await user.save();
-    
+
     // Generate temporary password
-    const tempPassword = crypto.randomBytes(4).toString('hex');
-    
+    const tempPassword = crypto.randomBytes(4).toString("hex");
+
     // Hash the temporary password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(tempPassword, salt);
-    
+
     // Update user password with temporary password
     user.password = hashedPassword;
     await user.save();
-    
+
     // Send email with temporary password
     const mailOptions = {
       from: process.env.EMAIL_USER,
@@ -293,15 +306,15 @@ class AuthService {
         <p>Please use this temporary password to log in, then change your password immediately.</p>
         <p>This temporary password will expire in 1 hour.</p>
         <p>If you did not request this, please ignore this email and your password will remain unchanged.</p>
-      `
+      `,
     };
-    
+
     await this.emailService.sendEmail(mailOptions);
-    
+
     return true;
   }
 }
 
 // Create and export service instance
 const authService = new AuthService();
-export default authService; 
+export default authService;

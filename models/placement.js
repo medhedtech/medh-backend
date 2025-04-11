@@ -16,7 +16,7 @@ const placementSchema = new mongoose.Schema(
     area_of_interest: { type: String },
     message: { type: String },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model("Placement", placementSchema);

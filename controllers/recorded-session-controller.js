@@ -1,8 +1,8 @@
+import Course from "../models/course-model.js";
 import EnrolledCourse from "../models/enrolled-courses-model.js";
+import Instructor from "../models/instructor-model.js";
 import RecordedSession from "../models/recorded-sessions-model.js";
 import Student from "../models/student-model.js";
-import Course from "../models/course-model.js";
-import Instructor from "../models/instructor-model.js";
 
 // Get Recorded Sessions for a student based on enrolled courses
 export const getRecordedSessionsByStudent = async (req, res) => {
@@ -17,7 +17,7 @@ export const getRecordedSessionsByStudent = async (req, res) => {
 
     // Get the list of courses the student is enrolled in
     const enrolledCourses = await EnrolledCourse.find({ student_id }).populate(
-      "course_id"
+      "course_id",
     );
 
     if (!enrolledCourses || enrolledCourses.length === 0) {
@@ -56,12 +56,12 @@ export const createRecordedSession = async (req, res) => {
     const recordedSession = await RecordedSession.create(req.body);
     res.status(201).json({
       message: "Recorded session created successfully",
-      recordedSession
+      recordedSession,
     });
   } catch (error) {
     res.status(500).json({
       message: "Error creating recorded session",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -70,23 +70,23 @@ export const createRecordedSession = async (req, res) => {
 export const getRecordedSessionById = async (req, res) => {
   try {
     const recordedSession = await RecordedSession.findById(req.params.id)
-      .populate('course')
-      .populate('instructor');
-    
+      .populate("course")
+      .populate("instructor");
+
     if (!recordedSession) {
       return res.status(404).json({
-        message: "Recorded session not found"
+        message: "Recorded session not found",
       });
     }
-    
+
     res.status(200).json({
       message: "Recorded session fetched successfully",
-      recordedSession
+      recordedSession,
     });
   } catch (error) {
     res.status(500).json({
       message: "Error fetching recorded session",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -97,23 +97,27 @@ export const updateRecordedSession = async (req, res) => {
     const recordedSession = await RecordedSession.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true }
-    ).populate('course').populate('instructor');
-    
+      {
+        new: true,
+      },
+    )
+      .populate("course")
+      .populate("instructor");
+
     if (!recordedSession) {
       return res.status(404).json({
-        message: "Recorded session not found"
+        message: "Recorded session not found",
       });
     }
-    
+
     res.status(200).json({
       message: "Recorded session updated successfully",
-      recordedSession
+      recordedSession,
     });
   } catch (error) {
     res.status(500).json({
       message: "Error updating recorded session",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -121,21 +125,23 @@ export const updateRecordedSession = async (req, res) => {
 // Delete recorded session by ID (for instructor/admin)
 export const deleteRecordedSession = async (req, res) => {
   try {
-    const recordedSession = await RecordedSession.findByIdAndDelete(req.params.id);
-    
+    const recordedSession = await RecordedSession.findByIdAndDelete(
+      req.params.id,
+    );
+
     if (!recordedSession) {
       return res.status(404).json({
-        message: "Recorded session not found"
+        message: "Recorded session not found",
       });
     }
-    
+
     res.status(200).json({
-      message: "Recorded session deleted successfully"
+      message: "Recorded session deleted successfully",
     });
   } catch (error) {
     res.status(500).json({
       message: "Error deleting recorded session",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -144,17 +150,17 @@ export const getRecordedSessionsByCourse = async (req, res) => {
   try {
     const { courseId } = req.params;
     const recordedSessions = await RecordedSession.find({ course: courseId })
-      .populate('instructor')
-      .sort('-createdAt');
-    
+      .populate("instructor")
+      .sort("-createdAt");
+
     res.status(200).json({
       message: "Recorded sessions fetched successfully",
-      recordedSessions
+      recordedSessions,
     });
   } catch (error) {
     res.status(500).json({
       message: "Error fetching recorded sessions",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -162,18 +168,20 @@ export const getRecordedSessionsByCourse = async (req, res) => {
 export const getRecordedSessionsByInstructor = async (req, res) => {
   try {
     const { instructorId } = req.params;
-    const recordedSessions = await RecordedSession.find({ instructor: instructorId })
-      .populate('course')
-      .sort('-createdAt');
-    
+    const recordedSessions = await RecordedSession.find({
+      instructor: instructorId,
+    })
+      .populate("course")
+      .sort("-createdAt");
+
     res.status(200).json({
       message: "Recorded sessions fetched successfully",
-      recordedSessions
+      recordedSessions,
     });
   } catch (error) {
     res.status(500).json({
       message: "Error fetching recorded sessions",
-      error: error.message
+      error: error.message,
     });
   }
 };

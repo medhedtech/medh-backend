@@ -1,5 +1,6 @@
-import ExcelJS from 'exceljs';
-import logger from '../utils/logger.js';
+import ExcelJS from "exceljs";
+
+import logger from "../utils/logger.js";
 
 class ExcelService {
   constructor() {
@@ -15,43 +16,43 @@ class ExcelService {
   async jsonToExcel(data, options = {}) {
     try {
       const {
-        sheetName = 'Sheet1',
+        sheetName = "Sheet1",
         headers = Object.keys(data[0] || {}),
         headerStyle = {
           font: { bold: true },
           fill: {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFE0E0E0' }
-          }
-        }
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFE0E0E0" },
+          },
+        },
       } = options;
 
       const worksheet = this.workbook.addWorksheet(sheetName);
 
       // Add headers
-      worksheet.columns = headers.map(header => ({
+      worksheet.columns = headers.map((header) => ({
         header,
         key: header,
-        width: Math.max(header.length + 2, 15)
+        width: Math.max(header.length + 2, 15),
       }));
 
       // Style headers
-      worksheet.getRow(1).eachCell(cell => {
+      worksheet.getRow(1).eachCell((cell) => {
         cell.style = headerStyle;
       });
 
       // Add data
-      data.forEach(row => {
+      data.forEach((row) => {
         const rowData = {};
-        headers.forEach(header => {
+        headers.forEach((header) => {
           rowData[header] = row[header];
         });
         worksheet.addRow(rowData);
       });
 
       // Auto-fit columns
-      worksheet.columns.forEach(column => {
+      worksheet.columns.forEach((column) => {
         const maxLength = column.values.reduce((max, value) => {
           const valueLength = value ? String(value).length : 0;
           return Math.max(max, valueLength);
@@ -61,13 +62,13 @@ class ExcelService {
 
       return await this.workbook.xlsx.writeBuffer();
     } catch (error) {
-      logger.error('Excel Generation Error', {
+      logger.error("Excel Generation Error", {
         error: {
           message: error.message,
-          stack: error.stack
-        }
+          stack: error.stack,
+        },
       });
-      throw new Error('Failed to generate Excel file');
+      throw new Error("Failed to generate Excel file");
     }
   }
 
@@ -79,11 +80,7 @@ class ExcelService {
    */
   async excelToJson(buffer, options = {}) {
     try {
-      const {
-        sheetName = 'Sheet1',
-        headerRow = 1,
-        dataStartRow = 2
-      } = options;
+      const { sheetName = "Sheet1", headerRow = 1, dataStartRow = 2 } = options;
 
       await this.workbook.xlsx.load(buffer);
       const worksheet = this.workbook.getWorksheet(sheetName);
@@ -113,13 +110,13 @@ class ExcelService {
 
       return data;
     } catch (error) {
-      logger.error('Excel Parsing Error', {
+      logger.error("Excel Parsing Error", {
         error: {
           message: error.message,
-          stack: error.stack
-        }
+          stack: error.stack,
+        },
       });
-      throw new Error('Failed to parse Excel file');
+      throw new Error("Failed to parse Excel file");
     }
   }
 
@@ -155,55 +152,57 @@ class ExcelService {
   async createTemplate(template) {
     try {
       const {
-        sheetName = 'Template',
+        sheetName = "Template",
         headers = [],
-        validations = {}
+        validations = {},
       } = template;
 
       const worksheet = this.workbook.addWorksheet(sheetName);
 
       // Add headers with styling
-      worksheet.columns = headers.map(header => ({
+      worksheet.columns = headers.map((header) => ({
         header: header.name,
         key: header.key,
-        width: Math.max(header.name.length + 2, 15)
+        width: Math.max(header.name.length + 2, 15),
       }));
 
       // Style headers
-      worksheet.getRow(1).eachCell(cell => {
+      worksheet.getRow(1).eachCell((cell) => {
         cell.style = {
           font: { bold: true },
           fill: {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFE0E0E0' }
-          }
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFE0E0E0" },
+          },
         };
       });
 
       // Add data validations
       Object.entries(validations).forEach(([column, validation]) => {
-        const colNumber = headers.findIndex(h => h.key === column) + 1;
+        const colNumber = headers.findIndex((h) => h.key === column) + 1;
         if (colNumber > 0) {
-          worksheet.getColumn(colNumber).eachCell({ includeEmpty: true }, (cell, rowNumber) => {
-            if (rowNumber > 1) {
-              cell.dataValidation = validation;
-            }
-          });
+          worksheet
+            .getColumn(colNumber)
+            .eachCell({ includeEmpty: true }, (cell, rowNumber) => {
+              if (rowNumber > 1) {
+                cell.dataValidation = validation;
+              }
+            });
         }
       });
 
       return await this.workbook.xlsx.writeBuffer();
     } catch (error) {
-      logger.error('Template Creation Error', {
+      logger.error("Template Creation Error", {
         error: {
           message: error.message,
-          stack: error.stack
-        }
+          stack: error.stack,
+        },
       });
-      throw new Error('Failed to create Excel template');
+      throw new Error("Failed to create Excel template");
     }
   }
 }
 
-export default new ExcelService(); 
+export default new ExcelService();

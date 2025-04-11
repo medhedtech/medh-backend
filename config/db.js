@@ -1,15 +1,19 @@
 import mongoose from "mongoose";
-import { ENV_VARS } from "./envVars.js";
+
 import logger from "../utils/logger.js";
 
+import { ENV_VARS } from "./envVars.js";
+
 // Set mongoose options
-mongoose.set('strictQuery', false);
+mongoose.set("strictQuery", false);
 
 // MongoDB connection with retries
 const connectDB = async (retryCount = 0, maxRetries = 5) => {
   try {
     if (!ENV_VARS.MONGODB_URI) {
-      throw new Error('MongoDB connection URI is not defined in environment variables');
+      throw new Error(
+        "MongoDB connection URI is not defined in environment variables",
+      );
     }
 
     // Connection options with increased timeouts
@@ -23,37 +27,48 @@ const connectDB = async (retryCount = 0, maxRetries = 5) => {
       heartbeatFrequencyMS: 10000, // Add heartbeat frequency
       retryWrites: true, // Enable retry for write operations
       retryReads: true, // Enable retry for read operations
-      w: 'majority', // Write concern for better consistency
-      readPreference: 'secondaryPreferred', // Read preference for better performance
+      w: "majority", // Write concern for better consistency
+      readPreference: "secondaryPreferred", // Read preference for better performance
     };
 
     // Connect to MongoDB
     const conn = await mongoose.connect(ENV_VARS.MONGODB_URI, options);
-    
+
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
 
     // Set up mongoose debug mode conditionally based on environment variable
-    if (ENV_VARS.NODE_ENV === 'development' && process.env.MONGOOSE_DEBUG === 'true') {
-      mongoose.set('debug', true);
-      logger.info('Mongoose debugging enabled.');
+    if (
+      ENV_VARS.NODE_ENV === "development" &&
+      process.env.MONGOOSE_DEBUG === "true"
+    ) {
+      mongoose.set("debug", true);
+      logger.info("Mongoose debugging enabled.");
     }
 
     // Connection Event Listeners
     conn.connection.on("connected", () => logger.info("Mongoose connected"));
-    conn.connection.on("error", (err) => logger.error("Mongoose connection error:", err));
-    conn.connection.on("disconnected", () => logger.warn("Mongoose disconnected"));
-    conn.connection.on("reconnected", () => logger.info("Mongoose reconnected"));
+    conn.connection.on("error", (err) =>
+      logger.error("Mongoose connection error:", err),
+    );
+    conn.connection.on("disconnected", () =>
+      logger.warn("Mongoose disconnected"),
+    );
+    conn.connection.on("reconnected", () =>
+      logger.info("Mongoose reconnected"),
+    );
 
     return conn;
   } catch (err) {
     logger.error(`MongoDB connection error: ${err.message}`);
-    
+
     // Implement retry logic with exponential backoff
     if (retryCount < maxRetries) {
       const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 30000); // Exponential backoff with max 30s
-      logger.info(`Retrying MongoDB connection in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`);
-      
-      return new Promise(resolve => {
+      logger.info(
+        `Retrying MongoDB connection in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`,
+      );
+
+      return new Promise((resolve) => {
         setTimeout(() => {
           resolve(connectDB(retryCount + 1, maxRetries));
         }, retryDelay);
@@ -69,7 +84,8 @@ const connectDB = async (retryCount = 0, maxRetries = 5) => {
 
 // Graceful shutdown handling
 process.on("SIGINT", async () => {
-  if (mongoose.connection.readyState !== 0) { // 0 = disconnected
+  if (mongoose.connection.readyState !== 0) {
+    // 0 = disconnected
     await mongoose.connection.close();
     logger.info("MongoDB connection closed due to app termination");
   }

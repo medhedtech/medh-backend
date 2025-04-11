@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { validationResult } from 'express-validator';
+import { validationResult } from "express-validator";
+import mongoose from "mongoose";
 
 /**
  * Middleware to handle express-validator validation results
@@ -13,10 +13,10 @@ const validateRequest = (req, res, next) => {
   if (!errors.isEmpty()) {
     return res.status(400).json({
       success: false,
-      errors: errors.array().map(error => ({
+      errors: errors.array().map((error) => ({
         field: error.path,
-        message: error.msg
-      }))
+        message: error.msg,
+      })),
     });
   }
   next();
@@ -30,18 +30,18 @@ const validateRequest = (req, res, next) => {
 const validateObjectId = (paramName) => {
   return (req, res, next) => {
     const id = req.params[paramName];
-    
+
     if (!id) {
       return res.status(400).json({
         success: false,
-        message: `${paramName} is required`
+        message: `${paramName} is required`,
       });
     }
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid ${paramName} format`
+        message: `Invalid ${paramName} format`,
       });
     }
 
@@ -57,11 +57,11 @@ const validateObjectId = (paramName) => {
 const validateDate = (paramName) => {
   return (req, res, next) => {
     const date = req.params[paramName];
-    
+
     if (!date) {
       return res.status(400).json({
         success: false,
-        message: `${paramName} is required`
+        message: `${paramName} is required`,
       });
     }
 
@@ -69,7 +69,7 @@ const validateDate = (paramName) => {
     if (isNaN(parsedDate.getTime())) {
       return res.status(400).json({
         success: false,
-        message: `Invalid ${paramName} format. Please provide a valid date.`
+        message: `Invalid ${paramName} format. Please provide a valid date.`,
       });
     }
 
@@ -87,18 +87,18 @@ const validateDate = (paramName) => {
 const validateNumberRange = (paramName, min, max) => {
   return (req, res, next) => {
     const value = Number(req.params[paramName]);
-    
+
     if (isNaN(value)) {
       return res.status(400).json({
         success: false,
-        message: `${paramName} must be a number`
+        message: `${paramName} must be a number`,
       });
     }
 
     if (value < min || value > max) {
       return res.status(400).json({
         success: false,
-        message: `${paramName} must be between ${min} and ${max}`
+        message: `${paramName} must be between ${min} and ${max}`,
       });
     }
 
@@ -116,18 +116,18 @@ const validateNumberRange = (paramName, min, max) => {
 const validatePattern = (paramName, pattern, message) => {
   return (req, res, next) => {
     const value = req.params[paramName];
-    
+
     if (!value) {
       return res.status(400).json({
         success: false,
-        message: `${paramName} is required`
+        message: `${paramName} is required`,
       });
     }
 
     if (!pattern.test(value)) {
       return res.status(400).json({
         success: false,
-        message: message || `Invalid ${paramName} format`
+        message: message || `Invalid ${paramName} format`,
       });
     }
 
@@ -140,5 +140,5 @@ export {
   validateObjectId,
   validateDate,
   validateNumberRange,
-  validatePattern
-}; 
+  validatePattern,
+};

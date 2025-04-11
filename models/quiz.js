@@ -36,7 +36,7 @@ const quizSchema = new mongoose.Schema(
     passing_percentage: { type: String },
     quiz_time: { type: Number, required: true, default: 300 },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model("Quiz", quizSchema);

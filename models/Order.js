@@ -1,50 +1,50 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const orderSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: true
+      ref: "User",
+      required: true,
     },
     razorpayOrderId: {
       type: String,
-      required: true
+      required: true,
     },
     razorpayPaymentId: {
-      type: String
+      type: String,
     },
     razorpaySignature: {
-      type: String
+      type: String,
     },
     amount: {
       type: Number,
-      required: true
+      required: true,
     },
     currency: {
       type: String,
-      default: 'INR'
+      default: "INR",
     },
     status: {
       type: String,
-      enum: ['created', 'attempted', 'paid', 'failed', 'refunded'],
-      default: 'created'
+      enum: ["created", "attempted", "paid", "failed", "refunded"],
+      default: "created",
     },
     notes: {
       type: Object,
-      default: {}
+      default: {},
     },
     receipt: {
-      type: String
+      type: String,
     },
     productInfo: {
       type: Object,
-      required: true
-    }
+      required: true,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-const Order = mongoose.model('Order', orderSchema);
+const Order = mongoose.model("Order", orderSchema);
 
-export default Order; 
+export default Order;

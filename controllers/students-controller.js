@@ -96,7 +96,7 @@ export const updateStudent = async (req, res) => {
         status,
         upload_image,
       },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!updatedStudent) {

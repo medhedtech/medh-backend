@@ -11,7 +11,7 @@ const feedbackSchema = new mongoose.Schema(
       default: "course",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model("Feedback", feedbackSchema);

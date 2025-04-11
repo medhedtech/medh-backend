@@ -39,7 +39,7 @@
               }
             ],
             "body": {
-              "mode": "raw", 
+              "mode": "raw",
               "raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"Test@123\",\n    \"full_name\": \"Test User\",\n    \"phone_number\": \"9876543210\",\n    \"agree_terms\": true,\n    \"role\": [\"student\"],\n    \"meta\": {\n        \"gender\": \"Male\",\n        \"upload_resume\": []\n    }\n}"
             },
             "url": {
@@ -193,7 +193,7 @@
         {
           "name": "Get Enrolled",
           "request": {
-            "method": "GET", 
+            "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/enrolled/get",
@@ -647,4 +647,4 @@
       ]
     }
   ]
-} 
+}

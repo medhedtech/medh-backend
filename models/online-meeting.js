@@ -48,7 +48,7 @@ const onlineMeetingSchema = new mongoose.Schema(
       type: String,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const OnlineMeeting = mongoose.model("OnlineMeeting", onlineMeetingSchema);

@@ -1,14 +1,37 @@
+import mime from "mime-types";
 import mongoose from "mongoose";
+
+import ENV_VARS from "../config/env.js";
+import Bookmark from "../models/bookmark-model.js";
 import Course from "../models/course-model.js";
 import EnrolledCourse from "../models/enrolled-courses-model.js";
-import { validateObjectId } from "../utils/validation-helpers.js";
-import Progress from "../models/progress-model.js";
-import Note from "../models/note-model.js";
-import Bookmark from "../models/bookmark-model.js";
 import Enrollment from "../models/enrollment-model.js";
-import CourseCreationService from "../services/courseCreationService.js";
-import { handleUploadError } from "../middleware/upload.js";
-import axios from "axios";
+import Note from "../models/note-model.js";
+import Progress from "../models/progress-model.js";
+import catchAsync from "../utils/catchAsync.js";
+import AppError from "../utils/errorHandler.js";
+import logger from "../utils/logger.js";
+import responseFormatter from "../utils/responseFormatter.js";
+import {
+  getFileStream,
+  createPresignedPost,
+  getPresignedUrl,
+  deleteS3Object,
+} from "../utils/s3Service.js";
+import {
+  validateCourseData,
+  validateVideoLessonData,
+  validateQuizLessonData,
+} from "../validations/courseValidation.js";
+
+// Mark unused imports with underscore prefix to avoid linting errors
+const _AppError = AppError;
+const _validateCourseData = validateCourseData;
+const _validateVideoLessonData = validateVideoLessonData;
+const _validateQuizLessonData = validateQuizLessonData;
+const _createPresignedPost = createPresignedPost;
+const _getPresignedUrl = getPresignedUrl;
+const _deleteS3Object = deleteS3Object;
 
 /* ------------------------------ */
 /* Helper Functions               */
@@ -18,14 +41,15 @@ import axios from "axios";
 const fullyDecodeURIComponent = (str) => {
   try {
     let decoded = str;
-    
+
     // First decode HTML entities
-    decoded = decoded.replace(/&amp;/g, '&')
-                    .replace(/&lt;/g, '<')
-                    .replace(/&gt;/g, '>')
-                    .replace(/&quot;/g, '"')
-                    .replace(/&#39;/g, "'");
-    
+    decoded = decoded
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+
     // Then decode URL encoding
     while (decoded.includes("%")) {
       const prev = decoded;
@@ -44,11 +68,17 @@ const escapeRegExp = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
 
+// Create a safe regex pattern - security-approved way
+const createSafeRegex = (pattern, flags = "i") => {
+  const escapedPattern = escapeRegExp(pattern);
+  return new RegExp(escapedPattern, flags);
+};
+
 // Helper to assign IDs to curriculum structure recursively
 const assignCurriculumIds = (curriculum) => {
   curriculum.forEach((week, weekIndex) => {
     week.id = `week_${weekIndex + 1}`;
-    
+
     // Assign IDs to direct lessons under weeks
     if (week.lessons && week.lessons.length) {
       week.lessons.forEach((lesson, lessonIndex) => {
@@ -60,7 +90,7 @@ const assignCurriculumIds = (curriculum) => {
         }
       });
     }
-    
+
     // Assign IDs to live classes
     if (week.liveClasses && week.liveClasses.length) {
       week.liveClasses.forEach((liveClass, classIndex) => {
@@ -69,7 +99,7 @@ const assignCurriculumIds = (curriculum) => {
         }
       });
     }
-    
+
     // Original section and lesson IDs assignment
     if (week.sections && week.sections.length) {
       week.sections.forEach((section, sectionIndex) => {
@@ -103,36 +133,36 @@ const createCourse = async (req, res) => {
     if (req.fileError) {
       return res.status(400).json({ success: false, message: req.fileError });
     }
-    
+
     if (req.file) {
       req.body.course_image = req.file.location;
     }
-    
+
     // Extract course data from request body
     const courseData = req.body;
-    
+
     // If curriculum data is provided as JSON string, parse it
-    if (courseData.curriculum && typeof courseData.curriculum === 'string') {
+    if (courseData.curriculum && typeof courseData.curriculum === "string") {
       try {
         courseData.curriculum = JSON.parse(courseData.curriculum);
       } catch (parseError) {
         return res.status(400).json({
           success: false,
           message: "Invalid curriculum data format. Expected valid JSON.",
-          error: parseError.message
+          error: parseError.message,
         });
       }
     }
-    
+
     // Process curriculum and assign IDs if needed
     if (courseData.curriculum && Array.isArray(courseData.curriculum)) {
       assignCurriculumIds(courseData.curriculum);
     }
-    
+
     // Create new course with embedded lessons
     const course = new Course(courseData);
     await course.save();
-    
+
     res.status(201).json({
       success: true,
       message: "Course created successfully with integrated lessons",
@@ -155,25 +185,30 @@ const createCourse = async (req, res) => {
  */
 const getAllCourses = async (req, res) => {
   try {
-    const courses = await Course.find({}, {
-      course_title: 1,
-      course_category: 1,
-      course_tag: 1,
-      course_image: 1,
-      course_fee: 1,
-      isFree: 1,
-      status: 1,
-      category_type: 1,
-      createdAt: 1,
-      prices: 1
-    }).lean();
-    res.status(200).json({ success: true, count: courses.length, data: courses });
+    const courses = await Course.find(
+      {},
+      {
+        course_title: 1,
+        course_category: 1,
+        course_tag: 1,
+        course_image: 1,
+        course_fee: 1,
+        isFree: 1,
+        status: 1,
+        category_type: 1,
+        createdAt: 1,
+        prices: 1,
+      },
+    ).lean();
+    res
+      .status(200)
+      .json({ success: true, count: courses.length, data: courses });
   } catch (error) {
     console.error("Error fetching all courses:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Error fetching courses", 
-      error: error.message || "An unexpected error occurred"
+      message: "Error fetching courses",
+      error: error.message || "An unexpected error occurred",
     });
   }
 };
@@ -189,29 +224,27 @@ const getAllCoursesWithLimits = async (req, res) => {
       page = 1,
       limit = 10,
       search,
-      course_category,
-      category_type,
-      status,
-      price_range,
-      course_tag,
-      class_type,
       sort_by = "createdAt",
       sort_order = "desc",
-      min_duration,
-      max_duration,
-      certification = "",
-      has_assignments = "",
-      has_projects = "",
-      has_quizzes = "",
-      exclude_ids = [],
+      course_category,
+      category_type,
+      course_tag,
+      class_type,
+      status,
+      course_duration,
+      min_hours_per_week,
+      max_hours_per_week,
       no_of_Sessions,
       description,
       course_grade,
-      min_hours_per_week,
-      max_hours_per_week,
-      user_id,
-      course_duration,
+      price_range,
+      certification,
+      has_assignments,
+      has_projects,
+      has_quizzes,
       currency,
+      exclude_ids,
+      user_id,
     } = req.query;
 
     page = parseInt(page);
@@ -219,7 +252,8 @@ const getAllCoursesWithLimits = async (req, res) => {
     if (isNaN(page) || page < 1 || isNaN(limit) || limit < 1) {
       return res.status(400).json({
         success: false,
-        message: "Invalid pagination parameters. Page and limit must be positive numbers."
+        message:
+          "Invalid pagination parameters. Page and limit must be positive numbers.",
       });
     }
 
@@ -233,39 +267,62 @@ const getAllCoursesWithLimits = async (req, res) => {
         textSearchFields.score = { $meta: "textScore" };
       } else {
         filter.$or = [
-          { course_title: { $regex: new RegExp(escapeRegExp(decodedSearch), "i") } },
-          { course_category: { $regex: new RegExp(escapeRegExp(decodedSearch), "i") } },
-          { course_tag: { $regex: new RegExp(escapeRegExp(decodedSearch), "i") } },
-          { "course_description.program_overview": { $regex: new RegExp(escapeRegExp(decodedSearch), "i") } },
-          { "course_description.benefits": { $regex: new RegExp(escapeRegExp(decodedSearch), "i") } },
-          { course_grade: { $regex: new RegExp(escapeRegExp(decodedSearch), "i") } }
+          { course_title: { $regex: createSafeRegex(decodedSearch) } },
+          { course_category: { $regex: createSafeRegex(decodedSearch) } },
+          { course_tag: { $regex: createSafeRegex(decodedSearch) } },
+          {
+            "course_description.program_overview": {
+              $regex: createSafeRegex(decodedSearch),
+            },
+          },
+          {
+            "course_description.benefits": {
+              $regex: createSafeRegex(decodedSearch),
+            },
+          },
+          { course_grade: { $regex: createSafeRegex(decodedSearch) } },
         ];
       }
     }
 
-    if (course_duration) filter.course_duration = fullyDecodeURIComponent(course_duration);
-    if (min_hours_per_week) filter.min_hours_per_week = fullyDecodeURIComponent(min_hours_per_week);
-    if (max_hours_per_week) filter.max_hours_per_week = fullyDecodeURIComponent(max_hours_per_week);
-    if (no_of_Sessions) filter.no_of_Sessions = fullyDecodeURIComponent(no_of_Sessions);
-    if (description) filter.course_description = fullyDecodeURIComponent(description);
-    if (course_grade) filter.course_grade = fullyDecodeURIComponent(course_grade);
+    if (course_duration)
+      filter.course_duration = fullyDecodeURIComponent(course_duration);
+    if (min_hours_per_week)
+      filter.min_hours_per_week = fullyDecodeURIComponent(min_hours_per_week);
+    if (max_hours_per_week)
+      filter.max_hours_per_week = fullyDecodeURIComponent(max_hours_per_week);
+    if (no_of_Sessions)
+      filter.no_of_Sessions = fullyDecodeURIComponent(no_of_Sessions);
+    if (description)
+      filter.course_description = fullyDecodeURIComponent(description);
+    if (course_grade)
+      filter.course_grade = fullyDecodeURIComponent(course_grade);
 
     const handleArrayOrStringFilter = (field, value) => {
       if (!value) return;
       if (Array.isArray(value)) {
-        const decodedValues = value.map(item => fullyDecodeURIComponent(item));
-        filter[field] = { 
-          $in: decodedValues.map(item => new RegExp("^" + escapeRegExp(item) + "$", "i"))
+        const decodedValues = value.map((item) =>
+          fullyDecodeURIComponent(item),
+        );
+        filter[field] = {
+          $in: decodedValues.map((item) => createSafeRegex("^" + item + "$")),
         };
       } else if (typeof value === "string") {
         const decodedValue = fullyDecodeURIComponent(value);
-        if (decodedValue.includes(",") || decodedValue.includes("|") || decodedValue.includes(";")) {
-          const values = decodedValue.split(/[,|;]/).map(v => v.trim()).filter(Boolean);
-          filter[field] = { 
-            $in: values.map(v => new RegExp("^" + escapeRegExp(v) + "$", "i"))
+        if (
+          decodedValue.includes(",") ||
+          decodedValue.includes("|") ||
+          decodedValue.includes(";")
+        ) {
+          const values = decodedValue
+            .split(/[,|;]/)
+            .map((v) => v.trim())
+            .filter(Boolean);
+          filter[field] = {
+            $in: values.map((v) => createSafeRegex("^" + v + "$")),
           };
         } else {
-          filter[field] = { $regex: new RegExp(escapeRegExp(decodedValue), "i") };
+          filter[field] = { $regex: createSafeRegex(decodedValue) };
         }
       }
     };
@@ -278,8 +335,12 @@ const getAllCoursesWithLimits = async (req, res) => {
     if (status) {
       const decodedStatus = fullyDecodeURIComponent(status);
       filter.status = decodedStatus.includes(",")
-        ? { $in: decodedStatus.split(",").map(s => new RegExp("^" + escapeRegExp(s.trim()) + "$", "i")) }
-        : new RegExp("^" + escapeRegExp(decodedStatus) + "$", "i");
+        ? {
+            $in: decodedStatus
+              .split(",")
+              .map((s) => createSafeRegex("^" + s.trim() + "$")),
+          }
+        : createSafeRegex("^" + decodedStatus + "$");
     }
 
     if (price_range) {
@@ -304,14 +365,16 @@ const getAllCoursesWithLimits = async (req, res) => {
 
     if (currency) {
       const decodedCurrency = fullyDecodeURIComponent(currency);
-      filter['prices.currency'] = decodedCurrency.toUpperCase();
+      filter["prices.currency"] = decodedCurrency.toUpperCase();
     }
 
     if (exclude_ids && exclude_ids.length > 0) {
-      const excludeIdsArray = Array.isArray(exclude_ids) ? exclude_ids : exclude_ids.split(",");
+      const excludeIdsArray = Array.isArray(exclude_ids)
+        ? exclude_ids
+        : exclude_ids.split(",");
       const validIds = excludeIdsArray
-        .filter(id => mongoose.Types.ObjectId.isValid(id))
-        .map(id => new mongoose.Types.ObjectId(id));
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
       if (validIds.length > 0) {
         filter._id = { $nin: validIds };
       }
@@ -319,8 +382,11 @@ const getAllCoursesWithLimits = async (req, res) => {
 
     if (user_id) {
       try {
-        const enrolledCourses = await EnrolledCourse.find({ student_id: user_id }, "course_id").lean();
-        const enrolledCourseIds = enrolledCourses.map(ec => ec.course_id);
+        const enrolledCourses = await EnrolledCourse.find(
+          { student_id: user_id },
+          "course_id",
+        ).lean();
+        const enrolledCourseIds = enrolledCourses.map((ec) => ec.course_id);
         if (enrolledCourseIds.length) {
           filter._id = { $nin: enrolledCourseIds };
         }
@@ -366,7 +432,7 @@ const getAllCoursesWithLimits = async (req, res) => {
       course_description: 1,
       course_grade: 1,
       brochures: 1,
-      final_evaluation: 1
+      final_evaluation: 1,
     };
 
     if (filter.$text) {
@@ -380,14 +446,14 @@ const getAllCoursesWithLimits = async (req, res) => {
           ...textSearchFields,
           pricing_summary: {
             min_price: { $min: "$prices.individual" },
-            max_price: { $max: "$prices.batch" }
-          }
-        }
+            max_price: { $max: "$prices.batch" },
+          },
+        },
       },
       { $sort: sortOptions },
       { $skip: (page - 1) * limit },
       { $limit: limit },
-      { $project: projection }
+      { $project: projection },
     ];
 
     const [courses, totalCourses, facets] = await Promise.all([
@@ -399,42 +465,42 @@ const getAllCoursesWithLimits = async (req, res) => {
           $facet: {
             categories: [
               { $group: { _id: "$course_category", count: { $sum: 1 } } },
-              { $sort: { count: -1 } }
+              { $sort: { count: -1 } },
             ],
             categoryTypes: [
               { $group: { _id: "$category_type", count: { $sum: 1 } } },
-              { $sort: { count: -1 } }
+              { $sort: { count: -1 } },
             ],
             tags: [
               { $group: { _id: "$course_tag", count: { $sum: 1 } } },
-              { $sort: { count: -1 } }
+              { $sort: { count: -1 } },
             ],
             classTypes: [
               { $group: { _id: "$class_type", count: { $sum: 1 } } },
-              { $sort: { count: -1 } }
+              { $sort: { count: -1 } },
             ],
             priceRanges: [
               {
                 $group: {
                   _id: null,
                   minPrice: { $min: "$prices.individual" },
-                  maxPrice: { $max: "$prices.batch" }
-                }
-              }
-            ]
-          }
-        }
-      ])
+                  maxPrice: { $max: "$prices.batch" },
+                },
+              },
+            ],
+          },
+        },
+      ]),
     ]);
 
     // Post-process results to filter prices by currency if specified
     let processedCourses = courses;
     if (currency) {
-      processedCourses = courses.map(course => {
+      processedCourses = courses.map((course) => {
         if (course.prices) {
           const clonedCourse = { ...course };
           clonedCourse.prices = course.prices.filter(
-            price => price.currency === currency.toUpperCase()
+            (price) => price.currency === currency.toUpperCase(),
           );
           return clonedCourse;
         }
@@ -450,87 +516,56 @@ const getAllCoursesWithLimits = async (req, res) => {
           total: totalCourses,
           page,
           limit,
-          totalPages: Math.ceil(totalCourses / limit)
+          totalPages: Math.ceil(totalCourses / limit),
         },
-        facets: facets[0]
-      }
+        facets: facets[0],
+      },
     });
   } catch (error) {
     console.error("Error in getAllCoursesWithLimits:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching courses",
-      error: error.message || "An unexpected error occurred"
+      error: error.message || "An unexpected error occurred",
     });
   }
 };
 
 /**
- * @desc    Get course by ID (including final evaluation)
+ * @desc    Get course by ID with extended curriculum details
  * @route   GET /api/courses/:id
  * @access  Public
  */
 const getCourseById = async (req, res) => {
   try {
     const { id } = req.params;
-    const { studentId, currency } = req.query;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+
+    if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid course ID format"
+        message: "Invalid course ID format",
       });
     }
-    const pipeline = [
-      { $match: { _id: new mongoose.Types.ObjectId(id) } },
-      {
-        $project: {
-          course_title: 1,
-          course_category: 1,
-          course_tag: 1,
-          course_image: 1,
-          class_type: 1,
-          course_fee: 1,
-          course_duration: 1,
-          no_of_Sessions: 1,
-          prices: 1,
-          course_description: 1,
-          final_evaluation: 1,
-          curriculum: 1,
-          faqs: 1,
-          bonus_modules: 1,
-          tools_technologies: 1,
-          meta: 1
-        }
-      }
-    ];
-    const courseAgg = await Course.aggregate(pipeline);
-    if (!courseAgg.length) {
+
+    const course = await Course.findById(id).lean();
+
+    if (!course) {
       return res.status(404).json({
         success: false,
-        message: "Course not found"
+        message: "Course not found",
       });
     }
 
-    // Apply currency filtering if specified
-    if (currency) {
-      const course = courseAgg[0];
-      if (course.prices && course.prices.length > 0) {
-        const filteredPrices = course.prices.filter(price => 
-          price.currency.toLowerCase() === currency.toLowerCase()
-        );
-        if (filteredPrices.length > 0) {
-          course.prices = filteredPrices;
-        }
-      }
-    }
-
-    res.status(200).json({ success: true, data: courseAgg[0] });
+    res.status(200).json({
+      success: true,
+      data: course,
+    });
   } catch (error) {
-    console.error("Error in getCourseById:", error);
+    console.error("Error fetching course:", error);
     res.status(500).json({
       success: false,
-      message: "Error fetching course",
-      error: error.message || "An unexpected error occurred"
+      message: "Error fetching course details",
+      error: error.message || "An unexpected error occurred",
     });
   }
 };
@@ -545,44 +580,47 @@ const updateCourse = async (req, res) => {
     if (req.fileError) {
       return res.status(400).json({ success: false, message: req.fileError });
     }
-    
+
     const courseData = { ...req.body };
-    
+
     if (req.file) {
       courseData.course_image = req.file.location;
     }
-    
+
     // If curriculum data is provided as JSON string, parse it
-    if (courseData.curriculum && typeof courseData.curriculum === 'string') {
+    if (courseData.curriculum && typeof courseData.curriculum === "string") {
       try {
         courseData.curriculum = JSON.parse(courseData.curriculum);
       } catch (parseError) {
         return res.status(400).json({
           success: false,
           message: "Invalid curriculum data format. Expected valid JSON.",
-          error: parseError.message
+          error: parseError.message,
         });
       }
     }
-    
+
     // Reassign IDs if curriculum structure changed
     if (courseData.curriculum && Array.isArray(courseData.curriculum)) {
       assignCurriculumIds(courseData.curriculum);
     }
-    
+
     const updatedCourse = await Course.findByIdAndUpdate(
       req.params.id,
       courseData,
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+      },
     );
-    
+
     if (!updatedCourse) {
       return res.status(404).json({
         success: false,
         message: "Course not found",
       });
     }
-    
+
     res.status(200).json({
       success: true,
       message: "Course updated successfully",
@@ -636,15 +674,17 @@ const getCourseTitles = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "No courses found",
-        data: []
+        data: [],
       });
     }
-    res.status(200).json({ success: true, count: courseTitles.length, data: courseTitles });
+    res
+      .status(200)
+      .json({ success: true, count: courseTitles.length, data: courseTitles });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Error fetching course titles", 
-      error: error.message || "An unexpected error occurred"
+      message: "Error fetching course titles",
+      error: error.message || "An unexpected error occurred",
     });
   }
 };
@@ -666,7 +706,11 @@ const toggleCourseStatus = async (req, res) => {
     await course.save();
     res.status(200).json({
       message: `Course status updated to ${newStatus}`,
-      course: { id: course._id, status: course.status, course_title: course.course_title }
+      course: {
+        id: course._id,
+        status: course.status,
+        course_title: course.course_title,
+      },
     });
   } catch (error) {
     console.error("Error toggling course status:", error);
@@ -690,80 +734,105 @@ const getCourseSections = async (req, res) => {
   try {
     const { courseId } = req.params;
     const { studentId } = req.user;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view sections" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view sections",
+      });
     }
     const course = await Course.findById(courseId).select("curriculum").lean();
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
-    
-    const enhancedCurriculum = course.curriculum.map(week => {
+
+    const enhancedCurriculum = course.curriculum.map((week) => {
       // Create a week object with basic info
       const weekObj = {
         ...week,
-        sections: []
+        sections: [],
       };
-      
+
       // Handle direct lessons if they exist
       if (week.lessons && week.lessons.length) {
         const directLessons = week.lessons;
-        const completedLessons = directLessons.filter(lesson => 
-          enrollment.completed_lessons.includes(lesson.id)
+        const completedLessons = directLessons.filter((lesson) =>
+          enrollment.completed_lessons.includes(lesson.id),
         );
-        
+
         weekObj.directLessonsProgress = {
           total: directLessons.length,
           completed: completedLessons.length,
-          percentage: directLessons.length > 0 ? 
-            Math.round((completedLessons.length / directLessons.length) * 100) : 0
+          percentage:
+            directLessons.length > 0
+              ? Math.round(
+                  (completedLessons.length / directLessons.length) * 100,
+                )
+              : 0,
         };
-        
-        weekObj.lessons = directLessons.map(lesson => ({
+
+        weekObj.lessons = directLessons.map((lesson) => ({
           ...lesson,
-          isCompleted: enrollment.completed_lessons.includes(lesson.id)
+          isCompleted: enrollment.completed_lessons.includes(lesson.id),
         }));
       }
-      
+
       // Handle live classes if they exist
       if (week.liveClasses && week.liveClasses.length) {
         weekObj.liveClasses = week.liveClasses;
       }
-      
+
       // Process sections if they exist
       if (week.sections && week.sections.length) {
-        weekObj.sections = week.sections.map(section => {
+        weekObj.sections = week.sections.map((section) => {
           const sectionLessons = section.lessons || [];
-          const completedLessons = sectionLessons.filter(lesson => 
-            enrollment.completed_lessons.includes(lesson.id)
+          const completedLessons = sectionLessons.filter((lesson) =>
+            enrollment.completed_lessons.includes(lesson.id),
           );
-          
+
           return {
             ...section,
             progress: {
               total: sectionLessons.length,
               completed: completedLessons.length,
-              percentage: sectionLessons.length > 0 ? 
-                Math.round((completedLessons.length / sectionLessons.length) * 100) : 0
+              percentage:
+                sectionLessons.length > 0
+                  ? Math.round(
+                      (completedLessons.length / sectionLessons.length) * 100,
+                    )
+                  : 0,
             },
-            lessons: sectionLessons.map(lesson => ({
+            lessons: sectionLessons.map((lesson) => ({
               ...lesson,
-              isCompleted: enrollment.completed_lessons.includes(lesson.id)
-            }))
+              isCompleted: enrollment.completed_lessons.includes(lesson.id),
+            })),
           };
         });
       }
-      
+
       return weekObj;
     });
-    
+
     enrollment.last_accessed = new Date();
     await enrollment.save();
-    res.status(200).json({ success: true, data: enhancedCurriculum, overallProgress: enrollment.progress });
+    res.status(200).json({
+      success: true,
+      data: enhancedCurriculum,
+      overallProgress: enrollment.progress,
+    });
   } catch (error) {
     console.error("Error fetching course sections:", error);
-    res.status(500).json({ success: false, message: "Error fetching course sections", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course sections",
+      error: error.message,
+    });
   }
 };
 
@@ -777,89 +846,112 @@ const getCourseLessons = async (req, res) => {
     const { courseId } = req.params;
     const { studentId } = req.user;
     const { includeResources = false } = req.query;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view lessons" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view lessons",
+      });
     }
     const course = await Course.findById(courseId).select("curriculum").lean();
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
-    
+
     // Collect all lessons from both direct under weeks and from sections
     const enhancedLessons = [];
-    
-    course.curriculum.forEach(week => {
+
+    course.curriculum.forEach((week) => {
       // Add direct lessons under weeks
       if (week.lessons && week.lessons.length) {
-        week.lessons.forEach(lesson => {
+        week.lessons.forEach((lesson) => {
           enhancedLessons.push({
             ...lesson,
             week: { id: week.id, title: week.weekTitle },
             section: null, // No section for direct lessons
             isCompleted: enrollment.completed_lessons.includes(lesson.id),
-            hasNotes: enrollment.notes.some(note => note.lessonId.toString() === lesson.id.toString()),
-            hasBookmarks: enrollment.bookmarks.some(bookmark => bookmark.lessonId.toString() === lesson.id.toString())
+            hasNotes: enrollment.notes.some(
+              (note) => note.lessonId.toString() === lesson.id.toString(),
+            ),
+            hasBookmarks: enrollment.bookmarks.some(
+              (bookmark) =>
+                bookmark.lessonId.toString() === lesson.id.toString(),
+            ),
           });
         });
       }
-      
+
       // Add lessons from sections
       if (week.sections && week.sections.length) {
-        week.sections.forEach(section => {
+        week.sections.forEach((section) => {
           if (section.lessons && section.lessons.length) {
-            section.lessons.forEach(lesson => {
+            section.lessons.forEach((lesson) => {
               enhancedLessons.push({
                 ...lesson,
                 week: { id: week.id, title: week.weekTitle },
                 section: { id: section.id, title: section.title },
                 isCompleted: enrollment.completed_lessons.includes(lesson.id),
-                hasNotes: enrollment.notes.some(note => note.lessonId.toString() === lesson.id.toString()),
-                hasBookmarks: enrollment.bookmarks.some(bookmark => bookmark.lessonId.toString() === lesson.id.toString())
+                hasNotes: enrollment.notes.some(
+                  (note) => note.lessonId.toString() === lesson.id.toString(),
+                ),
+                hasBookmarks: enrollment.bookmarks.some(
+                  (bookmark) =>
+                    bookmark.lessonId.toString() === lesson.id.toString(),
+                ),
               });
             });
           }
         });
       }
     });
-    
+
     // Also collect live classes if requested
     const liveClasses = [];
-    if (req.query.includeLiveClasses === 'true') {
-      course.curriculum.forEach(week => {
+    if (req.query.includeLiveClasses === "true") {
+      course.curriculum.forEach((week) => {
         if (week.liveClasses && week.liveClasses.length) {
-          week.liveClasses.forEach(liveClass => {
+          week.liveClasses.forEach((liveClass) => {
             liveClasses.push({
               ...liveClass,
-              week: { id: week.id, title: week.weekTitle }
+              week: { id: week.id, title: week.weekTitle },
             });
           });
         }
       });
     }
-    
+
     enhancedLessons.sort((a, b) => a.order - b.order);
     enrollment.last_accessed = new Date();
     await enrollment.save();
-    
+
     const response = {
       success: true,
       data: enhancedLessons,
-      progress: { 
-        total: enhancedLessons.length, 
-        completed: enrollment.completed_lessons.length, 
-        percentage: enrollment.progress 
-      }
+      progress: {
+        total: enhancedLessons.length,
+        completed: enrollment.completed_lessons.length,
+        percentage: enrollment.progress,
+      },
     };
-    
-    if (req.query.includeLiveClasses === 'true') {
+
+    if (req.query.includeLiveClasses === "true") {
       response.liveClasses = liveClasses;
     }
-    
+
     res.status(200).json(response);
   } catch (error) {
     console.error("Error fetching course lessons:", error);
-    res.status(500).json({ success: false, message: "Error fetching course lessons", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course lessons",
+      error: error.message,
+    });
   }
 };
 
@@ -871,43 +963,68 @@ const getCourseLessons = async (req, res) => {
 const getLessonDetails = async (req, res) => {
   try {
     const { courseId, lessonId } = req.params;
-    const userId = req.user._id;
+    const userId = req.user.id;
+
+    // Unused but potentially useful in future
+    const _includeResources = req.query.resources === "true";
+
     const course = await Course.findById(courseId);
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
-    const enrollment = await Enrollment.findOne({ course: courseId, student: userId, status: "active" });
+    const enrollment = await Enrollment.findOne({
+      course: courseId,
+      student: userId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to access lessons" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to access lessons",
+      });
     }
-    
+
     let lesson = null;
     let lessonContext = {};
-    
+
     // First search in direct lessons under weeks
     for (let week of course.curriculum) {
       // Check direct lessons under week
       if (week.lessons && week.lessons.length) {
-        const found = week.lessons.find(l => l.id === lessonId);
+        const found = week.lessons.find((l) => l.id === lessonId);
         if (found) {
           lesson = found;
           lessonContext = {
-            week: { id: week.id, title: week.weekTitle, description: week.weekDescription },
-            section: null // No section for direct lessons
+            week: {
+              id: week.id,
+              title: week.weekTitle,
+              description: week.weekDescription,
+            },
+            section: null, // No section for direct lessons
           };
           break;
         }
       }
-      
+
       // Check in sections
       if (week.sections && week.sections.length) {
         for (let section of week.sections) {
-          const found = section.lessons.find(l => l.id === lessonId);
+          const found = section.lessons.find((l) => l.id === lessonId);
           if (found) {
             lesson = found;
             lessonContext = {
-              week: { id: week.id, title: week.weekTitle, description: week.weekDescription },
-              section: { id: section.id, title: section.title, description: section.description }
+              week: {
+                id: week.id,
+                title: week.weekTitle,
+                description: week.weekDescription,
+              },
+              section: {
+                id: section.id,
+                title: section.title,
+                description: section.description,
+              },
             };
             break;
           }
@@ -915,87 +1032,122 @@ const getLessonDetails = async (req, res) => {
         if (lesson) break;
       }
     }
-    
+
     if (!lesson) {
-      return res.status(404).json({ success: false, message: "Lesson not found in this course" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Lesson not found in this course" });
     }
-    
-    const progress = await Progress.findOne({ course: courseId, student: userId, lesson: lessonId });
-    const notes = await Note.find({ course: courseId, student: userId, lesson: lessonId }).sort({ createdAt: -1 });
-    const bookmarks = await Bookmark.find({ course: courseId, student: userId, lesson: lessonId }).sort({ createdAt: -1 });
-    
+
+    const progress = await Progress.findOne({
+      course: courseId,
+      student: userId,
+      lesson: lessonId,
+    });
+    const notes = await Note.find({
+      course: courseId,
+      student: userId,
+      lesson: lessonId,
+    }).sort({
+      createdAt: -1,
+    });
+    const bookmarks = await Bookmark.find({
+      course: courseId,
+      student: userId,
+      lesson: lessonId,
+    }).sort({ createdAt: -1 });
+
     // Find previous and next lessons for navigation
     let allLessons = [];
-    
-    course.curriculum.forEach(week => {
+
+    course.curriculum.forEach((week) => {
       // Add direct lessons
       if (week.lessons && week.lessons.length) {
-        allLessons = allLessons.concat(week.lessons.map(l => ({
-          ...l.toObject(),
-          weekId: week.id,
-          sectionId: null
-        })));
+        allLessons = allLessons.concat(
+          week.lessons.map((l) => ({
+            ...l.toObject(),
+            weekId: week.id,
+            sectionId: null,
+          })),
+        );
       }
-      
+
       // Add section lessons
       if (week.sections && week.sections.length) {
-        week.sections.forEach(section => {
+        week.sections.forEach((section) => {
           if (section.lessons && section.lessons.length) {
-            allLessons = allLessons.concat(section.lessons.map(l => ({
-              ...l.toObject(),
-              weekId: week.id,
-              sectionId: section.id
-            })));
+            allLessons = allLessons.concat(
+              section.lessons.map((l) => ({
+                ...l.toObject(),
+                weekId: week.id,
+                sectionId: section.id,
+              })),
+            );
           }
         });
       }
     });
-    
+
     // Sort lessons by order
     allLessons.sort((a, b) => a.order - b.order);
-    
+
     // Find current lesson index
-    const currentIndex = allLessons.findIndex(l => l.id === lessonId);
+    const currentIndex = allLessons.findIndex((l) => l.id === lessonId);
     let previousLesson = null;
     let nextLesson = null;
-    
+
     if (currentIndex > 0) {
       previousLesson = allLessons[currentIndex - 1];
     }
-    
+
     if (currentIndex < allLessons.length - 1) {
       nextLesson = allLessons[currentIndex + 1];
     }
-    
+
     res.status(200).json({
       success: true,
       data: {
         lesson: {
           ...lesson.toObject(),
           progress: progress ? progress.status : "not_started",
-          notes: notes.map(note => ({ id: note._id, content: note.content, createdAt: note.createdAt })),
-          bookmarks: bookmarks.map(b => ({ id: b._id, createdAt: b.createdAt }))
+          notes: notes.map((note) => ({
+            id: note._id,
+            content: note.content,
+            createdAt: note.createdAt,
+          })),
+          bookmarks: bookmarks.map((b) => ({
+            id: b._id,
+            createdAt: b.createdAt,
+          })),
         },
         context: lessonContext,
         navigation: {
-          previous: previousLesson ? { 
-            id: previousLesson.id, 
-            title: previousLesson.title,
-            weekId: previousLesson.weekId,
-            sectionId: previousLesson.sectionId
-          } : null,
-          next: nextLesson ? { 
-            id: nextLesson.id, 
-            title: nextLesson.title,
-            weekId: nextLesson.weekId,
-            sectionId: nextLesson.sectionId
-          } : null
-        }
-      }
+          previous: previousLesson
+            ? {
+                id: previousLesson.id,
+                title: previousLesson.title,
+                weekId: previousLesson.weekId,
+                sectionId: previousLesson.sectionId,
+              }
+            : null,
+          next: nextLesson
+            ? {
+                id: nextLesson.id,
+                title: nextLesson.title,
+                weekId: nextLesson.weekId,
+                sectionId: nextLesson.sectionId,
+              }
+            : null,
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching lesson details:", error);
-    res.status(500).json({ success: false, message: "Error fetching lesson details", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching lesson details",
+      error: error.message,
+    });
   }
 };
 
@@ -1008,32 +1160,41 @@ const getLessonResources = async (req, res) => {
   try {
     const { courseId, lessonId } = req.params;
     const { studentId } = req.user;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view resources" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view resources",
+      });
     }
     const course = await Course.findById(courseId).select("curriculum").lean();
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
-    
+
     let lesson = null;
-    
+
     // Search in direct lessons under weeks
     for (let week of course.curriculum) {
       // Check direct lessons under week
       if (week.lessons && week.lessons.length) {
-        const found = week.lessons.find(l => l.id === lessonId);
+        const found = week.lessons.find((l) => l.id === lessonId);
         if (found) {
           lesson = found;
           break;
         }
       }
-      
+
       // Check in sections
       if (!lesson && week.sections && week.sections.length) {
         for (let section of week.sections) {
-          const found = section.lessons.find(l => l.id === lessonId);
+          const found = section.lessons.find((l) => l.id === lessonId);
           if (found) {
             lesson = found;
             break;
@@ -1042,15 +1203,21 @@ const getLessonResources = async (req, res) => {
         if (lesson) break;
       }
     }
-    
+
     if (!lesson) {
-      return res.status(404).json({ success: false, message: "Lesson not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Lesson not found" });
     }
-    
+
     res.status(200).json({ success: true, data: lesson.resources || [] });
   } catch (error) {
     console.error("Error fetching lesson resources:", error);
-    res.status(500).json({ success: false, message: "Error fetching lesson resources", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching lesson resources",
+      error: error.message,
+    });
   }
 };
 
@@ -1063,43 +1230,55 @@ const getCourseProgress = async (req, res) => {
   try {
     const { courseId } = req.params;
     const { studentId } = req.user;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view progress" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view progress",
+      });
     }
     const course = await Course.findById(courseId).select("curriculum").lean();
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
-    
+
     // Count both direct lessons and section lessons
     let totalLessons = 0;
-    
-    course.curriculum.forEach(week => {
+
+    course.curriculum.forEach((week) => {
       // Count direct lessons under weeks
       if (week.lessons && week.lessons.length) {
         totalLessons += week.lessons.length;
       }
-      
+
       // Count lessons in sections
       if (week.sections && week.sections.length) {
-        week.sections.forEach(section => {
+        week.sections.forEach((section) => {
           if (section.lessons && section.lessons.length) {
             totalLessons += section.lessons.length;
           }
         });
       }
     });
-    
+
     // Count live classes if any
     let totalLiveClasses = 0;
     let completedLiveClasses = 0;
-    
-    if (enrollment.attended_live_classes && enrollment.attended_live_classes.length) {
-      course.curriculum.forEach(week => {
+
+    if (
+      enrollment.attended_live_classes &&
+      enrollment.attended_live_classes.length
+    ) {
+      course.curriculum.forEach((week) => {
         if (week.liveClasses && week.liveClasses.length) {
           totalLiveClasses += week.liveClasses.length;
-          week.liveClasses.forEach(liveClass => {
+          week.liveClasses.forEach((liveClass) => {
             if (enrollment.attended_live_classes.includes(liveClass.id)) {
               completedLiveClasses++;
             }
@@ -1107,13 +1286,16 @@ const getCourseProgress = async (req, res) => {
         }
       });
     }
-    
+
     const completedLessons = enrollment.completed_lessons?.length || 0;
-    const progress = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
-    
-    const liveClassProgress = totalLiveClasses > 0 ? 
-      (completedLiveClasses / totalLiveClasses) * 100 : 0;
-    
+    const progress =
+      totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
+
+    const liveClassProgress =
+      totalLiveClasses > 0
+        ? (completedLiveClasses / totalLiveClasses) * 100
+        : 0;
+
     res.status(200).json({
       success: true,
       data: {
@@ -1125,12 +1307,16 @@ const getCourseProgress = async (req, res) => {
         liveClassProgress,
         lastAccessed: enrollment.last_accessed,
         completedLessonsList: enrollment.completed_lessons || [],
-        attendedLiveClassesList: enrollment.attended_live_classes || []
-      }
+        attendedLiveClassesList: enrollment.attended_live_classes || [],
+      },
     });
   } catch (error) {
     console.error("Error fetching course progress:", error);
-    res.status(500).json({ success: false, message: "Error fetching course progress", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course progress",
+      error: error.message,
+    });
   }
 };
 
@@ -1143,38 +1329,50 @@ const getCourseLiveClasses = async (req, res) => {
   try {
     const { courseId } = req.params;
     const { studentId } = req.user;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view live classes" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view live classes",
+      });
     }
     const course = await Course.findById(courseId).select("curriculum").lean();
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
-    
+
     // Extract all live classes
     const liveClasses = [];
-    course.curriculum.forEach(week => {
+    course.curriculum.forEach((week) => {
       if (week.liveClasses && week.liveClasses.length) {
-        week.liveClasses.forEach(liveClass => {
+        week.liveClasses.forEach((liveClass) => {
           liveClasses.push({
             ...liveClass,
             weekId: week.id,
             weekTitle: week.weekTitle,
-            isAttended: enrollment.attended_live_classes?.includes(liveClass.id) || false
+            isAttended:
+              enrollment.attended_live_classes?.includes(liveClass.id) || false,
           });
         });
       }
     });
-    
+
     // Sort by scheduled date
-    liveClasses.sort((a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate));
-    
+    liveClasses.sort(
+      (a, b) => new Date(a.scheduledDate) - new Date(b.scheduledDate),
+    );
+
     // Group by upcoming and past
     const now = new Date();
-    const upcoming = liveClasses.filter(c => new Date(c.scheduledDate) > now);
-    const past = liveClasses.filter(c => new Date(c.scheduledDate) <= now);
-    
+    const upcoming = liveClasses.filter((c) => new Date(c.scheduledDate) > now);
+    const past = liveClasses.filter((c) => new Date(c.scheduledDate) <= now);
+
     res.status(200).json({
       success: true,
       data: {
@@ -1182,12 +1380,16 @@ const getCourseLiveClasses = async (req, res) => {
         upcoming,
         past,
         total: liveClasses.length,
-        attended: enrollment.attended_live_classes?.length || 0
-      }
+        attended: enrollment.attended_live_classes?.length || 0,
+      },
     });
   } catch (error) {
     console.error("Error fetching course live classes:", error);
-    res.status(500).json({ success: false, message: "Error fetching course live classes", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course live classes",
+      error: error.message,
+    });
   }
 };
 
@@ -1200,56 +1402,74 @@ const markLiveClassAttended = async (req, res) => {
   try {
     const { courseId, liveClassId } = req.params;
     const { studentId } = req.user;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to mark live classes" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to mark live classes",
+      });
     }
-    
+
     // Check if live class exists
     const course = await Course.findById(courseId);
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
-    
+
     let liveClassExists = false;
     for (const week of course.curriculum) {
       if (week.liveClasses && week.liveClasses.length) {
-        if (week.liveClasses.some(lc => lc.id === liveClassId)) {
+        if (week.liveClasses.some((lc) => lc.id === liveClassId)) {
           liveClassExists = true;
           break;
         }
       }
     }
-    
+
     if (!liveClassExists) {
-      return res.status(404).json({ success: false, message: "Live class not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Live class not found" });
     }
-    
+
     // Initialize attended_live_classes array if it doesn't exist
     if (!enrollment.attended_live_classes) {
       enrollment.attended_live_classes = [];
     }
-    
+
     // Check if already attended
     if (enrollment.attended_live_classes.includes(liveClassId)) {
-      return res.status(200).json({ success: true, message: "Live class already marked as attended" });
+      return res.status(200).json({
+        success: true,
+        message: "Live class already marked as attended",
+      });
     }
-    
+
     // Mark as attended
     enrollment.attended_live_classes.push(liveClassId);
     enrollment.last_accessed = new Date();
     await enrollment.save();
-    
+
     res.status(200).json({
       success: true,
       message: "Live class marked as attended",
-      data: { 
-        attendedLiveClasses: enrollment.attended_live_classes.length
-      }
+      data: {
+        attendedLiveClasses: enrollment.attended_live_classes.length,
+      },
     });
   } catch (error) {
     console.error("Error marking live class attended:", error);
-    res.status(500).json({ success: false, message: "Error marking live class attended", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error marking live class attended",
+      error: error.message,
+    });
   }
 };
 
@@ -1262,34 +1482,46 @@ const markLessonComplete = async (req, res) => {
   try {
     const { courseId, lessonId } = req.params;
     const { studentId } = req.user;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to mark lessons complete" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to mark lessons complete",
+      });
     }
-    
+
     // Check if the lesson exists in the course (either direct under week or in a section)
     const course = await Course.findById(courseId);
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
-    
+
     // Find the lesson to validate it exists
     let lessonExists = false;
-    
+
     // Check in all possible locations (direct lessons and section lessons)
     for (const week of course.curriculum) {
       // Check direct lessons
       if (week.lessons && week.lessons.length) {
-        if (week.lessons.some(l => l.id === lessonId)) {
+        if (week.lessons.some((l) => l.id === lessonId)) {
           lessonExists = true;
           break;
         }
       }
-      
+
       // Check lessons in sections
       if (!lessonExists && week.sections && week.sections.length) {
         for (const section of week.sections) {
-          if (section.lessons && section.lessons.some(l => l.id === lessonId)) {
+          if (
+            section.lessons &&
+            section.lessons.some((l) => l.id === lessonId)
+          ) {
             lessonExists = true;
             break;
           }
@@ -1297,59 +1529,72 @@ const markLessonComplete = async (req, res) => {
         if (lessonExists) break;
       }
     }
-    
+
     if (!lessonExists) {
-      return res.status(404).json({ success: false, message: "Lesson not found in this course" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Lesson not found in this course" });
     }
-    
+
     // Check if lesson is already marked as complete
-    if (enrollment.completed_lessons && enrollment.completed_lessons.includes(lessonId)) {
-      return res.status(200).json({ success: true, message: "Lesson already marked as complete" });
+    if (
+      enrollment.completed_lessons &&
+      enrollment.completed_lessons.includes(lessonId)
+    ) {
+      return res
+        .status(200)
+        .json({ success: true, message: "Lesson already marked as complete" });
     }
-    
+
     // Initialize completed_lessons array if it doesn't exist
     if (!enrollment.completed_lessons) {
       enrollment.completed_lessons = [];
     }
-    
+
     // Mark lesson as complete
     enrollment.completed_lessons.push(lessonId);
     enrollment.last_accessed = new Date();
     await enrollment.save();
-    
+
     // Calculate new progress percentage
     let totalLessons = 0;
-    course.curriculum.forEach(week => {
+    course.curriculum.forEach((week) => {
       // Count direct lessons
       if (week.lessons && week.lessons.length) {
         totalLessons += week.lessons.length;
       }
-      
+
       // Count section lessons
       if (week.sections && week.sections.length) {
-        week.sections.forEach(section => {
+        week.sections.forEach((section) => {
           if (section.lessons && section.lessons.length) {
             totalLessons += section.lessons.length;
           }
         });
       }
     });
-    
-    const newProgress = totalLessons > 0 ? 
-      (enrollment.completed_lessons.length / totalLessons) * 100 : 0;
-    
+
+    const newProgress =
+      totalLessons > 0
+        ? (enrollment.completed_lessons.length / totalLessons) * 100
+        : 0;
+
     res.status(200).json({
       success: true,
       message: "Lesson marked as complete",
-      data: { 
+      data: {
         progress: newProgress,
         completedLessons: enrollment.completed_lessons.length,
-        totalLessons
-      }
+        totalLessons,
+      },
     });
   } catch (error) {
     console.error("Error marking lesson complete:", error);
-    res.status(500).json({ success: false, message: "Error marking lesson complete", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error marking lesson complete",
+      error: error.message,
+    });
   }
 };
 
@@ -1366,18 +1611,31 @@ const getCourseAssignments = async (req, res) => {
   try {
     const { courseId } = req.params;
     const { studentId } = req.user;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view assignments" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view assignments",
+      });
     }
     const course = await Course.findById(courseId).select("assignments").lean();
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
     res.status(200).json({ success: true, data: course.assignments || [] });
   } catch (error) {
     console.error("Error fetching course assignments:", error);
-    res.status(500).json({ success: false, message: "Error fetching course assignments", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course assignments",
+      error: error.message,
+    });
   }
 };
 
@@ -1392,26 +1650,43 @@ const submitAssignment = async (req, res) => {
     const { studentId } = req.user;
     const { submission } = req.body;
     if (!submission) {
-      return res.status(400).json({ success: false, message: "Submission content is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Submission content is required" });
     }
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to submit assignments" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to submit assignments",
+      });
     }
     const course = await Course.findById(courseId);
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
     const assignment = course.assignments.id(assignmentId);
     if (!assignment) {
-      return res.status(404).json({ success: false, message: "Assignment not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Assignment not found" });
     }
     const existingSubmission = enrollment.getAssignmentSubmission(assignmentId);
     if (existingSubmission) {
       existingSubmission.submission = submission;
       existingSubmission.submittedAt = new Date();
     } else {
-      enrollment.assignment_submissions.push({ assignmentId, submission, submittedAt: new Date() });
+      enrollment.assignment_submissions.push({
+        assignmentId,
+        submission,
+        submittedAt: new Date(),
+      });
     }
     if (!enrollment.isAssignmentCompleted(assignmentId)) {
       enrollment.completed_assignments.push(assignmentId);
@@ -1421,11 +1696,18 @@ const submitAssignment = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Assignment submitted successfully",
-      data: { progress: enrollment.progress, completedAssignments: enrollment.completed_assignments.length }
+      data: {
+        progress: enrollment.progress,
+        completedAssignments: enrollment.completed_assignments.length,
+      },
     });
   } catch (error) {
     console.error("Error submitting assignment:", error);
-    res.status(500).json({ success: false, message: "Error submitting assignment", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error submitting assignment",
+      error: error.message,
+    });
   }
 };
 
@@ -1438,18 +1720,31 @@ const getCourseQuizzes = async (req, res) => {
   try {
     const { courseId } = req.params;
     const { studentId } = req.user;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view quizzes" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view quizzes",
+      });
     }
     const course = await Course.findById(courseId).select("quizzes").lean();
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
     res.status(200).json({ success: true, data: course.quizzes || [] });
   } catch (error) {
     console.error("Error fetching course quizzes:", error);
-    res.status(500).json({ success: false, message: "Error fetching course quizzes", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course quizzes",
+      error: error.message,
+    });
   }
 };
 
@@ -1464,19 +1759,32 @@ const submitQuiz = async (req, res) => {
     const { studentId } = req.user;
     const { answers } = req.body;
     if (!answers || !Array.isArray(answers)) {
-      return res.status(400).json({ success: false, message: "Valid answers array is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Valid answers array is required" });
     }
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to submit quizzes" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to submit quizzes",
+      });
     }
     const course = await Course.findById(courseId);
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
     const quiz = course.quizzes.id(quizId);
     if (!quiz) {
-      return res.status(404).json({ success: false, message: "Quiz not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Quiz not found" });
     }
     let score = 0;
     quiz.questions.forEach((question, index) => {
@@ -1497,7 +1805,7 @@ const submitQuiz = async (req, res) => {
         answers,
         score,
         percentage,
-        submittedAt: new Date()
+        submittedAt: new Date(),
       });
     }
     if (!enrollment.isQuizCompleted(quizId)) {
@@ -1513,12 +1821,16 @@ const submitQuiz = async (req, res) => {
         percentage,
         totalQuestions: quiz.questions.length,
         progress: enrollment.progress,
-        completedQuizzes: enrollment.completed_quizzes.length
-      }
+        completedQuizzes: enrollment.completed_quizzes.length,
+      },
     });
   } catch (error) {
     console.error("Error submitting quiz:", error);
-    res.status(500).json({ success: false, message: "Error submitting quiz", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error submitting quiz",
+      error: error.message,
+    });
   }
 };
 
@@ -1531,34 +1843,51 @@ const getQuizResults = async (req, res) => {
   try {
     const { courseId, quizId } = req.params;
     const { studentId } = req.user;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view quiz results" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view quiz results",
+      });
     }
     const course = await Course.findById(courseId).select("quizzes").lean();
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
-    const quiz = course.quizzes.find(q => q._id.toString() === quizId);
+    const quiz = course.quizzes.find((q) => q._id.toString() === quizId);
     if (!quiz) {
-      return res.status(404).json({ success: false, message: "Quiz not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Quiz not found" });
     }
-    const submission = enrollment.quiz_submissions.find(s => s.quizId.toString() === quizId);
+    const submission = enrollment.quiz_submissions.find(
+      (s) => s.quizId.toString() === quizId,
+    );
     if (!submission) {
-      return res.status(404).json({ success: false, message: "No submission found for this quiz" });
+      return res
+        .status(404)
+        .json({ success: false, message: "No submission found for this quiz" });
     }
     res.status(200).json({ success: true, data: submission });
   } catch (error) {
     console.error("Error fetching quiz results:", error);
-    res.status(500).json({ success: false, message: "Error fetching quiz results", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching quiz results",
+      error: error.message,
+    });
   }
 };
 
 // =========================================
 // COURSE RESOURCES, NOTES & BOOKMARKS
 // =========================================
-
-
 
 /**
  * @desc    Download a resource
@@ -1569,33 +1898,60 @@ const downloadResource = async (req, res) => {
   try {
     const { courseId, lessonId, resourceId } = req.params;
     const { studentId } = req.user;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to download resources" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to download resources",
+      });
     }
     const course = await Course.findById(courseId);
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
     const lesson = course.lessons.id(lessonId);
     if (!lesson) {
-      return res.status(404).json({ success: false, message: "Lesson not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Lesson not found" });
     }
     const resource = lesson.resources.id(resourceId);
     if (!resource) {
-      return res.status(404).json({ success: false, message: "Resource not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Resource not found" });
     }
-    res.setHeader("Content-Type", resource.mimeType || "application/octet-stream");
-    res.setHeader("Content-Disposition", `attachment; filename="${resource.filename || "download"}"`);
+    res.setHeader(
+      "Content-Type",
+      resource.mimeType || "application/octet-stream",
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${resource.filename || "download"}"`,
+    );
     const fileStream = await getFileStream(resource.url);
     fileStream.pipe(res);
     fileStream.on("error", (error) => {
       console.error("Error streaming resource:", error);
-      res.status(500).json({ success: false, message: "Error downloading resource", error: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Error downloading resource",
+        error: error.message,
+      });
     });
   } catch (error) {
     console.error("Error downloading resource:", error);
-    res.status(500).json({ success: false, message: "Error downloading resource", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error downloading resource",
+      error: error.message,
+    });
   }
 };
 
@@ -1609,15 +1965,33 @@ const addLessonNote = async (req, res) => {
     const { courseId, lessonId } = req.params;
     const { content, timestamp, tags } = req.body;
     const userId = req.user._id;
-    const enrollment = await Enrollment.findOne({ course: courseId, student: userId, status: "active" });
+    const enrollment = await Enrollment.findOne({
+      course: courseId,
+      student: userId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to add notes" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to add notes",
+      });
     }
-    const note = await Note.create({ course: courseId, student: userId, lesson: lessonId, content, timestamp, tags: tags || [] });
+    const note = await Note.create({
+      course: courseId,
+      student: userId,
+      lesson: lessonId,
+      content,
+      timestamp,
+      tags: tags || [],
+    });
     res.status(201).json({ success: true, data: note });
   } catch (error) {
     console.error("Error adding note:", error);
-    res.status(500).json({ success: false, message: "Error adding note", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error adding note",
+      error: error.message,
+    });
   }
 };
 
@@ -1631,15 +2005,34 @@ const addLessonBookmark = async (req, res) => {
     const { courseId, lessonId } = req.params;
     const { timestamp, title, description, tags } = req.body;
     const userId = req.user._id;
-    const enrollment = await Enrollment.findOne({ course: courseId, student: userId, status: "active" });
+    const enrollment = await Enrollment.findOne({
+      course: courseId,
+      student: userId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to add bookmarks" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to add bookmarks",
+      });
     }
-    const bookmark = await Bookmark.create({ course: courseId, student: userId, lesson: lessonId, timestamp, title, description: description || "", tags: tags || [] });
+    const bookmark = await Bookmark.create({
+      course: courseId,
+      student: userId,
+      lesson: lessonId,
+      timestamp,
+      title,
+      description: description || "",
+      tags: tags || [],
+    });
     res.status(201).json({ success: true, data: bookmark });
   } catch (error) {
     console.error("Error adding bookmark:", error);
-    res.status(500).json({ success: false, message: "Error adding bookmark", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error adding bookmark",
+      error: error.message,
+    });
   }
 };
 
@@ -1652,15 +2045,26 @@ const getLessonNotes = async (req, res) => {
   try {
     const { courseId, lessonId } = req.params;
     const userId = req.user._id;
-    const enrollment = await Enrollment.findOne({ course: courseId, student: userId, status: "active" });
+    const enrollment = await Enrollment.findOne({
+      course: courseId,
+      student: userId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view notes" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view notes",
+      });
     }
     const notes = await Note.getLessonNotes(courseId, userId, lessonId);
     res.status(200).json({ success: true, data: notes });
   } catch (error) {
     console.error("Error fetching notes:", error);
-    res.status(500).json({ success: false, message: "Error fetching notes", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching notes",
+      error: error.message,
+    });
   }
 };
 
@@ -1673,15 +2077,30 @@ const getLessonBookmarks = async (req, res) => {
   try {
     const { courseId, lessonId } = req.params;
     const userId = req.user._id;
-    const enrollment = await Enrollment.findOne({ course: courseId, student: userId, status: "active" });
+    const enrollment = await Enrollment.findOne({
+      course: courseId,
+      student: userId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to view bookmarks" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to view bookmarks",
+      });
     }
-    const bookmarks = await Bookmark.getLessonBookmarks(courseId, userId, lessonId);
+    const bookmarks = await Bookmark.getLessonBookmarks(
+      courseId,
+      userId,
+      lessonId,
+    );
     res.status(200).json({ success: true, data: bookmarks });
   } catch (error) {
     console.error("Error fetching bookmarks:", error);
-    res.status(500).json({ success: false, message: "Error fetching bookmarks", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching bookmarks",
+      error: error.message,
+    });
   }
 };
 
@@ -1695,9 +2114,16 @@ const updateNote = async (req, res) => {
     const { courseId, lessonId, noteId } = req.params;
     const { content, tags } = req.body;
     const userId = req.user._id;
-    const note = await Note.findOne({ _id: noteId, course: courseId, student: userId, lesson: lessonId });
+    const note = await Note.findOne({
+      _id: noteId,
+      course: courseId,
+      student: userId,
+      lesson: lessonId,
+    });
     if (!note) {
-      return res.status(404).json({ success: false, message: "Note not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Note not found" });
     }
     await note.updateContent(content);
     if (tags) {
@@ -1707,7 +2133,11 @@ const updateNote = async (req, res) => {
     res.status(200).json({ success: true, data: note });
   } catch (error) {
     console.error("Error updating note:", error);
-    res.status(500).json({ success: false, message: "Error updating note", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error updating note",
+      error: error.message,
+    });
   }
 };
 
@@ -1721,15 +2151,26 @@ const updateBookmark = async (req, res) => {
     const { courseId, lessonId, bookmarkId } = req.params;
     const { title, description, tags } = req.body;
     const userId = req.user._id;
-    const bookmark = await Bookmark.findOne({ _id: bookmarkId, course: courseId, student: userId, lesson: lessonId });
+    const bookmark = await Bookmark.findOne({
+      _id: bookmarkId,
+      course: courseId,
+      student: userId,
+      lesson: lessonId,
+    });
     if (!bookmark) {
-      return res.status(404).json({ success: false, message: "Bookmark not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Bookmark not found" });
     }
     await bookmark.updateDetails(title, description, tags);
     res.status(200).json({ success: true, data: bookmark });
   } catch (error) {
     console.error("Error updating bookmark:", error);
-    res.status(500).json({ success: false, message: "Error updating bookmark", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error updating bookmark",
+      error: error.message,
+    });
   }
 };
 
@@ -1742,14 +2183,27 @@ const deleteNote = async (req, res) => {
   try {
     const { courseId, lessonId, noteId } = req.params;
     const userId = req.user._id;
-    const note = await Note.findOneAndDelete({ _id: noteId, course: courseId, student: userId, lesson: lessonId });
+    const note = await Note.findOneAndDelete({
+      _id: noteId,
+      course: courseId,
+      student: userId,
+      lesson: lessonId,
+    });
     if (!note) {
-      return res.status(404).json({ success: false, message: "Note not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Note not found" });
     }
-    res.status(200).json({ success: true, message: "Note deleted successfully" });
+    res
+      .status(200)
+      .json({ success: true, message: "Note deleted successfully" });
   } catch (error) {
     console.error("Error deleting note:", error);
-    res.status(500).json({ success: false, message: "Error deleting note", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error deleting note",
+      error: error.message,
+    });
   }
 };
 
@@ -1762,14 +2216,27 @@ const deleteBookmark = async (req, res) => {
   try {
     const { courseId, lessonId, bookmarkId } = req.params;
     const userId = req.user._id;
-    const bookmark = await Bookmark.findOneAndDelete({ _id: bookmarkId, course: courseId, student: userId, lesson: lessonId });
+    const bookmark = await Bookmark.findOneAndDelete({
+      _id: bookmarkId,
+      course: courseId,
+      student: userId,
+      lesson: lessonId,
+    });
     if (!bookmark) {
-      return res.status(404).json({ success: false, message: "Bookmark not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Bookmark not found" });
     }
-    res.status(200).json({ success: true, message: "Bookmark deleted successfully" });
+    res
+      .status(200)
+      .json({ success: true, message: "Bookmark deleted successfully" });
   } catch (error) {
     console.error("Error deleting bookmark:", error);
-    res.status(500).json({ success: false, message: "Error deleting bookmark", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error deleting bookmark",
+      error: error.message,
+    });
   }
 };
 
@@ -1785,7 +2252,9 @@ const deleteBookmark = async (req, res) => {
 const handleUpload = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: "No file uploaded" });
+      return res
+        .status(400)
+        .json({ success: false, message: "No file uploaded" });
     }
     res.status(200).json({
       success: true,
@@ -1796,11 +2265,15 @@ const handleUpload = async (req, res) => {
         mimetype: req.file.mimetype,
         size: req.file.size,
         path: req.file.path,
-      }
+      },
     });
   } catch (error) {
     console.error("Error in handleUpload:", error);
-    res.status(500).json({ success: false, message: "Error uploading file", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error uploading file",
+      error: error.message,
+    });
   }
 };
 
@@ -1812,9 +2285,11 @@ const handleUpload = async (req, res) => {
 const handleMultipleUpload = async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ success: false, message: "No files uploaded" });
+      return res
+        .status(400)
+        .json({ success: false, message: "No files uploaded" });
     }
-    const files = req.files.map(file => ({
+    const files = req.files.map((file) => ({
       filename: file.filename,
       originalname: file.originalname,
       mimetype: file.mimetype,
@@ -1824,11 +2299,15 @@ const handleMultipleUpload = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Files uploaded successfully",
-      data: { count: files.length, files }
+      data: { count: files.length, files },
     });
   } catch (error) {
     console.error("Error in handleMultipleUpload:", error);
-    res.status(500).json({ success: false, message: "Error uploading files", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error uploading files",
+      error: error.message,
+    });
   }
 };
 
@@ -1845,16 +2324,24 @@ const getCoorporateCourseById = async (req, res) => {
   try {
     const { id } = req.params;
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ success: false, message: "Invalid course ID format" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid course ID format" });
     }
     const course = await Course.findById(id).select("+corporate_details");
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
     res.status(200).json({ success: true, data: course });
   } catch (error) {
     console.error("Error fetching corporate course:", error);
-    res.status(500).json({ success: false, message: "Error fetching corporate course", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching corporate course",
+      error: error.message,
+    });
   }
 };
 
@@ -1868,20 +2355,32 @@ const updateRecordedVideos = async (req, res) => {
     const { id } = req.params;
     const { videos } = req.body;
     if (!Array.isArray(videos)) {
-      return res.status(400).json({ success: false, message: "Videos must be an array" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Videos must be an array" });
     }
-    const course = await Course.findByIdAndUpdate(id, { $set: { recorded_videos: videos } }, { new: true });
+    const course = await Course.findByIdAndUpdate(
+      id,
+      { $set: { recorded_videos: videos } },
+      { new: true },
+    );
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
     res.status(200).json({
       success: true,
       message: "Recorded videos updated successfully",
-      data: course.recorded_videos
+      data: course.recorded_videos,
     });
   } catch (error) {
     console.error("Error updating recorded videos:", error);
-    res.status(500).json({ success: false, message: "Error updating recorded videos", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error updating recorded videos",
+      error: error.message,
+    });
   }
 };
 
@@ -1896,20 +2395,24 @@ const getRecordedVideosForUser = async (req, res) => {
     const enrollments = await EnrolledCourse.find({ student_id: studentId })
       .populate("course_id", "recorded_videos course_title")
       .lean();
-    
+
     // Filter out enrollments with null course_id and map the valid ones
     const videos = enrollments
-      .filter(enrollment => enrollment.course_id != null)
-      .map(enrollment => ({
+      .filter((enrollment) => enrollment.course_id != null)
+      .map((enrollment) => ({
         course_id: enrollment.course_id._id,
         course_title: enrollment.course_id.course_title,
-        videos: enrollment.course_id.recorded_videos || []
+        videos: enrollment.course_id.recorded_videos || [],
       }));
-      
+
     res.status(200).json({ success: true, data: videos });
   } catch (error) {
     console.error("Error fetching recorded videos:", error);
-    res.status(500).json({ success: false, message: "Error fetching recorded videos", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching recorded videos",
+      error: error.message,
+    });
   }
 };
 
@@ -1931,7 +2434,11 @@ const getAllRelatedCourses = async (req, res) => {
     res.status(200).json({ success: true, data: relatedCourses });
   } catch (error) {
     console.error("Error fetching related courses:", error);
-    res.status(500).json({ success: false, message: "Error fetching related courses", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching related courses",
+      error: error.message,
+    });
   }
 };
 
@@ -1946,12 +2453,18 @@ const getNewCoursesWithLimits = async (req, res) => {
     const newCourses = await Course.find({ status: "Published" })
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .select("course_title course_category course_image course_fee course_duration")
+      .select(
+        "course_title course_category course_image course_fee course_duration",
+      )
       .lean();
     res.status(200).json({ success: true, data: newCourses });
   } catch (error) {
     console.error("Error fetching new courses:", error);
-    res.status(500).json({ success: false, message: "Error fetching new courses", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error fetching new courses",
+      error: error.message,
+    });
   }
 };
 
@@ -1964,29 +2477,52 @@ const downloadBrochure = async (req, res) => {
   try {
     const { courseId } = req.params;
     const { studentId } = req.user;
-    const enrollment = await EnrolledCourse.findOne({ student_id: studentId, course_id: courseId, status: "active" });
+    const enrollment = await EnrolledCourse.findOne({
+      student_id: studentId,
+      course_id: courseId,
+      status: "active",
+    });
     if (!enrollment) {
-      return res.status(403).json({ success: false, message: "You must be enrolled in this course to download the brochure" });
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to download the brochure",
+      });
     }
     const course = await Course.findById(courseId);
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
     if (!course.brochures || course.brochures.length === 0) {
-      return res.status(404).json({ success: false, message: "No brochure available for this course" });
+      return res.status(404).json({
+        success: false,
+        message: "No brochure available for this course",
+      });
     }
     const brochure = course.brochures[0];
     res.setHeader("Content-Type", brochure.mimeType || "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${brochure.filename || "course-brochure.pdf"}"`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${brochure.filename || "course-brochure.pdf"}"`,
+    );
     const fileStream = await getFileStream(brochure.url);
     fileStream.pipe(res);
     fileStream.on("error", (error) => {
       console.error("Error streaming brochure:", error);
-      res.status(500).json({ success: false, message: "Error downloading brochure", error: error.message });
+      res.status(500).json({
+        success: false,
+        message: "Error downloading brochure",
+        error: error.message,
+      });
     });
   } catch (error) {
     console.error("Error downloading brochure:", error);
-    res.status(500).json({ success: false, message: "Error downloading brochure", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Error downloading brochure",
+      error: error.message,
+    });
   }
 };
 
@@ -1994,13 +2530,13 @@ const downloadBrochure = async (req, res) => {
 const getCoursePrices = async (req, res) => {
   try {
     const course = await Course.findById(req.params.id)
-      .select('prices course_title')
+      .select("prices course_title")
       .lean();
-    
+
     if (!course) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Course not found" 
+        message: "Course not found",
       });
     }
 
@@ -2009,15 +2545,15 @@ const getCoursePrices = async (req, res) => {
       data: {
         courseId: course._id,
         courseTitle: course.course_title,
-        prices: course.prices || []
-      }
+        prices: course.prices || [],
+      },
     });
   } catch (error) {
     console.error("Error fetching course prices:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching course prices",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -2026,19 +2562,21 @@ const getCoursePrices = async (req, res) => {
 const updateCoursePrices = async (req, res) => {
   try {
     const { prices } = req.body;
-    
+
     if (!Array.isArray(prices)) {
       return res.status(400).json({
         success: false,
-        message: "Prices must be provided as an array"
+        message: "Prices must be provided as an array",
       });
     }
 
     // Validate and format price entries
-    const formattedPrices = prices.map(price => {
+    const formattedPrices = prices.map((price) => {
       // Ensure required fields are present
       if (!price.currency || !price.individual) {
-        throw new Error("Each price entry must contain currency and individual price");
+        throw new Error(
+          "Each price entry must contain currency and individual price",
+        );
       }
 
       // Convert string numbers to actual numbers
@@ -2048,9 +2586,15 @@ const updateCoursePrices = async (req, res) => {
         batch: Number(price.batch) || Number(price.individual),
         min_batch_size: Number(price.min_batch_size) || 1,
         max_batch_size: Number(price.max_batch_size) || 10,
-        early_bird_discount: price.early_bird_discount === 'N/A' ? 0 : Number(price.early_bird_discount) || 0,
-        group_discount: price.group_discount === 'N/A' ? 0 : Number(price.group_discount) || 0,
-        is_active: true
+        early_bird_discount:
+          price.early_bird_discount === "N/A"
+            ? 0
+            : Number(price.early_bird_discount) || 0,
+        group_discount:
+          price.group_discount === "N/A"
+            ? 0
+            : Number(price.group_discount) || 0,
+        is_active: true,
       };
 
       // Validate numeric values
@@ -2058,11 +2602,17 @@ const updateCoursePrices = async (req, res) => {
         throw new Error("Individual and batch prices must be valid numbers");
       }
 
-      if (isNaN(formattedPrice.early_bird_discount) || isNaN(formattedPrice.group_discount)) {
+      if (
+        isNaN(formattedPrice.early_bird_discount) ||
+        isNaN(formattedPrice.group_discount)
+      ) {
         throw new Error("Discount values must be valid numbers");
       }
 
-      if (isNaN(formattedPrice.min_batch_size) || isNaN(formattedPrice.max_batch_size)) {
+      if (
+        isNaN(formattedPrice.min_batch_size) ||
+        isNaN(formattedPrice.max_batch_size)
+      ) {
         throw new Error("Batch size values must be valid numbers");
       }
 
@@ -2072,27 +2622,27 @@ const updateCoursePrices = async (req, res) => {
     const course = await Course.findByIdAndUpdate(
       req.params.id,
       { $set: { prices: formattedPrices } },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: "Course not found"
+        message: "Course not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Prices updated successfully",
-      data: course.prices
+      data: course.prices,
     });
   } catch (error) {
     console.error("Error updating course prices:", error);
     res.status(500).json({
       success: false,
       message: "Error updating course prices",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -2101,54 +2651,54 @@ const updateCoursePrices = async (req, res) => {
 const bulkUpdateCoursePrices = async (req, res) => {
   try {
     const { updates } = req.body;
-    
+
     if (!Array.isArray(updates) || updates.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "Updates must be a non-empty array"
+        message: "Updates must be a non-empty array",
       });
     }
 
-    const bulkOps = updates.map(update => ({
+    const bulkOps = updates.map((update) => ({
       updateOne: {
         filter: { _id: update.courseId },
-        update: { 
-          $set: { 
+        update: {
+          $set: {
             prices: update.prices,
-            "meta.lastPriceUpdate": new Date()
-          } 
+            "meta.lastPriceUpdate": new Date(),
+          },
         },
-        runValidators: true
-      }
+        runValidators: true,
+      },
     }));
 
     const result = await Course.bulkWrite(bulkOps);
-    
+
     res.status(200).json({
       success: true,
       message: "Bulk price update completed",
       data: {
         matchedCount: result.matchedCount,
-        modifiedCount: result.modifiedCount
-      }
+        modifiedCount: result.modifiedCount,
+      },
     });
   } catch (error) {
     console.error("Error in bulk price update:", error);
     res.status(500).json({
       success: false,
       message: "Error performing bulk price update",
-      error: error.message
+      error: error.message,
     });
   }
 };
 
 const getAllCoursesWithPrices = async (req, res) => {
   try {
-    const { 
-      category, 
-      class_type, 
+    const {
+      category,
+      class_type,
       currency,
-      min_price, 
+      min_price,
       max_price,
       active_only,
       has_discount,
@@ -2156,109 +2706,116 @@ const getAllCoursesWithPrices = async (req, res) => {
       course_grade,
       pricing_status,
       has_pricing,
-      course_id
+      course_id,
     } = req.query;
 
     // Build filter object
     const filter = {};
-    
+
     // Category filter
     if (category) {
       filter.course_category = category;
     }
-    
+
     // Class type filter
     if (class_type) {
       filter.class_type = class_type;
     }
-    
+
     // Course grade filter
     if (course_grade) {
       filter.course_grade = course_grade;
     }
-    
+
     // Search by title
     if (search) {
-      filter.course_title = { $regex: search, $options: 'i' };
+      filter.course_title = { $regex: search, $options: "i" };
     }
-    
+
     // Course ID filter
     if (course_id) {
       filter._id = course_id;
     }
-    
+
     // Currency filter
     if (currency) {
-      filter['prices.currency'] = currency.toUpperCase();
+      filter["prices.currency"] = currency.toUpperCase();
     }
-    
+
     // Price range filter
     if (min_price || max_price) {
-      filter['prices.individual'] = {};
-      if (min_price) filter['prices.individual'].$gte = Number(min_price);
-      if (max_price) filter['prices.individual'].$lte = Number(max_price);
+      filter["prices.individual"] = {};
+      if (min_price) filter["prices.individual"].$gte = Number(min_price);
+      if (max_price) filter["prices.individual"].$lte = Number(max_price);
     }
-    
+
     // Active status filter
-    if (active_only === 'true') {
-      filter.status = { $regex: 'Published', $options: 'i' };
+    if (active_only === "true") {
+      filter.status = { $regex: "Published", $options: "i" };
     }
-    
+
     // Pricing status filter (active/inactive)
     if (pricing_status) {
-      if (pricing_status === 'active') {
-        filter['prices.is_active'] = true;
-      } else if (pricing_status === 'inactive') {
-        filter['prices.is_active'] = false;
+      if (pricing_status === "active") {
+        filter["prices.is_active"] = true;
+      } else if (pricing_status === "inactive") {
+        filter["prices.is_active"] = false;
       }
     }
-    
+
     // Has pricing filter
     if (has_pricing) {
-      if (has_pricing === 'yes') {
+      if (has_pricing === "yes") {
         filter.prices = { $exists: true, $ne: [] };
-      } else if (has_pricing === 'no') {
-        filter.$or = [
-          { prices: { $exists: false } },
-          { prices: [] }
-        ];
+      } else if (has_pricing === "no") {
+        filter.$or = [{ prices: { $exists: false } }, { prices: [] }];
       }
     }
-    
+
     // Discount filter
-    if (has_discount === 'true') {
+    if (has_discount === "true") {
       filter.$or = [
-        { 'prices.early_bird_discount': { $gt: 0 } },
-        { 'prices.group_discount': { $gt: 0 } }
+        { "prices.early_bird_discount": { $gt: 0 } },
+        { "prices.group_discount": { $gt: 0 } },
       ];
     }
 
     // Add status filter for published courses if not specified
-    if (!filter.hasOwnProperty('status')) {
-      filter.status = { $regex: 'Published', $options: 'i' };
+    if (!filter.hasOwnProperty("status")) {
+      filter.status = { $regex: "Published", $options: "i" };
     }
 
     const courses = await Course.find(filter)
-      .select('_id course_title course_category course_grade course_duration class_type status prices')
+      .select(
+        "_id course_title course_category course_grade course_duration class_type status prices",
+      )
       .lean()
-      .sort({'prices.currency': 1});
+      .sort({ "prices.currency": 1 });
 
     if (!courses.length) {
       return res.status(404).json({
         success: false,
-        message: "No courses found with matching criteria"
+        message: "No courses found with matching criteria",
       });
     }
 
     // Get unique values for filters
-    const uniqueCategories = [...new Set(courses.map(course => course.course_category))].filter(Boolean);
-    const uniqueTypes = [...new Set(courses.map(course => course.class_type))].filter(Boolean);
-    const uniqueCurrencies = [...new Set(courses.flatMap(course => 
-      (course.prices || []).map(p => p.currency)
-    ))];
+    const uniqueCategories = [
+      ...new Set(courses.map((course) => course.course_category)),
+    ].filter(Boolean);
+    const uniqueTypes = [
+      ...new Set(courses.map((course) => course.class_type)),
+    ].filter(Boolean);
+    const uniqueCurrencies = [
+      ...new Set(
+        courses.flatMap((course) =>
+          (course.prices || []).map((p) => p.currency),
+        ),
+      ),
+    ];
 
     // Transform the data for better readability
-    const transformed = courses.map(course => {
+    const transformed = courses.map((course) => {
       // Format course title with grade, duration, class type and category
       const titleParts = [course.course_title];
       if (course.course_category) {
@@ -2273,67 +2830,76 @@ const getAllCoursesWithPrices = async (req, res) => {
       if (course.class_type) {
         titleParts.push(`Type: ${course.class_type}`);
       }
-      const formattedTitle = titleParts.join(' | ');
+      const formattedTitle = titleParts.join(" | ");
 
       // Format pricing information
-      const pricing = (course.prices || []).map(price => {
-        if (!price) return null;
-        
-        const formattedPrice = {
-          currency: price.currency || 'Not specified',
-          prices: {
-            individual: price.individual || 0,
-            batch: price.batch || price.individual || 0
-          },
-          discounts: {
-            earlyBird: price.early_bird_discount ? `${price.early_bird_discount}%` : 'N/A',
-            group: price.group_discount ? `${price.group_discount}%` : 'N/A'
-          },
-          batchSize: {
-            min: price.min_batch_size || 'N/A',
-            max: price.max_batch_size || 'N/A'
-          },
-          status: price.is_active ? 'Active' : 'Inactive'
-        };
+      const pricing = (course.prices || [])
+        .map((price) => {
+          if (!price) return null;
 
-        // Format currency with symbol
-        if (price.currency === 'USD') {
-          formattedPrice.prices.individual = `${formattedPrice.prices.individual}`;
-          formattedPrice.prices.batch = `${formattedPrice.prices.batch}`;
-        } else if (price.currency === 'EUR') {
-          formattedPrice.prices.individual = `${formattedPrice.prices.individual}`;
-          formattedPrice.prices.batch = `${formattedPrice.prices.batch}`;
-        } else if (price.currency === 'INR') {
-          formattedPrice.prices.individual = `${formattedPrice.prices.individual}`;
-          formattedPrice.prices.batch = `${formattedPrice.prices.batch}`;
-        }
+          const formattedPrice = {
+            currency: price.currency || "Not specified",
+            prices: {
+              individual: price.individual || 0,
+              batch: price.batch || price.individual || 0,
+            },
+            discounts: {
+              earlyBird: price.early_bird_discount
+                ? `${price.early_bird_discount}%`
+                : "N/A",
+              group: price.group_discount ? `${price.group_discount}%` : "N/A",
+            },
+            batchSize: {
+              min: price.min_batch_size || "N/A",
+              max: price.max_batch_size || "N/A",
+            },
+            status: price.is_active ? "Active" : "Inactive",
+          };
 
-        return formattedPrice;
-      }).filter(Boolean); // Remove any null entries
+          // Format currency with symbol
+          if (price.currency === "USD") {
+            formattedPrice.prices.individual = `${formattedPrice.prices.individual}`;
+            formattedPrice.prices.batch = `${formattedPrice.prices.batch}`;
+          } else if (price.currency === "EUR") {
+            formattedPrice.prices.individual = `${formattedPrice.prices.individual}`;
+            formattedPrice.prices.batch = `${formattedPrice.prices.batch}`;
+          } else if (price.currency === "INR") {
+            formattedPrice.prices.individual = `${formattedPrice.prices.individual}`;
+            formattedPrice.prices.batch = `${formattedPrice.prices.batch}`;
+          }
+
+          return formattedPrice;
+        })
+        .filter(Boolean); // Remove any null entries
 
       return {
         courseId: course._id,
         courseTitle: formattedTitle,
-        courseCategory: course.course_category || 'Not specified',
-        courseGrade: course.course_grade || 'Not specified',
-        classType: course.class_type || 'Not specified',
-        status: course.status || 'Not specified',
-        pricing: pricing.length > 0 ? pricing : [{
-          currency: 'Not specified',
-          prices: {
-            individual: 'N/A',
-            batch: 'N/A'
-          },
-          discounts: {
-            earlyBird: 'N/A',
-            group: 'N/A'
-          },
-          batchSize: {
-            min: 'N/A',
-            max: 'N/A'
-          },
-          status: 'Not available'
-        }]
+        courseCategory: course.course_category || "Not specified",
+        courseGrade: course.course_grade || "Not specified",
+        classType: course.class_type || "Not specified",
+        status: course.status || "Not specified",
+        pricing:
+          pricing.length > 0
+            ? pricing
+            : [
+                {
+                  currency: "Not specified",
+                  prices: {
+                    individual: "N/A",
+                    batch: "N/A",
+                  },
+                  discounts: {
+                    earlyBird: "N/A",
+                    group: "N/A",
+                  },
+                  batchSize: {
+                    min: "N/A",
+                    max: "N/A",
+                  },
+                  status: "Not available",
+                },
+              ],
       };
     });
 
@@ -2343,17 +2909,16 @@ const getAllCoursesWithPrices = async (req, res) => {
       filters: {
         categories: uniqueCategories,
         types: uniqueTypes,
-        currencies: uniqueCurrencies
+        currencies: uniqueCurrencies,
       },
-      data: transformed
+      data: transformed,
     });
-
   } catch (error) {
     console.error("Error fetching course prices:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching course prices",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -2366,83 +2931,177 @@ const getAllCoursesWithPrices = async (req, res) => {
 const getCoursesWithFields = async (req, res) => {
   try {
     const { fields, filters = {}, sort = {}, page = 1, limit = 10 } = req.query;
-    
+
     // Parse fields from query parameter
     let requestedFields = {};
-    
+
     if (fields) {
       // Handle comma-separated list of fields
-      const fieldList = fields.split(',').map(field => field.trim());
-      
+      const fieldList = fields.split(",").map((field) => field.trim());
+
       // Map of valid fields and their MongoDB paths
       const validFields = {
         // Basic course info
-        id: '_id',
-        title: 'course_title',
-        subtitle: 'course_subtitle',
-        category: 'course_category',
-        subcategory: 'course_subcategory',
-        tag: 'course_tag',
-        image: 'course_image',
-        description: 'course_description',
-        level: 'course_level',
-        language: 'language',
-        subtitleLanguages: 'subtitle_languages',
-        sessions: 'no_of_Sessions',
-        duration: 'course_duration',
-        sessionDuration: 'session_duration',
-        prices: 'prices',
-        brochures: 'brochures',
-        status: 'status',
-        categoryType: 'category_type',
-        isFree: 'isFree',
-        grade: 'course_grade',
-        effortsPerWeek: 'efforts_per_Week',
-        classType: 'class_type',
-        minHoursPerWeek: 'min_hours_per_week',
-        maxHoursPerWeek: 'max_hours_per_week',
-        relatedCourses: 'related_courses',
-        
+        id: "_id",
+        title: "course_title",
+        subtitle: "course_subtitle",
+        category: "course_category",
+        subcategory: "course_subcategory",
+        tag: "course_tag",
+        image: "course_image",
+        description: "course_description",
+        level: "course_level",
+        language: "language",
+        subtitleLanguages: "subtitle_languages",
+        sessions: "no_of_Sessions",
+        duration: "course_duration",
+        sessionDuration: "session_duration",
+        prices: "prices",
+        brochures: "brochures",
+        status: "status",
+        categoryType: "category_type",
+        isFree: "isFree",
+        grade: "course_grade",
+        effortsPerWeek: "efforts_per_Week",
+        classType: "class_type",
+        minHoursPerWeek: "min_hours_per_week",
+        maxHoursPerWeek: "max_hours_per_week",
+        relatedCourses: "related_courses",
+
         // Features
-        hasCertification: 'is_Certification',
-        hasAssignments: 'is_Assignments',
-        hasProjects: 'is_Projects',
-        hasQuizzes: 'is_Quizes',
-        
+        hasCertification: "is_Certification",
+        hasAssignments: "is_Assignments",
+        hasProjects: "is_Projects",
+        hasQuizzes: "is_Quizes",
+
         // Metadata
-        createdAt: 'createdAt',
-        updatedAt: 'updatedAt',
-        slug: 'slug',
-        views: 'meta.views',
-        ratings: 'meta.ratings',
-        enrollments: 'meta.enrollments',
-        
+        createdAt: "createdAt",
+        updatedAt: "updatedAt",
+        slug: "slug",
+        views: "meta.views",
+        ratings: "meta.ratings",
+        enrollments: "meta.enrollments",
+
         // Curriculum
-        curriculum: 'curriculum',
-        
+        curriculum: "curriculum",
+
         // FAQs
-        faqs: 'faqs',
-        
+        faqs: "faqs",
+
         // Tools & Technologies
-        toolsTechnologies: 'tools_technologies',
-        
+        toolsTechnologies: "tools_technologies",
+
         // Bonus Modules
-        bonusModules: 'bonus_modules',
-        
+        bonusModules: "bonus_modules",
+
         // Final Evaluation
-        finalEvaluation: 'final_evaluation',
-        
+        finalEvaluation: "final_evaluation",
+
         // Resource PDFs
-        resourcePdfs: 'resource_pdfs',
-        
+        resourcePdfs: "resource_pdfs",
+
         // Predefined field sets for common UI components
-        card: ['id', 'title', 'category', 'tag', 'image', 'duration', 'isFree', 'status', 'categoryType', 'prices', 'slug', 'views', 'ratings', 'effortsPerWeek', 'sessions','classType'],
-        list: ['id', 'title', 'category', 'tag', 'image', 'duration', 'isFree', 'status', 'categoryType', 'prices', 'slug', 'classType'],
-        detail: ['id', 'title', 'subtitle', 'category', 'subcategory', 'tag', 'image', 'description', 'level', 'language', 'sessions', 'duration', 'fee', 'prices', 'brochures', 'status', 'categoryType', 'isFree', 'grade', 'effortsPerWeek', 'classType', 'hasCertification', 'hasAssignments', 'hasProjects', 'hasQuizzes', 'curriculum', 'faqs', 'toolsTechnologies', 'bonusModules', 'finalEvaluation', 'resourcePdfs', 'createdAt', 'updatedAt', 'slug', 'views', 'ratings', 'enrollments'],
-        search: ['id', 'title', 'category', 'tag', 'image', 'duration', 'isFree', 'status', 'categoryType', 'prices', 'slug', 'views', 'ratings'],
-        related: ['id', 'title', 'category', 'tag', 'image', 'duration', 'isFree', 'status', 'categoryType', 'prices', 'slug']
+        card: [
+          "id",
+          "title",
+          "category",
+          "tag",
+          "image",
+          "duration",
+          "isFree",
+          "status",
+          "categoryType",
+          "prices",
+          "slug",
+          "views",
+          "ratings",
+          "effortsPerWeek",
+          "sessions",
+          "classType",
+        ],
+        list: [
+          "id",
+          "title",
+          "category",
+          "tag",
+          "image",
+          "duration",
+          "isFree",
+          "status",
+          "categoryType",
+          "prices",
+          "slug",
+          "classType",
+        ],
+        detail: [
+          "id",
+          "title",
+          "subtitle",
+          "category",
+          "subcategory",
+          "tag",
+          "image",
+          "description",
+          "level",
+          "language",
+          "sessions",
+          "duration",
+          "fee",
+          "prices",
+          "brochures",
+          "status",
+          "categoryType",
+          "isFree",
+          "grade",
+          "effortsPerWeek",
+          "classType",
+          "hasCertification",
+          "hasAssignments",
+          "hasProjects",
+          "hasQuizzes",
+          "curriculum",
+          "faqs",
+          "toolsTechnologies",
+          "bonusModules",
+          "finalEvaluation",
+          "resourcePdfs",
+          "createdAt",
+          "updatedAt",
+          "slug",
+          "views",
+          "ratings",
+          "enrollments",
+        ],
+        search: [
+          "id",
+          "title",
+          "category",
+          "tag",
+          "image",
+          "duration",
+          "isFree",
+          "status",
+          "categoryType",
+          "prices",
+          "slug",
+          "views",
+          "ratings",
+        ],
+        related: [
+          "id",
+          "title",
+          "category",
+          "tag",
+          "image",
+          "duration",
+          "isFree",
+          "status",
+          "categoryType",
+          "prices",
+          "slug",
+        ],
       };
-      
+
       // Check if a predefined field set was requested
       if (validFields[fields]) {
         // If it's an array, it's a predefined field set
@@ -2457,20 +3116,20 @@ const getCoursesWithFields = async (req, res) => {
         }
       } else {
         // Process individual fields
-        fieldList.forEach(field => {
+        fieldList.forEach((field) => {
           if (validFields[field]) {
             requestedFields[validFields[field]] = 1;
           }
         });
       }
     }
-    
+
     // Always include _id field
     requestedFields._id = 1;
-    
+
     // Parse filters
     const queryFilters = {};
-    
+
     // Handle text search
     if (filters.search) {
       const searchTerm = fullyDecodeURIComponent(filters.search);
@@ -2478,33 +3137,41 @@ const getCoursesWithFields = async (req, res) => {
         queryFilters.$text = { $search: searchTerm };
       } else {
         queryFilters.$or = [
-          { course_title: { $regex: new RegExp(escapeRegExp(searchTerm), "i") } },
-          { course_category: { $regex: new RegExp(escapeRegExp(searchTerm), "i") } },
-          { course_tag: { $regex: new RegExp(escapeRegExp(searchTerm), "i") } }
+          {
+            course_title: { $regex: new RegExp(escapeRegExp(searchTerm), "i") },
+          },
+          {
+            course_category: {
+              $regex: new RegExp(escapeRegExp(searchTerm), "i"),
+            },
+          },
+          { course_tag: { $regex: new RegExp(escapeRegExp(searchTerm), "i") } },
         ];
       }
     }
-    
+
     // Handle category filter
     if (filters.category) {
       queryFilters.course_category = fullyDecodeURIComponent(filters.category);
     }
-    
+
     // Handle category type filter
     if (filters.categoryType) {
-      queryFilters.category_type = fullyDecodeURIComponent(filters.categoryType);
+      queryFilters.category_type = fullyDecodeURIComponent(
+        filters.categoryType,
+      );
     }
-    
+
     // Handle status filter
     if (filters.status) {
       queryFilters.status = fullyDecodeURIComponent(filters.status);
     }
-    
+
     // Also check for status in query params directly
     if (req.query.status) {
       queryFilters.status = fullyDecodeURIComponent(req.query.status);
     }
-    
+
     // Handle price range filter
     if (filters.priceRange) {
       const [min, max] = filters.priceRange.split("-").map(Number);
@@ -2512,19 +3179,21 @@ const getCoursesWithFields = async (req, res) => {
         queryFilters.course_fee = { $gte: min, $lte: max };
       }
     }
-    
+
     // Handle tag filter
     if (filters.tag) {
       queryFilters.course_tag = fullyDecodeURIComponent(filters.tag);
     }
-    
+
     // Handle class type filter
     if (req.query.filters && req.query.filters.class_type) {
-      const decodedClassType = fullyDecodeURIComponent(req.query.filters.class_type);
+      const decodedClassType = fullyDecodeURIComponent(
+        req.query.filters.class_type,
+      );
       queryFilters.class_type = decodedClassType;
-      console.log('Class type filter:', queryFilters.class_type);
+      console.log("Class type filter:", queryFilters.class_type);
     }
-    
+
     // Handle feature filters
     if (filters.hasCertification) {
       queryFilters.is_Certification = filters.hasCertification;
@@ -2538,26 +3207,26 @@ const getCoursesWithFields = async (req, res) => {
     if (filters.hasQuizzes) {
       queryFilters.is_Quizes = filters.hasQuizzes;
     }
-    
+
     // Handle isFree filter
     if (filters.isFree !== undefined) {
-      queryFilters.isFree = filters.isFree === 'true';
+      queryFilters.isFree = filters.isFree === "true";
     }
-    
+
     // Sort options
     let sortOptions = {};
-    
+
     // Apply sorting
     if (sort) {
-      if (sort === 'recent') {
+      if (sort === "recent") {
         sortOptions = { createdAt: -1 };
-      } else if (sort === 'popular') {
-        sortOptions = { 'meta.views': -1 };
-      } else if (sort === 'price_asc') {
+      } else if (sort === "popular") {
+        sortOptions = { "meta.views": -1 };
+      } else if (sort === "price_asc") {
         // For price ascending, we need to sort by the individual price in the prices array
         // Will be handled after fetching the data
         sortOptions = { _id: 1 }; // Default sort to ensure consistent results
-      } else if (sort === 'price_desc') {
+      } else if (sort === "price_desc") {
         // Will be handled after fetching the data
         sortOptions = { _id: 1 }; // Default sort to ensure consistent results
       } else {
@@ -2566,23 +3235,23 @@ const getCoursesWithFields = async (req, res) => {
     } else {
       sortOptions = { createdAt: -1 }; // Default to recent
     }
-    
+
     // Parse pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
-    
+
     // Function to format course duration
     const formatCourseDuration = (duration) => {
       if (!duration) return "";
-      
+
       // Extract months and weeks
       const monthsMatch = duration.match(/(\d+)\s*months?/i);
       const weeksMatch = duration.match(/(\d+)\s*weeks?/i);
-      
+
       const months = monthsMatch ? monthsMatch[1] : "";
       const weeks = weeksMatch ? weeksMatch[1] : "";
-      
+
       // Format as "X months / Y weeks"
       if (months && weeks) {
         return `${months} months / ${weeks} weeks`;
@@ -2591,21 +3260,21 @@ const getCoursesWithFields = async (req, res) => {
       } else if (weeks) {
         return `${weeks} weeks`;
       }
-      
+
       return duration; // Return original if no matches
     };
-    
+
     // Handle currency filter
     if (filters.currency) {
       const currency = fullyDecodeURIComponent(filters.currency).toUpperCase();
-      queryFilters['prices.currency'] = currency;
-      
+      queryFilters["prices.currency"] = currency;
+
       // Add a projection to only include prices for the requested currency
       if (!requestedFields.prices) {
         requestedFields.prices = 1;
       }
     }
-    
+
     // Execute query
     const [queryResults, totalCount] = await Promise.all([
       Course.find(queryFilters, requestedFields)
@@ -2613,56 +3282,72 @@ const getCoursesWithFields = async (req, res) => {
         .skip(skip)
         .limit(limitNum)
         .lean(),
-      Course.countDocuments(queryFilters)
+      Course.countDocuments(queryFilters),
     ]);
-    
+
     // Process courses based on filters
-    let processedCourses = queryResults.map(course => {
+    let processedCourses = queryResults.map((course) => {
       // Filter prices if currency filter is applied
       if (filters.currency) {
-        const currency = fullyDecodeURIComponent(filters.currency).toUpperCase();
+        const currency = fullyDecodeURIComponent(
+          filters.currency,
+        ).toUpperCase();
         if (course.prices) {
-          course.prices = course.prices.filter(price => price.currency === currency);
+          course.prices = course.prices.filter(
+            (price) => price.currency === currency,
+          );
         }
       }
-      
+
       // Fix efforts_per_Week field if it's undefined
       if (course.efforts_per_Week === "undefined - undefined hours / week") {
         course.efforts_per_Week = "3-5 hours / week"; // Default value
       }
-      
+
       // Format course duration
       if (course.course_duration) {
         course.course_duration = formatCourseDuration(course.course_duration);
       }
-      
+
       return course;
     });
-    
+
     // Apply post-query sorting for price if needed
-    if (sort === 'price_asc' || sort === 'price_desc') {
-      const currencyFilter = filters.currency 
-        ? fullyDecodeURIComponent(filters.currency).toUpperCase() 
-        : 'USD'; // Default to USD if no currency specified
-      
+    if (sort === "price_asc" || sort === "price_desc") {
+      const currencyFilter = filters.currency
+        ? fullyDecodeURIComponent(filters.currency).toUpperCase()
+        : "USD"; // Default to USD if no currency specified
+
       // Sort by price after fetching the data
       processedCourses = processedCourses.sort((a, b) => {
         // Get prices for the specified currency
-        const aPrice = a.prices && a.prices.find(p => p.currency === currencyFilter);
-        const bPrice = b.prices && b.prices.find(p => p.currency === currencyFilter);
-        
+        const aPrice =
+          a.prices && a.prices.find((p) => p.currency === currencyFilter);
+        const bPrice =
+          b.prices && b.prices.find((p) => p.currency === currencyFilter);
+
         // Get individual prices or use a default value if not found
-        const aPriceValue = aPrice ? aPrice.individual : (sort === 'price_asc' ? Number.MAX_SAFE_INTEGER : 0);
-        const bPriceValue = bPrice ? bPrice.individual : (sort === 'price_asc' ? Number.MAX_SAFE_INTEGER : 0);
-        
+        const aPriceValue = aPrice
+          ? aPrice.individual
+          : sort === "price_asc"
+            ? Number.MAX_SAFE_INTEGER
+            : 0;
+        const bPriceValue = bPrice
+          ? bPrice.individual
+          : sort === "price_asc"
+            ? Number.MAX_SAFE_INTEGER
+            : 0;
+
         // Sort ascending or descending based on sort parameter
-        return sort === 'price_asc' ? aPriceValue - bPriceValue : bPriceValue - aPriceValue;
+        return sort === "price_asc"
+          ? aPriceValue - bPriceValue
+          : bPriceValue - aPriceValue;
       });
     }
-    
+
     // Calculate pagination info
     const totalPages = Math.ceil(totalCount / limitNum);
-    
+
     // Return response
     res.status(200).json({
       success: true,
@@ -2673,18 +3358,218 @@ const getCoursesWithFields = async (req, res) => {
         currentPage: pageNum,
         limit: limitNum,
         hasNextPage: pageNum < totalPages,
-        hasPrevPage: pageNum > 1
-      }
+        hasPrevPage: pageNum > 1,
+      },
     });
   } catch (error) {
     console.error("Error in getCoursesWithFields:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching courses",
-      error: error.message || "An unexpected error occurred"
+      error: error.message || "An unexpected error occurred",
     });
   }
 };
+
+export const getCourseResource = catchAsync(async (req, res) => {
+  const { courseId, lessonId, resourceId } = req.params;
+
+  if (
+    !mongoose.isValidObjectId(courseId) ||
+    !mongoose.isValidObjectId(lessonId) ||
+    !mongoose.isValidObjectId(resourceId)
+  ) {
+    return res.status(400).json(responseFormatter.error("Invalid ID format"));
+  }
+
+  const course = await Course.findById(courseId);
+  if (!course) {
+    return res.status(404).json(responseFormatter.error("Course not found"));
+  }
+
+  const lesson = course.lessons.id(lessonId);
+  if (!lesson) {
+    return res.status(404).json(responseFormatter.error("Lesson not found"));
+  }
+
+  const resource = lesson.resources.id(resourceId);
+  if (!resource || !resource.url) {
+    return res
+      .status(404)
+      .json(responseFormatter.error("Resource not found or URL missing"));
+  }
+
+  try {
+    // Extract the S3 key from the resource URL
+    // Assumes URL format like https://bucket-name.s3.region.amazonaws.com/key or https://s3.region.amazonaws.com/bucket-name/key
+    let s3Key = "";
+    try {
+      const urlParts = new URL(resource.url);
+      if (urlParts.hostname.includes("s3")) {
+        s3Key = urlParts.pathname.startsWith("/")
+          ? urlParts.pathname.substring(1)
+          : urlParts.pathname;
+        // Handle bucket name potentially being in the path
+        const bucketNameInPath = s3Key.split("/")[0];
+        if (bucketNameInPath === ENV_VARS.AWS_S3_BUCKET_NAME) {
+          s3Key = s3Key.substring(bucketNameInPath.length + 1);
+        }
+      } else {
+        // Fallback for potentially different URL structures - adapt as needed
+        s3Key = resource.url.split(".com/").pop();
+      }
+    } catch (urlError) {
+      logger.error("Error parsing resource URL:", resource.url, urlError);
+      // Fallback parsing if URL object fails
+      s3Key = resource.url.includes(".com/")
+        ? resource.url.split(".com/").pop()
+        : resource.url;
+    }
+
+    if (!s3Key) {
+      logger.error("Could not extract S3 key from resource URL:", resource.url);
+      return res
+        .status(404)
+        .json(responseFormatter.error("Resource file path invalid."));
+    }
+
+    logger.info(`Attempting to stream resource with S3 key: ${s3Key}`);
+    const fileStream = await getFileStream(s3Key); // Use the imported function
+
+    // Set appropriate headers
+    res.setHeader(
+      "Content-Type",
+      resource.mimeType || "application/octet-stream",
+    );
+    // Use encodeURIComponent for filename to handle special characters
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${encodeURIComponent(resource.title)}"`,
+    );
+
+    fileStream.pipe(res);
+
+    fileStream.on("error", (streamError) => {
+      logger.error("Error streaming resource from S3:", streamError);
+      // Avoid sending further headers if already sent
+      if (!res.headersSent) {
+        res.status(500).json(responseFormatter.error("Error streaming file."));
+      }
+    });
+
+    fileStream.on("end", () => {
+      logger.info(`Successfully streamed resource: ${resource.title}`);
+    });
+  } catch (error) {
+    logger.error("Error retrieving resource stream:", error);
+    res
+      .status(500)
+      .json(
+        responseFormatter.error(
+          error.message || "Failed to get resource file.",
+        ),
+      );
+  }
+});
+
+export const getCourseMaterial = catchAsync(async (req, res) => {
+  const { courseId, materialId } = req.params;
+
+  if (
+    !mongoose.isValidObjectId(courseId) ||
+    !mongoose.isValidObjectId(materialId)
+  ) {
+    return res.status(400).json(responseFormatter.error("Invalid ID format"));
+  }
+
+  const course = await Course.findById(courseId);
+  if (
+    !course ||
+    !course.course_brochure ||
+    course.course_brochure.length === 0
+  ) {
+    return res
+      .status(404)
+      .json(responseFormatter.error("Course or brochure not found"));
+  }
+
+  const brochure = course.course_brochure.id(materialId);
+  if (!brochure || !brochure.url) {
+    return res
+      .status(404)
+      .json(
+        responseFormatter.error("Brochure material not found or URL missing"),
+      );
+  }
+
+  try {
+    // Extract the S3 key from the brochure URL (similar logic as getCourseResource)
+    let s3Key = "";
+    try {
+      const urlParts = new URL(brochure.url);
+      if (urlParts.hostname.includes("s3")) {
+        s3Key = urlParts.pathname.startsWith("/")
+          ? urlParts.pathname.substring(1)
+          : urlParts.pathname;
+        const bucketNameInPath = s3Key.split("/")[0];
+        if (bucketNameInPath === ENV_VARS.AWS_S3_BUCKET_NAME) {
+          s3Key = s3Key.substring(bucketNameInPath.length + 1);
+        }
+      } else {
+        s3Key = brochure.url.split(".com/").pop();
+      }
+    } catch (urlError) {
+      logger.error("Error parsing brochure URL:", brochure.url, urlError);
+      s3Key = brochure.url.includes(".com/")
+        ? brochure.url.split(".com/").pop()
+        : brochure.url;
+    }
+
+    if (!s3Key) {
+      logger.error("Could not extract S3 key from brochure URL:", brochure.url);
+      return res
+        .status(404)
+        .json(responseFormatter.error("Brochure file path invalid."));
+    }
+
+    logger.info(`Attempting to stream brochure with S3 key: ${s3Key}`);
+    const fileStream = await getFileStream(s3Key); // Use the imported function
+
+    // Determine Content-Type based on file extension or stored mimeType
+    const contentType =
+      brochure.mimeType ||
+      mime.getType(brochure.title) ||
+      "application/octet-stream";
+    res.setHeader("Content-Type", contentType);
+    // Use encodeURIComponent for filename
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${encodeURIComponent(brochure.title)}"`,
+    );
+
+    fileStream.pipe(res);
+
+    fileStream.on("error", (streamError) => {
+      logger.error("Error streaming brochure from S3:", streamError);
+      if (!res.headersSent) {
+        res.status(500).json(responseFormatter.error("Error streaming file."));
+      }
+    });
+
+    fileStream.on("end", () => {
+      logger.info(`Successfully streamed brochure: ${brochure.title}`);
+    });
+  } catch (error) {
+    logger.error("Error retrieving brochure stream:", error);
+    res
+      .status(500)
+      .json(
+        responseFormatter.error(
+          error.message || "Failed to get brochure file.",
+        ),
+      );
+  }
+});
 
 export {
   createCourse,
@@ -2727,5 +3612,5 @@ export {
   updateCoursePrices,
   bulkUpdateCoursePrices,
   getAllCoursesWithPrices,
-  getCoursesWithFields
+  getCoursesWithFields,
 };

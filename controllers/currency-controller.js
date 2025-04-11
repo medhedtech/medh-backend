@@ -22,7 +22,7 @@ export const createCurrency = catchAsync(async (req, res, next) => {
 });
 
 // Get all currencies
-export const getAllCurrencies = catchAsync(async (req, res, next) => {
+export const getAllCurrencies = catchAsync(async (req, res, _next) => {
   const currencies = await Currency.find();
 
   res.status(200).json({
@@ -35,17 +35,19 @@ export const getAllCurrencies = catchAsync(async (req, res, next) => {
 });
 
 // Get all currency country codes
-export const getAllCurrencyCountryCodes = catchAsync(async (req, res, next) => {
-  const currencies = await Currency.find().select('countryCode -_id');
+export const getAllCurrencyCountryCodes = catchAsync(
+  async (req, res, _next) => {
+    const currencies = await Currency.find().select("countryCode -_id");
 
-  res.status(200).json({
-    status: "success",
-    results: currencies.length,
-    data: {
-      countryCodes: currencies.map(currency => currency.countryCode),
-    },
-  });
-});
+    res.status(200).json({
+      status: "success",
+      results: currencies.length,
+      data: {
+        countryCodes: currencies.map((currency) => currency.countryCode),
+      },
+    });
+  },
+);
 
 // Get currency by ID
 export const getCurrencyById = catchAsync(async (req, res, next) => {
@@ -117,8 +119,8 @@ export const toggleCurrencyStatus = catchAsync(async (req, res, next) => {
 
 // Get currency by country code
 export const getCurrencyByCountryCode = catchAsync(async (req, res, next) => {
-  const currency = await Currency.findOne({ 
-    countryCode: req.params.code.toUpperCase() 
+  const currency = await Currency.findOne({
+    countryCode: req.params.code.toUpperCase(),
   });
 
   if (!currency) {
@@ -131,4 +133,4 @@ export const getCurrencyByCountryCode = catchAsync(async (req, res, next) => {
       currency,
     },
   });
-}); 
+});

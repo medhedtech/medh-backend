@@ -1,5 +1,6 @@
-import OnlineMeeting from "../models/online-meeting.js";
 import moment from "moment";
+
+import OnlineMeeting from "../models/online-meeting.js";
 
 export const statusUpdater = async () => {
   try {
@@ -26,10 +27,10 @@ export const statusUpdater = async () => {
     if (idsToUpdate.length > 0) {
       await OnlineMeeting.updateMany(
         { _id: { $in: idsToUpdate } },
-        { $set: { status: "inactive" } }
+        { $set: { status: "inactive" } },
       );
       console.log(
-        `Updated ${idsToUpdate.length} meeting(s) to status 'inactive'.`
+        `Updated ${idsToUpdate.length} meeting(s) to status 'inactive'.`,
       );
     } else {
       console.log("No meetings to update.");

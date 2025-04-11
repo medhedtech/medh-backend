@@ -11,10 +11,7 @@ const instructorFeedbackSchema = new mongoose.Schema(
       default: "student",
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-export default mongoose.model(
-  "InstructorFeedback",
-  instructorFeedbackSchema
-);
+export default mongoose.model("InstructorFeedback", instructorFeedbackSchema);

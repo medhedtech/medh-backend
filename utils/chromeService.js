@@ -1,8 +1,9 @@
-import { exec } from 'child_process';
-import logger from './logger.js';
-import path from 'path';
-import fs from 'fs';
-import os from 'os';
+import { exec } from "child_process";
+import fs from "fs";
+import os from "os";
+import path from "path";
+
+import logger from "./logger.js";
 
 class ChromeService {
   constructor() {
@@ -14,18 +15,21 @@ class ChromeService {
 
   getChromePath() {
     switch (os.platform()) {
-      case 'darwin': // macOS
-        return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-      case 'win32': // Windows
-        const programFiles = process.env['ProgramFiles'];
-        const programFilesX86 = process.env['ProgramFiles(x86)'];
+      case "darwin": // macOS
+        return "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+      case "win32": // Windows
+        const programFiles = process.env["ProgramFiles"];
+        const programFilesX86 = process.env["ProgramFiles(x86)"];
         const paths = [
-          path.join(programFiles || '', 'Google/Chrome/Application/chrome.exe'),
-          path.join(programFilesX86 || '', 'Google/Chrome/Application/chrome.exe')
+          path.join(programFiles || "", "Google/Chrome/Application/chrome.exe"),
+          path.join(
+            programFilesX86 || "",
+            "Google/Chrome/Application/chrome.exe",
+          ),
         ];
-        return paths.find(p => fs.existsSync(p)) || 'chrome';
+        return paths.find((p) => fs.existsSync(p)) || "chrome";
       default: // Linux and others
-        return 'google-chrome';
+        return "google-chrome";
     }
   }
 
@@ -35,33 +39,36 @@ class ChromeService {
     }
 
     try {
-      const userDataDir = path.join(os.tmpdir(), 'chrome-pdf-service');
+      const userDataDir = path.join(os.tmpdir(), "chrome-pdf-service");
       if (!fs.existsSync(userDataDir)) {
         fs.mkdirSync(userDataDir, { recursive: true });
       }
 
       const args = [
         `--remote-debugging-port=${this.debugPort}`,
-        '--headless',
-        '--disable-gpu',
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
+        "--headless",
+        "--disable-gpu",
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
         `--user-data-dir=${userDataDir}`,
-        '--disable-dev-shm-usage'
+        "--disable-dev-shm-usage",
       ];
 
-      this.chromeProcess = exec(`"${this.chromePath}" ${args.join(' ')}`, (error) => {
-        if (error) {
-          logger.error('Chrome process error:', {
-            error: {
-              message: error.message,
-              stack: error.stack
-            }
-          });
-        }
-      });
+      this.chromeProcess = exec(
+        `"${this.chromePath}" ${args.join(" ")}`,
+        (error) => {
+          if (error) {
+            logger.error("Chrome process error:", {
+              error: {
+                message: error.message,
+                stack: error.stack,
+              },
+            });
+          }
+        },
+      );
 
-      this.chromeProcess.on('exit', (code) => {
+      this.chromeProcess.on("exit", (code) => {
         logger.info(`Chrome process exited with code ${code}`);
         this.isRunning = false;
       });
@@ -70,18 +77,18 @@ class ChromeService {
       await new Promise((resolve) => setTimeout(resolve, 1000));
       this.isRunning = true;
 
-      logger.info('Chrome started successfully', {
+      logger.info("Chrome started successfully", {
         port: this.debugPort,
-        pid: this.chromeProcess.pid
+        pid: this.chromeProcess.pid,
       });
     } catch (error) {
-      logger.error('Failed to start Chrome:', {
+      logger.error("Failed to start Chrome:", {
         error: {
           message: error.message,
-          stack: error.stack
-        }
+          stack: error.stack,
+        },
       });
-      throw new Error('Failed to start Chrome');
+      throw new Error("Failed to start Chrome");
     }
   }
 
@@ -91,22 +98,22 @@ class ChromeService {
     }
 
     try {
-      if (os.platform() === 'win32') {
+      if (os.platform() === "win32") {
         exec(`taskkill /pid ${this.chromeProcess.pid} /T /F`);
       } else {
-        this.chromeProcess.kill('SIGTERM');
+        this.chromeProcess.kill("SIGTERM");
       }
 
       this.isRunning = false;
       this.chromeProcess = null;
 
-      logger.info('Chrome stopped successfully');
+      logger.info("Chrome stopped successfully");
     } catch (error) {
-      logger.error('Failed to stop Chrome:', {
+      logger.error("Failed to stop Chrome:", {
         error: {
           message: error.message,
-          stack: error.stack
-        }
+          stack: error.stack,
+        },
       });
     }
   }
@@ -122,18 +129,18 @@ class ChromeService {
 const chromeService = new ChromeService();
 
 // Ensure Chrome is stopped on process exit
-process.on('exit', () => {
+process.on("exit", () => {
   chromeService.stopChrome();
 });
 
-process.on('SIGINT', () => {
-  chromeService.stopChrome();
-  process.exit();
-});
-
-process.on('SIGTERM', () => {
+process.on("SIGINT", () => {
   chromeService.stopChrome();
   process.exit();
 });
 
-export { chromeService }; 
+process.on("SIGTERM", () => {
+  chromeService.stopChrome();
+  process.exit();
+});
+
+export { chromeService };

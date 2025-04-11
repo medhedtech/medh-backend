@@ -1,7 +1,9 @@
-import razorpayService from '../services/razorpayService.js';
-import paymentProcessor from './payment-controller.js';
-import { v4 as uuidv4 } from 'uuid';
-import logger from '../utils/logger.js';
+import { v4 as uuidv4 } from "uuid";
+
+import razorpayService from "../services/razorpayService.js";
+import logger from "../utils/logger.js";
+
+import paymentProcessor from "./payment-controller.js";
 
 /**
  * @description Create a new order for payment
@@ -10,10 +12,10 @@ import logger from '../utils/logger.js';
  */
 export const createOrder = async (req, res) => {
   try {
-    const { 
-      amount, 
-      currency, 
-      notes, 
+    const {
+      amount,
+      currency,
+      notes,
       productInfo,
       payment_type, // "course" or "subscription"
       // For course payments
@@ -24,27 +26,27 @@ export const createOrder = async (req, res) => {
       // For subscription payments
       plan_id,
       plan_name,
-      duration_months
+      duration_months,
     } = req.body;
-    
+
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid amount'
+        message: "Invalid amount",
       });
     }
 
     if (!productInfo) {
       return res.status(400).json({
         success: false,
-        message: 'Product information is required'
+        message: "Product information is required",
       });
     }
 
-    if (!payment_type || !['course', 'subscription'].includes(payment_type)) {
+    if (!payment_type || !["course", "subscription"].includes(payment_type)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid payment type. Must be "course" or "subscription".'
+        message: 'Invalid payment type. Must be "course" or "subscription".',
       });
     }
 
@@ -57,17 +59,17 @@ export const createOrder = async (req, res) => {
       payment_type,
       student_id: userId,
       // Add fields based on payment type
-      ...(payment_type === 'course' && {
+      ...(payment_type === "course" && {
         course_id,
         enrollment_type,
         is_self_paced,
-        expiry_date
+        expiry_date,
       }),
-      ...(payment_type === 'subscription' && {
+      ...(payment_type === "subscription" && {
         plan_id,
         plan_name,
-        duration_months
-      })
+        duration_months,
+      }),
     };
 
     const { order, razorpayOrder } = await razorpayService.createOrder({
@@ -76,7 +78,7 @@ export const createOrder = async (req, res) => {
       receipt,
       notes,
       userId,
-      productInfo: enhancedProductInfo
+      productInfo: enhancedProductInfo,
     });
 
     res.status(200).json({
@@ -86,17 +88,17 @@ export const createOrder = async (req, res) => {
         amount: razorpayOrder.amount,
         currency: razorpayOrder.currency,
         receipt: razorpayOrder.receipt,
-        orderId: order._id
-      }
+        orderId: order._id,
+      },
     });
   } catch (error) {
-    logger.error('Error creating Razorpay order', {
+    logger.error("Error creating Razorpay order", {
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
     });
     res.status(500).json({
       success: false,
-      message: error.message || 'Something went wrong while creating order'
+      message: error.message || "Something went wrong while creating order",
     });
   }
 };
@@ -108,19 +110,20 @@ export const createOrder = async (req, res) => {
  */
 export const verifyPayment = async (req, res) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
+      req.body;
 
     if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return res.status(400).json({
         success: false,
-        message: 'All payment verification parameters are required'
+        message: "All payment verification parameters are required",
       });
     }
 
     const result = await razorpayService.verifyPayment({
       orderId: razorpay_order_id,
       paymentId: razorpay_payment_id,
-      signature: razorpay_signature
+      signature: razorpay_signature,
     });
 
     // Process the payment with the existing payment controller
@@ -130,35 +133,38 @@ export const verifyPayment = async (req, res) => {
         razorpay_payment_id,
         razorpay_signature,
         razorpay_order_id,
-        amount: result.order.amount
+        amount: result.order.amount,
       };
 
       // Call the existing payment processor
-      return paymentProcessor.processPaymentAndEnroll({
-        user: { id: result.order.userId },
-        body: {
-          ...result.productInfo, // Already contains student_id, payment_type, etc.
-          paymentResponse,
-          currencyCode: result.order.currency,
-          getFinalPrice: () => result.order.amount
-        }
-      }, res);
+      return paymentProcessor.processPaymentAndEnroll(
+        {
+          user: { id: result.order.userId },
+          body: {
+            ...result.productInfo, // Already contains student_id, payment_type, etc.
+            paymentResponse,
+            currencyCode: result.order.currency,
+            getFinalPrice: () => result.order.amount,
+          },
+        },
+        res,
+      );
     }
 
     // If no processor integration happens, return standard response
     res.status(200).json({
       success: true,
-      message: 'Payment verified successfully',
-      data: result.order
+      message: "Payment verified successfully",
+      data: result.order,
     });
   } catch (error) {
-    logger.error('Payment verification failed', {
+    logger.error("Payment verification failed", {
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
     });
     res.status(400).json({
       success: false,
-      message: error.message || 'Payment verification failed'
+      message: error.message || "Payment verification failed",
     });
   }
 };
@@ -171,28 +177,28 @@ export const verifyPayment = async (req, res) => {
 export const getPaymentDetails = async (req, res) => {
   try {
     const { paymentId } = req.params;
-    
+
     if (!paymentId) {
       return res.status(400).json({
         success: false,
-        message: 'Payment ID is required'
+        message: "Payment ID is required",
       });
     }
 
     const payment = await razorpayService.getPaymentDetails(paymentId);
-    
+
     res.status(200).json({
       success: true,
-      data: payment
+      data: payment,
     });
   } catch (error) {
-    logger.error('Failed to fetch payment details', {
+    logger.error("Failed to fetch payment details", {
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
     });
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to fetch payment details'
+      message: error.message || "Failed to fetch payment details",
     });
   }
 };
@@ -205,22 +211,22 @@ export const getPaymentDetails = async (req, res) => {
 export const getUserOrders = async (req, res) => {
   try {
     const userId = req.user.id; // Assuming req.user is set by auth middleware
-    
+
     const orders = await razorpayService.getUserOrders(userId);
-    
+
     res.status(200).json({
       success: true,
       count: orders.length,
-      data: orders
+      data: orders,
     });
   } catch (error) {
-    logger.error('Failed to fetch user orders', {
+    logger.error("Failed to fetch user orders", {
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
     });
     res.status(500).json({
       success: false,
-      message: error.message || 'Failed to fetch user orders'
+      message: error.message || "Failed to fetch user orders",
     });
   }
 };
@@ -236,16 +242,16 @@ export const getRazorpayKey = (req, res) => {
     res.status(200).json({
       success: true,
       data: {
-        key: process.env.RAZORPAY_KEY_ID
-      }
+        key: process.env.RAZORPAY_KEY_ID,
+      },
     });
   } catch (error) {
-    logger.error('Failed to fetch Razorpay key', {
-      error: error.message
+    logger.error("Failed to fetch Razorpay key", {
+      error: error.message,
     });
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch Razorpay key'
+      message: "Failed to fetch Razorpay key",
     });
   }
-}; 
+};

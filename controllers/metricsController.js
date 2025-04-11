@@ -1,21 +1,21 @@
-import { getAPIMetrics } from '../middleware/apiMonitor.js';
-import errorTracker from '../services/errorTracker.js';
-import logger from '../utils/logger.js';
+import { getAPIMetrics } from "../middleware/apiMonitor.js";
+import errorTracker from "../services/errorTracker.js";
+import logger from "../utils/logger.js";
 
 export const getMetrics = (req, res) => {
   try {
     const metrics = getAPIMetrics();
     res.json(metrics);
   } catch (error) {
-    logger.error('Error fetching API metrics', {
+    logger.error("Error fetching API metrics", {
       error: {
         message: error.message,
-        stack: error.stack
-      }
+        stack: error.stack,
+      },
     });
     res.status(500).json({
-      status: 'error',
-      message: 'Error fetching API metrics'
+      status: "error",
+      message: "Error fetching API metrics",
     });
   }
 };
@@ -25,18 +25,18 @@ export const getErrorStats = (req, res) => {
     const stats = errorTracker.getErrorStats();
     res.json({
       timestamp: new Date(),
-      stats
+      stats,
     });
   } catch (error) {
-    logger.error('Error fetching error statistics', {
+    logger.error("Error fetching error statistics", {
       error: {
         message: error.message,
-        stack: error.stack
-      }
+        stack: error.stack,
+      },
     });
     res.status(500).json({
-      status: 'error',
-      message: 'Error fetching error statistics'
+      status: "error",
+      message: "Error fetching error statistics",
     });
   }
 };
@@ -47,18 +47,18 @@ export const getErrorSummary = (req, res) => {
     res.json({
       timestamp: new Date(),
       totalErrors: summary.length,
-      errors: summary
+      errors: summary,
     });
   } catch (error) {
-    logger.error('Error fetching error summary', {
+    logger.error("Error fetching error summary", {
       error: {
         message: error.message,
-        stack: error.stack
-      }
+        stack: error.stack,
+      },
     });
     res.status(500).json({
-      status: 'error',
-      message: 'Error fetching error summary'
+      status: "error",
+      message: "Error fetching error summary",
     });
   }
 };
@@ -67,67 +67,71 @@ export const getSystemHealth = (req, res) => {
   try {
     const metrics = getAPIMetrics();
     const errorStats = errorTracker.getErrorStats();
-    
+
     // Calculate error rate and average response time
     let totalRequests = 0;
     let totalErrors = 0;
     let totalDuration = 0;
-    
-    metrics.metrics.forEach(metric => {
+
+    metrics.metrics.forEach((metric) => {
       totalRequests += metric.totalCalls;
-      totalErrors += metric.errorRate * metric.totalCalls / 100;
+      totalErrors += (metric.errorRate * metric.totalCalls) / 100;
       totalDuration += metric.averageDuration * metric.totalCalls;
     });
 
     const health = {
       timestamp: new Date(),
-      status: 'healthy', // Will be updated based on checks
+      status: "healthy", // Will be updated based on checks
       checks: {
         errorRate: {
-          status: 'healthy',
+          status: "healthy",
           value: totalRequests ? (totalErrors / totalRequests) * 100 : 0,
-          threshold: 5 // 5% error rate threshold
+          threshold: 5, // 5% error rate threshold
         },
         responseTime: {
-          status: 'healthy',
+          status: "healthy",
           value: totalRequests ? totalDuration / totalRequests : 0,
-          threshold: 1000 // 1 second threshold
+          threshold: 1000, // 1 second threshold
         },
         recentErrors: {
-          status: 'healthy',
+          status: "healthy",
           value: errorStats.lastHour,
-          threshold: 50 // 50 errors per hour threshold
-        }
-      }
+          threshold: 50, // 50 errors per hour threshold
+        },
+      },
     };
 
     // Update check statuses
     if (health.checks.errorRate.value > health.checks.errorRate.threshold) {
-      health.checks.errorRate.status = 'unhealthy';
-      health.status = 'unhealthy';
+      health.checks.errorRate.status = "unhealthy";
+      health.status = "unhealthy";
     }
-    
-    if (health.checks.responseTime.value > health.checks.responseTime.threshold) {
-      health.checks.responseTime.status = 'degraded';
-      if (health.status === 'healthy') health.status = 'degraded';
+
+    if (
+      health.checks.responseTime.value > health.checks.responseTime.threshold
+    ) {
+      health.checks.responseTime.status = "degraded";
+      if (health.status === "healthy") health.status = "degraded";
     }
-    
-    if (health.checks.recentErrors.value > health.checks.recentErrors.threshold) {
-      health.checks.recentErrors.status = 'unhealthy';
-      health.status = 'unhealthy';
+
+    if (
+      health.checks.recentErrors.value > health.checks.recentErrors.threshold
+    ) {
+      health.checks.recentErrors.status = "unhealthy";
+      health.status = "unhealthy";
     }
 
     res.json(health);
   } catch (error) {
-    logger.error('Error fetching system health', {
+    logger.error("Error fetching system health", {
       error: {
         message: error.message,
-        stack: error.stack
-      }
+        stack: error.stack,
+      },
     });
     res.status(500).json({
-      status: 'error',
-      message: 'Error fetching system health'
+      status: "error",
+      message: "Error fetching system health",
     });
   }
-}; 
+};

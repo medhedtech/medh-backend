@@ -1,4 +1,4 @@
-import logger from '../utils/logger.js';
+import logger from "../utils/logger.js";
 
 class ErrorTracker {
   constructor() {
@@ -24,7 +24,7 @@ class ErrorTracker {
         firstOccurrence: timestamp,
         lastOccurrence: timestamp,
         occurrences: [],
-        contexts: new Set()
+        contexts: new Set(),
       });
     }
 
@@ -35,23 +35,23 @@ class ErrorTracker {
     // Keep last 10 occurrences with context
     errorEntry.occurrences.unshift({
       timestamp,
-      context
+      context,
     });
     if (errorEntry.occurrences.length > 10) {
       errorEntry.occurrences.pop();
     }
 
     // Log the error
-    logger.error('Error Tracked', {
+    logger.error("Error Tracked", {
       errorKey,
       error: {
         name: error.name,
         message: error.message,
         stack: error.stack,
-        code: error.code
+        code: error.code,
       },
       context,
-      occurrenceCount: this.errorCounts.get(errorKey)
+      occurrenceCount: this.errorCounts.get(errorKey),
     });
 
     // Alert if error frequency is high
@@ -60,7 +60,7 @@ class ErrorTracker {
 
   getErrorKey(error) {
     // Create a unique key based on error properties
-    return `${error.name}:${error.message}:${error.code || 'no_code'}`;
+    return `${error.name}:${error.message}:${error.code || "no_code"}`;
   }
 
   checkErrorFrequency(errorKey) {
@@ -69,17 +69,19 @@ class ErrorTracker {
     const timeWindow = 5 * 60 * 1000; // 5 minutes
 
     // Alert if more than 10 occurrences in 5 minutes
-    if (count > 10 && 
-        (Date.now() - errorEntry.firstOccurrence.getTime()) <= timeWindow) {
-      logger.warn('High Error Frequency Detected', {
+    if (
+      count > 10 &&
+      Date.now() - errorEntry.firstOccurrence.getTime() <= timeWindow
+    ) {
+      logger.warn("High Error Frequency Detected", {
         errorKey,
         count,
-        timeWindow: '5 minutes',
+        timeWindow: "5 minutes",
         error: {
           name: errorEntry.name,
           message: errorEntry.message,
-          code: errorEntry.code
-        }
+          code: errorEntry.code,
+        },
       });
     }
   }
@@ -96,7 +98,7 @@ class ErrorTracker {
         firstOccurrence: error.firstOccurrence,
         lastOccurrence: error.lastOccurrence,
         uniqueContexts: error.contexts.size,
-        recentOccurrences: error.occurrences
+        recentOccurrences: error.occurrences,
       });
     });
 
@@ -110,7 +112,7 @@ class ErrorTracker {
       last24Hours: 0,
       lastHour: 0,
       byType: {},
-      byCode: {}
+      byCode: {},
     };
 
     this.errors.forEach((error, key) => {
@@ -126,12 +128,14 @@ class ErrorTracker {
       }
 
       // Count recent errors
-      error.occurrences.forEach(occurrence => {
+      error.occurrences.forEach((occurrence) => {
         const timeDiff = now - occurrence.timestamp.getTime();
-        if (timeDiff <= 24 * 60 * 60 * 1000) { // 24 hours
+        if (timeDiff <= 24 * 60 * 60 * 1000) {
+          // 24 hours
           stats.last24Hours++;
         }
-        if (timeDiff <= 60 * 60 * 1000) { // 1 hour
+        if (timeDiff <= 60 * 60 * 1000) {
+          // 1 hour
           stats.lastHour++;
         }
       });
@@ -142,7 +146,7 @@ class ErrorTracker {
 
   clearOldErrors() {
     const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days
-    
+
     this.errors.forEach((error, key) => {
       if (error.lastOccurrence < cutoff) {
         this.errors.delete(key);
@@ -156,8 +160,11 @@ class ErrorTracker {
 const errorTracker = new ErrorTracker();
 
 // Clean up old errors every day
-setInterval(() => {
-  errorTracker.clearOldErrors();
-}, 24 * 60 * 60 * 1000);
+setInterval(
+  () => {
+    errorTracker.clearOldErrors();
+  },
+  24 * 60 * 60 * 1000,
+);
 
-export default errorTracker; 
+export default errorTracker;

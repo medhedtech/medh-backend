@@ -34,6 +34,7 @@ The API includes several predefined field sets for common UI components:
 - `related`: Fields needed for related courses
 
 Example:
+
 ```
 /api/courses/fields?fields=card
 ```
@@ -47,6 +48,7 @@ The `filters` parameter allows you to filter the results:
 ```
 
 Available filters:
+
 - `search`: Text search across title, category, and tag
 - `category`: Filter by course category
 - `categoryType`: Filter by category type (Free, Paid, Live, etc.)
@@ -62,6 +64,7 @@ Available filters:
 - `currency`: Filter by currency (e.g., "USD", "INR", "EUR")
 
 Example with currency filter:
+
 ```
 /api/courses/fields?fields=card&filters[currency]=USD
 ```
@@ -75,6 +78,7 @@ The `sort` parameter allows you to sort the results:
 ```
 
 Available sort fields:
+
 - `title`: Sort by course title
 - `category`: Sort by course category
 - `tag`: Sort by course tag
@@ -144,8 +148,8 @@ The API supports pagination with `page` and `limit` parameters:
 ### React Hook Example
 
 ```jsx
-import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { useState, useEffect } from "react";
+import axios from "axios";
 
 const useCourses = (fields, filters = {}, sort = {}, page = 1, limit = 10) => {
   const [courses, setCourses] = useState([]);
@@ -157,28 +161,30 @@ const useCourses = (fields, filters = {}, sort = {}, page = 1, limit = 10) => {
     const fetchCourses = async () => {
       try {
         setLoading(true);
-        
+
         // Build query parameters
         const params = new URLSearchParams();
-        params.append('fields', fields);
-        
+        params.append("fields", fields);
+
         // Add filters
         Object.entries(filters).forEach(([key, value]) => {
           params.append(`filters[${key}]`, value);
         });
-        
+
         // Add sort
         if (sort.field && sort.order) {
-          params.append('sort[field]', sort.field);
-          params.append('sort[order]', sort.order);
+          params.append("sort[field]", sort.field);
+          params.append("sort[order]", sort.order);
         }
-        
+
         // Add pagination
-        params.append('page', page);
-        params.append('limit', limit);
-        
-        const response = await axios.get(`/api/courses/fields?${params.toString()}`);
-        
+        params.append("page", page);
+        params.append("limit", limit);
+
+        const response = await axios.get(
+          `/api/courses/fields?${params.toString()}`,
+        );
+
         setCourses(response.data.data);
         setPagination(response.data.pagination);
         setError(null);
@@ -188,10 +194,10 @@ const useCourses = (fields, filters = {}, sort = {}, page = 1, limit = 10) => {
         setLoading(false);
       }
     };
-    
+
     fetchCourses();
   }, [fields, JSON.stringify(filters), JSON.stringify(sort), page, limit]);
-  
+
   return { courses, loading, error, pagination };
 };
 
@@ -204,30 +210,32 @@ export default useCourses;
 // Course Card Component with Required Effort and Total Learning Units
 const CourseCard = () => {
   // Example with currency filter
-  const { courses, loading, error } = useCourses('card', { 
-    status: 'Published',
-    currency: 'USD' // Filter courses with USD prices
+  const { courses, loading, error } = useCourses("card", {
+    status: "Published",
+    currency: "USD", // Filter courses with USD prices
   });
-  
+
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
-  
+
   return (
     <div className="course-grid">
-      {courses.map(course => (
+      {courses.map((course) => (
         <div key={course._id} className="course-card">
           <img src={course.course_image} alt={course.course_title} />
           <h3>{course.course_title}</h3>
           <p>{course.course_category}</p>
           <p>{course.course_duration}</p>
-          <p>{course.isFree ? 'Free' : `$${course.prices[0]?.individual || 0}`}</p>
-          
+          <p>
+            {course.isFree ? "Free" : `$${course.prices[0]?.individual || 0}`}
+          </p>
+
           {/* Required Effort */}
           <div className="course-effort">
             <span className="effort-label">Required Effort</span>
             <span className="effort-value">{course.efforts_per_Week}</span>
           </div>
-          
+
           {/* Total Learning Units */}
           <div className="course-units">
             <span className="units-label">Total Learning Units</span>
@@ -241,19 +249,19 @@ const CourseCard = () => {
 
 // Course Detail Component
 const CourseDetail = ({ courseId }) => {
-  const { courses, loading, error } = useCourses('detail', { _id: courseId });
-  
+  const { courses, loading, error } = useCourses("detail", { _id: courseId });
+
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
-  
+
   const course = courses[0];
   if (!course) return <div>Course not found</div>;
-  
+
   return (
     <div className="course-detail">
       <h1>{course.course_title}</h1>
       <p>{course.course_description.program_overview}</p>
-      
+
       {/* Course Information */}
       <div className="course-info">
         <div className="info-item">
@@ -271,11 +279,11 @@ const CourseDetail = ({ courseId }) => {
         <div className="info-item">
           <span className="info-label">Price:</span>
           <span className="info-value">
-            {course.isFree ? 'Free' : `$${course.prices[0]?.individual || 0}`}
+            {course.isFree ? "Free" : `$${course.prices[0]?.individual || 0}`}
           </span>
         </div>
       </div>
-      
+
       {/* More course details */}
     </div>
   );
@@ -288,4 +296,4 @@ const CourseDetail = ({ courseId }) => {
 2. **Improved Performance**: Smaller payloads mean faster loading times
 3. **Flexible UI Components**: Each component can request exactly what it needs
 4. **Consistent API**: One endpoint for all course data needs
-5. **Future-Proof**: Easy to add new fields or predefined field sets 
+5. **Future-Proof**: Easy to add new fields or predefined field sets

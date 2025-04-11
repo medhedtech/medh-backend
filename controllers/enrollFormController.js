@@ -81,7 +81,10 @@ export const updateEnrollment = async (req, res) => {
     const updatedEnrollment = await EnrollForm.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+      },
     );
 
     if (!updatedEnrollment)

@@ -1,7 +1,7 @@
-import path from "path";
+import nodemailer from "nodemailer";
+
 import Broucher from "../models/broucker-model.js";
 import Course from "../models/course-model.js";
-import nodemailer from "nodemailer";
 import { validateObjectId } from "../utils/validation-helpers.js";
 
 // Nodemailer Transporter Setup with AWS SES
@@ -11,23 +11,25 @@ const transporter = nodemailer.createTransport({
   secure: process.env.EMAIL_SECURE === "true" || true, // true for 465, false for other ports like 587
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
+    pass: process.env.EMAIL_PASS,
+  },
 });
 
 // Add error handling for transporter
-transporter.verify(function(error, success) {
+transporter.verify(function (error, success) {
   if (error) {
     console.error("Email configuration error:", error);
     // Log more details about the error
-    if (error.code === 'EAUTH') {
+    if (error.code === "EAUTH") {
       console.error("Authentication failed. Please check your credentials.");
       console.error("If using Gmail, make sure to:");
       console.error("1. Enable 2-Step Verification in your Google Account");
       console.error("2. Generate an App Password from Google Account settings");
       console.error("3. Use the App Password instead of your regular password");
-    } else if (error.code === 'EDNS') {
-      console.error("DNS lookup failed. Please check your internet connection and SMTP server settings.");
+    } else if (error.code === "EDNS") {
+      console.error(
+        "DNS lookup failed. Please check your internet connection and SMTP server settings.",
+      );
     }
   } else {
     console.log("Email server is ready to send messages");
@@ -41,18 +43,22 @@ const sendEmail = async (mailOptions) => {
     if (!mailOptions.from) {
       mailOptions.from = process.env.EMAIL_FROM || "noreply@medh.co";
     }
-    
+
     const info = await transporter.sendMail(mailOptions);
     console.log("Email sent successfully:", info.messageId);
     return true;
   } catch (error) {
     console.error("Email sending failed:", error);
-    
+
     // Handle specific email errors
-    if (error.code === 'EAUTH') {
-      throw new Error("Email authentication failed. Please check your email credentials.");
-    } else if (error.code === 'ESOCKET') {
-      throw new Error("Email connection failed. Please check your internet connection.");
+    if (error.code === "EAUTH") {
+      throw new Error(
+        "Email authentication failed. Please check your email credentials.",
+      );
+    } else if (error.code === "ESOCKET") {
+      throw new Error(
+        "Email connection failed. Please check your internet connection.",
+      );
     } else {
       throw new Error("Failed to send email. Please try again later.");
     }
@@ -72,20 +78,20 @@ const createBrouchers = async (req, res) => {
     if (!full_name || !email || !phone_number || !course_title) {
       return res.status(400).json({
         success: false,
-        message: "Please provide all required information"
+        message: "Please provide all required information",
       });
     }
 
     // Fetch course details by course_title
     const course = await Course.findOne({ course_title }).populate(
       "course_videos",
-      "brouchers"
+      "brouchers",
     );
-    
+
     if (!course) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Course not found!" 
+        message: "Course not found!",
       });
     }
 
@@ -93,7 +99,7 @@ const createBrouchers = async (req, res) => {
     if (!course.brochures || course.brochures.length === 0) {
       return res.status(404).json({
         success: false,
-        message: `No brochures available for the course "${course_title}"`
+        message: `No brochures available for the course "${course_title}"`,
       });
     }
 
@@ -104,7 +110,7 @@ const createBrouchers = async (req, res) => {
       phone_number,
       course: course._id,
       course_title,
-      selected_brochure: course.brochures[0]
+      selected_brochure: course.brochures[0],
     });
 
     await newBroucher.save();
@@ -131,14 +137,14 @@ const createBrouchers = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Brochure created and email sent successfully",
-      data: newBroucher
+      data: newBroucher,
     });
   } catch (error) {
     console.error("Error in createBroucher:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Error creating brochure", 
-      error: error.message 
+      message: "Error creating brochure",
+      error: error.message,
     });
   }
 };
@@ -154,19 +160,19 @@ const getAllBrouchers = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-    
+
     // Add filtering options similar to course controller
     const filter = {};
     const { email, course_title, date_from, date_to } = req.query;
-    
+
     if (email) {
-      filter.email = { $regex: email, $options: 'i' };
+      filter.email = { $regex: email, $options: "i" };
     }
-    
+
     if (course_title) {
-      filter.course_title = { $regex: course_title, $options: 'i' };
+      filter.course_title = { $regex: course_title, $options: "i" };
     }
-    
+
     if (date_from || date_to) {
       filter.createdAt = {};
       if (date_from) {
@@ -181,9 +187,9 @@ const getAllBrouchers = async (req, res) => {
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 });
-      
+
     const totalBrouchers = await Broucher.countDocuments(filter);
-    
+
     res.status(200).json({
       success: true,
       message: "Brochures fetched successfully",
@@ -191,15 +197,15 @@ const getAllBrouchers = async (req, res) => {
         brouchers,
         totalBrouchers,
         totalPages: Math.ceil(totalBrouchers / limit),
-        currentPage: page
-      }
+        currentPage: page,
+      },
     });
   } catch (error) {
     console.error("Error fetching brochures:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Error fetching brochures", 
-      error: error.message 
+      message: "Error fetching brochures",
+      error: error.message,
     });
   }
 };
@@ -212,34 +218,34 @@ const getAllBrouchers = async (req, res) => {
 const getBroucherById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Validate ID format
     if (!validateObjectId(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid brochure ID format"
+        message: "Invalid brochure ID format",
       });
     }
-    
+
     const broucher = await Broucher.findById(id);
 
     if (!broucher) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Brochure not found" 
+        message: "Brochure not found",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: broucher
+      data: broucher,
     });
   } catch (error) {
     console.error("Error fetching brochure:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Error fetching brochure", 
-      error: error.message 
+      message: "Error fetching brochure",
+      error: error.message,
     });
   }
 };
@@ -252,22 +258,22 @@ const getBroucherById = async (req, res) => {
 const updateBroucher = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Validate ID format
     if (!validateObjectId(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid brochure ID format"
+        message: "Invalid brochure ID format",
       });
     }
-    
+
     const { full_name, email, phone_number, course_title } = req.body;
 
     // Validate required fields
     if (!full_name || !email || !phone_number) {
       return res.status(400).json({
         success: false,
-        message: "Please provide all required information"
+        message: "Please provide all required information",
       });
     }
 
@@ -276,16 +282,19 @@ const updateBroucher = async (req, res) => {
     if (course_title) {
       const course = await Course.findOne({ course_title });
       if (!course) {
-        return res.status(404).json({ 
+        return res.status(404).json({
           success: false,
-          message: "Course not found!" 
+          message: "Course not found!",
         });
       }
-      
+
       courseData = {
         course: course._id,
         course_title,
-        selected_brochure: course.brochures && course.brochures.length > 0 ? course.brochures[0] : null
+        selected_brochure:
+          course.brochures && course.brochures.length > 0
+            ? course.brochures[0]
+            : null,
       };
     }
 
@@ -295,29 +304,29 @@ const updateBroucher = async (req, res) => {
         full_name,
         email,
         phone_number,
-        ...courseData
+        ...courseData,
       },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!updatedBroucher) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Brochure not found" 
+        message: "Brochure not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Brochure updated successfully",
-      data: updatedBroucher
+      data: updatedBroucher,
     });
   } catch (error) {
     console.error("Error updating brochure:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Error updating brochure", 
-      error: error.message 
+      message: "Error updating brochure",
+      error: error.message,
     });
   }
 };
@@ -330,33 +339,33 @@ const updateBroucher = async (req, res) => {
 const deleteBroucher = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Validate ID format
     if (!validateObjectId(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid brochure ID format"
-      });
-    }
-    
-    const deletedBroucher = await Broucher.findByIdAndDelete(id);
-    if (!deletedBroucher) {
-      return res.status(404).json({ 
-        success: false,
-        message: "Brochure not found" 
+        message: "Invalid brochure ID format",
       });
     }
 
-    res.status(200).json({ 
+    const deletedBroucher = await Broucher.findByIdAndDelete(id);
+    if (!deletedBroucher) {
+      return res.status(404).json({
+        success: false,
+        message: "Brochure not found",
+      });
+    }
+
+    res.status(200).json({
       success: true,
-      message: "Brochure deleted successfully" 
+      message: "Brochure deleted successfully",
     });
   } catch (error) {
     console.error("Error deleting brochure:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Error deleting brochure", 
-      error: error.message 
+      message: "Error deleting brochure",
+      error: error.message,
     });
   }
 };
@@ -373,18 +382,18 @@ const downloadBrochure = async (req, res) => {
 
     // Validate courseId format
     if (!validateObjectId(courseId)) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Please select a valid course" 
+        message: "Please select a valid course",
       });
     }
 
     // Find the course
     const course = await Course.findById(courseId);
     if (!course) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Course not found. Please select a valid course" 
+        message: "Course not found. Please select a valid course",
       });
     }
 
@@ -392,19 +401,22 @@ const downloadBrochure = async (req, res) => {
     if (!course.brochures || course.brochures.length === 0) {
       return res.status(404).json({
         success: false,
-        message: `No brochures available for the course "${course.course_title}". Please contact support.`
+        message: `No brochures available for the course "${course.course_title}". Please contact support.`,
       });
     }
 
     // For GET requests, directly download the file
-    if (req.method === 'GET') {
+    if (req.method === "GET") {
       // Get the first brochure URL
       const brochureUrl = course.brochures[0];
-      
+
       // Set headers for file download
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${course.course_title}-brochure.pdf"`);
-      
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${course.course_title}-brochure.pdf"`,
+      );
+
       // Redirect to the S3 URL for direct download
       return res.redirect(brochureUrl);
     }
@@ -415,7 +427,8 @@ const downloadBrochure = async (req, res) => {
     if (!full_name || !email || !phone_number) {
       return res.status(400).json({
         success: false,
-        message: "Please provide all required information (name, email, and phone number)"
+        message:
+          "Please provide all required information (name, email, and phone number)",
       });
     }
 
@@ -429,7 +442,7 @@ const downloadBrochure = async (req, res) => {
       phone_number,
       course: courseId,
       course_title: course.course_title,
-      selected_brochure: brochureUrl
+      selected_brochure: brochureUrl,
     });
 
     await broucherRecord.save();
@@ -445,9 +458,9 @@ const downloadBrochure = async (req, res) => {
           <h3 style="margin-top: 0; color: #444;">Course Details:</h3>
           <ul style="list-style-type: none; padding-left: 0;">
             <li><strong>Title:</strong> ${course.course_title}</li>
-            <li><strong>Category:</strong> ${course.course_category || 'Not specified'}</li>
-            <li><strong>Duration:</strong> ${course.course_duration || 'Not specified'}</li>
-            <li><strong>Fee:</strong> ${course.course_fee || 'Not specified'}</li>
+            <li><strong>Category:</strong> ${course.course_category || "Not specified"}</li>
+            <li><strong>Duration:</strong> ${course.course_duration || "Not specified"}</li>
+            <li><strong>Fee:</strong> ${course.course_fee || "Not specified"}</li>
           </ul>
         </div>
         
@@ -469,7 +482,7 @@ const downloadBrochure = async (req, res) => {
       from: process.env.EMAIL_FROM || "noreply@medh.co",
       to: email,
       subject: `Brochure for ${course.course_title}`,
-      html: htmlContent
+      html: htmlContent,
       // No attachments - using a download link instead
     };
 
@@ -489,16 +502,15 @@ const downloadBrochure = async (req, res) => {
       data: {
         brochureUrl,
         course_title: course.course_title,
-        recordId: broucherRecord._id
-      }
+        recordId: broucherRecord._id,
+      },
     });
-
   } catch (error) {
     console.error("Error downloading brochure:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: "Error processing your request. Please try again.",
-      error: error.message 
+      error: error.message,
     });
   }
 };
@@ -515,32 +527,32 @@ const getBroucherAnalytics = async (req, res) => {
       {
         $group: {
           _id: "$course_title",
-          count: { $sum: 1 }
-        }
+          count: { $sum: 1 },
+        },
       },
-      { $sort: { count: -1 } }
+      { $sort: { count: -1 } },
     ]);
 
     // Get total count
     const totalDownloads = await Broucher.countDocuments();
-    
+
     // Get counts by date (last 30 days)
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    
+
     const dailyDownloads = await Broucher.aggregate([
       {
         $match: {
-          createdAt: { $gte: thirtyDaysAgo }
-        }
+          createdAt: { $gte: thirtyDaysAgo },
+        },
       },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-          count: { $sum: 1 }
-        }
+          count: { $sum: 1 },
+        },
       },
-      { $sort: { _id: 1 } }
+      { $sort: { _id: 1 } },
     ]);
 
     res.status(200).json({
@@ -548,16 +560,15 @@ const getBroucherAnalytics = async (req, res) => {
       data: {
         totalDownloads,
         courseAnalytics,
-        dailyDownloads
-      }
+        dailyDownloads,
+      },
     });
-    
   } catch (error) {
     console.error("Error getting brochure analytics:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Error fetching brochure analytics", 
-      error: error.message 
+      message: "Error fetching brochure analytics",
+      error: error.message,
     });
   }
 };
@@ -569,5 +580,5 @@ export {
   updateBroucher,
   deleteBroucher,
   downloadBrochure,
-  getBroucherAnalytics
+  getBroucherAnalytics,
 };

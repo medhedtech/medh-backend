@@ -1,48 +1,60 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
-const bookmarkSchema = new Schema({
-  course: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Course",
-    required: [true, "Course ID is required"]
+const bookmarkSchema = new Schema(
+  {
+    course: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Course",
+      required: [true, "Course ID is required"],
+    },
+    student: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: [true, "Student ID is required"],
+    },
+    lesson: {
+      type: String,
+      required: [true, "Lesson ID is required"],
+    },
+    timestamp: {
+      type: Number, // video timestamp in seconds
+      required: [true, "Timestamp is required"],
+    },
+    title: {
+      type: String,
+      required: [true, "Bookmark title is required"],
+      trim: true,
+    },
+    description: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    tags: [
+      {
+        type: String,
+        trim: true,
+      },
+    ],
   },
-  student: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: [true, "Student ID is required"]
+  {
+    timestamps: true,
   },
-  lesson: {
-    type: String,
-    required: [true, "Lesson ID is required"]
-  },
-  timestamp: {
-    type: Number, // video timestamp in seconds
-    required: [true, "Timestamp is required"]
-  },
-  title: {
-    type: String,
-    required: [true, "Bookmark title is required"],
-    trim: true
-  },
-  description: {
-    type: String,
-    trim: true,
-    default: ""
-  },
-  tags: [{
-    type: String,
-    trim: true
-  }]
-}, {
-  timestamps: true
-});
+);
 
 // Compound index for unique bookmarks per student per lesson
-bookmarkSchema.index({ course: 1, student: 1, lesson: 1, timestamp: 1 }, { unique: true });
+bookmarkSchema.index(
+  { course: 1, student: 1, lesson: 1, timestamp: 1 },
+  { unique: true },
+);
 
 // Method to update bookmark details
-bookmarkSchema.methods.updateDetails = async function(title, description, tags) {
+bookmarkSchema.methods.updateDetails = async function (
+  title,
+  description,
+  tags,
+) {
   this.title = title;
   this.description = description;
   this.tags = tags;
@@ -52,22 +64,30 @@ bookmarkSchema.methods.updateDetails = async function(title, description, tags) 
 };
 
 // Static method to get all bookmarks for a lesson
-bookmarkSchema.statics.getLessonBookmarks = async function(courseId, studentId, lessonId) {
+bookmarkSchema.statics.getLessonBookmarks = async function (
+  courseId,
+  studentId,
+  lessonId,
+) {
   return await this.find({
     course: courseId,
     student: studentId,
-    lesson: lessonId
+    lesson: lessonId,
   }).sort({ timestamp: 1 });
 };
 
 // Static method to get bookmarks by tags
-bookmarkSchema.statics.getBookmarksByTags = async function(courseId, studentId, tags) {
+bookmarkSchema.statics.getBookmarksByTags = async function (
+  courseId,
+  studentId,
+  tags,
+) {
   return await this.find({
     course: courseId,
     student: studentId,
-    tags: { $in: tags }
+    tags: { $in: tags },
   }).sort({ timestamp: 1 });
 };
 
 const Bookmark = mongoose.model("Bookmark", bookmarkSchema);
-export default Bookmark; 
+export default Bookmark;

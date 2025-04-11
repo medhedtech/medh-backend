@@ -97,7 +97,7 @@ export const updateCorporate = async (req, res) => {
       {
         new: true,
         runValidators: true,
-      }
+      },
     );
 
     if (!updatedCorporate) {
@@ -119,7 +119,7 @@ export const updateCorporate = async (req, res) => {
 export const deleteCorporate = async (req, res) => {
   try {
     const deletedCorporate = await CorporateForm.findByIdAndDelete(
-      req.params.id
+      req.params.id,
     );
 
     if (!deletedCorporate) {

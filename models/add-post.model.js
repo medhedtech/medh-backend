@@ -11,7 +11,7 @@ const enrollJobPostSchema = new mongoose.Schema(
       required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const JobPost = mongoose.model("AddedJobPost", enrollJobPostSchema);

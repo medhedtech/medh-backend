@@ -1,53 +1,53 @@
 name: Node.js CI/CD
 on:
   push:
-    branches: [ "main" ]
+    branches: ['main']
   pull_request:
-    branches: [ "main" ]
+    branches: ['main']
 jobs:
   build:
     runs-on: self-hosted
     strategy:
       matrix:
-        node-version: [22.x]  # Add more versions as needed
+        node-version: [22.x] # Add more versions as needed
     steps:
-    - uses: actions/checkout@v4
-    # Update cache action to v3
-    - name: Cache npm modules
-      uses: actions/cache@v3
-      with:
-        path: node_modules
-        key: ${{ runner.os }}-node-${{ matrix.node-version }}-build-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-${{ matrix.node-version }}-build-
-    - name: Use Node.js ${{ matrix.node-version }}
-      uses: actions/setup-node@v4
-      with:
-        node-version: ${{ matrix.node-version }}
-        cache: 'npm'
-    # Install dependencies
-    - run: npm ci
-    # Create .env file securely
-    - name: Create .env file
-      run: echo "${{ secrets.PROD_ENV_FILE }}" > .env
-    # Build the application
-    - name: Build application
-      run: npm run build --if-present
-    # Restart PM2 processes
-    - name: Restart PM2 Processes
-      run: pm2 restart all
-    # Display important instructions
-    - name: CORS Configuration Instructions
-      run: |
-        echo "=================================================="
-        echo "IMPORTANT: If CORS issues persist after deployment"
-        echo "=================================================="
-        echo "1. Check if you're using Nginx/Apache as a reverse proxy"
-        echo "2. If using Nginx, apply the configuration from nginx-cors.conf"
-        echo "3. Restart your web server after making changes"
-        echo "4. Check firewall rules to ensure cross-origin requests are allowed"
-        echo "5. Verify DNS configuration for api.medh.co is pointing to the correct server"
-        echo "=================================================="
+      - uses: actions/checkout@v4
+      # Update cache action to v3
+      - name: Cache npm modules
+        uses: actions/cache@v3
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ matrix.node-version }}-build-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ matrix.node-version }}-build-
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      # Install dependencies
+      - run: npm ci
+      # Create .env file securely
+      - name: Create .env file
+        run: echo "${{ secrets.PROD_ENV_FILE }}" > .env
+      # Build the application
+      - name: Build application
+        run: npm run build --if-present
+      # Restart PM2 processes
+      - name: Restart PM2 Processes
+        run: pm2 restart all
+      # Display important instructions
+      - name: CORS Configuration Instructions
+        run: |
+          echo "=================================================="
+          echo "IMPORTANT: If CORS issues persist after deployment"
+          echo "=================================================="
+          echo "1. Check if you're using Nginx/Apache as a reverse proxy"
+          echo "2. If using Nginx, apply the configuration from nginx-cors.conf"
+          echo "3. Restart your web server after making changes"
+          echo "4. Check firewall rules to ensure cross-origin requests are allowed"
+          echo "5. Verify DNS configuration for api.medh.co is pointing to the correct server"
+          echo "=================================================="
     # Optional: Upload artifacts if needed
     # - name: Upload Build Artifacts
     #   uses: actions/upload-artifact@v2

@@ -28,20 +28,20 @@ export const createPlacementForm = async (req, res) => {
   try {
     // Create new placement form from request body
     const newPlacementForm = new PlacementForm(req.body);
-    
+
     // Save to database
     const savedForm = await newPlacementForm.save();
-    
+
     res.status(201).json({
       success: true,
       message: "Placement form submitted successfully",
-      data: savedForm
+      data: savedForm,
     });
   } catch (error) {
     res.status(400).json({
       success: false,
       message: "Failed to submit placement form",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -52,23 +52,26 @@ export const updatePlacementForm = async (req, res) => {
     const updatedForm = await PlacementForm.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true, runValidators: true }
+      {
+        new: true,
+        runValidators: true,
+      },
     );
-    
+
     if (!updatedForm) {
       return res.status(404).json({ message: "Placement form not found" });
     }
-    
+
     res.status(200).json({
       success: true,
       message: "Placement form updated successfully",
-      data: updatedForm
+      data: updatedForm,
     });
   } catch (error) {
     res.status(400).json({
       success: false,
       message: "Failed to update placement form",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -77,20 +80,20 @@ export const updatePlacementForm = async (req, res) => {
 export const deletePlacementForm = async (req, res) => {
   try {
     const deletedForm = await PlacementForm.findByIdAndDelete(req.params.id);
-    
+
     if (!deletedForm) {
       return res.status(404).json({ message: "Placement form not found" });
     }
-    
+
     res.status(200).json({
       success: true,
-      message: "Placement form deleted successfully"
+      message: "Placement form deleted successfully",
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: "Failed to delete placement form",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -98,8 +101,14 @@ export const deletePlacementForm = async (req, res) => {
 // Update application status
 export const updateApplicationStatus = async (req, res) => {
   try {
-    const { status, application_notes, interview_date, interviewer, interview_feedback } = req.body;
-    
+    const {
+      status,
+      application_notes,
+      interview_date,
+      interviewer,
+      interview_feedback,
+    } = req.body;
+
     const updatedForm = await PlacementForm.findByIdAndUpdate(
       req.params.id,
       {
@@ -107,25 +116,25 @@ export const updateApplicationStatus = async (req, res) => {
         application_notes,
         interview_date,
         interviewer,
-        interview_feedback
+        interview_feedback,
       },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
-    
+
     if (!updatedForm) {
       return res.status(404).json({ message: "Placement form not found" });
     }
-    
+
     res.status(200).json({
       success: true,
       message: "Application status updated successfully",
-      data: updatedForm
+      data: updatedForm,
     });
   } catch (error) {
     res.status(400).json({
       success: false,
       message: "Failed to update application status",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -134,33 +143,33 @@ export const updateApplicationStatus = async (req, res) => {
 export const bulkUpdateCourseFees = async (req, res) => {
   try {
     const { updates } = req.body;
-    
+
     if (!updates || !Array.isArray(updates) || updates.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Update data must be a non-empty array of course fee updates'
+        message: "Update data must be a non-empty array of course fee updates",
       });
     }
-    
+
     // Process the bulk updates
     // This would typically connect to a course model
     // For now, we'll just return success with the data
-    
+
     res.status(200).json({
       success: true,
       message: "Course fees updated successfully",
       data: {
-        updates: updates.map(item => ({
+        updates: updates.map((item) => ({
           ...item,
-          updated_at: new Date().toISOString()
-        }))
-      }
+          updated_at: new Date().toISOString(),
+        })),
+      },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: "Failed to update course fees",
-      error: error.message
+      error: error.message,
     });
   }
-}; 
+};

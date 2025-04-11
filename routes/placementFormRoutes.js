@@ -1,4 +1,5 @@
 import express from "express";
+
 import {
   getAllPlacementForms,
   getPlacementFormById,
@@ -6,7 +7,7 @@ import {
   updatePlacementForm,
   deletePlacementForm,
   updateApplicationStatus,
-  bulkUpdateCourseFees
+  bulkUpdateCourseFees,
 } from "../controllers/placementFormController.js";
 
 const router = express.Router();
@@ -32,4 +33,4 @@ router.patch("/:id/status", updateApplicationStatus);
 // Route for bulk updating course fees
 router.post("/bulk-update-fees", bulkUpdateCourseFees);
 
-export default router; 
+export default router;

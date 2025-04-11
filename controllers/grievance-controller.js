@@ -35,7 +35,7 @@ export const updateGrievance = async (req, res) => {
     const grievance = await Grievance.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true }
+      { new: true },
     );
     if (!grievance) {
       return res.status(404).json({

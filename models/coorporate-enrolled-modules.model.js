@@ -27,12 +27,12 @@ const coorporateEnrolledModuleSchema = new Schema(
       default: false,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const CoorporateEnrolledModule = mongoose.model(
   "CoorporateEnrolledModule",
-  coorporateEnrolledModuleSchema
+  coorporateEnrolledModuleSchema,
 );
 
 export default CoorporateEnrolledModule;

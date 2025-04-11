@@ -16,11 +16,11 @@ const feedbackCoorporateSchema = new mongoose.Schema(
       default: ["coorporate-student"],
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 const FeedbackCoorporate = mongoose.model(
   "FeedbackCoorporate",
-  feedbackCoorporateSchema
+  feedbackCoorporateSchema,
 );
 export default FeedbackCoorporate;

@@ -1,4 +1,5 @@
 import express from "express";
+
 import {
   createFAQ,
   getAllFAQs,
@@ -6,7 +7,7 @@ import {
   getFAQById,
   updateFAQ,
   deleteFAQ,
-  getAllCategories
+  getAllCategories,
 } from "../controllers/faq-controller.js";
 
 const router = express.Router();
@@ -32,4 +33,4 @@ router.delete("/delete/:id", deleteFAQ);
 // Get FAQ by ID
 router.get("/:id", getFAQById);
 
-export default router; 
+export default router;

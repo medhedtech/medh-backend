@@ -1,5 +1,6 @@
-const { createClient } = require('redis');
-const logger = require('./logger');
+import { createClient } from "redis";
+
+import logger from "./logger.js";
 
 class Cache {
   constructor() {
@@ -11,22 +12,22 @@ class Cache {
   async init() {
     try {
       this.client = createClient({
-        url: process.env.REDIS_URL || 'redis://localhost:6379',
+        url: process.env.REDIS_URL || "redis://localhost:6379",
       });
 
-      this.client.on('error', (err) => {
-        logger.error('Redis Client Error:', err);
+      this.client.on("error", (err) => {
+        logger.error("Redis Client Error:", err);
         this.connected = false;
       });
 
-      this.client.on('connect', () => {
-        logger.info('Redis Client Connected');
+      this.client.on("connect", () => {
+        logger.info("Redis Client Connected");
         this.connected = true;
       });
 
       await this.client.connect();
     } catch (error) {
-      logger.error('Redis Connection Error:', error);
+      logger.error("Redis Connection Error:", error);
       this.connected = false;
     }
   }
@@ -37,7 +38,7 @@ class Cache {
       const value = await this.client.get(key);
       return value ? JSON.parse(value) : null;
     } catch (error) {
-      logger.error('Redis Get Error:', error);
+      logger.error("Redis Get Error:", error);
       return null;
     }
   }
@@ -48,7 +49,7 @@ class Cache {
       await this.client.setEx(key, expireTime, JSON.stringify(value));
       return true;
     } catch (error) {
-      logger.error('Redis Set Error:', error);
+      logger.error("Redis Set Error:", error);
       return false;
     }
   }
@@ -59,7 +60,7 @@ class Cache {
       await this.client.del(key);
       return true;
     } catch (error) {
-      logger.error('Redis Delete Error:', error);
+      logger.error("Redis Delete Error:", error);
       return false;
     }
   }
@@ -70,10 +71,10 @@ class Cache {
       await this.client.flushAll();
       return true;
     } catch (error) {
-      logger.error('Redis Flush Error:', error);
+      logger.error("Redis Flush Error:", error);
       return false;
     }
   }
 }
 
-module.exports = new Cache(); 
+module.exports = new Cache();

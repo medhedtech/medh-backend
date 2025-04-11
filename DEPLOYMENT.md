@@ -30,38 +30,44 @@ Ensure all required environment variables are set in your production environment
    ```
 4. Set up environment variables (either directly or via a `.env` file)
 5. Start the server using a process manager like PM2:
+
    ```bash
    pm2 start index.js --name "medh-backend" --env production
    ```
-   
+
    Note the `--env production` flag to ensure NODE_ENV is set properly.
 
 ## Troubleshooting CORS Issues
 
 If you're seeing CORS errors like:
+
 ```
-Access to XMLHttpRequest at 'https://api.medh.co/api/v1/blogs/get...' from origin 'https://www.medh.co' has been blocked by CORS policy: 
+Access to XMLHttpRequest at 'https://api.medh.co/api/v1/blogs/get...' from origin 'https://www.medh.co' has been blocked by CORS policy:
 Response to preflight request doesn't pass access control check: No 'Access-Control-Allow-Origin' header is present on the requested resource.
 ```
 
 Follow these steps:
 
 1. **Restart the server after changes**:
+
    ```bash
    pm2 restart medh-backend --env production
    ```
 
 2. **Verify the NODE_ENV is set correctly**:
+
    ```bash
    pm2 env medh-backend  # Check if NODE_ENV=production is set
    ```
-   
+
    If not set correctly:
+
    ```bash
    NODE_ENV=production pm2 restart medh-backend
    ```
 
 3. **Test the CORS endpoint**:
+
    ```bash
    curl -v -X OPTIONS \
      -H "Origin: https://www.medh.co" \
@@ -71,33 +77,36 @@ Follow these steps:
    ```
 
    The response should include:
+
    ```
    Access-Control-Allow-Origin: https://www.medh.co
    Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH
    ```
 
 4. **Check server logs for CORS debugging info**:
+
    ```bash
    pm2 logs medh-backend
    ```
-   
+
    Look for "CORS Headers Debug" entries with the origin and allowed origins information.
 
 5. **If using a proxy (Nginx, Apache, etc.)**, make sure it's not stripping CORS headers:
-   
+
    For Nginx, add to the proxy configuration:
+
    ```
    location /api/ {
        proxy_pass http://your_node_app;
        proxy_set_header Host $host;
        proxy_set_header X-Real-IP $remote_addr;
-       
+
        # Preserve CORS headers
        proxy_pass_header Access-Control-Allow-Origin;
        proxy_pass_header Access-Control-Allow-Methods;
        proxy_pass_header Access-Control-Allow-Headers;
        proxy_pass_header Access-Control-Allow-Credentials;
-       
+
        # Handle OPTIONS method
        if ($request_method = 'OPTIONS') {
            add_header Access-Control-Allow-Origin 'https://www.medh.co';
@@ -121,36 +130,41 @@ Follow these steps:
 - Keep your `.env` file secure and outside of version control
 - Regularly update dependencies to address security vulnerabilities
 - Consider implementing rate limiting to prevent abuse
-- Set up SSL/TLS certificates for both your frontend and backend domains 
+- Set up SSL/TLS certificates for both your frontend and backend domains
 
 ## Local Development Setup
 
 When running the application locally, you'll typically have:
+
 - Frontend running on http://localhost:3000
 - Backend running on http://localhost:8080
 
 The CORS configuration automatically allows requests between these localhost origins in development mode. To ensure this works correctly:
 
 1. **Set NODE_ENV correctly**:
+
    ```bash
    # Add to your .env file for development
    NODE_ENV=development
    ```
-   
+
    Or when starting the server:
+
    ```bash
    NODE_ENV=development npm start
    ```
 
 2. **Test local CORS configuration**:
+
    ```bash
    curl -v -X OPTIONS \
      -H "Origin: http://localhost:3000" \
      -H "Access-Control-Request-Method: GET" \
      http://localhost:8080/api/v1/cors-test
    ```
-   
+
    The response should include:
+
    ```
    Access-Control-Allow-Origin: http://localhost:3000
    ```
@@ -161,4 +175,4 @@ The CORS configuration automatically allows requests between these localhost ori
    - Ensure NODE_ENV is not set to 'production' during local development
    - Restart your server after making changes to CORS configuration
    - Check server logs for 'CORS Headers Debug' entries
-   - Try using Chrome with CORS disabled for testing (launch with `--disable-web-security` flag) 
+   - Try using Chrome with CORS disabled for testing (launch with `--disable-web-security` flag)
