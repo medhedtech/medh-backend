@@ -9,20 +9,28 @@ export const getDashboardCounts = async (req, res) => {
   try {
     // Check if user exists in request (from auth middleware)
     if (!req.user) {
-      return res.status(401).json({ 
+      return res.status(401).json({
         success: false,
-        message: "Authentication required" 
+        message: "Authentication required",
       });
     }
 
     // SuperAdmin automatically has access to all dashboard data
     // For other users, check if they have the admin_dashboard permission
-    const isAuthorized = req.user.admin_role === USER_ADMIN_ROLES.SUPER_ADMIN || USER_ADMIN_ROLES.ADMIN || USER_ADMIN_ROLES.INSTRUCTOR || USER_ADMIN_ROLES.CORPORATE || USER_ADMIN_ROLES.CORPORATE_STUDENT || USER_ADMIN_ROLES.STUDENT || (req.user.permissions && req.user.permissions.includes(USER_PERMISSIONS.ADMIN_DASHBOARD));
-    
+    const isAuthorized =
+      req.user.admin_role === USER_ADMIN_ROLES.SUPER_ADMIN ||
+      USER_ADMIN_ROLES.ADMIN ||
+      USER_ADMIN_ROLES.INSTRUCTOR ||
+      USER_ADMIN_ROLES.CORPORATE ||
+      USER_ADMIN_ROLES.CORPORATE_STUDENT ||
+      USER_ADMIN_ROLES.STUDENT ||
+      (req.user.permissions &&
+        req.user.permissions.includes(USER_PERMISSIONS.ADMIN_DASHBOARD));
+
     if (!isAuthorized) {
       return res.status(403).json({
         success: false,
-        message: "You don't have permission to access the dashboard data"
+        message: "You don't have permission to access the dashboard data",
       });
     }
 

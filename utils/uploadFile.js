@@ -1,5 +1,6 @@
-import { s3Client } from "../config/aws-config.js";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
+
+import { s3Client } from "../config/aws-config.js";
 import { ENV_VARS } from "../config/envVars.js"; // Import ENV_VARS
 
 // Removed local upload constants
@@ -56,9 +57,9 @@ export const uploadFile = async (uploadData) => {
     // AWS SDK v3 approach
     const command = new PutObjectCommand(uploadParams);
     await s3Client.send(command);
-    
+
     // Construct the S3 URL since SDK v3 doesn't return Location
-    const region = ENV_VARS.AWS_REGION || 'us-east-1';
+    const region = ENV_VARS.AWS_REGION || "us-east-1";
     const url = `https://${uploadParams.Bucket}.s3.${region}.amazonaws.com/${uploadParams.Key}`;
 
     return {

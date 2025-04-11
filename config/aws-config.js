@@ -1,17 +1,18 @@
 // Migrate from AWS SDK v2 to AWS SDK v3
-import { 
-  S3Client, 
-  ListBucketsCommand, 
+import {
+  S3Client,
+  ListBucketsCommand,
   DeleteObjectCommand,
   GetObjectCommand,
-  PutObjectCommand
+  PutObjectCommand,
 } from "@aws-sdk/client-s3";
-import { SNSClient, ListTopicsCommand } from "@aws-sdk/client-sns";
 import { SESClient, GetSendQuotaCommand } from "@aws-sdk/client-ses";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { SNSClient, ListTopicsCommand } from "@aws-sdk/client-sns";
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import logger from "../utils/logger.js";
+
 import { ENV_VARS } from "./envVars.js";
 
 // Common AWS configuration
@@ -20,7 +21,7 @@ const awsConfig = {
     accessKeyId: ENV_VARS.AWS_ACCESS_KEY,
     secretAccessKey: ENV_VARS.AWS_SECRET_KEY,
   },
-  region: ENV_VARS.AWS_REGION || "us-east-1" // Set a default region if not specified
+  region: ENV_VARS.AWS_REGION || "us-east-1", // Set a default region if not specified
 };
 
 // Create client instances
@@ -71,12 +72,12 @@ const deleteS3Object = async (params) => {
   return await s3Client.send(new DeleteObjectCommand(params));
 };
 
-export { 
-  s3Client, 
-  snsClient, 
-  sesClient, 
-  testAWSConnection, 
+export {
+  s3Client,
+  snsClient,
+  sesClient,
+  testAWSConnection,
   getPresignedUrl,
   getPresignedPost,
-  deleteS3Object 
+  deleteS3Object,
 };

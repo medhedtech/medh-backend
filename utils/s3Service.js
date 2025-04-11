@@ -1,11 +1,13 @@
-import { 
-  s3Client, 
-  getPresignedUrl as getS3PresignedUrl, 
-  getPresignedPost, 
-  deleteS3Object as s3DeleteObject 
-} from "../config/aws-config.js";
-import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { Readable } from "stream";
+
+import { GetObjectCommand } from "@aws-sdk/client-s3";
+
+import {
+  s3Client,
+  getPresignedUrl as getS3PresignedUrl,
+  getPresignedPost,
+  deleteS3Object as s3DeleteObject,
+} from "../config/aws-config.js";
 import { ENV_VARS } from "../config/envVars.js";
 
 import logger from "./logger.js";
@@ -35,20 +37,20 @@ export const getFileStream = async (key) => {
     logger.info(
       `Attempting to get S3 stream for key: ${key} in bucket: ${BUCKET_NAME}`,
     );
-    
+
     // AWS SDK v3 approach
     const command = new GetObjectCommand(params);
     const response = await s3Client.send(command);
-    
+
     // Return the body as a stream
     const stream = response.Body;
-    
+
     if (stream instanceof Readable) {
       stream.on("error", (err) => {
         // Log stream-specific errors
         logger.error(`S3 stream error for key ${key}:`, err);
       });
-      
+
       return stream;
     } else {
       throw new Error("Response body is not a readable stream");
@@ -84,7 +86,7 @@ export const createPresignedPost = async (key, options = {}) => {
 
   try {
     logger.info(`Creating presigned POST for key: ${key}`);
-    
+
     // Using the helper from aws-config.js
     return await getPresignedPost(params);
   } catch (error) {
