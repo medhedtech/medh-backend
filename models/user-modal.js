@@ -22,6 +22,20 @@ const PERMISSIONS = {
   FEEDBACK_COMPLAINTS: "feedback_and_complaints",
   PLACEMENT_REQUESTS: "placement_requests",
   BLOGS: "blogs",
+  ADMIN_DASHBOARD: "admin_dashboard",
+  STUDENT_DASHBOARD: "student_dashboard",
+  INSTRUCTOR_DASHBOARD: "instructor_dashboard",
+  CORPORATE_DASHBOARD: "corporate_dashboard",
+  CORPORATE_STUDENT_DASHBOARD: "corporate_student_dashboard",
+  INSTRUCTOR_DASHBOARD: "instructor_dashboard",
+  CORPORATE_DASHBOARD: "corporate_dashboard",
+  View_Course: "view_courses",
+  View_Student: "view_student",
+  View_Instructor: "view_instructor",
+  View_Corporate: "view_corporate",
+  View_Corporate_Student: "view_corporate_student",
+  View_Admin: "view_admin",
+  View_Super_Admin: "view_super_admin",
 };
 
 const ADMIN_ROLES = {
@@ -218,6 +232,13 @@ const userSchema = new Schema(
     corporate_id: {
       type: String,
     },
+    last_login: {
+      type: Date,
+    },
+    login_count: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
@@ -240,6 +261,99 @@ userSchema.methods.hasPermission = function (permission) {
 userSchema.methods.hasRole = function (role) {
   return this.role && this.role.includes(role);
 };
+
+// Add a method to check if user is an admin
+userSchema.methods.isAdmin = function () {
+  return this.admin_role === ADMIN_ROLES.ADMIN || this.admin_role === ADMIN_ROLES.SUPER_ADMIN;
+};
+
+// Add a method to check if user is a super admin
+userSchema.methods.isSuperAdmin = function () {
+  return this.admin_role === ADMIN_ROLES.SUPER_ADMIN;
+};
+
+// Add a method to check if user is a student
+userSchema.methods.isStudent = function () {
+  return this.role.includes(ROLES.STUDENT);
+};
+
+// Add a method to check if user is an instructor
+userSchema.methods.isInstructor = function () {
+  return this.role.includes(ROLES.INSTRUCTOR);
+};
+
+// Add a method to check if user is a corporate
+userSchema.methods.isCorporate = function () {
+  return this.role.includes(ROLES.CORPORATE);
+};
+
+// Add a method to check if user is a corporate student
+userSchema.methods.isCorporateStudent = function () {
+  return this.role.includes(ROLES.CORPORATE_STUDENT);
+};
+
+// Add a method to check if user is active
+userSchema.methods.isActive = function () {
+  return this.status === "Active";
+};
+
+// Add a method to get user's primary role
+userSchema.methods.getPrimaryRole = function () {
+  if (this.role && this.role.length > 0) {
+    return this.role[0];
+  }
+  return null;
+};
+
+// Add a method to update user's last login
+userSchema.methods.updateLastLogin = async function () {
+  this.last_login = new Date();
+  this.login_count += 1;
+  return await this.save();
+};
+
+// Add static methods for common queries
+userSchema.statics.findByRole = function (role) {
+  return this.find({ role: role });
+};
+
+userSchema.statics.findActiveUsers = function () {
+  return this.find({ status: "Active" });
+};
+
+userSchema.statics.findInactiveUsers = function () {
+  return this.find({ status: "Inactive" });
+};
+
+userSchema.statics.findAdmins = function () {
+  return this.find({ admin_role: { $in: [ADMIN_ROLES.ADMIN, ADMIN_ROLES.SUPER_ADMIN] } });
+};
+
+userSchema.statics.findSuperAdmins = function () {
+  return this.find({ admin_role: ADMIN_ROLES.SUPER_ADMIN });
+};
+
+userSchema.statics.findStudents = function () {
+  return this.find({ role: ROLES.STUDENT });
+};
+
+userSchema.statics.findInstructors = function () {
+  return this.find({ role: ROLES.INSTRUCTOR });
+};
+
+userSchema.statics.findCorporates = function () {
+  return this.find({ role: ROLES.CORPORATE });
+};
+
+userSchema.statics.findCorporateStudents = function () {
+  return this.find({ role: ROLES.CORPORATE_STUDENT });
+};
+
+// Add indexes for better query performance
+userSchema.index({ role: 1 });
+userSchema.index({ status: 1 });
+userSchema.index({ admin_role: 1 });
+userSchema.index({ "phone_numbers.number": 1 });
 
 // Export model constants for use in other files
 export const USER_ROLES = ROLES;
