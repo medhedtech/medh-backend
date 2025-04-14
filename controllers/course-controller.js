@@ -63,6 +63,43 @@ const fullyDecodeURIComponent = (str) => {
   }
 };
 
+// Format course duration to remove "0 months" if present
+const formatCourseDuration = (duration) => {
+  if (!duration) return duration;
+  
+  // Check for "0 months" pattern
+  const zeroMonthsPattern = /^0 months\s+(.+)$/;
+  const match = duration.match(zeroMonthsPattern);
+  
+  if (match) {
+    return match[1]; // Return just the part after "0 months "
+  }
+  
+  return duration;
+};
+
+// Process course or courses array to apply consistent formatting
+const processCoursesResponse = (coursesData) => {
+  if (!coursesData) return coursesData;
+  
+  // Handle array of courses
+  if (Array.isArray(coursesData)) {
+    return coursesData.map(course => {
+      if (course.course_duration) {
+        return { ...course, course_duration: formatCourseDuration(course.course_duration) };
+      }
+      return course;
+    });
+  }
+  
+  // Handle single course object
+  if (coursesData.course_duration) {
+    return { ...coursesData, course_duration: formatCourseDuration(coursesData.course_duration) };
+  }
+  
+  return coursesData;
+};
+
 // Escape regex special characters
 const escapeRegExp = (string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -198,11 +235,16 @@ const getAllCourses = async (req, res) => {
         category_type: 1,
         createdAt: 1,
         prices: 1,
+        course_duration: 1,
       },
     ).lean();
+    
+    // Format course durations
+    const processedCourses = processCoursesResponse(courses);
+    
     res
       .status(200)
-      .json({ success: true, count: courses.length, data: courses });
+      .json({ success: true, count: processedCourses.length, data: processedCourses });
   } catch (error) {
     console.error("Error fetching all courses:", error);
     res.status(500).json({
@@ -510,6 +552,9 @@ const getAllCoursesWithLimits = async (req, res) => {
       });
     }
 
+    // Format course durations
+    processedCourses = processCoursesResponse(processedCourses);
+
     res.status(200).json({
       success: true,
       data: {
@@ -541,6 +586,7 @@ const getAllCoursesWithLimits = async (req, res) => {
 const getCourseById = async (req, res) => {
   try {
     const { id } = req.params;
+    const { currency } = req.query;
 
     if (!mongoose.isValidObjectId(id)) {
       return res.status(400).json({
@@ -558,9 +604,24 @@ const getCourseById = async (req, res) => {
       });
     }
 
+    // Handle currency filtering if specified
+    let processedCourse = course;
+    if (currency && course.prices && course.prices.length > 0) {
+      const upperCaseCurrency = currency.toUpperCase();
+      processedCourse = { 
+        ...course,
+        prices: course.prices.filter(
+          (price) => price.currency === upperCaseCurrency
+        )
+      };
+    }
+
+    // Apply formatting to course duration
+    processedCourse = processCoursesResponse(processedCourse);
+
     res.status(200).json({
       success: true,
-      data: course,
+      data: processedCourse,
     });
   } catch (error) {
     console.error("Error fetching course:", error);
@@ -2430,10 +2491,14 @@ const getAllRelatedCourses = async (req, res) => {
     if (category) query.course_category = category;
     if (courseId) query._id = { $ne: new mongoose.Types.ObjectId(courseId) };
     const relatedCourses = await Course.find(query)
-      .select("course_title course_category course_image course_fee")
+      .select("course_title course_category course_image course_fee course_duration")
       .limit(parseInt(limit))
       .lean();
-    res.status(200).json({ success: true, data: relatedCourses });
+    
+    // Format course durations
+    const processedCourses = processCoursesResponse(relatedCourses);
+    
+    res.status(200).json({ success: true, data: processedCourses });
   } catch (error) {
     console.error("Error fetching related courses:", error);
     res.status(500).json({
@@ -2459,7 +2524,11 @@ const getNewCoursesWithLimits = async (req, res) => {
         "course_title course_category course_image course_fee course_duration",
       )
       .lean();
-    res.status(200).json({ success: true, data: newCourses });
+    
+    // Format course durations
+    const processedCourses = processCoursesResponse(newCourses);
+    
+    res.status(200).json({ success: true, data: processedCourses });
   } catch (error) {
     console.error("Error fetching new courses:", error);
     res.status(500).json({

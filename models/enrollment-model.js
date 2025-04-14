@@ -146,14 +146,28 @@ const enrollmentSchema = new Schema(
     accessExpiresAt: {
       type: Date,
       required: function () {
-        return this.course && this.course.duration; // Required if course has duration
+        return this.course && this.course.duration && this.enrollmentType !== 'saved'; // Not required for saved courses
       },
     },
     enrollmentType: {
       type: String,
-      enum: ["individual", "batch", "corporate"],
+      enum: ["individual", "batch", "corporate", "saved"],
       default: "individual",
       required: true,
+    },
+    savedDetails: {
+      savedAt: {
+        type: Date,
+        default: Date.now,
+      },
+      notes: String,
+      reminder: {
+        enabled: {
+          type: Boolean,
+          default: false,
+        },
+        date: Date,
+      }
     },
     batchDetails: {
       batchId: {
@@ -202,7 +216,7 @@ const enrollmentSchema = new Schema(
 );
 
 // Indexes for better query performance
-enrollmentSchema.index({ course: 1, student: 1 }, { unique: true });
+enrollmentSchema.index({ course: 1, student: 1, enrollmentType: 1 }, { unique: true });
 enrollmentSchema.index({ status: 1 });
 enrollmentSchema.index({ paymentStatus: 1 });
 enrollmentSchema.index({ lastAccessed: 1 });
@@ -210,6 +224,7 @@ enrollmentSchema.index({ "progress.overall": 1 });
 enrollmentSchema.index({ accessExpiresAt: 1 });
 enrollmentSchema.index({ "certificate.issued": 1 });
 enrollmentSchema.index({ enrolledAt: 1 });
+enrollmentSchema.index({ enrollmentType: 1, student: 1 });
 
 // Virtual for remaining time
 enrollmentSchema.virtual("remainingTime").get(function () {
@@ -344,10 +359,80 @@ enrollmentSchema.statics.getExpiredEnrollments = async function () {
   });
 };
 
+// Static method to get saved courses for a student
+enrollmentSchema.statics.getSavedCourses = async function (studentId) {
+  return await this.find({
+    student: studentId,
+    enrollmentType: "saved"
+  }).populate("course", "course_title course_category course_image course_duration prices status").lean();
+};
+
+// Static method to check if a course is saved by a student
+enrollmentSchema.statics.isSavedCourse = async function (studentId, courseId) {
+  const savedCourse = await this.findOne({
+    student: studentId,
+    course: courseId,
+    enrollmentType: "saved"
+  });
+  return !!savedCourse;
+};
+
+// Instance method to convert a saved course to an active enrollment
+enrollmentSchema.methods.convertToEnrollment = async function (enrollmentData) {
+  if (this.enrollmentType !== "saved") {
+    throw new Error("Only saved courses can be converted to enrollments");
+  }
+  
+  // Update enrollment details
+  this.enrollmentType = enrollmentData.enrollmentType || "individual";
+  this.status = "active";
+  this.enrolledAt = new Date();
+  this.lastAccessed = new Date();
+  this.paymentStatus = enrollmentData.paymentStatus || "pending";
+  
+  if (enrollmentData.paymentDetails) {
+    this.paymentDetails = enrollmentData.paymentDetails;
+  }
+  
+  if (enrollmentData.accessExpiresAt) {
+    this.accessExpiresAt = enrollmentData.accessExpiresAt;
+  } else if (this.course && this.course.duration) {
+    // Calculate expiry based on course duration
+    const durationMatch = this.course.duration.match(/(\d+)\s+(\w+)/);
+    if (durationMatch) {
+      const [, value, unit] = durationMatch;
+      const expiryDate = new Date();
+      
+      if (unit.includes('month')) {
+        expiryDate.setMonth(expiryDate.getMonth() + parseInt(value));
+      } else if (unit.includes('week')) {
+        expiryDate.setDate(expiryDate.getDate() + (parseInt(value) * 7));
+      } else if (unit.includes('day')) {
+        expiryDate.setDate(expiryDate.getDate() + parseInt(value));
+      } else if (unit.includes('year')) {
+        expiryDate.setFullYear(expiryDate.getFullYear() + parseInt(value));
+      }
+      
+      this.accessExpiresAt = expiryDate;
+    }
+  }
+  
+  // Initialize progress
+  this.progress = {
+    overall: 0,
+    lessons: { completed: [], lastAccessed: null },
+    assignments: { completed: [], lastAccessed: null },
+    quizzes: { completed: [], lastAccessed: null }
+  };
+  
+  await this.save();
+  return this;
+};
+
 // Static method to get enrollment statistics
 enrollmentSchema.statics.getEnrollmentStats = async function (courseId) {
   const stats = await this.aggregate([
-    { $match: { course: courseId } },
+    { $match: { course: courseId, enrollmentType: { $ne: "saved" } } },
     {
       $group: {
         _id: null,
