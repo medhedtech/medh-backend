@@ -98,4 +98,36 @@ router.get(
   enrollerCourseController.watchVideo,
 );
 
+// ----- Saved Courses Routes -----
+
+// Save a course
+router.post(
+  "/save-course",
+  authorize(["student"]),
+  enrollerCourseController.saveCourse,
+);
+
+// Remove a saved course
+router.delete(
+  "/save-course/:course_id",
+  authorize(["student"]),
+  validateObjectId("course_id"),
+  enrollerCourseController.removeSavedCourse,
+);
+
+// Get all saved courses for a student
+router.get(
+  "/saved-courses",
+  authorize(["student"]),
+  enrollerCourseController.getSavedCourses,
+);
+
+// Convert a saved course to an enrollment
+router.post(
+  "/convert-saved/:course_id",
+  authorize(["student"]),
+  validateObjectId("course_id"),
+  enrollerCourseController.convertSavedCourseToEnrollment,
+);
+
 export default router;

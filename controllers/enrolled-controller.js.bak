@@ -964,36 +964,6 @@ export const getSavedCourses = async (req, res, next) => {
   }
 };
 
-// Remove a saved course
-export const removeSavedCourse = async (req, res, next) => {
-  try {
-    const { course_id } = req.params;
-    const student_id = req.user._id; // Get student ID from authenticated user
-
-    // Find and delete the saved course
-    const deletedCourse = await EnrolledCourse.findOneAndDelete({
-      student_id,
-      course_id,
-      enrollmentType: "saved"
-    });
-
-    if (!deletedCourse) {
-      return res.status(404).json({
-        success: false,
-        message: "Saved course not found",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Course removed from saved list successfully",
-      data: deletedCourse,
-    });
-  } catch (error) {
-    errorHandler(error, req, res, next);
-  }
-};
-
 // Convert a saved course to an enrollment
 export const convertSavedCourseToEnrollment = async (req, res, next) => {
   try {
@@ -1073,3 +1043,20 @@ export const convertSavedCourseToEnrollment = async (req, res, next) => {
   }
 };
 
+export {
+  createEnrolledCourse,
+  getAllEnrolledCourses,
+  getEnrolledCourseById,
+  updateEnrolledCourse,
+  deleteEnrolledCourse,
+  getEnrolledCourseByStudentId,
+  getEnrolledStudentsByCourseId,
+  markCourseAsCompleted,
+  getEnrollmentCountsByStudentId,
+  getUpcomingMeetingsForStudent,
+  watchVideo,
+  getAllStudentsWithEnrolledCourses,
+  saveCourse,
+  getSavedCourses,
+  convertSavedCourseToEnrollment
+};
