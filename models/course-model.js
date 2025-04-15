@@ -558,12 +558,6 @@ const courseSchema = new Schema(
       type: String,
       trim: true,
     },
-    course_fee: {
-      type: Number,
-      min: [0, "Course fee cannot be negative"],
-      default: 0,
-      index: true,
-    },
     prices: {
       type: [priceSchema],
       default: [],
