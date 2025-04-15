@@ -107,6 +107,8 @@ export const getHomeDisplayWithFields = async (req, res) => {
           "prices",
           "price_suffix",
           "duration_range",
+          "no_of_Sessions",
+          "effort_hours",
         ],
         list: [
           "id",

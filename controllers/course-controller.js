@@ -40,7 +40,11 @@ const _deleteS3Object = deleteS3Object;
 // Recursively decode URL-encoded strings
 const fullyDecodeURIComponent = (str) => {
   try {
-    let decoded = str;
+    if (!str) return str;
+    
+    // Handle string or other types
+    const inputStr = String(str);
+    let decoded = inputStr;
 
     // First decode HTML entities
     decoded = decoded
@@ -50,16 +54,30 @@ const fullyDecodeURIComponent = (str) => {
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'");
 
-    // Then decode URL encoding
-    while (decoded.includes("%")) {
-      const prev = decoded;
-      decoded = decodeURIComponent(decoded);
-      if (prev === decoded) break;
+    // Special handling for %25 (which is the encoded form of %)
+    // This handles double-encoding scenarios
+    if (decoded.includes('%25')) {
+      decoded = decoded.replace(/%25/g, '%');
     }
+
+    // Then recursively decode URL encoding
+    let prevDecoded = '';
+    while (decoded !== prevDecoded) {
+      prevDecoded = decoded;
+      try {
+        decoded = decodeURIComponent(decoded);
+      } catch (e) {
+        // If we hit a decoding error, stop and return what we have
+        console.warn("Decoding stopped due to error:", e);
+        break;
+      }
+    }
+    
+    console.log(`Decoded "${inputStr}" to "${decoded}"`);
     return decoded;
   } catch (e) {
     console.warn("Decoding error:", e);
-    return str;
+    return str || '';
   }
 };
 
@@ -82,22 +100,81 @@ const formatCourseDuration = (duration) => {
 const processCoursesResponse = (coursesData) => {
   if (!coursesData) return coursesData;
   
+  // Function to categorize and format a single course
+  const processSingleCourse = (course) => {
+    // Create a new object to avoid mutating the original
+    const processedCourse = { ...course };
+    
+    // Format course duration if exists
+    if (course.course_duration) {
+      processedCourse.course_duration = formatCourseDuration(course.course_duration);
+    }
+    
+    // Properly categorize the course type based on class_type
+    if (course.class_type) {
+      // Normalize class type for consistent processing
+      const classType = course.class_type.toLowerCase();
+      
+      // Add delivery_format field for frontend consistency
+      if (classType.includes('live')) {
+        processedCourse.delivery_format = 'Live';
+      } else if (classType.includes('blend')) {
+        processedCourse.delivery_format = 'Blended';
+      } else if (classType.includes('self') || classType.includes('recorded')) {
+        processedCourse.delivery_format = 'Self-Paced';
+      } else {
+        processedCourse.delivery_format = course.class_type; // Keep original if no match
+      }
+      
+      // Add delivery_type for additional categorization if needed
+      processedCourse.delivery_type = processedCourse.delivery_format;
+    }
+    
+    return processedCourse;
+  };
+  
   // Handle array of courses
   if (Array.isArray(coursesData)) {
-    return coursesData.map(course => {
-      if (course.course_duration) {
-        return { ...course, course_duration: formatCourseDuration(course.course_duration) };
-      }
-      return course;
-    });
+    return coursesData.map(processSingleCourse);
   }
   
   // Handle single course object
-  if (coursesData.course_duration) {
-    return { ...coursesData, course_duration: formatCourseDuration(coursesData.course_duration) };
+  return processSingleCourse(coursesData);
+};
+
+// Group courses by class type (live and blended)
+const groupCoursesByClassType = (coursesData) => {
+  if (!coursesData || !coursesData.data || !coursesData.data.courses || !Array.isArray(coursesData.data.courses)) {
+    return coursesData;
   }
   
-  return coursesData;
+  // Create a copy of the response structure
+  const result = {
+    ...coursesData,
+    data: {
+      ...coursesData.data,
+      live: [],
+      blended: []
+    }
+  };
+  
+  // Categorize courses by class_type
+  coursesData.data.courses.forEach(course => {
+    // Check various fields that might indicate live vs blended course type
+    const isLiveCourse = 
+      course.category_type === 'Live' || 
+      (course.class_type && course.class_type.toLowerCase().includes('live')) ||
+      (course.delivery_format === 'Live');
+    
+    if (isLiveCourse) {
+      result.data.live.push(course);
+    } else {
+      result.data.blended.push(course);
+    }
+  });
+  
+  // Keep original courses array for backward compatibility
+  return result;
 };
 
 // Escape regex special characters
@@ -259,6 +336,14 @@ const getAllCourses = async (req, res) => {
  * @desc    Get all courses with filtering, pagination and search (advanced)
  * @route   GET /api/courses/search
  * @access  Public
+ * @param   {number} page - Page number for pagination (default: 1)
+ * @param   {number} limit - Number of results per page (default: 10)
+ * @param   {string} search - Text search term
+ * @param   {string} sort_by - Field to sort by (createdAt, price, popularity, ratings)
+ * @param   {string} sort_order - Sort order (asc, desc)
+ * @param   {string} course_category - Filter by course category, can be comma-separated for multiple values
+ * @param   {string} status - Filter by course status
+ * @param   {string} currency - Filter by currency code (e.g., 'inr', 'usd')
  */
 const getAllCoursesWithLimits = async (req, res) => {
   try {
@@ -342,15 +427,22 @@ const getAllCoursesWithLimits = async (req, res) => {
 
     const handleArrayOrStringFilter = (field, value) => {
       if (!value) return;
+      
+      console.log(`Processing ${field} filter with value:`, value);
+      
       if (Array.isArray(value)) {
         const decodedValues = value.map((item) =>
           fullyDecodeURIComponent(item),
         );
+        console.log(`Decoded ${field} array values:`, decodedValues);
         filter[field] = {
           $in: decodedValues.map((item) => createSafeRegex("^" + item + "$")),
         };
       } else if (typeof value === "string") {
         const decodedValue = fullyDecodeURIComponent(value);
+        console.log(`Decoded ${field} string value:`, decodedValue);
+        
+        // Check for various delimiter patterns
         if (
           decodedValue.includes(",") ||
           decodedValue.includes("|") ||
@@ -360,11 +452,23 @@ const getAllCoursesWithLimits = async (req, res) => {
             .split(/[,|;]/)
             .map((v) => v.trim())
             .filter(Boolean);
-          filter[field] = {
-            $in: values.map((v) => createSafeRegex("^" + v + "$")),
-          };
+          console.log(`Split ${field} values:`, values);
+          
+          // Use exact matching for categories
+          if (field === "course_category") {
+            filter[field] = { $in: values };
+          } else {
+            filter[field] = {
+              $in: values.map((v) => createSafeRegex("^" + v + "$")),
+            };
+          }
         } else {
-          filter[field] = { $regex: createSafeRegex(decodedValue) };
+          // For single values, use exact match for categories
+          if (field === "course_category") {
+            filter[field] = decodedValue;
+          } else {
+            filter[field] = { $regex: createSafeRegex(decodedValue) };
+          }
         }
       }
     };
@@ -372,7 +476,54 @@ const getAllCoursesWithLimits = async (req, res) => {
     handleArrayOrStringFilter("course_category", course_category);
     handleArrayOrStringFilter("category_type", category_type);
     handleArrayOrStringFilter("course_tag", course_tag);
-    handleArrayOrStringFilter("class_type", class_type);
+    
+    // Special handling for class_type to better match Live and Blended courses
+    if (class_type) {
+      console.log(`Processing class_type filter with value:`, class_type);
+      
+      const decodedClassType = fullyDecodeURIComponent(class_type);
+      console.log(`Decoded class_type value:`, decodedClassType);
+      
+      if (decodedClassType.includes(",") || decodedClassType.includes("|") || decodedClassType.includes(";")) {
+        // Handle multiple class types
+        const classTypeValues = decodedClassType.split(/[,|;]/).map(v => v.trim()).filter(Boolean);
+        console.log(`Split class_type values:`, classTypeValues);
+        
+        // Create a more flexible match for class types
+        const regexPatterns = classTypeValues.map(type => {
+          // Create case-insensitive patterns that match anywhere in the string
+          const baseType = type.toLowerCase();
+          
+          if (baseType.includes('live')) {
+            return createSafeRegex('live', 'i');
+          } else if (baseType.includes('blend')) {
+            return createSafeRegex('blend', 'i');
+          } else if (baseType.includes('self') || baseType.includes('record')) {
+            return createSafeRegex('self|record', 'i');
+          } else {
+            return createSafeRegex(type, 'i');
+          }
+        });
+        
+        filter.class_type = { $in: regexPatterns };
+      } else {
+        // Handle single class type with flexible matching
+        const baseType = decodedClassType.toLowerCase();
+        
+        if (baseType.includes('live')) {
+          filter.class_type = { $regex: createSafeRegex('live', 'i') };
+        } else if (baseType.includes('blend')) {
+          filter.class_type = { $regex: createSafeRegex('blend', 'i') };
+        } else if (baseType.includes('self') || baseType.includes('record')) {
+          filter.class_type = { $regex: createSafeRegex('self|record', 'i') };
+        } else {
+          filter.class_type = { $regex: createSafeRegex(decodedClassType, 'i') };
+        }
+      }
+    } else {
+      // If no class_type specified, use standard handler
+      handleArrayOrStringFilter("class_type", class_type);
+    }
 
     if (status) {
       const decodedStatus = fullyDecodeURIComponent(status);
@@ -441,6 +592,12 @@ const getAllCoursesWithLimits = async (req, res) => {
 
     console.log("Final filter object:", JSON.stringify(filter, null, 2));
 
+    // Add detailed logging for course_category
+    if (course_category) {
+      console.log("Original course_category parameter:", course_category);
+      console.log("Processed course_category filter:", JSON.stringify(filter.course_category, null, 2));
+    }
+
     const sortOptions = {};
     if (search && sort_by === "relevance" && filter.$text) {
       sortOptions.score = { $meta: "textScore" };
@@ -464,6 +621,7 @@ const getAllCoursesWithLimits = async (req, res) => {
       isFree: 1,
       status: 1,
       category_type: 1,
+      class_type: 1,
       is_Certification: 1,
       is_Assignments: 1,
       is_Projects: 1,
@@ -523,6 +681,45 @@ const getAllCoursesWithLimits = async (req, res) => {
               { $group: { _id: "$class_type", count: { $sum: 1 } } },
               { $sort: { count: -1 } },
             ],
+            deliveryFormats: [
+              // Add computed field for normalized delivery format
+              {
+                $addFields: {
+                  computed_delivery_format: {
+                    $cond: [
+                      { $eq: [{ $ifNull: ["$class_type", ""] }, ""] },
+                      "Unknown",
+                      {
+                        $cond: [
+                          { $regexMatch: { input: { $toLower: "$class_type" }, regex: "live" } },
+                          "Live",
+                          {
+                            $cond: [
+                              { $regexMatch: { input: { $toLower: "$class_type" }, regex: "blend" } },
+                              "Blended",
+                              {
+                                $cond: [
+                                  { 
+                                    $or: [
+                                      { $regexMatch: { input: { $toLower: "$class_type" }, regex: "self" } },
+                                      { $regexMatch: { input: { $toLower: "$class_type" }, regex: "record" } }
+                                    ]
+                                  },
+                                  "Self-Paced",
+                                  "$class_type"
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              },
+              { $group: { _id: "$computed_delivery_format", count: { $sum: 1 } } },
+              { $sort: { count: -1 } },
+            ],
             priceRanges: [
               {
                 $group: {
@@ -555,7 +752,7 @@ const getAllCoursesWithLimits = async (req, res) => {
     // Format course durations
     processedCourses = processCoursesResponse(processedCourses);
 
-    res.status(200).json({
+    const response = {
       success: true,
       data: {
         courses: processedCourses,
@@ -567,7 +764,14 @@ const getAllCoursesWithLimits = async (req, res) => {
         },
         facets: facets[0],
       },
-    });
+    };
+
+    // Group courses by class type if requested
+    if (req.query.group_by_class_type === 'true') {
+      res.status(200).json(groupCoursesByClassType(response));
+    } else {
+      res.status(200).json(response);
+    }
   } catch (error) {
     console.error("Error in getAllCoursesWithLimits:", error);
     res.status(500).json({
@@ -3684,4 +3888,5 @@ export {
   bulkUpdateCoursePrices,
   getAllCoursesWithPrices,
   getCoursesWithFields,
+  groupCoursesByClassType,
 };
