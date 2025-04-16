@@ -85,9 +85,6 @@ const userMetaSchema = new Schema(
     course_name: {
       type: String,
     },
-    age: {
-      type: String,
-    },
     age_group: {
       type: String,
       enum: AGE_GROUPS,
@@ -238,6 +235,16 @@ const userSchema = new Schema(
     login_count: {
       type: Number,
       default: 0,
+    },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    emailVerificationOTP: {
+      type: String,
+    },
+    emailVerificationOTPExpires: {
+      type: Date,
     },
   },
   {

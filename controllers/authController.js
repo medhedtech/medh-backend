@@ -17,9 +17,22 @@ import userValidation from "../validations/userValidation.js";
 const emailService = new EmailService();
 
 /**
+ * Generate a random 6-digit OTP
+ * @returns {string} 6-digit OTP
+ */
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+/**
  * Authentication Controller Class
  */
 class AuthController {
+  constructor() {
+    // Make emailService accessible from outside
+    this.emailService = emailService;
+  }
+
   /**
    * Register a new user
    * @param {Object} req - Express request object
@@ -48,7 +61,7 @@ class AuthController {
         password = "",
         agree_terms,
         meta = { gender: "Male", upload_resume: [] },
-        role = [USER_ROLES.STUDENT], // Allow role to be specified during registration
+        role = [USER_ROLES.STUDENT],
       } = value;
 
       // Check if user already exists
@@ -61,6 +74,10 @@ class AuthController {
         });
       }
 
+      // Generate OTP for email verification
+      const otp = generateOTP();
+      const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // OTP valid for 15 minutes
+
       // Create user with specified role or default student role
       const user = new User({
         full_name,
@@ -69,7 +86,7 @@ class AuthController {
         password,
         agree_terms,
         role: role,
-        status: "Active",
+        status: "Inactive", // User starts as inactive until email is verified
         meta: meta || {
           gender: "Male",
           upload_resume: [],
@@ -79,6 +96,9 @@ class AuthController {
         },
         assign_department: [],
         permissions: [],
+        emailVerified: false,
+        emailVerificationOTP: otp,
+        emailVerificationOTPExpires: otpExpiry,
       });
 
       // Hash the password before saving
@@ -99,20 +119,91 @@ class AuthController {
         email,
       });
 
-      // Send welcome email to the user
+      // Send OTP verification email to the user
       try {
-        await this.sendWelcomeEmail(email, full_name, password);
+        // Debug email configuration
+        logger.auth.debug("Email configuration:", {
+          host: process.env.EMAIL_HOST,
+          port: process.env.EMAIL_PORT,
+          secure: process.env.EMAIL_SECURE,
+          user: process.env.EMAIL_USER ? "Set" : "Not set",
+          pass: process.env.EMAIL_PASS ? "Set" : "Not set"
+        });
+        
+        // Create HTML content directly
+        const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Email Verification - Medh Learning Platform</title>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+                .container { background-color: #f9f9f9; border-radius: 5px; padding: 20px; margin-top: 20px; }
+                .header { text-align: center; margin-bottom: 30px; }
+                .otp-box { background-color: #ffffff; border: 2px solid #e0e0e0; border-radius: 5px; padding: 15px; margin: 20px 0; text-align: center; font-size: 24px; letter-spacing: 2px; }
+                .warning { color: #dc3545; font-size: 14px; margin-top: 20px; }
+                .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h2>Email Verification</h2>
+                </div>
+                
+                <p>Hello ${full_name},</p>
+                
+                <p>Thank you for registering with Medh Learning Platform. To complete your registration and activate your account, please use the following verification code:</p>
+                
+                <div class="otp-box">
+                    <strong>${otp}</strong>
+                </div>
+                
+                <p>This verification code will expire in 15 minutes. Please enter this code in the verification page to activate your account.</p>
+                
+                <p class="warning">
+                    <strong>Important:</strong> For your security, please do not share this code with anyone.
+                </p>
+                
+                <p>If you did not request this verification code, please ignore this email or contact our support team if you have concerns.</p>
+                
+                <div class="footer">
+                    <p>This is an automated message, please do not reply to this email.</p>
+                    <p>&copy; ${new Date().getFullYear()} Medh Learning Platform. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
+
+        // Send email directly
+        const mailOptions = {
+          to: email,
+          from: process.env.EMAIL_FROM || `"Medh Platform" <${process.env.EMAIL_USER}>`,
+          subject: "Email Verification - Medh Learning Platform",
+          html: htmlContent,
+        };
+
+        const emailResult = await this.emailService.sendEmail(mailOptions);
+        logger.auth.info("OTP verification email sent successfully", { 
+          email, 
+          result: emailResult 
+        });
       } catch (emailError) {
-        logger.auth.error("Welcome email sending failed", {
-          error: emailError,
+        logger.auth.error("OTP verification email sending failed", {
+          error: emailError.message,
+          stack: emailError.stack,
           email,
+          code: emailError.code
         });
         // Continue registration even if email sending fails
       }
 
       return res.status(201).json({
         success: true,
-        message: "User registered successfully, and email sent to the user.",
+        message: "User registered successfully. Please verify your email with the OTP sent.",
         data: {
           id: user._id,
           email: user.email,
@@ -129,6 +220,268 @@ class AuthController {
         success: false,
         message: "Server error",
         error: err.message,
+      });
+    }
+  }
+
+  /**
+   * Verify email with OTP
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async verifyEmailOTP(req, res) {
+    try {
+      const { email, otp } = req.body;
+
+      if (!email || !otp) {
+        return res.status(400).json({
+          success: false,
+          message: "Email and OTP are required",
+        });
+      }
+
+      // Find user by email
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Check if OTP is valid and not expired
+      if (
+        user.emailVerificationOTP !== otp ||
+        Date.now() > user.emailVerificationOTPExpires
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired OTP",
+        });
+      }
+
+      // Update user verification status
+      user.emailVerified = true;
+      user.status = "Active";
+      user.emailVerificationOTP = undefined;
+      user.emailVerificationOTPExpires = undefined;
+      await user.save();
+
+      // Send welcome email to the user
+      try {
+        // Create HTML content for welcome email
+        const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Welcome to Medh Learning Platform</title>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+                .container { background-color: #f9f9f9; border-radius: 5px; padding: 20px; margin-top: 20px; }
+                .header { text-align: center; margin-bottom: 30px; }
+                .button { display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; }
+                .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h2>Welcome to Medh Learning Platform!</h2>
+                </div>
+                
+                <p>Hello ${user.full_name},</p>
+                
+                <p>Thank you for verifying your email. Your account has been successfully activated.</p>
+                
+                <p>You can now log in to access all features of the Medh Learning Platform.</p>
+                
+                <p style="text-align: center; margin: 30px 0;">
+                    <a href="${process.env.FRONTEND_URL || 'https://medh.co'}/login" class="button">Login to Your Account</a>
+                </p>
+                
+                <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+                
+                <p>We're excited to have you with us!</p>
+                
+                <div class="footer">
+                    <p>This is an automated message, please do not reply to this email.</p>
+                    <p>&copy; ${new Date().getFullYear()} Medh Learning Platform. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
+
+        // Send welcome email directly
+        await this.emailService.sendEmail({
+          to: email,
+          from: process.env.EMAIL_FROM || `"Medh Platform" <${process.env.EMAIL_USER}>`,
+          subject: "Welcome to Medh Learning Platform",
+          html: htmlContent,
+        });
+        
+        logger.auth.info("Welcome email sent successfully", { email });
+      } catch (emailError) {
+        logger.auth.error("Welcome email sending failed", {
+          error: emailError.message,
+          stack: emailError.stack,
+          email,
+          code: emailError.code || 'NO_CODE'
+        });
+        // Continue with account verification even if welcome email fails
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Email verified successfully",
+      });
+    } catch (err) {
+      logger.auth.error("Email verification failed", {
+        error: err,
+        stack: err.stack,
+      });
+      return res.status(500).json({
+        success: false,
+        message: "Server error",
+        error: err.message,
+      });
+    }
+  }
+
+  /**
+   * Resend OTP for email verification
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async resendVerificationOTP(req, res) {
+    try {
+      const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is required",
+        });
+      }
+
+      // Find user by email
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Check if email is already verified
+      if (user.emailVerified) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is already verified",
+        });
+      }
+
+      // Generate new OTP
+      const otp = generateOTP();
+      const otpExpiry = new Date(Date.now() + 15 * 60 * 1000); // OTP valid for 15 minutes
+
+      // Update user with new OTP
+      user.emailVerificationOTP = otp;
+      user.emailVerificationOTPExpires = otpExpiry;
+      await user.save();
+
+      // Send new OTP verification email using direct HTML without template
+      try {
+        // Create HTML content directly
+        const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Email Verification - Medh Learning Platform</title>
+            <style>
+                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+                .container { background-color: #f9f9f9; border-radius: 5px; padding: 20px; margin-top: 20px; }
+                .header { text-align: center; margin-bottom: 30px; }
+                .otp-box { background-color: #ffffff; border: 2px solid #e0e0e0; border-radius: 5px; padding: 15px; margin: 20px 0; text-align: center; font-size: 24px; letter-spacing: 2px; }
+                .warning { color: #dc3545; font-size: 14px; margin-top: 20px; }
+                .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h2>Email Verification</h2>
+                </div>
+                
+                <p>Hello ${user.full_name},</p>
+                
+                <p>Thank you for registering with Medh Learning Platform. To complete your registration and activate your account, please use the following verification code:</p>
+                
+                <div class="otp-box">
+                    <strong>${otp}</strong>
+                </div>
+                
+                <p>This verification code will expire in 15 minutes. Please enter this code in the verification page to activate your account.</p>
+                
+                <p class="warning">
+                    <strong>Important:</strong> For your security, please do not share this code with anyone.
+                </p>
+                
+                <p>If you did not request this verification code, please ignore this email or contact our support team if you have concerns.</p>
+                
+                <div class="footer">
+                    <p>This is an automated message, please do not reply to this email.</p>
+                    <p>&copy; ${new Date().getFullYear()} Medh Learning Platform. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        `;
+
+        // Send email directly without using template
+        const mailOptions = {
+          to: email,
+          from: process.env.EMAIL_FROM || `"Medh Platform" <${process.env.EMAIL_USER}>`,
+          subject: "Email Verification - Medh Learning Platform",
+          html: htmlContent,
+        };
+
+        // Try sending with the simplified direct method
+        await this.emailService.sendEmail(mailOptions);
+        
+        logger.auth.info("Verification OTP resent successfully", { email });
+
+        return res.status(200).json({
+          success: true,
+          message: "New verification OTP sent successfully",
+        });
+      } catch (emailError) {
+        logger.auth.error("OTP verification email sending failed", {
+          error: emailError.message,
+          stack: emailError.stack,
+          email,
+          code: emailError.code || 'NO_CODE'
+        });
+        
+        return res.status(500).json({
+          success: false,
+          message: "Failed to send verification email",
+          error: process.env.NODE_ENV === 'development' ? emailError.message : undefined
+        });
+      }
+    } catch (err) {
+      logger.auth.error("Resend verification OTP failed", {
+        error: err.message,
+        stack: err.stack,
+      });
+      return res.status(500).json({
+        success: false,
+        message: "Server error",
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined
       });
     }
   }
@@ -169,6 +522,14 @@ class AuthController {
         return res.status(400).json({
           success: false,
           message: "Invalid credentials.",
+        });
+      }
+
+      // Check if email is verified
+      if (!user.emailVerified) {
+        return res.status(403).json({
+          success: false,
+          message: "Please verify your email before logging in",
         });
       }
 
