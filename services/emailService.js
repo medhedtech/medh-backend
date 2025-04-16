@@ -3,43 +3,63 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { promisify } from "util";
 
-import Queue from "bull";
 import Handlebars from "handlebars";
 import nodemailer from "nodemailer";
-import { v4 as uuidv4 } from "uuid";
 
 import logger from "../utils/logger.js";
 import registerTemplateHelpers from "../utils/templateHelpers.js";
-
-// Constants
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 5000; // 5 seconds
-const EMAIL_QUEUE_NAME = "email-queue";
-const EMAIL_CONCURRENCY = 5;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const readFileAsync = promisify(fs.readFile);
 
 /**
  * Email Service
- * Industry-standard implementation for handling email operations
+ * Simplified implementation for handling email operations
  */
 class EmailService {
   constructor() {
-    // Initialize transporter
-    this.transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT,
-      secure: process.env.EMAIL_SECURE === "true" || true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      pool: true, // Use pooled connections
-      maxConnections: 5, // Maximum number of connections to use
-      rateDelta: 1000, // Define how many messages to send in rateDelta time
-      rateLimit: 5, // Max number of messages per rateDelta
+    // Get configured credentials or use defaults
+    const emailHost = process.env.EMAIL_HOST || "email-smtp.us-east-1.amazonaws.com";
+    const emailPort = process.env.EMAIL_PORT || 465;
+    const emailUser = process.env.EMAIL_USER;
+    const emailPass = process.env.EMAIL_PASS;
+    
+    // Log what we're using
+    console.log("EmailService: Using email configuration:", { 
+      host: emailHost,
+      port: emailPort,
+      user: emailUser ? "SET" : "NOT SET", 
+      pass: emailPass ? "SET" : "NOT SET",
+      secure: true
     });
+    
+    // Initialize transporter - only if credentials are actually provided
+    if (emailUser && emailPass) {
+      this.transporter = nodemailer.createTransport({
+        host: emailHost,
+        port: emailPort,
+        secure: true, // true for 465
+        auth: {
+          user: emailUser,
+          pass: emailPass,
+        },
+      });
+    } else {
+      console.warn("EmailService: No email credentials provided. Using console transport.");
+      // Create a "fake" transporter that just logs emails instead of sending them
+      this.transporter = {
+        sendMail: async (mailOptions) => {
+          console.log("EMAIL WOULD BE SENT:", {
+            to: mailOptions.to,
+            from: mailOptions.from,
+            subject: mailOptions.subject,
+            text: mailOptions.text?.substring(0, 150) + "...",
+          });
+          return { messageId: "fake-message-id-" + Date.now() };
+        },
+        verify: (callback) => callback(null, true)
+      };
+    }
 
     // Initialize template cache
     this.templateCache = new Map();
@@ -47,61 +67,8 @@ class EmailService {
     // Register template helpers
     registerTemplateHelpers();
 
-    // Initialize email queue
-    this.emailQueue = new Queue(EMAIL_QUEUE_NAME, {
-      redis: {
-        host: process.env.REDIS_HOST || "localhost",
-        port: process.env.REDIS_PORT || 6379,
-        password: process.env.REDIS_PASSWORD,
-      },
-      defaultJobOptions: {
-        attempts: MAX_RETRIES,
-        backoff: {
-          type: "exponential",
-          delay: RETRY_DELAY,
-        },
-        removeOnComplete: true,
-        removeOnFail: false,
-      },
-    });
-
-    // Process queue
-    this.emailQueue.process(EMAIL_CONCURRENCY, async (job) => {
-      return this.processEmailJob(job);
-    });
-
-    // Define queue event handlers
-    this.setupQueueEvents();
-
     // Verify connection
     this.verifyConnection();
-  }
-
-  /**
-   * Setup email queue event handlers
-   */
-  setupQueueEvents() {
-    this.emailQueue.on("completed", (job) => {
-      logger.email.info("Email job completed", {
-        jobId: job.id,
-        emailId: job.data.emailId,
-        recipient: job.data.mailOptions.to,
-      });
-    });
-
-    this.emailQueue.on("failed", (job, error) => {
-      logger.email.error("Email job failed", {
-        jobId: job.id,
-        emailId: job.data.emailId,
-        recipient: job.data.mailOptions.to,
-        error: error.message,
-        attempts: job.attemptsMade,
-      });
-    });
-
-    this.emailQueue.on("error", (error) => {
-      logger.email.error("Email queue error", { error });
-    });
   }
 
   /**
@@ -110,7 +77,7 @@ class EmailService {
   verifyConnection() {
     this.transporter.verify((error, _success) => {
       if (error) {
-        logger.email.error("Configuration error", { error });
+        logger.email.error("Email configuration error:", { error });
         this.handleConnectionError(error);
       } else {
         logger.email.info("Email server is ready to send messages");
@@ -153,78 +120,6 @@ class EmailService {
       });
     } else {
       logger.email.error("Unknown email connection error", { error });
-    }
-  }
-
-  /**
-   * Process email job from queue
-   * @param {Object} job - Queue job
-   * @returns {Promise} Email sending result
-   */
-  async processEmailJob(job) {
-    const { mailOptions, attemptsMade } = job.data;
-
-    try {
-      const info = await this.transporter.sendMail(mailOptions);
-      return {
-        success: true,
-        messageId: info.messageId,
-      };
-    } catch (error) {
-      // Log detailed error information
-      logger.email.error("Failed to send email in job processor", {
-        error,
-        attemptsMade,
-        maxRetries: MAX_RETRIES,
-        recipient: mailOptions.to,
-        subject: mailOptions.subject,
-      });
-
-      // If max retries reached, send a notification to admin
-      if (attemptsMade >= MAX_RETRIES - 1) {
-        this.notifyAdminOfFailure(mailOptions, error);
-      }
-
-      // Re-throw error to trigger retry mechanism
-      throw error;
-    }
-  }
-
-  /**
-   * Notify admin about persistent email failures
-   * @param {Object} mailOptions - Original mail options
-   * @param {Error} error - Error object
-   */
-  async notifyAdminOfFailure(mailOptions, error) {
-    try {
-      // Only if admin email is different from the recipient
-      if (
-        process.env.ADMIN_EMAIL &&
-        process.env.ADMIN_EMAIL !== mailOptions.to
-      ) {
-        const adminNotification = {
-          from: process.env.EMAIL_USER,
-          to: process.env.ADMIN_EMAIL,
-          subject: `[ALERT] Failed email to ${mailOptions.to}`,
-          html: `
-            <h2>Email Delivery Failure</h2>
-            <p><strong>Recipient:</strong> ${mailOptions.to}</p>
-            <p><strong>Subject:</strong> ${mailOptions.subject}</p>
-            <p><strong>Error:</strong> ${error.message}</p>
-            <p><strong>Time:</strong> ${new Date().toISOString()}</p>
-          `,
-        };
-
-        await this.transporter.sendMail(adminNotification);
-        logger.email.info("Admin notification sent for email failure", {
-          admin: process.env.ADMIN_EMAIL,
-          originalRecipient: mailOptions.to,
-        });
-      }
-    } catch (notifyError) {
-      logger.email.error("Failed to notify admin of email failure", {
-        error: notifyError,
-      });
     }
   }
 
@@ -283,19 +178,13 @@ class EmailService {
   }
 
   /**
-   * Queue an email for sending
+   * Send an email directly
    * @param {Object} mailOptions - Email options (from, to, subject, html)
-   * @param {Object} options - Additional options (priority, delay)
-   * @returns {Promise<Object>} Job details
+   * @returns {Promise} Email sending result
    */
-  async queueEmail(mailOptions, options = {}) {
-    const defaultSender = process.env.EMAIL_USER;
-    const emailId = uuidv4();
-
-    // Set default sender if not provided
-    if (!mailOptions.from) {
-      mailOptions.from = defaultSender;
-    }
+  async sendEmail(mailOptions) {
+    // Force a valid FROM address regardless of what was provided
+    mailOptions.from = '"Medh No-Reply" <noreply@medh.co>';
 
     // Add text version if only HTML is provided
     if (mailOptions.html && !mailOptions.text) {
@@ -306,13 +195,6 @@ class EmailService {
         .trim();
     }
 
-    // Add default headers for tracking
-    mailOptions.headers = {
-      ...mailOptions.headers,
-      "X-Email-ID": emailId,
-      "X-Mailer": "Medh-Platform",
-    };
-
     const recipient =
       typeof mailOptions.to === "string"
         ? mailOptions.to
@@ -321,64 +203,8 @@ class EmailService {
           : "unknown";
 
     try {
-      const jobOptions = {
-        priority: options.priority || "normal",
-        delay: options.delay || 0,
-        attempts: options.attempts || MAX_RETRIES,
-      };
-
-      logger.email.debug(`Queueing email to ${recipient}`, {
-        emailId,
+      logger.email.debug(`Sending email to ${recipient}`, {
         subject: mailOptions.subject,
-        recipientCount: Array.isArray(mailOptions.to)
-          ? mailOptions.to.length
-          : 1,
-      });
-
-      const job = await this.emailQueue.add(
-        {
-          mailOptions,
-          emailId,
-          timestamp: Date.now(),
-          attemptsMade: 0,
-        },
-        jobOptions,
-      );
-
-      return {
-        success: true,
-        jobId: job.id,
-        emailId,
-      };
-    } catch (error) {
-      logger.email.error(`Failed to queue email to ${recipient}`, {
-        error,
-        emailId,
-        subject: mailOptions.subject,
-      });
-      throw new Error(`Failed to queue email: ${error.message}`);
-    }
-  }
-
-  /**
-   * Send an email immediately (bypassing queue)
-   * @param {Object} mailOptions - Email options (from, to, subject, html)
-   * @returns {Promise} Email sending result
-   */
-  async sendEmailDirectly(mailOptions) {
-    const recipient =
-      typeof mailOptions.to === "string"
-        ? mailOptions.to
-        : Array.isArray(mailOptions.to)
-          ? mailOptions.to.join(", ")
-          : "unknown";
-
-    try {
-      logger.email.debug(`Sending email directly to ${recipient}`, {
-        subject: mailOptions.subject,
-        recipientCount: Array.isArray(mailOptions.to)
-          ? mailOptions.to.length
-          : 1,
       });
 
       const info = await this.transporter.sendMail(mailOptions);
@@ -400,11 +226,11 @@ class EmailService {
 
       if (error.code === "EAUTH") {
         throw new Error(
-          "Email authentication failed. Please check your email credentials.",
+          "Email authentication failed. Please check your email credentials."
         );
       } else if (error.code === "ESOCKET") {
         throw new Error(
-          "Email connection failed. Please check your internet connection.",
+          "Email connection failed. Please check your internet connection."
         );
       } else {
         throw new Error(`Failed to send email: ${error.message}`);
@@ -433,7 +259,7 @@ class EmailService {
         html,
       };
 
-      return this.queueEmail(mailOptions, { priority: "high" });
+      return this.sendEmail(mailOptions);
     } catch (error) {
       logger.email.error("Failed to send welcome email", { error, email });
       throw error;
@@ -462,9 +288,41 @@ class EmailService {
         html,
       };
 
-      return this.queueEmail(mailOptions, { priority: "high" });
+      return this.sendEmail(mailOptions);
     } catch (error) {
       logger.email.error("Failed to send password reset email", {
+        error,
+        email,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Send an OTP verification email
+   * @param {string} email - Recipient email
+   * @param {string} name - Recipient name
+   * @param {string} otp - One-time password
+   * @returns {Promise} Email sending result
+   */
+  async sendOTPVerificationEmail(email, name, otp) {
+    try {
+      const html = await this.renderTemplate("email-verification", {
+        name,
+        email,
+        otp,
+        expiryTime: "15 minutes",
+      });
+
+      const mailOptions = {
+        to: email,
+        subject: "Email Verification - Medh Learning Platform",
+        html,
+      };
+
+      return this.sendEmail(mailOptions);
+    } catch (error) {
+      logger.email.error("Failed to send OTP verification email", {
         error,
         email,
       });
@@ -505,7 +363,7 @@ class EmailService {
         html,
       };
 
-      return this.queueEmail(mailOptions);
+      return this.sendEmail(mailOptions);
     } catch (error) {
       logger.email.error("Failed to send notification email", {
         error,
@@ -522,15 +380,13 @@ class EmailService {
    * @param {string} subject - Email subject
    * @param {string} templateName - Template name
    * @param {Object} templateData - Template data
-   * @param {Object} options - Additional options (priority, delay)
    * @returns {Promise<Array>} Results of all email jobs
    */
   async sendBulkEmail(
     emails,
     subject,
     templateName,
-    templateData = {},
-    options = {},
+    templateData = {}
   ) {
     if (!Array.isArray(emails) || emails.length === 0) {
       throw new Error("Emails must be a non-empty array");
@@ -547,8 +403,8 @@ class EmailService {
             html,
           };
 
-          return this.queueEmail(mailOptions, options);
-        }),
+          return this.sendEmail(mailOptions);
+        })
       );
 
       // Count successes and failures
@@ -581,32 +437,17 @@ class EmailService {
     }
   }
 
-  /**
-   * Get the status of the email queue
-   * @returns {Promise<Object>} Queue status
-   */
-  async getQueueStatus() {
-    try {
-      const [waiting, active, completed, failed, delayed] = await Promise.all([
-        this.emailQueue.getWaitingCount(),
-        this.emailQueue.getActiveCount(),
-        this.emailQueue.getCompletedCount(),
-        this.emailQueue.getFailedCount(),
-        this.emailQueue.getDelayedCount(),
-      ]);
+  // Alias for backward compatibility
+  async sendEmailDirectly(mailOptions) {
+    return this.sendEmail(mailOptions);
+  }
 
-      return {
-        waiting,
-        active,
-        completed,
-        failed,
-        delayed,
-        total: waiting + active + completed + failed + delayed,
-      };
-    } catch (error) {
-      logger.email.error("Failed to get queue status", { error });
-      throw error;
-    }
+  // Alias for backward compatibility
+  async queueEmail(mailOptions, options = {}) {
+    logger.email.warn("queueEmail is deprecated, using direct send instead", {
+      options,
+    });
+    return this.sendEmail(mailOptions);
   }
 }
 

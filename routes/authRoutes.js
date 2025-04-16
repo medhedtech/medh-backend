@@ -16,6 +16,20 @@ const router = express.Router();
 router.post("/register", authController.registerUser.bind(authController));
 
 /**
+ * @route   POST /api/v1/auth/verify-email
+ * @desc    Verify email with OTP
+ * @access  Public
+ */
+router.post("/verify-email", authController.verifyEmailOTP.bind(authController));
+
+/**
+ * @route   POST /api/v1/auth/resend-verification
+ * @desc    Resend verification OTP
+ * @access  Public
+ */
+router.post("/resend-verification", authController.resendVerificationOTP.bind(authController));
+
+/**
  * @route   POST /api/v1/auth/login
  * @desc    Login a user and get token
  * @access  Public
@@ -162,17 +176,30 @@ router.delete(
 
 router.post("/test-email", async (req, res) => {
   try {
+    const { email = "care@medh.co" } = req.body;
+    
+    // Debug current email configuration
+    console.log("Email configuration:", {
+      host: process.env.EMAIL_HOST,
+      port: process.env.EMAIL_PORT,
+      secure: process.env.EMAIL_SECURE,
+      user: process.env.EMAIL_USER ? "Set" : "Not set",
+      pass: process.env.EMAIL_PASS ? "Set" : "Not set"
+    });
+    
     const mailOptions = {
-      from: '"Medh Care" <care@medh.co>',
-      to: "care@medh.co",
+      from: process.env.EMAIL_FROM || `"Medh Platform" <${process.env.EMAIL_USER}>`,
+      to: email,
       subject: "Test Email",
-      html: "<p>This is a test email to verify the email configuration.</p>",
+      html: "<p>This is a test email to verify the email configuration.</p><p>If you received this email, your email service is working correctly!</p>",
     };
 
-    await authController.sendEmail(mailOptions);
+    // Use the simplified email sending approach
+    const result = await authController.emailService.sendEmail(mailOptions);
     res.status(200).json({
       success: true,
       message: "Test email sent successfully",
+      result
     });
   } catch (error) {
     console.error("Test email error:", error);
@@ -180,6 +207,103 @@ router.post("/test-email", async (req, res) => {
       success: false,
       message: "Failed to send test email",
       error: error.message,
+      code: error.code,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+/**
+ * @route   POST /api/v1/auth/test-verification-email
+ * @desc    Test OTP verification email
+ * @access  Public (Should be restricted in production)
+ */
+router.post("/test-verification-email", async (req, res) => {
+  try {
+    const { email, name } = req.body;
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
+    }
+
+    // Generate test OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Try direct email sending
+    await authController.emailService.sendEmailDirectly({
+      to: email,
+      subject: "Test OTP Verification",
+      html: `<p>Hello ${name || 'User'},</p><p>Your test verification code is: <strong>${otp}</strong></p>`,
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: "Test verification email sent successfully",
+      otp: otp // Only include in test route
+    });
+  } catch (error) {
+    console.error("Test verification email error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to send test verification email",
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+/**
+ * @route   POST /api/v1/auth/test-otp
+ * @desc    Test OTP generation and email formatting (logs to console)
+ * @access  Public (should be restricted in production)
+ */
+router.post("/test-otp", async (req, res) => {
+  try {
+    const { email = "test@example.com" } = req.body;
+    
+    // Generate a test OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Create HTML content for testing
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <body>
+        <h2>Test OTP Email</h2>
+        <p>Your OTP is: ${otp}</p>
+    </body>
+    </html>
+    `;
+    
+    // Log what would be sent
+    console.log("TEST OTP EMAIL:", {
+      to: email,
+      from: '"Medh No-Reply" <noreply@medh.co>',
+      subject: "Test OTP",
+      html: htmlContent
+    });
+    
+    // Use the email service to send directly
+    const result = await authController.emailService.sendEmail({
+      to: email,
+      subject: "Test OTP Email",
+      html: htmlContent
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: "Test OTP generated and email sending attempted",
+      otp: otp,
+      result: result
+    });
+  } catch (error) {
+    console.error("Test OTP error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Test OTP failed",
+      error: error.message
     });
   }
 });
