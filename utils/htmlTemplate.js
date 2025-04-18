@@ -15,7 +15,7 @@ const generatePdfContentForSubscription = (subscription) => {
             .invoice-container {
               width: 100%;
               max-width: 800px;
-              margin: 0 auto;
+              margin: 0 auto;a
               padding: 20px;
               background-color: white;
               border-radius: 10px;

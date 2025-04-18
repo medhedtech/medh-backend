@@ -73,6 +73,9 @@ app.use((req, res) => {
 
 const PORT = envVars.PORT || 3000;
 
+console.log('App starting - ENV check for Redis');
+console.log('REDIS_ENABLED from process.env:', process.env.REDIS_ENABLED);
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

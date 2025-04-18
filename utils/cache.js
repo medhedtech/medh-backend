@@ -2,6 +2,17 @@ import { createClient } from "redis";
 
 import logger from "./logger.js";
 
+// Utility function to standardize Redis enabled checking across the application
+export function isRedisEnabled() {
+  // Get the raw value and trim any trailing comments
+  const redisEnabledRaw = (process.env.REDIS_ENABLED || "").toLowerCase();
+  
+  // Split by any comment character and take only the first part
+  const redisEnabled = redisEnabledRaw.split('#')[0].trim();
+  
+  return redisEnabled === "true" || redisEnabled === "yes" || redisEnabled === "1";
+}
+
 class Cache {
   constructor() {
     this.client = null;
@@ -12,8 +23,19 @@ class Cache {
 
   async init() {
     try {
-      // Check if Redis is enabled
-      if (process.env.REDIS_ENABLED !== "true") {
+      // Debug the Redis enabled value
+      const redisEnabledRaw = process.env.REDIS_ENABLED;
+      logger.redis.debug("Redis enabled raw value:", { 
+        value: redisEnabledRaw,
+        type: typeof redisEnabledRaw,
+        length: redisEnabledRaw?.length
+      });
+      
+      // Use the standardized function to check if Redis is enabled
+      const enabled = isRedisEnabled();
+      logger.redis.debug("Redis enabled processed value:", { enabled });
+      
+      if (!enabled) {
         logger.redis.warn(
           "Redis is disabled in configuration. Skipping connection.",
         );
@@ -28,20 +50,43 @@ class Cache {
         `Attempting to connect to Redis at ${redisHost}:${redisPort}`,
       );
 
-      // Create Redis client with proper authentication
+      // Create Redis client with proper authentication - using the same approach that works in redis-test.js
       this.client = createClient({
         socket: {
           host: redisHost,
           port: redisPort,
         },
-        password: process.env.REDIS_PASSWORD,
+        password: process.env.REDIS_PASSWORD || undefined, // Only set if defined
+        // Add a longer connection timeout for reliability
+        socket_keepalive: true,
+        retry_strategy: (options) => {
+          if (options.error && options.error.code === "ECONNREFUSED") {
+            // End reconnecting on a specific error
+            logger.redis.error("Connection refused. Redis server may not be running.");
+            return new Error("Redis server refused connection");
+          }
+          if (options.total_retry_time > 1000 * 60 * 5) {
+            // End reconnecting after 5 minutes
+            logger.redis.error("Retry time exhausted");
+            return new Error("Retry time exhausted");
+          }
+          if (options.attempt > 10) {
+            // End reconnecting with built in error
+            logger.redis.error("Maximum retry attempts reached");
+            return undefined;
+          }
+          // Reconnect after increasing delay
+          return Math.min(options.attempt * 100, 3000);
+        }
       });
 
+      // Set event handlers for diagnostic logging
       this.client.on("error", (err) => {
         logger.connection.error("Redis", err, {
           host: redisHost,
           port: redisPort,
         });
+        logger.redis.error(`Redis error: ${err.message}`, { stack: err.stack });
         this.connected = false;
       });
 
@@ -69,10 +114,21 @@ class Cache {
         this.connected = false;
       });
 
-      await this.client.connect();
+      try {
+        // Add more detailed error handling for the connect call
+        logger.redis.info("Initiating Redis connection");
+        await this.client.connect();
+        logger.redis.info("Redis connection established successfully");
+      } catch (connError) {
+        logger.redis.error(`Redis connection error: ${connError.message}`, { 
+          stack: connError.stack,
+          code: connError.code 
+        });
+        throw connError;
+      }
 
       // Setup periodic health check if Redis is enabled and connected
-      if (process.env.REDIS_ENABLED === "true") {
+      if (isRedisEnabled()) {
         this.setupHealthCheck();
       }
     } catch (error) {
@@ -128,7 +184,7 @@ class Cache {
   getConnectionStatus() {
     const status = {
       connected: this.connected,
-      enabled: process.env.REDIS_ENABLED === "true",
+      enabled: isRedisEnabled(),
       host: process.env.REDIS_HOST || "localhost",
       port: process.env.REDIS_PORT || 6379,
       lastChecked: new Date().toISOString(),
