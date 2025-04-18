@@ -1,261 +1,214 @@
 # Email Service Documentation
 
-## Overview
-
-The Email Service is an industry-standard implementation for handling all email operations in the Medh Learning Platform. It provides a robust, reliable way to send emails with features like templating, queuing, rate limiting, and error recovery.
+The Medh Platform uses a robust Redis-based email service to handle all email communications with high reliability and performance.
 
 ## Features
 
-- **HTML Templating**: Uses Handlebars for consistent, maintainable email templates
-- **Queue System**: Bull queue integration for reliable email delivery
-- **Rate Limiting**: Prevents sending too many emails too quickly
-- **Retry Mechanism**: Automatic retries with exponential backoff
-- **Error Handling**: Comprehensive error capturing and reporting
-- **Admin Notifications**: Alerts for persistent failures
-- **Plain Text Fallback**: Automatically generates plain text versions
-- **Template Caching**: Performance optimization for templates
-- **Bulk Email Support**: Efficiently send to multiple recipients
-- **Email Analytics**: Track email sending status and queue health
+- Queue-based email delivery using Redis
+- Automatic retries for failed emails
+- Priority-based email processing
+- Rate limiting for bulk emails
+- Comprehensive error handling and logging
+- HTML templating with Handlebars
+- Support for AWS SES via SMTP
 
 ## Configuration
 
-The Email Service uses the following environment variables:
+Set the following environment variables in your `.env` file:
 
-```
-EMAIL_HOST=smtp.example.com
-EMAIL_PORT=587
+```env
+# Email Configuration
+EMAIL_HOST=email-smtp.us-east-1.amazonaws.com
+EMAIL_PORT=465
 EMAIL_SECURE=true
-EMAIL_USER=your-email@example.com
-EMAIL_PASS=your-password
-ADMIN_EMAIL=admin@example.com
+EMAIL_USER=your-ses-smtp-username
+EMAIL_PASS=your-ses-smtp-password
+EMAIL_FROM=noreply@yourdomain.com
+
+# Redis Configuration
+REDIS_ENABLED=true
 REDIS_HOST=localhost
 REDIS_PORT=6379
 REDIS_PASSWORD=redis-password
+
+# Email Queue Configuration
+EMAIL_QUEUE_CONCURRENCY=5
+EMAIL_RETRY_ATTEMPTS=3
+EMAIL_RETRY_DELAY=60000
+EMAIL_JOB_TIMEOUT=30000
+EMAIL_BATCH_SIZE=50
+EMAIL_BATCH_DELAY=1000
+EMAIL_KEEP_FAILED_JOBS=false
+EMAIL_DEBUG=false
+
+# Email Template Settings
+OTP_EXPIRY_MINUTES=10
+PASSWORD_RESET_EXPIRY_HOURS=24
 ```
 
-## Template System
+## Usage
 
-Email templates are stored in the `templates/` directory as `.hbs` files. Here's how to create a new template:
-
-1. Create a new file in the `templates` directory (e.g., `notification.hbs`)
-2. Use Handlebars syntax for dynamic content: `{{variableName}}`
-3. Use available helpers like `{{currentYear}}` or `{{formatDate date 'long'}}`
-
-### Available Template Helpers
-
-- `currentYear` - Returns the current year
-- `formatDate` - Formats a date (formats: 'short', 'long', 'time', 'full')
-- `ifEquals` - Conditional comparison
-- `joinList` - Joins an array with a separator
-
-## API Reference
-
-### Initialization
+### Basic Email Sending
 
 ```javascript
 import EmailService from "../services/emailService.js";
+
 const emailService = new EmailService();
-```
 
-### Sending Emails
+// Simple email
+await emailService.sendEmail({
+  to: "recipient@example.com",
+  subject: "Hello World",
+  html: "<p>This is a test email</p>"
+});
 
-#### Welcome Email
-
-```javascript
-/**
- * @param {string} email - Recipient email
- * @param {string} name - Recipient name
- * @param {Object} userData - Additional user data (optional)
- */
-await emailService.sendWelcomeEmail("user@example.com", "John Doe", {
-  loginUrl: "https://example.com/login",
-  // Any additional data to pass to the template
+// With priority
+await emailService.sendEmail({
+  to: "recipient@example.com",
+  subject: "Important Notification",
+  html: "<p>This is a high priority email</p>"
+}, {
+  priority: "high", // can be "high", "normal", or "low"
+  useQueue: true // force queue usage even if direct would be used
 });
 ```
 
-#### Password Reset Email
+### Templated Emails
 
 ```javascript
-/**
- * @param {string} email - Recipient email
- * @param {string} name - Recipient name
- * @param {string} tempPassword - Temporary password
- */
+// Using one of the built-in template methods
+await emailService.sendWelcomeEmail(
+  "user@example.com",
+  "John Doe",
+  { password: "temporary-password" }
+);
+
+await emailService.sendOTPVerificationEmail(
+  "user@example.com",
+  "John Doe",
+  "123456"
+);
+
 await emailService.sendPasswordResetEmail(
   "user@example.com",
   "John Doe",
-  "Temp123!",
+  "new-temp-password"
 );
-```
 
-#### Notification Email
-
-```javascript
-/**
- * @param {string} email - Recipient email
- * @param {string} subject - Email subject
- * @param {string} message - HTML content or template name
- * @param {Object} data - Template data (if message is template name)
- */
-// Using HTML content directly
+// Using a custom template
 await emailService.sendNotificationEmail(
   "user@example.com",
-  "Important Update",
-  "<h1>Hello!</h1><p>This is an important update.</p>",
-);
-
-// Using a template
-await emailService.sendNotificationEmail(
-  "user@example.com",
-  "Course Completion",
-  "course-completion", // Template name (without .hbs extension)
-  {
-    courseName: "JavaScript 101",
-    completionDate: new Date(),
-    score: 95,
-  },
+  "Course Update Available",
+  "Your course has been updated",
+  { 
+    courseName: "JavaScript Fundamentals",
+    updateType: "New content added"
+  }
 );
 ```
 
-#### Bulk Email
+### Bulk Email Sending
 
 ```javascript
-/**
- * @param {Array<string>} emails - List of recipient emails
- * @param {string} subject - Email subject
- * @param {string} templateName - Template name
- * @param {Object} templateData - Template data
- * @param {Object} options - Additional options (priority, delay)
- */
-await emailService.sendBulkEmail(
-  ["user1@example.com", "user2@example.com", "user3@example.com"],
-  "New Course Available",
-  "new-course",
-  {
-    courseName: "Advanced React",
-    startDate: new Date("2023-11-15"),
-    instructor: "Jane Smith",
-  },
-  { priority: "high" },
+const recipients = ["user1@example.com", "user2@example.com", "user3@example.com"];
+
+const results = await emailService.sendBulkEmail(
+  recipients,
+  "New Feature Announcement",
+  "announcement-template",
+  { 
+    featureName: "Video Conferencing",
+    releaseDate: "May 15, 2023"
+  }
 );
+
+console.log(`Sent: ${results.queued}, Failed: ${results.failed}`);
 ```
 
-### Advanced Usage
+## Email Templates
 
-#### Direct Email Sending (Bypass Queue)
+Email templates are stored in the `templates` directory as `.hbs` (Handlebars) files. The following templates are available:
+
+- `welcome.hbs` - Welcome email for new users
+- `email-verification.hbs` - Email verification with OTP
+- `reset-password.hbs` - Password reset emails
+- `notification.hbs` - General notifications
+- `receipt.hbs` - Payment receipts
+- `course-update.hbs` - Course update notifications
+
+## Queue Management
+
+The email queue is powered by Bull and Redis. To monitor the queue:
 
 ```javascript
-/**
- * @param {Object} mailOptions - Email options
- */
-await emailService.sendEmailDirectly({
-  from: "sender@example.com",
-  to: "recipient@example.com",
-  subject: "Urgent Message",
-  html: "<p>This is sent immediately, bypassing the queue.</p>",
-});
+// Get queue statistics
+const stats = await emailService.getQueueStats();
+console.log(stats);
+/*
+{
+  enabled: true,
+  isPaused: false,
+  workers: 5,
+  jobs: {
+    waiting: 10,
+    active: 2,
+    completed: 500,
+    failed: 5,
+    delayed: 0
+  }
+}
+*/
 ```
 
-#### Custom Queue Options
+## Health Checks
 
-```javascript
-/**
- * @param {Object} mailOptions - Email options
- * @param {Object} options - Queue options
- */
-await emailService.queueEmail(
-  {
-    to: "user@example.com",
-    subject: "Scheduled Email",
-    html: "<p>This is a scheduled email.</p>",
-  },
-  {
-    priority: "low", // 'high', 'normal', 'low'
-    delay: 3600000, // 1 hour delay in milliseconds
-    attempts: 5, // Custom retry attempts
-  },
-);
-```
-
-#### Queue Status Monitoring
-
-```javascript
-/**
- * Get current queue statistics
- */
-const queueStats = await emailService.getQueueStatus();
-console.log(queueStats);
-// Output: { waiting: 5, active: 2, completed: 100, failed: 1, delayed: 3, total: 111 }
-```
-
-## Handling Email Failures
-
-The service automatically retries failed emails with exponential backoff. After all retries are exhausted:
-
-1. The error is logged with detailed information
-2. An admin notification is sent (if configured)
-3. The failed job remains in the queue for manual inspection
-
-## Best Practices
-
-1. **Always use templates** for consistent branding and easier maintenance
-2. **Include both HTML and plain text** versions for better deliverability
-3. **Use queue priorities** appropriately (high for critical emails like password resets)
-4. **Monitor the queue status** regularly
-5. **Test templates** in various email clients
-6. **Keep templates modular** with reusable components
-7. **Follow anti-spam guidelines** in your email content
+The email service automatically performs health checks for:
+- SMTP connection status
+- Redis connection status
+- Queue health status
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Emails not being sent**
+1. **Authentication Errors**
+   - Check your SMTP credentials
+   - Ensure AWS SES is properly configured
+   - Verify your account is out of the SES sandbox if sending to non-verified recipients
 
-   - Check SMTP credentials
-   - Verify Redis connection for queue
-   - Check server logs for detailed errors
+2. **Connection Issues**
+   - Verify network connectivity
+   - Check firewall settings
+   - Ensure SMTP port is not blocked
 
-2. **Template rendering errors**
+3. **Redis Issues**
+   - Check Redis server is running
+   - Verify Redis credentials
+   - Ensure Redis is accessible from the application server
 
-   - Verify template exists in the templates directory
-   - Check variable names match between code and template
+### Viewing Logs
 
-3. **Rate limiting problems**
+Email-related logs are available in the combined log files and can be filtered using:
 
-   - Adjust rate limiting settings in the EmailService constructor
-   - Use bulk email sending for large batches
-
-4. **Queue processing stalled**
-   - Restart the application
-   - Check Redis connection
-   - Verify worker processes are running
-
-## Development and Testing
-
-For local development and testing, you can use:
-
-- [Ethereal](https://ethereal.email/) - Fake SMTP service
-- [MailHog](https://github.com/mailhog/MailHog) - Email testing tool with UI
-- Test environment flag to prevent actual email sending
-
-Example test configuration:
-
-```javascript
-// In test environment
-if (process.env.NODE_ENV === "test") {
-  // Create test account on ethereal
-  const testAccount = await nodemailer.createTestAccount();
-
-  // Configure transporter with test account
-  this.transporter = nodemailer.createTransport({
-    host: "smtp.ethereal.email",
-    port: 587,
-    secure: false,
-    auth: {
-      user: testAccount.user,
-      pass: testAccount.pass,
-    },
-  });
-}
+```bash
+grep "email" logs/combined-*.log
 ```
+
+For queue-specific issues:
+
+```bash
+grep "queue" logs/combined-*.log
+```
+
+## Performance Considerations
+
+- The service uses connection pooling for better SMTP performance
+- Bulk emails are sent in batches with rate limiting
+- High priority emails bypass the queue when Redis is unavailable
+
+## Security
+
+- Credentials are stored in environment variables only
+- Templates are validated before rendering
+- HTML is sanitized where appropriate
+- Error messages do not expose sensitive information

@@ -8,6 +8,7 @@ const ROLES = {
   INSTRUCTOR: "instructor",
   CORPORATE: "coorporate",
   CORPORATE_STUDENT: "coorporate-student",
+  PARENT: "parent",
 };
 
 const PERMISSIONS = {
@@ -302,6 +303,11 @@ userSchema.methods.isCorporateStudent = function () {
   return this.role.includes(ROLES.CORPORATE_STUDENT);
 };
 
+// Add a method to check if user is a parent
+userSchema.methods.isParent = function () {
+  return this.role.includes(ROLES.PARENT);
+};
+
 // Add a method to check if user is active
 userSchema.methods.isActive = function () {
   return this.status === "Active";
@@ -359,6 +365,11 @@ userSchema.statics.findCorporates = function () {
 
 userSchema.statics.findCorporateStudents = function () {
   return this.find({ role: ROLES.CORPORATE_STUDENT });
+};
+
+// Add static method to find all parents
+userSchema.statics.findParents = function () {
+  return this.find({ role: ROLES.PARENT });
 };
 
 // Add indexes for better query performance
