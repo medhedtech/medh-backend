@@ -54,6 +54,8 @@ if (ENV_VARS.NODE_ENV === "development") {
   );
 }
 
+
+
 // Apply compression for better performance
 app.use(compression());
 app.use(mongoSanitize()); // Prevent MongoDB operator injection
