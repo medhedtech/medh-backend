@@ -2,7 +2,7 @@ import express from "express";
 
 const router = express.Router();
 import * as controller from "../controllers/home-display-controller.js";
-import { authenticate, authorize } from "../middleware/auth.js";
+import { authenticateToken, authorize } from "../middleware/auth.js";
 
 // Public routes - root
 router.get("/", function (req, res) {
@@ -16,13 +16,13 @@ router.get("/fields", function (req, res) {
 
 router
   .route("/order")
-  .put(authenticate, authorize("admin"), function (req, res) {
+  .put(authenticateToken, authorize("admin"), function (req, res) {
     return controller.updateDisplayOrder(req, res);
   });
 
 router
   .route("/seed")
-  .post(authenticate, authorize("admin"), function (req, res) {
+  .post(authenticateToken, authorize("admin"), function (req, res) {
     return controller.seedHomeDisplayData(req, res);
   });
 
@@ -33,7 +33,7 @@ router.get("/prices", function (req, res) {
 
 router.post(
   "/prices/bulk-update",
-  authenticate,
+  authenticateToken,
   authorize("admin"),
   function (req, res) {
     return controller.bulkUpdateHomeDisplayPrices(req, res);
@@ -50,16 +50,16 @@ router.get("/:id", function (req, res) {
   return controller.getHomeDisplayById(req, res);
 });
 
-router.put("/:id", authenticate, authorize("admin"), function (req, res) {
+router.put("/:id", authenticateToken, authorize("admin"), function (req, res) {
   return controller.updateHomeDisplay(req, res);
 });
 
-router.delete("/:id", authenticate, authorize("admin"), function (req, res) {
+router.delete("/:id", authenticateToken, authorize("admin"), function (req, res) {
   return controller.deleteHomeDisplay(req, res);
 });
 
 // Admin root path route
-router.post("/", authenticate, authorize("admin"), function (req, res) {
+router.post("/", authenticateToken, authorize("admin"), function (req, res) {
   return controller.createHomeDisplay(req, res);
 });
 

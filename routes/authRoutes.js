@@ -4,7 +4,8 @@ import authController from "../controllers/authController.js";
 import * as corporateStudentController from "../controllers/coorporate-student-controller.js";
 import * as corporateController from "../controllers/corporateController.js";
 import * as instructorController from "../controllers/instructor-controller.js";
-import { authenticate as authMiddleware } from "../middleware/auth.js";
+import { authenticateToken } from "../middleware/auth.js";
+import { loginLimiter, registerLimiter, passwordResetLimiter } from "../middleware/rateLimit.js";
 
 const router = express.Router();
 
@@ -13,14 +14,28 @@ const router = express.Router();
  * @desc    Register a new user
  * @access  Public
  */
-router.post("/register", authController.registerUser.bind(authController));
+router.post("/register", registerLimiter, authController.registerUser.bind(authController));
 
 /**
  * @route   POST /api/v1/auth/login
  * @desc    Login a user and get token
  * @access  Public
  */
-router.post("/login", authController.loginUser.bind(authController));
+router.post("/login", loginLimiter, authController.loginUser.bind(authController));
+
+/**
+ * @route   POST /api/v1/auth/refresh-token
+ * @desc    Get a new access token using a refresh token
+ * @access  Public
+ */
+router.post("/refresh-token", authController.refreshToken.bind(authController));
+
+/**
+ * @route   POST /api/v1/auth/logout
+ * @desc    Logout a user by invalidating their refresh token
+ * @access  Private
+ */
+router.post("/logout", authenticateToken, authController.logout.bind(authController));
 
 /**
  * @route   POST /api/v1/auth/forgot-password
@@ -29,7 +44,19 @@ router.post("/login", authController.loginUser.bind(authController));
  */
 router.post(
   "/forgot-password",
+  passwordResetLimiter,
   authController.forgotPassword.bind(authController),
+);
+
+/**
+ * @route   POST /api/v1/auth/reset-password
+ * @desc    Reset user password with token
+ * @access  Public
+ */
+router.post(
+  "/reset-password",
+  passwordResetLimiter,
+  authController.resetPassword.bind(authController),
 );
 
 /**
@@ -39,7 +66,7 @@ router.post(
  */
 router.get(
   "/users",
-  authMiddleware,
+  authenticateToken,
   authController.getAllUsers.bind(authController),
 );
 
@@ -50,7 +77,7 @@ router.get(
  */
 router.get(
   "/get-all-students",
-  authMiddleware,
+  authenticateToken,
   authController.getAllStudents.bind(authController),
 );
 
@@ -61,7 +88,7 @@ router.get(
  */
 router.get(
   "/users/:id",
-  authMiddleware,
+  authenticateToken,
   authController.getUserById.bind(authController),
 );
 
@@ -72,7 +99,7 @@ router.get(
  */
 router.put(
   "/users/:id",
-  authMiddleware,
+  authenticateToken,
   authController.updateUser.bind(authController),
 );
 
@@ -83,7 +110,7 @@ router.put(
  */
 router.put(
   "/users/email/:email",
-  authMiddleware,
+  authenticateToken,
   authController.updateUserByEmail.bind(authController),
 );
 
@@ -94,7 +121,7 @@ router.put(
  */
 router.delete(
   "/users/:id",
-  authMiddleware,
+  authenticateToken,
   authController.deleteUser.bind(authController),
 );
 
@@ -105,13 +132,8 @@ router.delete(
  */
 router.put(
   "/toggle-status/:id",
-  authMiddleware,
+  authenticateToken,
   authController.toggleUserStatus.bind(authController),
-);
-
-router.post(
-  "/reset-password",
-  authController.resetPassword.bind(authController),
 );
 
 router.post("/create", instructorController.createInstructor);

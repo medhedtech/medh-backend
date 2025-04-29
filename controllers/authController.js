@@ -9,12 +9,10 @@ import User, {
   USER_PERMISSIONS,
   USER_ADMIN_ROLES,
 } from "../models/user-modal.js";
-import EmailService from "../services/emailService.js";
+import emailService from "../services/emailService.js";
 import logger from "../utils/logger.js";
 import userValidation from "../validations/userValidation.js";
-
-// Initialize email service
-const emailService = new EmailService();
+import jwtUtils from "../utils/jwt.js";
 
 /**
  * Generate a random 6-digit OTP
@@ -307,7 +305,7 @@ class AuthController {
   }
 
   /**
-   * Login a user
+   * Login a user and generate access + refresh tokens
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
@@ -315,96 +313,185 @@ class AuthController {
     try {
       const { email, password } = req.body;
 
-      logger.auth.debug("Login attempt", { email, ip: req.ip });
-
-      // Find the user by email
-      const user = await User.findOne({ email });
-      if (!user) {
-        logger.auth.warn("Login failed - user not found", {
-          email,
-          ip: req.ip,
-        });
+      if (!email || !password) {
         return res.status(400).json({
           success: false,
-          message: "Invalid credentials.",
+          message: "Email and password are required",
         });
       }
 
-      // Check if email is verified
-      if (!user.emailVerified) {
-        return res.status(403).json({
+      // Find user by email
+      const user = await User.findOne({ email });
+      if (!user) {
+        logger.auth.warn("Login attempt with non-existent email", { email });
+        return res.status(401).json({
           success: false,
-          message: "Please verify your email before logging in",
+          message: "Invalid credentials",
+        });
+      }
+
+      // Check if user is active
+      if (user.status !== "Active") {
+        logger.auth.warn("Login attempt with inactive account", { 
+          userId: user._id, 
+          email, 
+          status: user.status 
+        });
+        return res.status(401).json({
+          success: false,
+          message: "Account is not active. Please contact support.",
         });
       }
 
       // Verify password
       const isMatch = await bcrypt.compare(password, user.password);
       if (!isMatch) {
-        logger.auth.warn("Login failed - invalid password", {
-          userId: user._id,
-          email,
-          ip: req.ip,
+        logger.auth.warn("Login attempt with invalid password", { 
+          userId: user._id, 
+          email 
         });
-        return res.status(400).json({
+        return res.status(401).json({
           success: false,
           message: "Invalid credentials",
         });
       }
 
-      // Update last login time and count
-      await user.updateLastLogin();
-
-      // Generate JWT token with enhanced payload
-      const payload = {
-        user: {
-          id: user.id,
-          role: user.role,
-          admin_role: user.admin_role,
-          permissions: user.permissions,
-        },
-      };
-
-      const token = jwt.sign(payload, ENV_VARS.JWT_SECRET_KEY, {
-        expiresIn: "24h",
-      });
-
-      // Determine permissions based on admin role
-      const permissions =
-        user.admin_role === USER_ADMIN_ROLES.SUPER_ADMIN
-          ? Object.values(USER_PERMISSIONS)
-          : user.permissions || [];
-
-      logger.auth.info("User logged in successfully", {
-        userId: user._id,
-        email,
-        roles: user.role,
-        ip: req.ip,
+      // Generate tokens
+      const accessToken = jwtUtils.generateAccessToken(user);
+      const refreshToken = await jwtUtils.generateRefreshToken(user);
+      
+      logger.auth.info("User logged in successfully", { 
+        userId: user._id, 
+        email, 
+        role: user.role 
       });
 
       return res.status(200).json({
         success: true,
-        message: "User logged in successfully",
-        token,
+        message: "Login successful",
         data: {
-          id: user.id,
-          full_name: user.full_name,
+          id: user._id,
           email: user.email,
+          full_name: user.full_name,
           role: user.role,
-          admin_role: user.admin_role,
-          permissions,
-          status: user.status,
+          permissions: user.permissions,
+          access_token: accessToken,
+          refresh_token: refreshToken,
         },
       });
     } catch (err) {
-      logger.auth.error("Login failed", {
-        error: err,
-        stack: err.stack,
+      logger.auth.error("Login error", { 
+        error: err.message, 
+        stack: err.stack 
       });
       return res.status(500).json({
         success: false,
-        message: "Server error",
+        message: "Server error during login",
         error: err.message,
+      });
+    }
+  }
+
+  /**
+   * Refresh an access token using a refresh token
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async refreshToken(req, res) {
+    try {
+      const { refresh_token } = req.body;
+      
+      if (!refresh_token) {
+        return res.status(400).json({
+          success: false,
+          message: "Refresh token is required"
+        });
+      }
+      
+      // Get user by ID function for token refresh
+      const getUserById = async (userId) => {
+        return await User.findById(userId);
+      };
+      
+      // Verify and refresh tokens
+      const tokens = await jwtUtils.refreshAccessToken(refresh_token, getUserById);
+      
+      if (!tokens) {
+        logger.auth.warn("Invalid or expired refresh token", {
+          ip: req.ip,
+          userAgent: req.headers['user-agent']
+        });
+        return res.status(401).json({
+          success: false,
+          message: "Invalid or expired refresh token"
+        });
+      }
+      
+      logger.auth.info("Token refreshed successfully");
+      
+      return res.status(200).json({
+        success: true,
+        message: "Token refreshed successfully",
+        data: {
+          access_token: tokens.accessToken,
+          refresh_token: tokens.refreshToken
+        }
+      });
+    } catch (error) {
+      logger.auth.error("Token refresh error", {
+        error: error.message,
+        stack: error.stack
+      });
+      return res.status(500).json({
+        success: false,
+        message: "Server error during token refresh"
+      });
+    }
+  }
+  
+  /**
+   * Logout a user by invalidating their refresh token
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async logout(req, res) {
+    try {
+      const { refresh_token } = req.body;
+      
+      if (!refresh_token) {
+        return res.status(400).json({
+          success: false,
+          message: "Refresh token is required"
+        });
+      }
+      
+      // Revoke the refresh token
+      const result = await jwtUtils.revokeRefreshToken(refresh_token);
+      
+      if (!result) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid refresh token"
+        });
+      }
+      
+      logger.auth.info("User logged out successfully", {
+        userId: req.user.id
+      });
+      
+      return res.status(200).json({
+        success: true,
+        message: "Logged out successfully"
+      });
+    } catch (error) {
+      logger.auth.error("Logout error", {
+        error: error.message,
+        stack: error.stack,
+        userId: req.user?.id
+      });
+      return res.status(500).json({
+        success: false,
+        message: "Server error during logout"
       });
     }
   }

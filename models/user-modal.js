@@ -6,8 +6,8 @@ const ROLES = {
   ADMIN: "admin",
   STUDENT: "student",
   INSTRUCTOR: "instructor",
-  CORPORATE: "coorporate",
-  CORPORATE_STUDENT: "coorporate-student",
+  CORPORATE: "corporate",
+  CORPORATE_STUDENT: "corporate-student",
   PARENT: "parent",
 };
 
@@ -42,7 +42,7 @@ const PERMISSIONS = {
 const ADMIN_ROLES = {
   SUPER_ADMIN: "super-admin",
   ADMIN: "admin",
-  CORPORATE_ADMIN: "coorporate-admin",
+  CORPORATE_ADMIN: "corporate-admin",
 };
 
 const AGE_GROUPS = [

@@ -1,7 +1,7 @@
 import express from "express";
 
 import * as blogController from "../controllers/blogController.js";
-import { authenticate } from "../middleware/auth.js";
+import { authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -15,7 +15,7 @@ router.get("/id/:id", blogController.getBlogById);
 router.get("/:slug", blogController.getBlogBySlug);
 
 // Protected routes (require authentication)
-router.use(authenticate);
+router.use(authenticateToken);
 router.post("/", blogController.createBlog);
 router.put("/:id", blogController.updateBlog);
 router.delete("/:id", blogController.deleteBlog);

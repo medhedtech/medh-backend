@@ -2,14 +2,14 @@ import express from "express";
 
 const router = express.Router();
 import * as paymentController from "../controllers/payment-controller.js";
-import { authenticate, authorize } from "../middleware/auth.js";
+import { authenticateToken, authorize } from "../middleware/auth.js";
 import { validateObjectId } from "../middleware/validation.js";
 import { validateEnrollment } from "../middleware/validators/enrollmentValidator.js";
 
 // Process payment and create enrollment/subscription
 router.post(
   "/process",
-  authenticate,
+  authenticateToken,
   validateEnrollment,
   paymentController.processPaymentAndEnroll,
 );
@@ -17,7 +17,7 @@ router.post(
 // Get all payments (enrollments and subscriptions) for a student
 router.get(
   "/student/:student_id",
-  authenticate,
+  authenticateToken,
   validateObjectId("student_id"),
   paymentController.getStudentPayments,
 );
@@ -25,7 +25,7 @@ router.get(
 // Get a specific payment by ID and type
 router.get(
   "/:payment_type/:payment_id",
-  authenticate,
+  authenticateToken,
   validateObjectId("payment_id"),
   paymentController.getPaymentById,
 );
@@ -33,7 +33,7 @@ router.get(
 // Get payment statistics (admin only)
 router.get(
   "/stats",
-  authenticate,
+  authenticateToken,
   authorize(["admin"]),
   paymentController.getPaymentStats,
 );
@@ -42,7 +42,7 @@ router.get(
 // Generate receipt for existing payment
 router.post(
   "/receipt/:payment_type/:payment_id",
-  authenticate,
+  authenticateToken,
   validateObjectId("payment_id"),
   paymentController.generateReceiptForExistingPayment,
 );
@@ -50,7 +50,7 @@ router.post(
 // Resend receipt email
 router.post(
   "/receipt/:payment_type/:payment_id/email",
-  authenticate,
+  authenticateToken,
   validateObjectId("payment_id"),
   paymentController.resendReceiptEmail,
 );
@@ -58,7 +58,7 @@ router.post(
 // Get all receipts for a student
 router.get(
   "/receipts/student/:student_id",
-  authenticate,
+  authenticateToken,
   validateObjectId("student_id"),
   paymentController.getStudentReceipts,
 );
