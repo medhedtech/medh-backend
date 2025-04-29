@@ -17,4 +17,7 @@ router.get("/errors/summary", metricsController.getErrorSummary);
 // System Health
 router.get("/health", metricsController.getSystemHealth);
 
+// Deployment Metrics (Sprint 3: DevOps Essentials)
+router.get("/deployment", metricsController.getDeploymentMetrics);
+
 export default router;

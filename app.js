@@ -8,16 +8,23 @@ import mongoose from "mongoose";
 import morgan from "morgan";
 
 import { corsOptions } from "./config/cors.js";
-import { envVars } from "./config/envVars.js";
+import { ENV_VARS } from "./config/envVars.js";
 import errorHandler from "./middleware/errorHandler.js";
 import trackingMiddleware from "./middleware/trackingMiddleware.js";
 import routes from "./routes/index.js";
+import sentryUtils from "./utils/sentry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Initialize Sentry
+sentryUtils.initSentry();
+
 // Initialize express app
 const app = express();
+
+// Add Sentry request handler middleware
+sentryUtils.setupSentryRequestHandler(app);
 
 // Connect to MongoDB using modern async/await with proper error handling
 const connectDB = async () => {
@@ -32,6 +39,10 @@ const connectDB = async () => {
     console.log("Connected to MongoDB");
   } catch (error) {
     console.error("MongoDB connection error:", error);
+    // Also capture in Sentry for centralized error tracking
+    sentryUtils.captureException(error, {
+      tags: { module: "database", action: "connect" }
+    });
     process.exit(1); // Exit with failure
   }
 };
@@ -54,8 +65,20 @@ app.use(trackingMiddleware.requestTracker);
 app.use(trackingMiddleware.sessionTracker);
 app.use(trackingMiddleware.uiActivityTracker);
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Routes
 app.use("/api/v1", routes);
+
+// Add Sentry error handler before other error handlers
+sentryUtils.setupSentryErrorHandler(app);
 
 // Error handling
 app.use(errorHandler);
@@ -71,7 +94,7 @@ app.use((req, res) => {
   });
 });
 
-const PORT = envVars.PORT || 3000;
+const PORT = ENV_VARS.PORT || 3000;
 
 console.log('App starting - ENV check for Redis');
 console.log('REDIS_ENABLED from process.env:', process.env.REDIS_ENABLED);

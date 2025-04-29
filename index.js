@@ -9,10 +9,15 @@ import mongoSanitize from "express-mongo-sanitize";
 import mongoose from "mongoose";
 import morgan from "morgan";
 // import cron from 'node-cron';
+import http from "http";
+import https from "https";
+import path from "path";
+import fs from "fs";
 
 import corsMiddleware from "./config/cors.js";
 import connectDB from "./config/db.js";
 import { ENV_VARS } from "./config/envVars.js";
+import { tlsConfig } from "./config/tls.js";
 // import { statusUpdater } from './cronjob/inactive-meetings.js';
 import redirectionMiddleware from "./middleware/redirection.js";
 import securityMiddleware from "./middleware/security.js";
@@ -53,8 +58,6 @@ if (ENV_VARS.NODE_ENV === "development") {
     }),
   );
 }
-
-
 
 // Apply compression for better performance
 app.use(compression());
@@ -221,48 +224,130 @@ app.use((err, req, res) => {
   });
 });
 
-// Initialize DB connection
-connectDB();
-
-// Start server
-const PORT = ENV_VARS.PORT;
-const server = app.listen(PORT, () => {
-  logger.info(`Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode`);
-});
-
 // Graceful shutdown handling
 const gracefulShutdown = () => {
   logger.info("Received shutdown signal. Starting graceful shutdown...");
-  server.close(async () => {
-    logger.connection.closed("Express Server", {
+  
+  // Close both HTTP and HTTPS servers if they exist
+  if (httpServer) {
+    httpServer.close(async () => {
+      logger.connection.closed("HTTP Server", {
+        port: PORT,
+        environment: ENV_VARS.NODE_ENV,
+      });
+      
+      if (!httpsServer) {
+        // Only exit if HTTPS server doesn't exist or is already closed
+        await shutdownServices();
+      }
+    });
+  }
+  
+  if (httpsServer) {
+    httpsServer.close(async () => {
+      logger.connection.closed("HTTPS Server", {
+        port: HTTPS_PORT,
+        environment: ENV_VARS.NODE_ENV,
+      });
+      
+      await shutdownServices();
+    });
+  }
+};
+
+// Extract shared shutdown logic
+const shutdownServices = async () => {
+  try {
+    await mongoose.connection.close();
+    logger.connection.closed("MongoDB", {
+      reason: "Application shutdown",
+      graceful: true,
+    });
+    process.exit(0);
+  } catch (err) {
+    logger.connection.error("MongoDB", err, {
+      reason: "Application shutdown",
+      graceful: false,
+    });
+    process.exit(1);
+  }
+};
+
+// Initialize DB connection
+connectDB();
+
+// Start server(s)
+const PORT = ENV_VARS.PORT;
+let httpServer, httpsServer;
+
+// In production, use HTTPS if certificates are available
+if (ENV_VARS.NODE_ENV === 'production' && ENV_VARS.TLS_CERT_PATH) {
+  try {
+    const HTTPS_PORT = ENV_VARS.HTTPS_PORT || 443;
+    const certPath = ENV_VARS.TLS_CERT_PATH;
+    
+    // Create HTTPS server
+    httpsServer = https.createServer(tlsConfig.production(certPath), app);
+    
+    httpsServer.listen(HTTPS_PORT, () => {
+      logger.info(`HTTPS Server running on port ${HTTPS_PORT} in ${ENV_VARS.NODE_ENV} mode`);
+      logger.connection.success("HTTPS Server", {
+        port: HTTPS_PORT,
+        environment: ENV_VARS.NODE_ENV,
+      });
+    });
+    
+    // Also create HTTP server for redirect to HTTPS
+    httpServer = http.createServer((req, res) => {
+      // Redirect HTTP to HTTPS
+      res.writeHead(301, { 
+        'Location': `https://${req.headers.host.split(':')[0]}:${HTTPS_PORT}${req.url}` 
+      });
+      res.end();
+    });
+    
+    httpServer.listen(PORT, () => {
+      logger.info(`HTTP->HTTPS redirect server running on port ${PORT}`);
+    });
+  } catch (error) {
+    // If HTTPS setup fails, fall back to HTTP
+    logger.error(`HTTPS server setup failed: ${error.message}. Falling back to HTTP.`);
+    httpServer = http.createServer(app);
+    httpServer.listen(PORT, () => {
+      logger.info(`Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode (HTTP fallback)`);
+    });
+  }
+} else if (ENV_VARS.NODE_ENV === 'development' && ENV_VARS.USE_HTTPS === 'true') {
+  // In development, use HTTPS with self-signed certificates if requested
+  try {
+    // Create HTTPS server with development certificates
+    httpsServer = https.createServer(tlsConfig.development(), app);
+    
+    httpsServer.listen(PORT, () => {
+      logger.info(`HTTPS Development Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode`);
+    });
+  } catch (error) {
+    // If HTTPS setup fails in development, fall back to HTTP
+    logger.error(`HTTPS development server setup failed: ${error.message}. Falling back to HTTP.`);
+    httpServer = http.createServer(app);
+    httpServer.listen(PORT, () => {
+      logger.info(`Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode (HTTP fallback)`);
+    });
+  }
+} else {
+  // Standard HTTP server for development or when HTTPS is not configured
+  httpServer = http.createServer(app);
+  httpServer.listen(PORT, () => {
+    logger.info(`HTTP Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode`);
+    logger.connection.success("HTTP Server", {
       port: PORT,
       environment: ENV_VARS.NODE_ENV,
     });
-
-    try {
-      await mongoose.connection.close();
-      logger.connection.closed("MongoDB", {
-        reason: "Application shutdown",
-        graceful: true,
-      });
-      process.exit(0);
-    } catch (err) {
-      logger.connection.error("MongoDB", err, {
-        context: "shutdown",
-      });
-      process.exit(1);
-    }
   });
+}
 
-  // Force shutdown after 30 seconds
-  setTimeout(() => {
-    logger.error(
-      "Could not close connections in time, forcefully shutting down",
-    );
-    process.exit(1);
-  }, 30000);
-};
-
-// Listen for termination signals
+// Register shutdown handlers
 process.on("SIGTERM", gracefulShutdown);
 process.on("SIGINT", gracefulShutdown);
+
+export default app;

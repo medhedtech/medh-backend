@@ -44,7 +44,7 @@ import {
   getAllCoursesWithPrices,
   getCoursesWithFields,
 } from "../controllers/course-controller.js";
-import { authenticate } from "../middleware/auth.js";
+import { authenticateToken } from "../middleware/auth.js";
 import {
   upload,
   uploadMultiple,
@@ -63,7 +63,7 @@ router.get("/titles", getCourseTitles);
 router.get("/related", getAllRelatedCourses);
 
 // Student Routes (Protected)
-router.use(authenticate);
+router.use(authenticateToken);
 router.get("/:courseId/sections", getCourseSections);
 router.get("/:courseId/lessons", getCourseLessons);
 router.get("/:courseId/lessons/:lessonId", getLessonDetails);

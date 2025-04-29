@@ -4,87 +4,90 @@ import { ENV_VARS } from "../config/envVars.js";
 import User from "../models/user-modal.js";
 import { AppError } from "../utils/errorHandler.js";
 import logger from "../utils/logger.js";
+import { verifyAccessToken } from '../utils/jwt.js';
 
 /**
- * Middleware to authenticate user requests
+ * Authentication middleware using access tokens
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next function
  */
-const authenticateUser = (req, res, next) => {
+export const authenticateToken = (req, res, next) => {
   try {
-    // Check for token in Authorization header (preferred)
-    let token = req.header("Authorization")?.replace("Bearer ", "");
-
-    // If not found, check for token in x-access-token header
-    if (!token) {
-      token = req.header("x-access-token");
-    }
+    // Extract token from Authorization header
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1];
 
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: "Authentication required",
+      logger.warn('Authentication failed: No token provided', { 
+        ip: req.ip, 
+        path: req.originalUrl
       });
+      return res.status(401).json({ success: false, message: 'Authentication required' });
     }
 
-    logger.debug("Token received:", token);
-
-    try {
-      const decoded = jwt.verify(token, ENV_VARS.JWT_SECRET_KEY);
-      logger.debug("Decoded token:", decoded);
-      req.user = decoded;
-      next();
-    } catch (jwtError) {
-      logger.error("JWT Verification Error:", jwtError);
-      res.status(401).json({
-        success: false,
-        message: "Invalid token",
-        error: jwtError.message,
-        details: {
-          name: jwtError.name,
-          expiredAt: jwtError.expiredAt,
-        },
+    // Verify token
+    const user = verifyAccessToken(token);
+    
+    if (!user) {
+      logger.warn('Authentication failed: Invalid token', { 
+        ip: req.ip, 
+        path: req.originalUrl 
       });
+      return res.status(401).json({ success: false, message: 'Invalid or expired token' });
     }
-  } catch (err) {
-    logger.error("General auth error:", err);
-    res.status(401).json({
-      success: false,
-      message: "Authentication error",
-      error: err.message,
+
+    // Attach user to request
+    req.user = user;
+    next();
+  } catch (error) {
+    logger.error('Authentication error', { 
+      error: error.message,
+      stack: error.stack
     });
+    return res.status(500).json({ success: false, message: 'Authentication error' });
   }
 };
 
 /**
- * Middleware to authorize user based on roles
- * @param {Array} roles - Array of allowed roles
+ * Role-based authorization middleware
+ * @param {string|string[]} roles - Role or array of roles allowed to access the resource
+ * @returns {Function} Express middleware function
  */
-const authorize = (roles) => {
+export const authorize = (roles) => {
+  // Convert single role to array
+  const allowedRoles = Array.isArray(roles) ? roles : [roles];
+  
   return (req, res, next) => {
-    // Check if user exists
-    if (!req.user) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied: User not authenticated properly",
+    try {
+      // User must be authenticated first
+      if (!req.user) {
+        logger.warn('Authorization failed: User not authenticated', { 
+          path: req.originalUrl 
+        });
+        return res.status(401).json({ success: false, message: 'Authentication required' });
+      }
+
+      // Check if user's role is in the allowed roles
+      if (!allowedRoles.includes(req.user.role)) {
+        logger.warn('Authorization failed: Insufficient permissions', { 
+          userId: req.user.id, 
+          userRole: req.user.role, 
+          requiredRoles: allowedRoles,
+          path: req.originalUrl
+        });
+        return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+      }
+
+      // User is authorized
+      next();
+    } catch (error) {
+      logger.error('Authorization error', { 
+        error: error.message,
+        stack: error.stack
       });
+      return res.status(500).json({ success: false, message: 'Authorization error' });
     }
-
-    // Get user roles - handle both nested user object and direct role property
-    const userRoles = req.user.role || (req.user.user && req.user.user.role);
-
-    // Ensure we have an array of roles
-    const userRoleArray = Array.isArray(userRoles) ? userRoles : [userRoles];
-
-    // Check if any of the user's roles are in the allowed roles
-    const hasPermission = userRoleArray.some((role) => roles.includes(role));
-
-    if (!hasPermission) {
-      return res.status(403).json({
-        success: false,
-        message: `Access denied: User role(s) [${userRoleArray.join(", ")}] not authorized. Required roles: [${roles.join(", ")}]`,
-      });
-    }
-
-    next();
   };
 };
 
@@ -178,7 +181,8 @@ export const isStudent = (req, res, next) => {
   }
 };
 
-export { authenticateUser as authenticate, authorize, verifyStudentOwnership };
-
-// Default export for use with authMiddleware reference in routes
-export default authenticateUser;
+export default {
+  authenticateToken,
+  authorize,
+  verifyStudentOwnership
+};

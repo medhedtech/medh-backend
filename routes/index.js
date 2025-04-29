@@ -26,6 +26,7 @@ import faqRoutes from "./faqRoutes.js";
 import feedback from "./feedbackRoutes.js";
 import freqRoutes from "./freqRoutes.js";
 import grievance from "./grievanceRoute.js";
+import healthRoutes from "./healthRoutes.js";
 import homeDisplayRoutes from "./homeDisplayRoutes.js";
 import instructorRoutes from "./instructorRoutes.js";
 import jobPost from "./jobRoutes.js";
@@ -50,6 +51,10 @@ const moduleRoutes = [
   {
     path: "/auth",
     route: authRoutes,
+  },
+  {
+    path: "/health",
+    route: healthRoutes,
   },
   {
     path: "/categories",

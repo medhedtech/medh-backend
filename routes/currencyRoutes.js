@@ -10,7 +10,7 @@ import {
   getCurrencyByCountryCode,
   getAllCurrencyCountryCodes,
 } from "../controllers/currency-controller.js";
-import { authenticate } from "../middleware/auth.js";
+import { authenticateToken } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -21,7 +21,7 @@ router.get("/code/:code", getCurrencyByCountryCode);
 router.get("/:id", getCurrencyById);
 
 // Admin routes (protected)
-router.use(authenticate);
+router.use(authenticateToken);
 router.post("/", createCurrency);
 router.put("/:id", updateCurrency);
 router.delete("/:id", deleteCurrency);

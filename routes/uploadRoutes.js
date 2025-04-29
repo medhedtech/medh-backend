@@ -7,7 +7,7 @@ import {
   handleBase64Upload,
   handleMultipleUpload,
 } from "../controllers/upload/uploadController.js";
-import { authenticate } from "../middleware/auth.js";
+import { authenticateToken } from "../middleware/auth.js";
 
 /**
  * @route POST /api/v1/upload
@@ -15,7 +15,7 @@ import { authenticate } from "../middleware/auth.js";
  * @access Private
  * @body multipart/form-data with field 'file'
  */
-router.post("/", authenticate, upload.single("file"), handleUpload);
+router.post("/", authenticateToken, upload.single("file"), handleUpload);
 
 /**
  * @route POST /api/v1/upload/multiple
@@ -25,7 +25,7 @@ router.post("/", authenticate, upload.single("file"), handleUpload);
  */
 router.post(
   "/multiple",
-  authenticate,
+  authenticateToken,
   upload.array("files", 10),
   handleMultipleUpload,
 );
@@ -36,6 +36,6 @@ router.post(
  * @access Private
  * @body { base64String: string, fileType: 'image' | 'document' }
  */
-router.post("/base64", authenticate, handleBase64Upload);
+router.post("/base64", authenticateToken, handleBase64Upload);
 
 export default router;

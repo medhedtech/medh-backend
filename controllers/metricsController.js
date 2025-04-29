@@ -1,6 +1,7 @@
 import { getAPIMetrics } from "../middleware/apiMonitor.js";
 import errorTracker from "../services/errorTracker.js";
 import logger from "../utils/logger.js";
+import metrics from "../utils/metrics.js";
 
 export const getMetrics = (req, res) => {
   try {
@@ -134,4 +135,88 @@ export const getSystemHealth = (req, res) => {
       message: "Error fetching system health",
     });
   }
+};
+
+/**
+ * Get deployment metrics
+ * @route GET /api/metrics/deployment
+ * @access Private
+ */
+export const getDeploymentMetrics = (req, res) => {
+  try {
+    const deploymentStats = {
+      timestamp: new Date(),
+      metrics: {
+        deployments: {
+          total: metrics.deploymentCount.get(),
+          failures: metrics.deploymentFailures.get(),
+          successRate: calculateSuccessRate(
+            metrics.deploymentCount.get(),
+            metrics.deploymentFailures.get()
+          )
+        },
+        cicd: {
+          pipelineRuns: metrics.ciPipelineRuns.get(),
+          failures: metrics.ciPipelineFailures.get(),
+          successRate: calculateSuccessRate(
+            metrics.ciPipelineRuns.get(),
+            metrics.ciPipelineFailures.get()
+          )
+        },
+        infrastructure: {
+          containerRestarts: metrics.containerRestarts.get(),
+          configErrors: metrics.configErrors.get(),
+          envVarIssues: metrics.environmentVariableIssues.get()
+        },
+        serviceAvailability: {
+          percentage: metrics.serviceAvailability.get(),
+          status: getAvailabilityStatus(metrics.serviceAvailability.get())
+        }
+      }
+    };
+
+    res.json(deploymentStats);
+  } catch (error) {
+    logger.error("Error fetching deployment metrics", {
+      error: {
+        message: error.message,
+        stack: error.stack,
+      },
+    });
+    res.status(500).json({
+      status: "error",
+      message: "Error fetching deployment metrics",
+    });
+  }
+};
+
+/**
+ * Calculates success rate as a percentage
+ * @param {number} total - Total count
+ * @param {number} failures - Failure count
+ * @returns {number} Success rate percentage
+ */
+function calculateSuccessRate(total, failures) {
+  if (total === 0) return 100; // No deployments means no failures
+  return Math.round(((total - failures) / total) * 100);
+}
+
+/**
+ * Gets availability status based on percentage
+ * @param {number} percentage - Availability percentage
+ * @returns {string} Status description
+ */
+function getAvailabilityStatus(percentage) {
+  if (percentage >= 99.9) return "excellent";
+  if (percentage >= 99) return "good";
+  if (percentage >= 95) return "fair";
+  return "poor";
+}
+
+export default {
+  getMetrics,
+  getErrorStats,
+  getErrorSummary,
+  getSystemHealth,
+  getDeploymentMetrics
 };

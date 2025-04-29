@@ -1,14 +1,14 @@
 import express from "express";
 
 import * as enrollerCourseController from "../controllers/enrolled-controller.js";
-import { authenticate, authorize } from "../middleware/auth.js";
+import { authenticateToken, authorize } from "../middleware/auth.js";
 import { validateObjectId } from "../middleware/validation.js";
 import { validateEnrollment } from "../middleware/validators/enrollmentValidator.js";
 
 const router = express.Router();
 
 // Apply authentication to all routes
-router.use(authenticate);
+router.use(authenticateToken);
 
 // Create enrollment
 router.post(

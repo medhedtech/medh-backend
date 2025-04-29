@@ -1,65 +1,144 @@
-// import createError from 'http-errors';
+/**
+ * Standardized Error Handler Middleware
+ * 
+ * Part of Sprint 3: DevOps Essentials
+ * Provides consistent error handling across the application
+ */
 
-const errorHandler = (err, req, res, _next) => {
-  // Log error for debugging
-  console.error(err.stack);
+import logger from '../utils/logger.js';
+import metrics from '../utils/metrics.js';
 
-  // Handle Mongoose validation errors
-  if (err.name === "ValidationError") {
-    const messages = Object.values(err.errors).map((val) => val.message);
-    return res.status(400).json({
-      success: false,
-      message: "Validation Error",
-      errors: messages,
-    });
+// Error codes and their default messages
+const ERROR_TYPES = {
+  VALIDATION: {
+    status: 400,
+    code: 'VALIDATION_ERROR',
+    message: 'Invalid input data'
+  },
+  AUTHENTICATION: {
+    status: 401,
+    code: 'AUTHENTICATION_ERROR',
+    message: 'Authentication required'
+  },
+  AUTHORIZATION: {
+    status: 403,
+    code: 'AUTHORIZATION_ERROR',
+    message: 'Insufficient permissions'
+  },
+  NOT_FOUND: {
+    status: 404,
+    code: 'RESOURCE_NOT_FOUND',
+    message: 'Resource not found'
+  },
+  CONFLICT: {
+    status: 409,
+    code: 'RESOURCE_CONFLICT',
+    message: 'Resource conflict'
+  },
+  RATE_LIMIT: {
+    status: 429,
+    code: 'RATE_LIMIT_EXCEEDED',
+    message: 'Too many requests'
+  },
+  INTERNAL: {
+    status: 500,
+    code: 'INTERNAL_SERVER_ERROR',
+    message: 'Internal server error'
+  },
+  SERVICE_UNAVAILABLE: {
+    status: 503,
+    code: 'SERVICE_UNAVAILABLE',
+    message: 'Service temporarily unavailable'
   }
-
-  // Handle Mongoose duplicate key errors
-  if (err.code === 11000) {
-    return res.status(400).json({
-      success: false,
-      message: "Duplicate field value entered",
-    });
-  }
-
-  // Handle JWT errors
-  if (err.name === "JsonWebTokenError") {
-    return res.status(401).json({
-      success: false,
-      message: "Invalid token",
-    });
-  }
-
-  if (err.name === "TokenExpiredError") {
-    return res.status(401).json({
-      success: false,
-      message: "Token expired",
-    });
-  }
-
-  // Handle file upload errors
-  if (err.name === "MulterError") {
-    return res.status(400).json({
-      success: false,
-      message: "File upload error",
-      error: err.message,
-    });
-  }
-
-  // Handle HTTP errors
-  if (err.status) {
-    return res.status(err.status).json({
-      success: false,
-      message: err.message,
-    });
-  }
-
-  // Handle other errors
-  res.status(500).json({
-    success: false,
-    message: "Internal Server Error",
-    error: process.env.NODE_ENV === "development" ? err.message : undefined,
-  });
 };
 
-export default errorHandler;
+/**
+ * Creates a standard error object with consistent structure
+ * @param {string} type - Error type from ERROR_TYPES
+ * @param {string} message - Custom error message (optional)
+ * @param {Object} details - Additional error details (optional)
+ * @returns {Object} Standardized error object
+ */
+export const createError = (type, message, details = {}) => {
+  if (!ERROR_TYPES[type]) {
+    type = 'INTERNAL';
+  }
+
+  const error = new Error(message || ERROR_TYPES[type].message);
+  error.status = ERROR_TYPES[type].status;
+  error.code = ERROR_TYPES[type].code;
+  error.details = details;
+  
+  return error;
+};
+
+/**
+ * Main error handler middleware
+ * Processes all errors and returns standardized responses
+ */
+export const errorHandler = (err, req, res, next) => {
+  // Increment error count metric
+  metrics.errorCount.increment();
+  
+  // Ensure error has appropriate properties
+  const status = err.status || 500;
+  const code = err.code || 'INTERNAL_SERVER_ERROR';
+  const message = err.message || 'Something went wrong';
+  
+  // Log the error with appropriate level
+  const logMethod = status >= 500 ? 'error' : 'warn';
+  logger[logMethod](`[${code}] ${message}`, {
+    error: {
+      status,
+      code,
+      message,
+      stack: err.stack,
+      details: err.details
+    },
+    request: {
+      method: req.method,
+      url: req.originalUrl,
+      ip: req.ip,
+      user: req.user ? req.user.id : 'anonymous'
+    }
+  });
+  
+  // Return formatted error response
+  const response = {
+    status: 'error',
+    code,
+    message
+  };
+  
+  // Include error details in non-production environments
+  if (process.env.NODE_ENV !== 'production' && err.details) {
+    response.details = err.details;
+  }
+  
+  // Include request ID if available
+  if (req.id) {
+    response.requestId = req.id;
+  }
+  
+  return res.status(status).json(response);
+};
+
+/**
+ * 404 Handler - Convert 404s to standardized errors
+ */
+export const notFoundHandler = (req, res, next) => {
+  next(createError('NOT_FOUND', `Route not found: ${req.originalUrl}`));
+};
+
+// Export error types for usage throughout the application
+export const ERROR = Object.keys(ERROR_TYPES).reduce((acc, key) => {
+  acc[key] = key;
+  return acc;
+}, {});
+
+export default {
+  errorHandler,
+  notFoundHandler,
+  createError,
+  ERROR
+};

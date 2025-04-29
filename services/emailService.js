@@ -12,6 +12,7 @@ import logger from "../utils/logger.js";
 import cache from "../utils/cache.js";
 import registerTemplateHelpers from "../utils/templateHelpers.js";
 import { isRedisEnabled } from "../utils/cache.js";
+import { serviceCircuitBreakers } from '../utils/circuitBreaker.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const readFileAsync = promisify(fs.readFile);
@@ -60,6 +61,42 @@ class EmailService {
 
     // Verify connection
     this.verifyConnection();
+    
+    // Create circuit breaker for direct email sending with fallback function
+    this.sendEmailDirectlyWithCircuitBreaker = serviceCircuitBreakers.email(
+      // Main function
+      async (mailOptions) => {
+        return await this.sendEmailDirectly(mailOptions);
+      },
+      // Fallback function
+      async (mailOptions) => {
+        logger.email.warn('Email circuit breaker open, using fallback', { 
+          to: mailOptions.to, 
+          subject: mailOptions.subject 
+        });
+        
+        try {
+          // Store in database/file system for later retry
+          await this.storeFailedEmailForRetry(mailOptions);
+          
+          return {
+            success: false,
+            queued: true,
+            message: 'Email service unavailable, message stored for later delivery'
+          };
+        } catch (fallbackError) {
+          logger.email.error('Email fallback also failed', { 
+            error: fallbackError.message
+          });
+          
+          return {
+            success: false,
+            queued: false,
+            message: 'Email service unavailable and fallback storage failed'
+          };
+        }
+      }
+    );
   }
 
   /**
@@ -263,69 +300,42 @@ class EmailService {
   }
 
   /**
-   * Send an email through the queue or directly
-   * @param {Object} mailOptions - Email options (from, to, subject, html)
+   * Send an email directly or through queue
+   * @param {Object} mailOptions - Nodemailer mail options
    * @param {Object} options - Additional options
-   * @returns {Promise} Email sending result
+   * @returns {Promise<Object>} Send result
    */
   async sendEmail(mailOptions, options = {}) {
-    // Ensure we have a valid FROM address
-    if (!mailOptions.from) {
-      // If EMAIL_FROM is set, use it
-      if (process.env.EMAIL_FROM) {
-        mailOptions.from = process.env.EMAIL_FROM;
-      } 
-      // If EMAIL_USER is set, use it with a friendly name
-      else if (process.env.EMAIL_USER) {
-        mailOptions.from = `"Medh Platform" <${process.env.EMAIL_USER}>`;
-      }
-      // Fallback to a default
-      else {
-        mailOptions.from = '"Medh Platform" <noreply@medh.co>';
-      }
-    }
-
-    // Add text version if only HTML is provided
-    if (mailOptions.html && !mailOptions.text) {
-      // Simple HTML to text conversion
-      mailOptions.text = mailOptions.html
-        .replace(/<[^>]*>/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-    }
-
-    // Check if this is a high-priority email
-    const priority = options.priority || "normal";
-    
-    // Always use the queue if it exists
-    const useQueue = options.useQueue !== false && this.queue;
-
     try {
-      if (useQueue) {
-        return await this.queueEmail(mailOptions, {
-          priority,
-          attempts: options.attempts || EMAIL_RETRY_ATTEMPTS,
-          delay: options.delay || 0,
-        });
-      } else {
-        // Fallback to direct sending if queue is not available
-        return await this.sendEmailDirectly(mailOptions);
+      const { priority = "normal", skipQueue = false } = options;
+
+      // Validate email options
+      if (!mailOptions.to || !mailOptions.subject) {
+        throw new Error("Missing required email fields (to, subject)");
       }
+
+      // Log the email being sent
+      logger.email.info(`Sending email to ${mailOptions.to}`, {
+        subject: mailOptions.subject,
+        skipQueue,
+      });
+
+      // If Redis queue is not available or skip queue is requested, send directly
+      if (!this.queue || skipQueue) {
+        return await this.sendEmailDirectlyWithCircuitBreaker(mailOptions);
+      }
+
+      // Otherwise, queue the email
+      return await this.queueEmail(mailOptions, {
+        priority,
+        ...options,
+      });
     } catch (error) {
-      // Log the error but don't throw it to the caller unless specified
-      logger.email.error(`Email dispatch error for ${mailOptions.to}`, {
-        error,
+      logger.email.error(`Failed to send email to ${mailOptions.to}`, {
+        error: error.message,
         subject: mailOptions.subject,
       });
-      
-      if (options.throwErrors) {
-        throw error;
-      }
-      
-      return {
-        success: false,
-        error: error.message,
-      };
+      throw error;
     }
   }
 
@@ -680,6 +690,55 @@ class EmailService {
       };
     }
   }
+
+  /**
+   * Store failed email for later retry when the circuit breaker is open
+   * @param {Object} mailOptions - The email that failed to send
+   * @returns {Promise<void>}
+   */
+  async storeFailedEmailForRetry(mailOptions) {
+    try {
+      // Create a file in the failed-emails directory
+      const failedEmailsDir = path.join(__dirname, '../logs/failed-emails');
+      
+      // Ensure directory exists
+      if (!fs.existsSync(failedEmailsDir)) {
+        fs.mkdirSync(failedEmailsDir, { recursive: true });
+      }
+      
+      // Generate a unique filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `${timestamp}-${mailOptions.to.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
+      const filePath = path.join(failedEmailsDir, filename);
+      
+      // Store the mail options as JSON
+      await fs.promises.writeFile(
+        filePath, 
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          retryCount: 0,
+          mailOptions
+        }, null, 2)
+      );
+      
+      logger.email.info('Stored failed email for later retry', {
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        filePath
+      });
+      
+      return true;
+    } catch (error) {
+      logger.email.error('Failed to store email for retry', {
+        error: error.message
+      });
+      throw error;
+    }
+  }
 }
 
-export default EmailService;
+// Create instance
+const emailService = new EmailService();
+
+// Export as default
+export default emailService;
