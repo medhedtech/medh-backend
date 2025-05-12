@@ -1,6 +1,92 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
+// EMI Payment Schedule Schema
+const emiScheduleSchema = new Schema({
+  installmentNumber: {
+    type: Number,
+    required: true,
+  },
+  dueDate: {
+    type: Date,
+    required: true,
+  },
+  amount: {
+    type: Number,
+    required: true,
+  },
+  status: {
+    type: String,
+    enum: ["pending", "paid", "overdue", "failed"],
+    default: "pending",
+  },
+  paidDate: Date,
+  transactionId: String,
+  paymentMethod: String,
+  reminderSent: {
+    type: Boolean,
+    default: false,
+  },
+  gracePeriodEnds: Date,
+});
+
+// EMI Details Schema
+const emiDetailsSchema = new Schema({
+  totalAmount: {
+    type: Number,
+    required: true,
+  },
+  downPayment: {
+    type: Number,
+    default: 0,
+  },
+  numberOfInstallments: {
+    type: Number,
+    required: true,
+  },
+  installmentAmount: {
+    type: Number,
+    required: true,
+  },
+  interestRate: {
+    type: Number,
+    default: 0,
+  },
+  processingFee: {
+    type: Number,
+    default: 0,
+  },
+  startDate: {
+    type: Date,
+    required: true,
+  },
+  gracePeriodDays: {
+    type: Number,
+    default: 5,
+  },
+  status: {
+    type: String,
+    enum: ["active", "completed", "defaulted", "cancelled"],
+    default: "active",
+  },
+  schedule: [emiScheduleSchema],
+  lastPaymentDate: Date,
+  nextPaymentDate: Date,
+  missedPayments: {
+    type: Number,
+    default: 0,
+  },
+  autoDebitEnabled: {
+    type: Boolean,
+    default: false,
+  },
+  autoDebitDetails: {
+    mandateId: String,
+    bankAccount: String,
+    validUntil: Date,
+  },
+});
+
 // Sub-schemas for better organization
 const paymentDetailsSchema = new Schema({
   amount: {
@@ -207,6 +293,22 @@ const enrollmentSchema = new Schema(
       ipAddress: String,
       enrollmentSource: String,
     },
+    paymentType: {
+      type: String,
+      enum: ["full", "emi"],
+      default: "full",
+    },
+    emiDetails: emiDetailsSchema,
+    accessStatus: {
+      type: String,
+      enum: ["active", "restricted", "suspended", "expired"],
+      default: "active",
+    },
+    accessRestrictionReason: String,
+    lastAccessCheck: {
+      type: Date,
+      default: Date.now,
+    },
   },
   {
     timestamps: true,
@@ -225,6 +327,9 @@ enrollmentSchema.index({ accessExpiresAt: 1 });
 enrollmentSchema.index({ "certificate.issued": 1 });
 enrollmentSchema.index({ enrolledAt: 1 });
 enrollmentSchema.index({ enrollmentType: 1, student: 1 });
+enrollmentSchema.index({ "emiDetails.status": 1 });
+enrollmentSchema.index({ "emiDetails.nextPaymentDate": 1 });
+enrollmentSchema.index({ "accessStatus": 1 });
 
 // Virtual for remaining time
 enrollmentSchema.virtual("remainingTime").get(function () {
@@ -458,6 +563,128 @@ enrollmentSchema.statics.getEnrollmentStats = async function (courseId) {
       totalRevenue: 0,
     }
   );
+};
+
+// Method to check EMI payment status and update course access
+enrollmentSchema.methods.checkAndUpdateAccess = async function() {
+  if (this.paymentType !== "emi") return;
+
+  const now = new Date();
+  const emi = this.emiDetails;
+  
+  if (!emi || !emi.schedule || emi.schedule.length === 0) return;
+
+  // Find any overdue payments
+  const overduePayments = emi.schedule.filter(payment => 
+    payment.status === "pending" && 
+    payment.gracePeriodEnds < now
+  );
+
+  if (overduePayments.length > 0) {
+    this.accessStatus = "restricted";
+    this.accessRestrictionReason = "EMI payment overdue";
+    emi.missedPayments = overduePayments.length;
+  } else {
+    this.accessStatus = "active";
+    this.accessRestrictionReason = null;
+  }
+
+  this.lastAccessCheck = now;
+  await this.save();
+};
+
+// Method to process EMI payment
+enrollmentSchema.methods.processEmiPayment = async function(paymentData) {
+  const { installmentNumber, amount, transactionId, paymentMethod } = paymentData;
+  
+  if (!this.emiDetails || !this.emiDetails.schedule) {
+    throw new Error("No EMI schedule found");
+  }
+
+  const installment = this.emiDetails.schedule.find(
+    s => s.installmentNumber === installmentNumber && s.status === "pending"
+  );
+
+  if (!installment) {
+    throw new Error("Invalid installment or already paid");
+  }
+
+  installment.status = "paid";
+  installment.paidDate = new Date();
+  installment.transactionId = transactionId;
+  installment.paymentMethod = paymentMethod;
+
+  // Update EMI details
+  this.emiDetails.lastPaymentDate = new Date();
+  
+  // Find next pending payment
+  const nextPending = this.emiDetails.schedule.find(
+    s => s.status === "pending"
+  );
+  this.emiDetails.nextPaymentDate = nextPending ? nextPending.dueDate : null;
+
+  // Check if all installments are paid
+  const allPaid = this.emiDetails.schedule.every(s => s.status === "paid");
+  if (allPaid) {
+    this.emiDetails.status = "completed";
+  }
+
+  // Reset access if payment clears restrictions
+  await this.checkAndUpdateAccess();
+  
+  await this.save();
+  return this;
+};
+
+// Method to setup EMI schedule
+enrollmentSchema.methods.setupEmiSchedule = async function(emiConfig) {
+  const {
+    totalAmount,
+    downPayment,
+    numberOfInstallments,
+    startDate,
+    interestRate,
+    processingFee,
+    gracePeriodDays,
+  } = emiConfig;
+
+  const installmentAmount = (totalAmount - downPayment) / numberOfInstallments;
+  const schedule = [];
+  const baseDate = new Date(startDate);
+
+  for (let i = 1; i <= numberOfInstallments; i++) {
+    const dueDate = new Date(baseDate);
+    dueDate.setMonth(dueDate.getMonth() + (i - 1));
+    
+    const gracePeriodEnds = new Date(dueDate);
+    gracePeriodEnds.setDate(gracePeriodEnds.getDate() + gracePeriodDays);
+
+    schedule.push({
+      installmentNumber: i,
+      dueDate,
+      amount: installmentAmount,
+      status: "pending",
+      gracePeriodEnds,
+    });
+  }
+
+  this.paymentType = "emi";
+  this.emiDetails = {
+    totalAmount,
+    downPayment,
+    numberOfInstallments,
+    installmentAmount,
+    interestRate,
+    processingFee,
+    startDate: baseDate,
+    gracePeriodDays,
+    status: "active",
+    schedule,
+    nextPaymentDate: schedule[0].dueDate,
+  };
+
+  await this.save();
+  return this;
 };
 
 const Enrollment = mongoose.model("Enrollment", enrollmentSchema);

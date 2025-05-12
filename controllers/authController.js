@@ -401,7 +401,12 @@ class AuthController {
     try {
       const { refresh_token } = req.body;
       
+      // Check if refresh token exists in request body
       if (!refresh_token) {
+        logger.auth.warn("Refresh token missing from request", {
+          ip: req.ip,
+          userAgent: req.headers['user-agent']
+        });
         return res.status(400).json({
           success: false,
           message: "Refresh token is required"
@@ -427,7 +432,10 @@ class AuthController {
         });
       }
       
-      logger.auth.info("Token refreshed successfully");
+      logger.auth.info("Token refreshed successfully", {
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      });
       
       return res.status(200).json({
         success: true,
@@ -440,7 +448,9 @@ class AuthController {
     } catch (error) {
       logger.auth.error("Token refresh error", {
         error: error.message,
-        stack: error.stack
+        stack: error.stack,
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
       });
       return res.status(500).json({
         success: false,

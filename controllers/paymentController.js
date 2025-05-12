@@ -4,9 +4,25 @@ import razorpayService from "../services/razorpayService.js";
 import logger from "../utils/logger.js";
 
 import paymentProcessor from "./payment-controller.js";
+import Enrollment from "../models/enrollment-model.js";
+
+// EMI Payment Processing Helper
+const processEmiPayment = async (enrollment, paymentData) => {
+  try {
+    await enrollment.processEmiPayment(paymentData);
+    return { success: true, enrollment };
+  } catch (error) {
+    logger.error("EMI payment processing failed", {
+      error: error.message,
+      enrollmentId: enrollment._id,
+      paymentData,
+    });
+    return { success: false, error: error.message };
+  }
+};
 
 /**
- * @description Create a new order for payment
+ * @description Create a new order for payment (Enhanced for EMI)
  * @route POST /api/v1/payments/create-order
  * @access Private
  */
@@ -17,16 +33,17 @@ export const createOrder = async (req, res) => {
       currency,
       notes,
       productInfo,
-      payment_type, // "course" or "subscription"
-      // For course payments
+      payment_type,
       course_id,
       enrollment_type,
       is_self_paced,
       expiry_date,
-      // For subscription payments
       plan_id,
       plan_name,
       duration_months,
+      // EMI specific fields
+      is_emi,
+      emi_details,
     } = req.body;
 
     if (!amount || amount <= 0) {
@@ -36,29 +53,24 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    if (!productInfo) {
+    // Validate EMI details if applicable
+    if (is_emi && (!emi_details || !emi_details.numberOfInstallments)) {
       return res.status(400).json({
         success: false,
-        message: "Product information is required",
-      });
-    }
-
-    if (!payment_type || !["course", "subscription"].includes(payment_type)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid payment type. Must be "course" or "subscription".',
+        message: "Invalid EMI details",
       });
     }
 
     const receipt = `receipt_${uuidv4()}`;
-    const userId = req.user.id; // Assuming req.user is set by auth middleware
+    const userId = req.user.id;
 
-    // Enhanced productInfo with additional payment-specific data
+    // Enhanced productInfo with EMI details
     const enhancedProductInfo = {
       ...productInfo,
       payment_type,
       student_id: userId,
-      // Add fields based on payment type
+      is_emi,
+      emi_details,
       ...(payment_type === "course" && {
         course_id,
         enrollment_type,
@@ -89,6 +101,7 @@ export const createOrder = async (req, res) => {
         currency: razorpayOrder.currency,
         receipt: razorpayOrder.receipt,
         orderId: order._id,
+        emi_enabled: is_emi,
       },
     });
   } catch (error) {
@@ -252,6 +265,123 @@ export const getRazorpayKey = (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch Razorpay key",
+    });
+  }
+};
+
+/**
+ * @description Process EMI payment installment
+ * @route POST /api/v1/payments/process-emi
+ * @access Private
+ */
+export const processEmiInstallment = async (req, res) => {
+  try {
+    const {
+      enrollment_id,
+      installment_number,
+      amount,
+      payment_method,
+      transaction_id,
+    } = req.body;
+
+    // Validate required fields
+    if (!enrollment_id || !installment_number || !amount) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+      });
+    }
+
+    // Find enrollment
+    const enrollment = await Enrollment.findById(enrollment_id);
+    if (!enrollment) {
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found",
+      });
+    }
+
+    // Process EMI payment
+    const result = await processEmiPayment(enrollment, {
+      installmentNumber: installment_number,
+      amount,
+      transactionId: transaction_id,
+      paymentMethod: payment_method,
+    });
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        message: result.error,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "EMI payment processed successfully",
+      data: {
+        enrollment: result.enrollment,
+        nextPaymentDate: result.enrollment.emiDetails.nextPaymentDate,
+        remainingInstallments: result.enrollment.emiDetails.schedule.filter(
+          s => s.status === "pending"
+        ).length,
+      },
+    });
+  } catch (error) {
+    logger.error("EMI payment processing failed", {
+      error: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to process EMI payment",
+    });
+  }
+};
+
+/**
+ * @description Get EMI details for an enrollment
+ * @route GET /api/v1/payments/emi/:enrollmentId
+ * @access Private
+ */
+export const getEmiDetails = async (req, res) => {
+  try {
+    const { enrollmentId } = req.params;
+
+    const enrollment = await Enrollment.findById(enrollmentId);
+    if (!enrollment) {
+      return res.status(404).json({
+        success: false,
+        message: "Enrollment not found",
+      });
+    }
+
+    if (enrollment.paymentType !== "emi") {
+      return res.status(400).json({
+        success: false,
+        message: "This is not an EMI enrollment",
+      });
+    }
+
+    // Check and update access status before returning details
+    await enrollment.checkAndUpdateAccess();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        emiDetails: enrollment.emiDetails,
+        accessStatus: enrollment.accessStatus,
+        accessRestrictionReason: enrollment.accessRestrictionReason,
+      },
+    });
+  } catch (error) {
+    logger.error("Failed to fetch EMI details", {
+      error: error.message,
+      stack: error.stack,
+    });
+    res.status(500).json({
+      success: false,
+      message: error.message || "Failed to fetch EMI details",
     });
   }
 };

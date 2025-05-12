@@ -161,12 +161,17 @@ export const verifyAccessToken = (token) => {
  * @returns {Promise<Object|null>} User ID if valid, null otherwise
  */
 export const verifyRefreshToken = async (token) => {
+  if (!token || typeof token !== 'string') {
+    logger.warn('Invalid refresh token format');
+    return null;
+  }
+
   try {
     const decoded = jwt.verify(token, ENV_VARS.JWT_SECRET_KEY);
     
     // Ensure it's a refresh token
     if (decoded.type !== 'refresh') {
-      logger.warn('Invalid token type used for refresh');
+      logger.warn('Invalid token type used for refresh', { tokenType: decoded.type });
       return null;
     }
     
@@ -175,7 +180,7 @@ export const verifyRefreshToken = async (token) => {
     // Check if the refresh token exists in our store
     let tokenData;
     
-    if (redisClient) {
+    if (redisClient && redisClient.isReady) {
       try {
         const data = await redisClient.get(`refresh_token:${refreshToken}`);
         tokenData = data ? JSON.parse(data) : null;
@@ -189,13 +194,17 @@ export const verifyRefreshToken = async (token) => {
     }
     
     if (!tokenData) {
-      logger.warn('Refresh token not found in store');
+      logger.warn('Refresh token not found in store', { refreshToken: refreshToken.substr(0, 10) + '...' });
       return null;
     }
     
     return { userId: tokenData.userId, refreshToken };
   } catch (error) {
-    logger.warn('Refresh token verification failed', { error: error.message });
+    logger.warn('Refresh token verification failed', { 
+      error: error.message,
+      errorType: error.name,
+      tokenPrefix: token ? token.substr(0, 10) + '...' : 'undefined' 
+    });
     return null;
   }
 };
@@ -241,31 +250,47 @@ export const revokeRefreshToken = async (token) => {
  * @returns {Promise<Object|null>} New tokens or null if refresh failed
  */
 export const refreshAccessToken = async (refreshToken, getUserById) => {
+  if (!refreshToken) {
+    logger.warn('Refresh token missing');
+    return null;
+  }
+
+  if (!getUserById || typeof getUserById !== 'function') {
+    logger.error('Invalid getUserById function provided to refreshAccessToken');
+    return null;
+  }
+  
   const tokenData = await verifyRefreshToken(refreshToken);
   
   if (!tokenData) {
+    logger.warn('Invalid refresh token provided');
     return null;
   }
   
-  // Get user data to include in new token
-  const user = await getUserById(tokenData.userId);
-  
-  if (!user) {
-    logger.warn('User not found during token refresh', { userId: tokenData.userId });
+  try {
+    // Get user data to include in new token
+    const user = await getUserById(tokenData.userId);
+    
+    if (!user) {
+      logger.warn('User not found during token refresh', { userId: tokenData.userId });
+      return null;
+    }
+    
+    // Revoke the old refresh token (one-time use)
+    await revokeRefreshToken(refreshToken);
+    
+    // Generate new tokens
+    const newAccessToken = generateAccessToken(user);
+    const newRefreshToken = await generateRefreshToken(user);
+    
+    return {
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken
+    };
+  } catch (error) {
+    logger.error('Error during access token refresh', { error: error.message, stack: error.stack });
     return null;
   }
-  
-  // Revoke the old refresh token (one-time use)
-  await revokeRefreshToken(refreshToken);
-  
-  // Generate new tokens
-  const newAccessToken = generateAccessToken(user);
-  const newRefreshToken = await generateRefreshToken(user);
-  
-  return {
-    accessToken: newAccessToken,
-    refreshToken: newRefreshToken
-  };
 };
 
 /**
