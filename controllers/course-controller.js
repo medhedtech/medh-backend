@@ -3889,4 +3889,55 @@ export {
   getAllCoursesWithPrices,
   getCoursesWithFields,
   groupCoursesByClassType,
+  getHomeCourses,
+  toggleShowInHome,
+};
+
+// List all courses with show_in_home tag for home page
+const getHomeCourses = async (req, res) => {
+  try {
+    const courses = await Course.find({ show_in_home: true, status: "Published" })
+      .sort({ createdAt: -1 })
+      .lean();
+    return res.status(200).json({
+      success: true,
+      count: courses.length,
+      data: courses,
+    });
+  } catch (err) {
+    logger.error("Error fetching home courses:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message,
+    });
+  }
+};
+
+// Toggle the show_in_home field for a course
+const toggleShowInHome = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const course = await Course.findById(id);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
+    }
+    course.show_in_home = !course.show_in_home;
+    await course.save();
+    return res.status(200).json({
+      success: true,
+      message: `show_in_home toggled to ${course.show_in_home}`,
+      data: { id: course._id, show_in_home: course.show_in_home },
+    });
+  } catch (err) {
+    logger.error("Error toggling show_in_home:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message,
+    });
+  }
 };

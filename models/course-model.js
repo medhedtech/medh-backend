@@ -779,6 +779,14 @@ const courseSchema = new Schema(
         default: Date.now,
       },
     },
+    /**
+     * Tag to indicate if the course should be shown on the home page
+     */
+    show_in_home: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
   },
   {
     timestamps: true,

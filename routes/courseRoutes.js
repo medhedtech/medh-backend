@@ -43,6 +43,8 @@ import {
   bulkUpdateCoursePrices,
   getAllCoursesWithPrices,
   getCoursesWithFields,
+  getHomeCourses,
+  toggleShowInHome,
 } from "../controllers/course-controller.js";
 import { authenticateToken } from "../middleware/auth.js";
 import {
@@ -57,6 +59,7 @@ router.get("/search", getAllCoursesWithLimits);
 router.get("/new", getNewCoursesWithLimits);
 router.get("/prices", getAllCoursesWithPrices);
 router.get("/fields", getCoursesWithFields);
+router.get("/home", getHomeCourses);
 router.get("/:id", getCourseById);
 router.get("/coorporate/:id", getCoorporateCourseById);
 router.get("/titles", getCourseTitles);
@@ -115,6 +118,11 @@ router.get("/recorded-videos/:studentId", getRecordedVideosForUser);
 router.get("/:id/prices", getCoursePrices);
 router.put("/:id/prices", updateCoursePrices);
 router.post("/prices/bulk-update", bulkUpdateCoursePrices);
+router.patch(
+  "/:id/toggle-home",
+  authenticateToken,
+  toggleShowInHome,
+);
 
 // File Upload Routes (Protected)
 router.post("/upload", upload.single("file"), handleUploadError, handleUpload);
