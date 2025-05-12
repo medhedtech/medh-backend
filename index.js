@@ -188,7 +188,9 @@ const moduleRoutesPaths = [
   "/corporate-training",
   "/payments",
   "/home-display",
+  "/currencies",
   "/batches",
+  "/enrollments",
 ];
 
 // Set up direct access middleware for each path

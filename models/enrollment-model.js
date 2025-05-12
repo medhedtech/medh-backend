@@ -1,691 +1,352 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
-// EMI Payment Schedule Schema
-const emiScheduleSchema = new Schema({
-  installmentNumber: {
-    type: Number,
-    required: true,
-  },
-  dueDate: {
-    type: Date,
-    required: true,
-  },
-  amount: {
-    type: Number,
-    required: true,
-  },
-  status: {
-    type: String,
-    enum: ["pending", "paid", "overdue", "failed"],
-    default: "pending",
-  },
-  paidDate: Date,
-  transactionId: String,
-  paymentMethod: String,
-  reminderSent: {
-    type: Boolean,
-    default: false,
-  },
-  gracePeriodEnds: Date,
-});
-
-// EMI Details Schema
-const emiDetailsSchema = new Schema({
-  totalAmount: {
-    type: Number,
-    required: true,
-  },
-  downPayment: {
-    type: Number,
-    default: 0,
-  },
-  numberOfInstallments: {
-    type: Number,
-    required: true,
-  },
-  installmentAmount: {
-    type: Number,
-    required: true,
-  },
-  interestRate: {
-    type: Number,
-    default: 0,
-  },
-  processingFee: {
-    type: Number,
-    default: 0,
-  },
-  startDate: {
-    type: Date,
-    required: true,
-  },
-  gracePeriodDays: {
-    type: Number,
-    default: 5,
-  },
-  status: {
-    type: String,
-    enum: ["active", "completed", "defaulted", "cancelled"],
-    default: "active",
-  },
-  schedule: [emiScheduleSchema],
-  lastPaymentDate: Date,
-  nextPaymentDate: Date,
-  missedPayments: {
-    type: Number,
-    default: 0,
-  },
-  autoDebitEnabled: {
-    type: Boolean,
-    default: false,
-  },
-  autoDebitDetails: {
-    mandateId: String,
-    bankAccount: String,
-    validUntil: Date,
-  },
-});
-
-// Sub-schemas for better organization
-const paymentDetailsSchema = new Schema({
+// Payment schema embedded in enrollment
+const paymentSchema = new Schema({
   amount: {
     type: Number,
     required: [true, "Payment amount is required"],
-    min: [0, "Amount cannot be negative"],
+    min: [0, "Payment amount cannot be negative"]
   },
   currency: {
     type: String,
-    default: "USD",
-    uppercase: true,
+    required: [true, "Currency is required"],
+    enum: ["USD", "EUR", "INR", "GBP", "AUD", "CAD"],
+    default: "INR"
   },
-  transactionId: {
-    type: String,
-    sparse: true,
-  },
-  paymentMethod: {
-    type: String,
-    required: [true, "Payment method is required"],
-  },
-  paymentDate: {
+  payment_date: {
     type: Date,
-    default: Date.now,
+    default: Date.now
   },
-  refundDetails: {
-    refundId: String,
-    refundAmount: Number,
-    refundDate: Date,
-    refundReason: String,
+  payment_method: {
+    type: String,
+    enum: ["credit_card", "debit_card", "upi", "net_banking", "wallet", "bank_transfer", "cash", "other"],
+    required: [true, "Payment method is required"]
   },
+  transaction_id: {
+    type: String,
+    trim: true
+  },
+  payment_status: {
+    type: String,
+    enum: ["pending", "completed", "failed", "refunded", "partially_refunded"],
+    default: "pending"
+  },
+  receipt_url: {
+    type: String,
+    trim: true
+  },
+  metadata: {
+    type: Map,
+    of: Schema.Types.Mixed
+  }
 });
 
+// Progress tracking schema
 const progressSchema = new Schema({
-  overall: {
+  lesson_id: {
+    type: String,
+    required: true
+  },
+  status: {
+    type: String,
+    enum: ["not_started", "in_progress", "completed"],
+    default: "not_started"
+  },
+  progress_percentage: {
     type: Number,
-    default: 0,
     min: 0,
     max: 100,
+    default: 0
   },
-  lessons: {
-    completed: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Lesson",
-      },
-    ],
-    lastAccessed: Date,
+  last_accessed: {
+    type: Date
   },
-  assignments: {
-    completed: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Assignment",
-      },
-    ],
-    lastAccessed: Date,
-  },
-  quizzes: {
-    completed: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Quiz",
-      },
-    ],
-    lastAccessed: Date,
-  },
+  time_spent_seconds: {
+    type: Number,
+    default: 0
+  }
 });
 
-const certificateSchema = new Schema({
-  issued: {
-    type: Boolean,
-    default: false,
-  },
-  issuedAt: Date,
-  certificateUrl: String,
-  certificateId: {
-    type: String,
-    unique: true,
-    sparse: true,
-  },
-  grade: {
-    type: String,
-    enum: ["A", "B", "C", "D", "F"],
-    default: null,
+// Assessment score schema
+const assessmentScoreSchema = new Schema({
+  assessment_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Quiz",
+    required: true
   },
   score: {
     type: Number,
-    min: 0,
-    max: 100,
-    default: null,
+    min: 0
   },
+  max_possible_score: {
+    type: Number,
+    min: 0
+  },
+  passed: {
+    type: Boolean,
+    default: false
+  },
+  attempts: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  last_attempt_date: {
+    type: Date
+  }
 });
 
 const enrollmentSchema = new Schema(
   {
+    student: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Student",
+      required: [true, "Student reference is required"]
+    },
     course: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Course",
-      required: [true, "Course ID is required"],
-      index: true,
+      required: [true, "Course reference is required"]
     },
-    student: {
+    batch: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: [true, "Student ID is required"],
-      index: true,
+      ref: "Batch",
+      required: [true, "Batch reference is required"]
+    },
+    enrollment_date: {
+      type: Date,
+      default: Date.now
     },
     status: {
       type: String,
-      enum: {
-        values: ["active", "completed", "dropped", "suspended", "expired"],
-        message: "{VALUE} is not a valid enrollment status",
-      },
-      default: "active",
-      required: true,
+      enum: ["active", "completed", "cancelled", "on_hold", "expired"],
+      default: "active"
     },
-    enrolledAt: {
+    access_expiry_date: {
       type: Date,
-      default: Date.now,
-      required: true,
+      required: [true, "Access expiry date is required"]
     },
-    completedAt: {
-      type: Date,
-      default: null,
-    },
-    lastAccessed: {
-      type: Date,
-      default: Date.now,
-      required: true,
-    },
-    progress: progressSchema,
-    certificate: certificateSchema,
-    paymentStatus: {
+    enrollment_type: {
       type: String,
-      enum: {
-        values: ["pending", "completed", "failed", "refunded", "partial"],
-        message: "{VALUE} is not a valid payment status",
-      },
-      default: "pending",
-      required: true,
+      enum: ["individual", "corporate", "group", "scholarship", "trial"],
+      default: "individual"
     },
-    paymentDetails: paymentDetailsSchema,
-    accessExpiresAt: {
-      type: Date,
-      required: function () {
-        return this.course && this.course.duration && this.enrollmentType !== 'saved'; // Not required for saved courses
-      },
-    },
-    enrollmentType: {
+    enrollment_source: {
       type: String,
-      enum: ["individual", "batch", "corporate", "saved"],
-      default: "individual",
-      required: true,
+      enum: ["website", "referral", "direct", "sales_team", "partner"],
+      default: "website"
     },
-    savedDetails: {
-      savedAt: {
-        type: Date,
-        default: Date.now,
+    progress: {
+      overall_percentage: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 100
       },
-      notes: String,
-      reminder: {
-        enabled: {
-          type: Boolean,
-          default: false,
-        },
-        date: Date,
-      }
-    },
-    batchDetails: {
-      batchId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Batch",
-        sparse: true,
+      lessons_completed: {
+        type: Number,
+        default: 0,
+        min: 0
       },
-      batchName: String,
-      startDate: Date,
-      endDate: Date,
-    },
-    corporateDetails: {
-      companyId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Company",
-        sparse: true,
+      last_activity_date: {
+        type: Date
       },
-      department: String,
-      employeeId: String,
+      detailed_progress: [progressSchema]
     },
-    notes: [
-      {
-        content: String,
-        addedBy: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "User",
-        },
-        addedAt: {
-          type: Date,
-          default: Date.now,
-        },
-      },
-    ],
-    metadata: {
-      deviceInfo: String,
-      browserInfo: String,
-      ipAddress: String,
-      enrollmentSource: String,
+    assessments: [assessmentScoreSchema],
+    payments: [paymentSchema],
+    total_amount_paid: {
+      type: Number,
+      default: 0,
+      min: 0
     },
-    paymentType: {
+    payment_plan: {
       type: String,
-      enum: ["full", "emi"],
-      default: "full",
+      enum: ["full", "installment", "subscription", "free", "scholarship"],
+      default: "full"
     },
-    emiDetails: emiDetailsSchema,
-    accessStatus: {
-      type: String,
-      enum: ["active", "restricted", "suspended", "expired"],
-      default: "active",
+    installments_count: {
+      type: Number,
+      default: 1,
+      min: 1
     },
-    accessRestrictionReason: String,
-    lastAccessCheck: {
-      type: Date,
-      default: Date.now,
+    next_payment_date: {
+      type: Date
     },
+    discount_applied: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    discount_code: {
+      type: String
+    },
+    certificate_issued: {
+      type: Boolean,
+      default: false
+    },
+    certificate_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Certificate"
+    },
+    feedback_submitted: {
+      type: Boolean,
+      default: false
+    },
+    notes: {
+      type: String
+    },
+    created_by: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User"
+    }
   },
   {
-    timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
-  },
+    timestamps: true
+  }
 );
 
-// Indexes for better query performance
-enrollmentSchema.index({ course: 1, student: 1, enrollmentType: 1 }, { unique: true });
+// Indexes for efficient querying
+enrollmentSchema.index({ student: 1, course: 1, batch: 1 }, { unique: true });
 enrollmentSchema.index({ status: 1 });
-enrollmentSchema.index({ paymentStatus: 1 });
-enrollmentSchema.index({ lastAccessed: 1 });
-enrollmentSchema.index({ "progress.overall": 1 });
-enrollmentSchema.index({ accessExpiresAt: 1 });
-enrollmentSchema.index({ "certificate.issued": 1 });
-enrollmentSchema.index({ enrolledAt: 1 });
-enrollmentSchema.index({ enrollmentType: 1, student: 1 });
-enrollmentSchema.index({ "emiDetails.status": 1 });
-enrollmentSchema.index({ "emiDetails.nextPaymentDate": 1 });
-enrollmentSchema.index({ "accessStatus": 1 });
+enrollmentSchema.index({ enrollment_date: 1 });
+enrollmentSchema.index({ access_expiry_date: 1 });
+enrollmentSchema.index({ "payments.payment_status": 1 });
+enrollmentSchema.index({ "payments.payment_date": 1 });
+enrollmentSchema.index({ enrollment_type: 1 });
 
-// Virtual for remaining time
-enrollmentSchema.virtual("remainingTime").get(function () {
-  if (!this.accessExpiresAt) return null;
-  return this.accessExpiresAt - new Date();
+// Virtual properties
+enrollmentSchema.virtual('isActive').get(function() {
+  return this.status === 'active' && new Date() < this.access_expiry_date;
 });
 
-// Method to update enrollment status
-enrollmentSchema.methods.updateStatus = async function (newStatus) {
-  if (
-    !["active", "completed", "dropped", "suspended", "expired"].includes(
-      newStatus,
-    )
-  ) {
-    throw new Error("Invalid status");
-  }
-
-  this.status = newStatus;
-  if (newStatus === "completed") {
-    this.completedAt = new Date();
-  }
-  this.lastAccessed = new Date();
-  await this.save();
-  return this;
-};
-
-// Method to update progress
-enrollmentSchema.methods.updateProgress = async function (progressData) {
-  const { type, itemId } = progressData;
-
-  if (!["lessons", "assignments", "quizzes"].includes(type)) {
-    throw new Error("Invalid progress type");
-  }
-
-  if (!this.progress[type].completed.includes(itemId)) {
-    this.progress[type].completed.push(itemId);
-    this.progress[type].lastAccessed = new Date();
-
-    // Calculate overall progress
-    const totalItems = await this.calculateTotalItems();
-    const completedItems =
-      this.progress.lessons.completed.length +
-      this.progress.assignments.completed.length +
-      this.progress.quizzes.completed.length;
-
-    this.progress.overall = Math.round((completedItems / totalItems) * 100);
-
-    // Check completion
-    if (this.progress.overall === 100 && this.status === "active") {
-      this.status = "completed";
-      this.completedAt = new Date();
-    }
-  }
-
-  this.lastAccessed = new Date();
-  await this.save();
-  return this;
-};
-
-// Method to calculate total items
-enrollmentSchema.methods.calculateTotalItems = async function () {
-  const course = await this.model("Course").findById(this.course);
-  if (!course) return 0;
-
-  return (
-    course.lessons.length + course.assignments.length + course.quizzes.length
-  );
-};
-
-// Method to issue certificate
-enrollmentSchema.methods.issueCertificate = async function (certificateData) {
-  const { certificateUrl, certificateId, grade, score } = certificateData;
-
-  this.certificate = {
-    issued: true,
-    issuedAt: new Date(),
-    certificateUrl,
-    certificateId,
-    grade,
-    score,
-  };
-
-  this.lastAccessed = new Date();
-  await this.save();
-  return this;
-};
-
-// Method to update payment status
-enrollmentSchema.methods.updatePaymentStatus = async function (
-  status,
-  details = {},
-) {
-  if (
-    !["pending", "completed", "failed", "refunded", "partial"].includes(status)
-  ) {
-    throw new Error("Invalid payment status");
-  }
-
-  this.paymentStatus = status;
-  if (details) {
-    this.paymentDetails = {
-      ...this.paymentDetails,
-      ...details,
-      paymentDate: new Date(),
-    };
-  }
-  this.lastAccessed = new Date();
-  await this.save();
-  return this;
-};
-
-// Static method to get student's active enrollments
-enrollmentSchema.statics.getActiveEnrollments = async function (studentId) {
-  return await this.find({
-    student: studentId,
-    status: "active",
-  }).populate("course", "title description thumbnail duration");
-};
-
-// Static method to get course enrollments
-enrollmentSchema.statics.getCourseEnrollments = async function (courseId) {
-  return await this.find({
-    course: courseId,
-  }).populate("student", "name email role");
-};
-
-// Static method to get expired enrollments
-enrollmentSchema.statics.getExpiredEnrollments = async function () {
-  return await this.find({
-    status: "active",
-    accessExpiresAt: { $lt: new Date() },
-  });
-};
-
-// Static method to get saved courses for a student
-enrollmentSchema.statics.getSavedCourses = async function (studentId) {
-  return await this.find({
-    student: studentId,
-    enrollmentType: "saved"
-  }).populate("course", "course_title course_category course_image course_duration prices status").lean();
-};
-
-// Static method to check if a course is saved by a student
-enrollmentSchema.statics.isSavedCourse = async function (studentId, courseId) {
-  const savedCourse = await this.findOne({
-    student: studentId,
-    course: courseId,
-    enrollmentType: "saved"
-  });
-  return !!savedCourse;
-};
-
-// Instance method to convert a saved course to an active enrollment
-enrollmentSchema.methods.convertToEnrollment = async function (enrollmentData) {
-  if (this.enrollmentType !== "saved") {
-    throw new Error("Only saved courses can be converted to enrollments");
-  }
+enrollmentSchema.virtual('remainingDays').get(function() {
+  if (new Date() > this.access_expiry_date) return 0;
   
-  // Update enrollment details
-  this.enrollmentType = enrollmentData.enrollmentType || "individual";
-  this.status = "active";
-  this.enrolledAt = new Date();
-  this.lastAccessed = new Date();
-  this.paymentStatus = enrollmentData.paymentStatus || "pending";
+  const diffTime = this.access_expiry_date - new Date();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+});
+
+// Methods
+enrollmentSchema.methods.updateProgress = async function(lessonId, progressData) {
+  let lesson = this.progress.detailed_progress.find(item => item.lesson_id === lessonId);
   
-  if (enrollmentData.paymentDetails) {
-    this.paymentDetails = enrollmentData.paymentDetails;
-  }
-  
-  if (enrollmentData.accessExpiresAt) {
-    this.accessExpiresAt = enrollmentData.accessExpiresAt;
-  } else if (this.course && this.course.duration) {
-    // Calculate expiry based on course duration
-    const durationMatch = this.course.duration.match(/(\d+)\s+(\w+)/);
-    if (durationMatch) {
-      const [, value, unit] = durationMatch;
-      const expiryDate = new Date();
-      
-      if (unit.includes('month')) {
-        expiryDate.setMonth(expiryDate.getMonth() + parseInt(value));
-      } else if (unit.includes('week')) {
-        expiryDate.setDate(expiryDate.getDate() + (parseInt(value) * 7));
-      } else if (unit.includes('day')) {
-        expiryDate.setDate(expiryDate.getDate() + parseInt(value));
-      } else if (unit.includes('year')) {
-        expiryDate.setFullYear(expiryDate.getFullYear() + parseInt(value));
-      }
-      
-      this.accessExpiresAt = expiryDate;
-    }
-  }
-  
-  // Initialize progress
-  this.progress = {
-    overall: 0,
-    lessons: { completed: [], lastAccessed: null },
-    assignments: { completed: [], lastAccessed: null },
-    quizzes: { completed: [], lastAccessed: null }
-  };
-  
-  await this.save();
-  return this;
-};
-
-// Static method to get enrollment statistics
-enrollmentSchema.statics.getEnrollmentStats = async function (courseId) {
-  const stats = await this.aggregate([
-    { $match: { course: courseId, enrollmentType: { $ne: "saved" } } },
-    {
-      $group: {
-        _id: null,
-        totalEnrollments: { $sum: 1 },
-        activeEnrollments: {
-          $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] },
-        },
-        completedEnrollments: {
-          $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] },
-        },
-        averageProgress: { $avg: "$progress.overall" },
-        totalRevenue: { $sum: "$paymentDetails.amount" },
-      },
-    },
-  ]);
-
-  return (
-    stats[0] || {
-      totalEnrollments: 0,
-      activeEnrollments: 0,
-      completedEnrollments: 0,
-      averageProgress: 0,
-      totalRevenue: 0,
-    }
-  );
-};
-
-// Method to check EMI payment status and update course access
-enrollmentSchema.methods.checkAndUpdateAccess = async function() {
-  if (this.paymentType !== "emi") return;
-
-  const now = new Date();
-  const emi = this.emiDetails;
-  
-  if (!emi || !emi.schedule || emi.schedule.length === 0) return;
-
-  // Find any overdue payments
-  const overduePayments = emi.schedule.filter(payment => 
-    payment.status === "pending" && 
-    payment.gracePeriodEnds < now
-  );
-
-  if (overduePayments.length > 0) {
-    this.accessStatus = "restricted";
-    this.accessRestrictionReason = "EMI payment overdue";
-    emi.missedPayments = overduePayments.length;
-  } else {
-    this.accessStatus = "active";
-    this.accessRestrictionReason = null;
-  }
-
-  this.lastAccessCheck = now;
-  await this.save();
-};
-
-// Method to process EMI payment
-enrollmentSchema.methods.processEmiPayment = async function(paymentData) {
-  const { installmentNumber, amount, transactionId, paymentMethod } = paymentData;
-  
-  if (!this.emiDetails || !this.emiDetails.schedule) {
-    throw new Error("No EMI schedule found");
-  }
-
-  const installment = this.emiDetails.schedule.find(
-    s => s.installmentNumber === installmentNumber && s.status === "pending"
-  );
-
-  if (!installment) {
-    throw new Error("Invalid installment or already paid");
-  }
-
-  installment.status = "paid";
-  installment.paidDate = new Date();
-  installment.transactionId = transactionId;
-  installment.paymentMethod = paymentMethod;
-
-  // Update EMI details
-  this.emiDetails.lastPaymentDate = new Date();
-  
-  // Find next pending payment
-  const nextPending = this.emiDetails.schedule.find(
-    s => s.status === "pending"
-  );
-  this.emiDetails.nextPaymentDate = nextPending ? nextPending.dueDate : null;
-
-  // Check if all installments are paid
-  const allPaid = this.emiDetails.schedule.every(s => s.status === "paid");
-  if (allPaid) {
-    this.emiDetails.status = "completed";
-  }
-
-  // Reset access if payment clears restrictions
-  await this.checkAndUpdateAccess();
-  
-  await this.save();
-  return this;
-};
-
-// Method to setup EMI schedule
-enrollmentSchema.methods.setupEmiSchedule = async function(emiConfig) {
-  const {
-    totalAmount,
-    downPayment,
-    numberOfInstallments,
-    startDate,
-    interestRate,
-    processingFee,
-    gracePeriodDays,
-  } = emiConfig;
-
-  const installmentAmount = (totalAmount - downPayment) / numberOfInstallments;
-  const schedule = [];
-  const baseDate = new Date(startDate);
-
-  for (let i = 1; i <= numberOfInstallments; i++) {
-    const dueDate = new Date(baseDate);
-    dueDate.setMonth(dueDate.getMonth() + (i - 1));
-    
-    const gracePeriodEnds = new Date(dueDate);
-    gracePeriodEnds.setDate(gracePeriodEnds.getDate() + gracePeriodDays);
-
-    schedule.push({
-      installmentNumber: i,
-      dueDate,
-      amount: installmentAmount,
-      status: "pending",
-      gracePeriodEnds,
+  if (!lesson) {
+    this.progress.detailed_progress.push({
+      lesson_id: lessonId,
+      ...progressData
     });
+  } else {
+    Object.assign(lesson, progressData);
   }
+  
+  // Recalculate overall progress
+  const totalLessons = await mongoose.model('Course').countLessons(this.course);
+  this.progress.lessons_completed = this.progress.detailed_progress.filter(
+    lesson => lesson.status === 'completed'
+  ).length;
+  
+  this.progress.overall_percentage = Math.round(
+    (this.progress.lessons_completed / totalLessons) * 100
+  );
+  
+  this.progress.last_activity_date = new Date();
+  
+  return this.save();
+};
 
-  this.paymentType = "emi";
-  this.emiDetails = {
-    totalAmount,
-    downPayment,
-    numberOfInstallments,
-    installmentAmount,
-    interestRate,
-    processingFee,
-    startDate: baseDate,
-    gracePeriodDays,
-    status: "active",
-    schedule,
-    nextPaymentDate: schedule[0].dueDate,
+enrollmentSchema.methods.recordPayment = async function(paymentData) {
+  this.payments.push(paymentData);
+  
+  // Update total amount paid
+  this.total_amount_paid = this.payments
+    .filter(payment => payment.payment_status === 'completed')
+    .reduce((sum, payment) => sum + payment.amount, 0);
+  
+  return this.save();
+};
+
+enrollmentSchema.methods.updateAssessmentScore = async function(assessmentId, scoreData) {
+  let assessment = this.assessments.find(a => a.assessment_id.equals(assessmentId));
+  
+  if (!assessment) {
+    this.assessments.push({
+      assessment_id: assessmentId,
+      ...scoreData
+    });
+  } else {
+    Object.assign(assessment, scoreData);
+  }
+  
+  return this.save();
+};
+
+// Static methods
+enrollmentSchema.statics.findActiveEnrollments = function(studentId = null) {
+  const query = { 
+    status: 'active',
+    access_expiry_date: { $gte: new Date() }
   };
+  
+  if (studentId) {
+    query.student = studentId;
+  }
+  
+  return this.find(query)
+    .populate('course', 'course_title course_image slug')
+    .populate('batch', 'batch_name start_date end_date schedule');
+};
 
-  await this.save();
-  return this;
+enrollmentSchema.statics.findStudentsInBatch = function(batchId) {
+  return this.find({ batch: batchId, status: 'active' })
+    .populate('student', 'first_name last_name email profile_picture')
+    .select('student enrollment_date progress.overall_percentage');
+};
+
+enrollmentSchema.statics.getDashboardStats = async function() {
+  return {
+    totalActive: await this.countDocuments({ 
+      status: 'active',
+      access_expiry_date: { $gte: new Date() }
+    }),
+    totalCompleted: await this.countDocuments({ status: 'completed' }),
+    recentEnrollments: await this.find()
+      .sort({ enrollment_date: -1 })
+      .limit(10)
+      .populate('student', 'first_name last_name email')
+      .populate('course', 'course_title')
+      .populate('batch', 'batch_name')
+      .select('enrollment_date payment_plan total_amount_paid'),
+    paymentStats: await this.aggregate([
+      {
+        $unwind: '$payments'
+      },
+      {
+        $match: {
+          'payments.payment_status': 'completed',
+          'payments.payment_date': {
+            $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
+          }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: '%Y-%m-%d', date: '$payments.payment_date' }
+          },
+          totalAmount: { $sum: '$payments.amount' },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { _id: 1 }
+      }
+    ])
+  };
 };
 
 const Enrollment = mongoose.model("Enrollment", enrollmentSchema);
+
 export default Enrollment;
