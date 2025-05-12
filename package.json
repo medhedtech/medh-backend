@@ -15,7 +15,7 @@
     "test:api:report": "start reports/api-test-report.html",
     "test:postman": "./test-api.sh",
     "test:refresh-token": "node test-refresh-token.js",
-    "lint": "eslint .",
+    "lint": "eslint . --quiet",
     "format": "prettier --write .",
     "logs:error": "tail -f logs/error-*.log",
     "logs:combined": "tail -f logs/combined-*.log",
