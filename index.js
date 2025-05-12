@@ -278,12 +278,12 @@ connectDB();
 
 // Start server(s)
 const PORT = ENV_VARS.PORT;
+const HTTPS_PORT = ENV_VARS.HTTPS_PORT || 443;
 let httpServer, httpsServer;
 
 // In production, use HTTPS if certificates are available
 if (ENV_VARS.NODE_ENV === 'production' && ENV_VARS.TLS_CERT_PATH) {
   try {
-    const HTTPS_PORT = ENV_VARS.HTTPS_PORT || 443;
     const certPath = ENV_VARS.TLS_CERT_PATH;
     
     // Create HTTPS server
