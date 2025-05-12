@@ -14,6 +14,7 @@
     "test:api:auto": "node tests/run-api-tests.js",
     "test:api:report": "start reports/api-test-report.html",
     "test:postman": "./test-api.sh",
+    "test:refresh-token": "node test-refresh-token.js",
     "lint": "eslint .",
     "format": "prettier --write .",
     "logs:error": "tail -f logs/error-*.log",

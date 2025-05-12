@@ -14,6 +14,12 @@ export const corsOptions = {
       "https://www.medh.org",
       "https://admin.medh.org",
       "https://api.medh.org",
+      "https://medh.co",
+      "https://www.medh.co",
+      "https://admin.medh.co",
+      "https://api.medh.co",
+      "https://staging.medh.co",
+      "https://api2.medh.co"
     ];
 
     // Allow requests with no origin (like mobile apps or curl requests)
@@ -25,10 +31,12 @@ export const corsOptions = {
     ) {
       callback(null, true);
     } else {
+      // Log rejected origins for debugging
+      logger.warn(`CORS rejected origin: ${origin}`);
       callback(new Error("Not allowed by CORS"));
     }
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
   allowedHeaders: [
     "Content-Type",
     "Authorization",
@@ -49,9 +57,13 @@ const handlePreflight = (req, res, next) => {
     ENV_VARS.ALLOWED_ORIGINS && ENV_VARS.ALLOWED_ORIGINS.length > 0
       ? ENV_VARS.ALLOWED_ORIGINS
       : [
-          // Fallback list (using the one defined in corsOptions for consistency here)
+          // Fallback list (using the one defined in corsOptions for consistency)
           "http://localhost:3000",
           "http://localhost:3001",
+          "https://medh.org",
+          "https://www.medh.org",
+          "https://admin.medh.org",
+          "https://api.medh.org",
           "https://medh.co",
           "https://www.medh.co",
           "https://admin.medh.co",

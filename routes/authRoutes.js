@@ -28,7 +28,21 @@ router.post("/login", loginLimiter, authController.loginUser.bind(authController
  * @desc    Get a new access token using a refresh token
  * @access  Public
  */
-router.post("/refresh-token", authController.refreshToken.bind(authController));
+router.post("/refresh-token", (req, res, next) => {
+  // Validate the input before processing
+  const { refresh_token } = req.body;
+  
+  if (!refresh_token) {
+    return res.status(400).json({
+      success: false,
+      message: "Refresh token is required",
+      error_code: "MISSING_REFRESH_TOKEN"
+    });
+  }
+  
+  // Continue to the controller
+  return authController.refreshToken.bind(authController)(req, res, next);
+});
 
 /**
  * @route   POST /api/v1/auth/logout

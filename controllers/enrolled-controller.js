@@ -11,7 +11,7 @@ import logger from "../utils/logger.js";
 const _Student = Student;
 const _logger = logger;
 
-// Create a new enrollment
+// Create a new enrollment with EMI support
 export const createEnrolledCourse = async (req, res, next) => {
   try {
     const {
@@ -27,6 +27,9 @@ export const createEnrolledCourse = async (req, res, next) => {
       activePricing,
       getFinalPrice,
       metadata,
+      // EMI specific fields
+      is_emi,
+      emi_config,
     } = req.body;
 
     // Unused variable but kept for future implementation
@@ -85,6 +88,7 @@ export const createEnrolledCourse = async (req, res, next) => {
       enrollment_date: new Date(),
       course_progress: 0,
       status: status || "active",
+      paymentType: is_emi ? "emi" : "full",
       metadata: {
         deviceInfo: req.headers["user-agent"],
         ipAddress: req.ip,
@@ -123,6 +127,20 @@ export const createEnrolledCourse = async (req, res, next) => {
 
     // Create new enrollment
     const newEnrolledCourse = new EnrolledCourse(enrollmentData);
+
+    // Setup EMI if applicable
+    if (is_emi && emi_config) {
+      await newEnrolledCourse.setupEmiSchedule({
+        totalAmount: emi_config.totalAmount || enrollmentData.payment_details.amount,
+        downPayment: emi_config.downPayment || 0,
+        numberOfInstallments: emi_config.numberOfInstallments,
+        startDate: emi_config.startDate || new Date(),
+        interestRate: emi_config.interestRate || 0,
+        processingFee: emi_config.processingFee || 0,
+        gracePeriodDays: emi_config.gracePeriodDays || 5,
+      });
+    }
+
     await newEnrolledCourse.save();
 
     // Create enrolled modules if course has videos
@@ -1067,6 +1085,161 @@ export const convertSavedCourseToEnrollment = async (req, res, next) => {
       success: true,
       message: "Saved course converted to enrollment successfully",
       data: updatedEnrollment,
+    });
+  } catch (error) {
+    errorHandler(error, req, res, next);
+  }
+};
+
+/**
+ * @description Check and update EMI access status for all enrollments
+ * @route POST /api/v1/enrolled/check-emi-status
+ * @access Private (Admin/System)
+ */
+export const checkAndUpdateEmiStatus = async (req, res, next) => {
+  try {
+    const enrollments = await EnrolledCourse.find({
+      paymentType: "emi",
+      "emiDetails.status": "active",
+    });
+
+    const results = {
+      total: enrollments.length,
+      updated: 0,
+      restricted: 0,
+      active: 0,
+      errors: [],
+    };
+
+    for (const enrollment of enrollments) {
+      try {
+        const previousStatus = enrollment.accessStatus;
+        await enrollment.checkAndUpdateAccess();
+        
+        results.updated++;
+        if (enrollment.accessStatus === "restricted") {
+          results.restricted++;
+        } else if (enrollment.accessStatus === "active") {
+          results.active++;
+        }
+
+        // Log status changes
+        if (previousStatus !== enrollment.accessStatus) {
+          logger.info("Enrollment access status changed", {
+            enrollmentId: enrollment._id,
+            previousStatus,
+            newStatus: enrollment.accessStatus,
+            reason: enrollment.accessRestrictionReason,
+          });
+        }
+      } catch (error) {
+        results.errors.push({
+          enrollmentId: enrollment._id,
+          error: error.message,
+        });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "EMI status check completed",
+      data: results,
+    });
+  } catch (error) {
+    errorHandler(error, req, res, next);
+  }
+};
+
+/**
+ * @description Get EMI analytics for a course
+ * @route GET /api/v1/enrolled/emi-analytics/:courseId
+ * @access Private (Admin)
+ */
+export const getEmiAnalytics = async (req, res, next) => {
+  try {
+    const { courseId } = req.params;
+
+    const enrollments = await EnrolledCourse.find({
+      course_id: courseId,
+      paymentType: "emi",
+    });
+
+    const analytics = {
+      totalEmiEnrollments: enrollments.length,
+      activeEmiPlans: 0,
+      completedEmiPlans: 0,
+      defaultedEmiPlans: 0,
+      totalRevenue: 0,
+      pendingRevenue: 0,
+      collectedRevenue: 0,
+      averageInstallmentAmount: 0,
+      missedPaymentsCount: 0,
+      onTimePaymentsPercentage: 0,
+      installmentAnalytics: {
+        total: 0,
+        paid: 0,
+        pending: 0,
+        overdue: 0,
+      },
+    };
+
+    let totalInstallments = 0;
+    let paidInstallments = 0;
+    let onTimePayments = 0;
+
+    enrollments.forEach(enrollment => {
+      const emi = enrollment.emiDetails;
+      if (!emi) return;
+
+      switch (emi.status) {
+        case "active":
+          analytics.activeEmiPlans++;
+          break;
+        case "completed":
+          analytics.completedEmiPlans++;
+          break;
+        case "defaulted":
+          analytics.defaultedEmiPlans++;
+          break;
+      }
+
+      analytics.totalRevenue += emi.totalAmount;
+      analytics.missedPaymentsCount += emi.missedPayments;
+
+      emi.schedule.forEach(installment => {
+        totalInstallments++;
+        analytics.installmentAnalytics.total++;
+
+        switch (installment.status) {
+          case "paid":
+            paidInstallments++;
+            analytics.installmentAnalytics.paid++;
+            analytics.collectedRevenue += installment.amount;
+            if (installment.paidDate <= installment.dueDate) {
+              onTimePayments++;
+            }
+            break;
+          case "pending":
+            analytics.installmentAnalytics.pending++;
+            analytics.pendingRevenue += installment.amount;
+            break;
+          case "overdue":
+            analytics.installmentAnalytics.overdue++;
+            analytics.pendingRevenue += installment.amount;
+            break;
+        }
+      });
+    });
+
+    // Calculate averages and percentages
+    if (totalInstallments > 0) {
+      analytics.averageInstallmentAmount = analytics.totalRevenue / totalInstallments;
+      analytics.onTimePaymentsPercentage = (onTimePayments / paidInstallments) * 100;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: analytics,
     });
   } catch (error) {
     errorHandler(error, req, res, next);
