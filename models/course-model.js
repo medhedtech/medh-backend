@@ -79,6 +79,108 @@ const assignCurriculumIds = (curriculum) => {
 };
 
 /* ------------------------------ */
+/* Batch Schema                   */
+/* ------------------------------ */
+const batchSchema = new Schema(
+  {
+    batch_name: {
+      type: String,
+      required: [true, "Batch name is required"],
+      trim: true,
+    },
+    batch_code: {
+      type: String,
+      unique: true,
+      required: [true, "Batch code is required"],
+      trim: true,
+    },
+    course: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Course",
+      required: [true, "Course reference is required for a batch"],
+    },
+    status: {
+      type: String,
+      enum: {
+        values: ["Active", "Upcoming", "Completed", "Cancelled"],
+        message: "{VALUE} is not a valid batch status",
+      },
+      default: "Upcoming",
+    },
+    start_date: {
+      type: Date,
+      required: [true, "Batch start date is required"],
+    },
+    end_date: {
+      type: Date,
+      required: [true, "Batch end date is required"],
+      validate: {
+        validator: function (v) {
+          return v > this.start_date;
+        },
+        message: "End date must be after start date",
+      },
+    },
+    capacity: {
+      type: Number,
+      required: [true, "Batch capacity is required"],
+      min: [1, "Batch capacity must be at least 1"],
+    },
+    enrolled_students: {
+      type: Number,
+      default: 0,
+      min: [0, "Enrolled students cannot be negative"],
+    },
+    assigned_instructor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Instructor",
+      required: [true, "Instructor assignment is required for a batch"],
+    },
+    schedule: [
+      {
+        day: {
+          type: String,
+          enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+          required: true,
+        },
+        start_time: {
+          type: String,
+          required: true,
+          match: /^([01]\d|2[0-3]):([0-5]\d)$/,
+        },
+        end_time: {
+          type: String,
+          required: true,
+          match: /^([01]\d|2[0-3]):([0-5]\d)$/,
+          validate: {
+            validator: function (v) {
+              const startParts = this.start_time.split(':').map(Number);
+              const endParts = v.split(':').map(Number);
+              const startMins = startParts[0] * 60 + startParts[1];
+              const endMins = endParts[0] * 60 + endParts[1];
+              return endMins > startMins;
+            },
+            message: "End time must be after start time",
+          },
+        },
+      },
+    ],
+    batch_notes: {
+      type: String,
+      trim: true,
+    },
+    created_by: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: [true, "Creator reference is required"],
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+/* ------------------------------ */
 /* Schemas                        */
 /* ------------------------------ */
 
@@ -1023,6 +1125,60 @@ courseSchema.statics.searchCourses = async function (options = {}) {
   };
 };
 
-const Course = mongoose.model("Course", courseSchema);
+courseSchema.statics.createBatch = async function(courseId, batchData, adminId) {
+  // Check if course exists
+  const course = await this.findById(courseId);
+  if (!course) {
+    throw new Error('Course not found');
+  }
+  
+  // Generate a unique batch code if not provided
+  if (!batchData.batch_code) {
+    const coursePrefix = course.course_title
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .toUpperCase();
+    const timestamp = Date.now().toString().slice(-6);
+    batchData.batch_code = `${coursePrefix}-${timestamp}`;
+  }
+  
+  // Create a new batch with the provided data
+  const newBatch = new Batch({
+    ...batchData,
+    course: courseId,
+    created_by: adminId
+  });
+  
+  return await newBatch.save();
+};
 
+courseSchema.statics.assignInstructorToBatch = async function(batchId, instructorId, adminId) {
+  // Find the batch
+  const batch = await Batch.findById(batchId);
+  if (!batch) {
+    throw new Error('Batch not found');
+  }
+  
+  // Check if instructor exists
+  const instructor = await mongoose.model('Instructor').findById(instructorId);
+  if (!instructor) {
+    throw new Error('Instructor not found');
+  }
+  
+  // Update the batch with the instructor
+  batch.assigned_instructor = instructorId;
+  batch.updated_by = adminId;
+  
+  return await batch.save();
+};
+
+courseSchema.statics.getBatchesForCourse = async function(courseId) {
+  return await Batch.find({ course: courseId }).populate('assigned_instructor');
+};
+
+const Course = mongoose.model("Course", courseSchema);
+const Batch = mongoose.model("Batch", batchSchema);
+
+export { Course, Batch };
 export default Course;

@@ -10,6 +10,7 @@ import assignCoorporateCourse from "./assign-course-coorporateRoutes.js";
 import assignedInstructor from "./assignInstructorRoute.js";
 import assignment from "./assignmentRoutes.js";
 import authRoutes from "./authRoutes.js";
+import batchRoutes from "./batch-routes.js";
 import blogRoutes from "./blogRoutes.js";
 import broucherRoute from "./broucherRoutes.js";
 import categoryRoutes from "./categoryRoutes.js";
@@ -203,6 +204,10 @@ const moduleRoutes = [
   {
     path: "/zoom",
     route: zoomRoutes,
+  },
+  {
+    path: "/batches",
+    route: batchRoutes,
   },
 ];
 
