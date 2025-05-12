@@ -23,6 +23,7 @@ import currencyRoutes from "./currencyRoutes.js";
 import dashboardRoutes from "./dashboardRoutes.js";
 import enrollForm from "./enroll-formRoute.js";
 import enrolledRoutes from "./enrolledRoutes.js";
+import enrollmentRoutes from "./enrollment-routes.js";
 import faqRoutes from "./faqRoutes.js";
 import feedback from "./feedbackRoutes.js";
 import freqRoutes from "./freqRoutes.js";
@@ -208,6 +209,10 @@ const moduleRoutes = [
   {
     path: "/batches",
     route: batchRoutes,
+  },
+  {
+    path: "/enrollments",
+    route: enrollmentRoutes,
   },
 ];
 
