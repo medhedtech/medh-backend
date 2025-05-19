@@ -191,7 +191,7 @@ class AuthController {
 
       // Send welcome email to the user
       try {
-        await this.sendWelcomeEmail(email, user.full_name, "");
+        await emailService.sendWelcomeEmail(email, user.full_name, {});
       } catch (emailError) {
         logger.auth.error("Welcome email sending failed", {
           error: emailError,
@@ -286,21 +286,6 @@ class AuthController {
         message: "Server error",
         error: err.message,
       });
-    }
-  }
-
-  /**
-   * Send welcome email to newly registered user
-   * @param {string} email - User's email
-   * @param {string} fullName - User's full name
-   * @param {string} password - User's password
-   */
-  async sendWelcomeEmail(email, fullName, password) {
-    try {
-      return await emailService.sendWelcomeEmail(email, fullName, { password });
-    } catch (error) {
-      logger.auth.error("Failed to send welcome email", { error, email });
-      throw error;
     }
   }
 

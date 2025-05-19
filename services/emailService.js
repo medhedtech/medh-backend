@@ -30,25 +30,52 @@ const EMAIL_JOB_TIMEOUT = parseInt(process.env.EMAIL_JOB_TIMEOUT, 10) || 30 * 10
  */
 class EmailService {
   constructor() {
-    // Initialize AWS SES or standard SMTP transporter
-    this.transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_HOST || "email-smtp.us-east-1.amazonaws.com",
-      port: process.env.EMAIL_PORT || 465,
-      secure: process.env.EMAIL_SECURE === "true" || true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-      // Set connection pool settings for better performance
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
-      // Set timeouts
-      connectionTimeout: 10000, // 10 seconds
-      socketTimeout: 30000, // 30 seconds
-      // Enable debug if needed
-      debug: process.env.EMAIL_DEBUG === "true" || false,
-    });
+    // Initialize with more robust error handling
+    try {
+      // Log email config for debugging (without credentials)
+      logger.email.debug("Configuring email transport with:", {
+        host: process.env.EMAIL_HOST || "email-smtp.us-east-1.amazonaws.com",
+        port: process.env.EMAIL_PORT || 465,
+        secure: process.env.EMAIL_SECURE === "true" || true,
+        user: process.env.EMAIL_USER ? "Set" : "Not set",
+        pass: process.env.EMAIL_PASS ? "Set" : "Not set"
+      });
+      
+      // Initialize AWS SES or standard SMTP transporter
+      this.transporter = nodemailer.createTransport({
+        host: process.env.EMAIL_HOST || "email-smtp.us-east-1.amazonaws.com",
+        port: process.env.EMAIL_PORT || 465,
+        secure: process.env.EMAIL_SECURE === "true" || true,
+        auth: {
+          user: process.env.EMAIL_USER,
+          pass: process.env.EMAIL_PASS,
+        },
+        // Set connection pool settings for better performance
+        pool: true,
+        maxConnections: 5,
+        maxMessages: 100,
+        // Set timeouts
+        connectionTimeout: 10000, // 10 seconds
+        socketTimeout: 30000, // 30 seconds
+        // Enable debug for troubleshooting
+        debug: true, // Always enable debug during troubleshooting
+        logger: true, // Enable logger for more detailed info
+      });
+    } catch (error) {
+      logger.email.error("Failed to initialize email transporter", {
+        error: error.message
+      });
+      // Create a fake transporter that logs emails instead of sending
+      this.transporter = {
+        sendMail: async (mailOptions) => {
+          logger.email.warn("Email would have been sent (transport error):", {
+            to: mailOptions.to,
+            subject: mailOptions.subject
+          });
+          return { messageId: `fake-${Date.now()}` };
+        }
+      };
+    }
 
     // Initialize template cache
     this.templateCache = new Map();
@@ -197,12 +224,23 @@ class EmailService {
    * Verify the email service connection
    */
   verifyConnection() {
+    // Skip verification if using the fake transporter
+    if (typeof this.transporter.verify !== 'function') {
+      logger.email.warn("Using failsafe email transporter - skipping verification");
+      return;
+    }
+    
     this.transporter.verify((error, _success) => {
       if (error) {
-        logger.email.error("Email configuration error:", { error });
+        logger.email.error("Email configuration error:", { 
+          error: error.message,
+          code: error.code,
+          command: error.command 
+        });
         this.handleConnectionError(error);
       } else {
         logger.email.info("Email server is ready to send messages");
+        console.log("Email server is ready to send messages");
       }
     });
   }
@@ -571,7 +609,25 @@ class EmailService {
         subject: mailOptions.subject,
       });
 
-      const info = await this.transporter.sendMail(mailOptions);
+      // Make sure we have proper From address set
+      if (!mailOptions.from) {
+        mailOptions.from = process.env.EMAIL_FROM || 'noreply@medh.co';
+      }
+
+      // Ensure text version for clients that can't display HTML
+      if (mailOptions.html && !mailOptions.text) {
+        // Simple conversion, you could use a library for better HTML-to-text
+        mailOptions.text = mailOptions.html.replace(/<[^>]*>/g, '');
+      }
+
+      // Add retry envelope for troubleshooting
+      const info = await this.transporter.sendMail({
+        ...mailOptions,
+        headers: {
+          ...(mailOptions.headers || {}),
+          'X-Mailer': 'Medh-Learning-Platform',
+        }
+      });
 
       logger.email.info(`Email sent successfully to ${recipient}`, {
         messageId: info.messageId,
@@ -584,11 +640,20 @@ class EmailService {
       };
     } catch (error) {
       logger.email.error(`Failed to send email directly to ${recipient}`, {
-        error,
+        error: error.message,
+        code: error.code,
+        command: error.command,
         subject: mailOptions.subject,
       });
 
-      // Provide specific error messages for common issues
+      // Store for retry
+      await this.storeFailedEmailForRetry(mailOptions).catch(storeError => {
+        logger.email.error("Failed to store email for retry", { 
+          error: storeError.message 
+        });
+      });
+
+      // Handle specific error cases
       if (error.code === "EAUTH") {
         throw new Error(
           "Email authentication failed. Please check your email credentials."
@@ -706,23 +771,47 @@ class EmailService {
         fs.mkdirSync(failedEmailsDir, { recursive: true });
       }
       
-      // Generate a unique filename
+      // Generate a unique identifier
+      const recipient = typeof mailOptions.to === "string" 
+        ? mailOptions.to 
+        : Array.isArray(mailOptions.to) 
+          ? mailOptions.to[0] 
+          : "unknown";
+      
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `${timestamp}-${mailOptions.to.replace(/[^a-zA-Z0-9]/g, '_')}.json`;
+      const safeRecipient = recipient.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 30);
+      const filename = `${timestamp}-${safeRecipient}.json`;
       const filePath = path.join(failedEmailsDir, filename);
       
-      // Store the mail options as JSON
+      // Store the mail options as JSON, but handle circular references
+      const safeMailOptions = { ...mailOptions };
+      
+      // Remove any potential circular references or non-serializable data
+      delete safeMailOptions.connection;
+      delete safeMailOptions.transport;
+      delete safeMailOptions.transporter;
+      
+      // Handle functions that can't be serialized
+      if (typeof safeMailOptions.text === 'function') {
+        safeMailOptions.text = '[Function: text]';
+      }
+      
+      if (typeof safeMailOptions.html === 'function') {
+        safeMailOptions.html = '[Function: html]';
+      }
+      
+      // Store the mail options safely
       await fs.promises.writeFile(
         filePath, 
         JSON.stringify({
           timestamp: new Date().toISOString(),
           retryCount: 0,
-          mailOptions
+          mailOptions: safeMailOptions
         }, null, 2)
       );
       
       logger.email.info('Stored failed email for later retry', {
-        to: mailOptions.to,
+        to: recipient,
         subject: mailOptions.subject,
         filePath
       });
@@ -730,9 +819,11 @@ class EmailService {
       return true;
     } catch (error) {
       logger.email.error('Failed to store email for retry', {
-        error: error.message
+        error: error.message,
+        stack: error.stack
       });
-      throw error;
+      // Don't throw, just return false - we don't want storing failures to cascade
+      return false;
     }
   }
 }

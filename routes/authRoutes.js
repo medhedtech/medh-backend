@@ -17,6 +17,20 @@ const router = express.Router();
 router.post("/register", registerLimiter, authController.registerUser.bind(authController));
 
 /**
+ * @route   POST /api/v1/auth/verify-email
+ * @desc    Verify user email with OTP
+ * @access  Public
+ */
+router.post("/verify-email", authController.verifyEmailOTP.bind(authController));
+
+/**
+ * @route   POST /api/v1/auth/resend-verification
+ * @desc    Resend verification OTP
+ * @access  Public
+ */
+router.post("/resend-verification", authController.resendVerificationOTP.bind(authController));
+
+/**
  * @route   POST /api/v1/auth/login
  * @desc    Login a user and get token
  * @access  Public
