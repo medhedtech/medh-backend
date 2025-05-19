@@ -27,7 +27,6 @@ export const createEnrolledCourse = async (req, res, next) => {
       activePricing,
       getFinalPrice,
       metadata,
-      // EMI specific fields
       is_emi,
       emi_config,
     } = req.body;
