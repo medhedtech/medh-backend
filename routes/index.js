@@ -19,6 +19,7 @@ import complaint from "./complaintRoute.js";
 import contactRoutes from "./contactRoutes.js";
 import corporateRoute from "./corporate-traing-Routes.js";
 import courseRoutes from "./courseRoutes.js";
+import courseTypesRoutes from "./course-types-routes.js";
 import currencyRoutes from "./currencyRoutes.js";
 import dashboardRoutes from "./dashboardRoutes.js";
 import enrollForm from "./enroll-formRoute.js";
@@ -65,6 +66,10 @@ const moduleRoutes = [
   {
     path: "/courses",
     route: courseRoutes,
+  },
+  {
+    path: "/course-types",
+    route: courseTypesRoutes,
   },
   {
     path: "/freq",
