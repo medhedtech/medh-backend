@@ -29,6 +29,8 @@ export const corsOptions = {
       allowedOrigins.indexOf(origin) !== -1 ||
       ENV_VARS.NODE_ENV === "development"
     ) {
+      // Log successful CORS origin for debugging
+      logger.info(`CORS accepted origin: ${origin}`);
       callback(null, true);
     } else {
       // Log rejected origins for debugging
@@ -74,7 +76,11 @@ const handlePreflight = (req, res, next) => {
 
   // First, set basic CORS headers for all requests as a fallback
   const origin = req.headers.origin;
-  // Use the correctly defined list here
+  
+  // Log the origin for debugging purposes
+  logger.info(`CORS middleware processing request from origin: ${origin || 'undefined'}`);
+  
+  // Always set Access-Control-Allow-Origin header if origin is in the allowed list
   if (
     origin &&
     (definedAllowedOrigins.includes(origin) ||
@@ -90,6 +96,9 @@ const handlePreflight = (req, res, next) => {
       "X-Requested-With, Content-Type, Authorization, Accept, x-access-token",
     );
     res.header("Access-Control-Allow-Credentials", "true");
+    logger.info(`CORS headers set for origin: ${origin}`);
+  } else if (origin) {
+    logger.warn(`CORS origin rejected: ${origin}`);
   }
 
   // If this is a preflight OPTIONS request

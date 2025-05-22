@@ -1,5 +1,5 @@
 import { BlendedCourse, LiveCourse, FreeCourse } from "../models/course-types/index.js";
-import { validateMongoDbId } from "../utils/validateMongodbId.js";
+import { validateObjectId } from "../utils/validation-helpers.js";
 import asyncHandler from "express-async-handler";
 
 /**
@@ -81,7 +81,10 @@ export const getCoursesByType = asyncHandler(async (req, res) => {
 export const getCourseById = asyncHandler(async (req, res) => {
   try {
     const { type, id } = req.params;
-    validateMongoDbId(id);
+    if (!validateObjectId(id)) {
+      res.status(400);
+      throw new Error("Invalid course ID format");
+    }
 
     let CourseModel;
     switch (type) {
@@ -121,7 +124,10 @@ export const getCourseById = asyncHandler(async (req, res) => {
 export const updateCourse = asyncHandler(async (req, res) => {
   try {
     const { type, id } = req.params;
-    validateMongoDbId(id);
+    if (!validateObjectId(id)) {
+      res.status(400);
+      throw new Error("Invalid course ID format");
+    }
 
     let CourseModel;
     switch (type) {
@@ -166,7 +172,10 @@ export const updateCourse = asyncHandler(async (req, res) => {
 export const deleteCourse = asyncHandler(async (req, res) => {
   try {
     const { type, id } = req.params;
-    validateMongoDbId(id);
+    if (!validateObjectId(id)) {
+      res.status(400);
+      throw new Error("Invalid course ID format");
+    }
 
     let CourseModel;
     switch (type) {
@@ -208,7 +217,10 @@ export const deleteCourse = asyncHandler(async (req, res) => {
 export const scheduleDoubtSession = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
-    validateMongoDbId(id);
+    if (!validateObjectId(id)) {
+      res.status(400);
+      throw new Error("Invalid course ID format");
+    }
 
     const { sectionId, sessionDetails } = req.body;
 
@@ -246,7 +258,10 @@ export const scheduleDoubtSession = asyncHandler(async (req, res) => {
 export const updateDoubtSchedule = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
-    validateMongoDbId(id);
+    if (!validateObjectId(id)) {
+      res.status(400);
+      throw new Error("Invalid course ID format");
+    }
 
     const course = await BlendedCourse.findById(id);
     if (!course) {
@@ -277,7 +292,10 @@ export const updateDoubtSchedule = asyncHandler(async (req, res) => {
 export const updateLiveSchedule = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
-    validateMongoDbId(id);
+    if (!validateObjectId(id)) {
+      res.status(400);
+      throw new Error("Invalid course ID format");
+    }
 
     const course = await LiveCourse.findById(id);
     if (!course) {
@@ -306,7 +324,10 @@ export const updateLiveSchedule = asyncHandler(async (req, res) => {
 export const addRecordedSession = asyncHandler(async (req, res) => {
   try {
     const { id, weekId } = req.params;
-    validateMongoDbId(id);
+    if (!validateObjectId(id)) {
+      res.status(400);
+      throw new Error("Invalid course ID format");
+    }
 
     const course = await LiveCourse.findById(id);
     if (!course) {
@@ -350,7 +371,10 @@ export const addRecordedSession = asyncHandler(async (req, res) => {
 export const updateAccessSettings = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
-    validateMongoDbId(id);
+    if (!validateObjectId(id)) {
+      res.status(400);
+      throw new Error("Invalid course ID format");
+    }
 
     const course = await FreeCourse.findById(id);
     if (!course) {
