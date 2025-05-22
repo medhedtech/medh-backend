@@ -13,6 +13,7 @@ export const ENV_VARS = {
   AWS_ACCESS_KEY: process.env.IM_AWS_ACCESS_KEY,
   AWS_SECRET_KEY: process.env.IM_AWS_SECRET_KEY,
   AWS_S3_BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME || "medh-files",
+  AWS_REGION: process.env.AWS_REGION || "us-east-1",
   
   // TLS Configuration
   TLS_CERT_PATH: process.env.TLS_CERT_PATH,

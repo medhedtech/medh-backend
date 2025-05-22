@@ -146,24 +146,41 @@ export const handleBase64Upload = async (req, res) => {
       );
     }
 
-    // Validate base64 string format
-    if (!base64String.startsWith("data:")) {
-      throw new UploadError(
-        'Invalid base64 string format. Must start with "data:"',
-        "INVALID_BASE64_FORMAT",
-      );
+    // Handle both raw base64 strings and data URIs
+    let formattedBase64String = base64String;
+    let mimeType;
+    
+    if (base64String.startsWith("data:")) {
+      // It's already a data URI, extract MIME type
+      const mimeTypeMatch = base64String.match(/^data:(.*?);base64,/);
+      if (!mimeTypeMatch) {
+        throw new UploadError(
+          "Invalid data URI format. Missing MIME type",
+          "INVALID_BASE64_FORMAT"
+        );
+      }
+      mimeType = mimeTypeMatch[1];
+    } else {
+      // It's a raw base64 string, add the appropriate prefix
+      // Determine default MIME type based on fileType
+      switch (fileType) {
+        case "image":
+          mimeType = "image/jpeg";
+          break;
+        case "document":
+          mimeType = "application/pdf";
+          break;
+        case "video":
+          mimeType = "video/mp4";
+          break;
+        default:
+          throw new UploadError(
+            "Invalid file type for raw base64 data",
+            "INVALID_FILE_TYPE"
+          );
+      }
+      formattedBase64String = `data:${mimeType};base64,${base64String}`;
     }
-
-    // Extract and validate MIME type from base64 string
-    const mimeTypeMatch = base64String.match(/^data:(.*?);base64,/);
-    if (!mimeTypeMatch) {
-      throw new UploadError(
-        "Invalid base64 string format. Missing MIME type",
-        "INVALID_BASE64_FORMAT",
-      );
-    }
-
-    const mimeType = mimeTypeMatch[1];
 
     // Validate MIME type based on fileType
     if (fileType === "video" && !mimeType.startsWith("video/")) {
@@ -202,7 +219,7 @@ export const handleBase64Upload = async (req, res) => {
         throw new UploadError("Invalid file type", "INVALID_FILE_TYPE");
     }
 
-    const result = await uploadBase64File(base64String, fileType, folder);
+    const result = await uploadBase64File(formattedBase64String, fileType, folder);
 
     res.status(200).json({
       success: true,

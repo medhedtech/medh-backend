@@ -1,0 +1,5 @@
+# Ask a developer for actual secrets
+IM_AWS_ACCESS_KEY=AKIAU6VTTMQEZIR67CE6
+IM_AWS_SECRET_KEY=your_aws_secret_key_here
+AWS_S3_BUCKET_NAME=medh-files
+AWS_REGION=us-east-1
