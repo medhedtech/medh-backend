@@ -6,6 +6,9 @@
   "scripts": {
     "start": "NODE_ENV=production node index.js",
     "dev": "NODE_ENV=development nodemon index.js",
+    "dev:local": "NODE_ENV=development MONGO_URI=mongodb://localhost:27017/medh REDIS_ENABLED=false nodemon index.js",
+    "start:mongo": "node scripts/start-local-mongo.js",
+    "dev:full-local": "npm run start:mongo && npm run dev:local",
     "debug": "NODE_ENV=development nodemon --inspect index.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest --detectOpenHandles --testPathIgnorePatterns=tests/zoom.test.js --passWithNoTests",
     "test:zoom": "NODE_OPTIONS=--experimental-vm-modules jest --config tests/zoom.test.config.js tests/zoom.test.js",
@@ -59,6 +62,7 @@
     "dotenv": "^16.5.0",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
+    "express-async-handler": "^1.2.0",
     "express-fileupload": "^1.5.1",
     "express-mongo-sanitize": "^2.2.0",
     "express-prom-bundle": "^8.0.0",

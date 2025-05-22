@@ -247,7 +247,8 @@ baseCourseSchema.methods.getStudentProgress = async function (studentId) {
   };
 };
 
-const BaseCourse = mongoose.model("Course", baseCourseSchema);
+// Check if the model already exists to prevent the "OverwriteModelError"
+const BaseCourse = mongoose.models.Course || mongoose.model("Course", baseCourseSchema);
 
 export { 
   BaseCourse,
