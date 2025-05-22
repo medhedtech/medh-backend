@@ -41,10 +41,14 @@ connectDB().catch(error => {
   // We don't exit the process here to allow the app to run even without DB
 });
 
-// Middleware
-app.use(helmet());
-// Removing redundant cors middleware and using only the handlePreflight middleware
+// Middleware - CORS handling must be first
+// Apply CORS middleware before any other middleware
 app.use(handlePreflight);
+// Then apply other middleware
+app.use(helmet({
+  // Disable contentSecurityPolicy as it can interfere with CORS
+  contentSecurityPolicy: false
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan("dev"));

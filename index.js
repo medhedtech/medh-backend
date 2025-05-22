@@ -26,7 +26,8 @@ import logger from "./utils/logger.js";
 
 const app = express();
 
-// Use the centralized CORS middleware
+// CRITICAL: Use the centralized CORS middleware first before any other middleware
+// This ensures CORS headers are set properly and not overridden
 app.use(corsMiddleware);
 
 // Apply security middleware but we'll modify it to not apply additional CORS headers
@@ -113,37 +114,45 @@ app.use("/api/v1/upload/base64", (req, res, next) => {
 // Apply redirection middleware to handle CORS preflight requests that might involve redirects
 app.use(redirectionMiddleware);
 
-// CORS headers for all routes as a fallback
-app.use((req, res, next) => {
-  if (req.headers.origin) {
-    const allowedOrigins =
-      ENV_VARS.ALLOWED_ORIGINS.length > 0
-        ? ENV_VARS.ALLOWED_ORIGINS
-        : [
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "https://medh.co",
-            "https://www.medh.co",
-          ];
-
-    const origin = req.headers.origin;
-    if (
-      allowedOrigins.includes(origin) ||
-      ENV_VARS.NODE_ENV === "development"
-    ) {
-      res.header("Access-Control-Allow-Origin", origin);
-      res.header(
-        "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-      );
-      res.header(
-        "Access-Control-Allow-Headers",
-        "X-Requested-With, Content-Type, Authorization, Accept, x-access-token",
-      );
-      res.header("Access-Control-Allow-Credentials", "true");
-    }
+// CORS debug endpoint - helps diagnose CORS issues
+app.use('/cors-debug', (req, res) => {
+  const origin = req.headers.origin;
+  const allowedOrigins =
+    ENV_VARS.ALLOWED_ORIGINS.length > 0
+      ? ENV_VARS.ALLOWED_ORIGINS
+      : [
+          "http://localhost:3000",
+          "http://localhost:3001",
+          "https://medh.co",
+          "https://www.medh.co",
+        ];
+  
+  // Log the request for debugging
+  logger.info('CORS Debug Request', {
+    origin,
+    allowedOrigins,
+    method: req.method,
+    path: req.path,
+    headers: req.headers
+  });
+  
+  // Add CORS headers for this response
+  if (origin) {
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+    res.header("Access-Control-Allow-Headers", "X-Requested-With, Content-Type, Authorization, Accept, x-access-token");
+    res.header("Access-Control-Allow-Credentials", "true");
   }
-  next();
+  
+  // Return CORS diagnostic info
+  return res.status(200).json({
+    message: 'CORS debug endpoint',
+    allowedOrigins,
+    requestOrigin: origin || 'No origin in request',
+    isAllowed: !origin || allowedOrigins.includes(origin) || ENV_VARS.NODE_ENV === 'development',
+    responseHeaders: res.getHeaders(),
+    environment: ENV_VARS.NODE_ENV
+  });
 });
 
 // Main API routes

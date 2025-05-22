@@ -74,49 +74,43 @@ const handlePreflight = (req, res, next) => {
           "https://api2.medh.co",
         ];
 
-  // First, set basic CORS headers for all requests as a fallback
+  // Get the origin from the request
   const origin = req.headers.origin;
   
   // Log the origin for debugging purposes
-  logger.info(`CORS middleware processing request from origin: ${origin || 'undefined'}`);
+  logger.info(`CORS middleware processing request from origin: ${origin || 'undefined'}, method: ${req.method}, path: ${req.path}`);
   
-  // Always set Access-Control-Allow-Origin header if origin is in the allowed list
-  if (
-    origin &&
-    (definedAllowedOrigins.includes(origin) ||
-      ENV_VARS.NODE_ENV === "development")
-  ) {
-    res.header("Access-Control-Allow-Origin", origin);
-    res.header(
-      "Access-Control-Allow-Methods",
-      "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-    );
-    res.header(
-      "Access-Control-Allow-Headers",
-      "X-Requested-With, Content-Type, Authorization, Accept, x-access-token",
-    );
+  // For preflight requests (OPTIONS)
+  if (req.method === "OPTIONS") {
+    // Always set CORS headers for OPTIONS requests
+    // This is critical for preflight requests to work
+    res.header("Access-Control-Allow-Origin", origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, x-access-token");
     res.header("Access-Control-Allow-Credentials", "true");
+    res.header("Access-Control-Max-Age", "86400"); // 24 hours
+    
+    logger.info(`CORS preflight headers set for origin: ${origin || '*'}`);
+    
+    // Return 204 No Content for OPTIONS requests
+    return res.status(204).end();
+  }
+  
+  // For regular requests, check if the origin is allowed
+  if (origin && (definedAllowedOrigins.includes(origin) || ENV_VARS.NODE_ENV === "development")) {
+    // Set CORS headers for allowed origins
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, x-access-token");
+    res.header("Access-Control-Allow-Credentials", "true");
+    
     logger.info(`CORS headers set for origin: ${origin}`);
   } else if (origin) {
     logger.warn(`CORS origin rejected: ${origin}`);
   }
-
-  // If this is a preflight OPTIONS request
-  if (req.method === "OPTIONS") {
-    // Log the preflight request
-    logger.info("CORS Preflight Request", {
-      url: req.originalUrl,
-      origin: req.headers.origin || "No origin",
-    });
-
-    // Apply CORS headers and respond immediately
-    return cors(corsOptions)(req, res, () => {
-      res.status(204).end();
-    });
-  }
-
-  // For non-OPTIONS requests, apply regular CORS middleware
-  return corsMiddleware(req, res, next);
+  
+  // Continue to the next middleware
+  next();
 };
 
 export default handlePreflight;
