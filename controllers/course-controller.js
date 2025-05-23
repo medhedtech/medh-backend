@@ -386,6 +386,28 @@ const getAllCoursesWithLimits = async (req, res) => {
 
     const filter = {};
     const textSearchFields = {};
+    let requestedCurrency = null;
+    let shouldFallbackToUSD = false;
+
+    // Handle currency logic with fallback to USD
+    if (currency) {
+      requestedCurrency = fullyDecodeURIComponent(currency).toUpperCase();
+      
+      // First, check if any courses exist with the requested currency
+      const coursesWithRequestedCurrency = await Course.countDocuments({
+        "prices.currency": requestedCurrency,
+        status: "Published" // Only check published courses
+      });
+      
+      if (coursesWithRequestedCurrency === 0) {
+        // No courses found with requested currency, fallback to USD
+        shouldFallbackToUSD = true;
+        filter["prices.currency"] = "USD";
+      } else {
+        // Courses exist with requested currency, use it
+        filter["prices.currency"] = requestedCurrency;
+      }
+    }
 
     if (search) {
       const decodedSearch = fullyDecodeURIComponent(search);
@@ -558,10 +580,6 @@ const getAllCoursesWithLimits = async (req, res) => {
       filter.is_Quizes = has_quizzes;
     }
 
-    if (currency) {
-      const decodedCurrency = fullyDecodeURIComponent(currency);
-      filter["prices.currency"] = decodedCurrency.toUpperCase();
-    }
 
     if (exclude_ids && exclude_ids.length > 0) {
       const excludeIdsArray = Array.isArray(exclude_ids)
@@ -591,6 +609,9 @@ const getAllCoursesWithLimits = async (req, res) => {
     }
 
     console.log("Final filter object:", JSON.stringify(filter, null, 2));
+    if (shouldFallbackToUSD) {
+      console.log(`Currency fallback: Requested ${requestedCurrency} not found, showing USD prices instead`);
+    }
 
     // Add detailed logging for course_category
     if (course_category) {
@@ -734,14 +755,16 @@ const getAllCoursesWithLimits = async (req, res) => {
       ]),
     ]);
 
-    // Post-process results to filter prices by currency if specified
+    // Post-process results to filter prices by currency
     let processedCourses = courses;
-    if (currency) {
+    const effectiveCurrency = shouldFallbackToUSD ? "USD" : (requestedCurrency || null);
+    
+    if (effectiveCurrency) {
       processedCourses = courses.map((course) => {
         if (course.prices) {
           const clonedCourse = { ...course };
           clonedCourse.prices = course.prices.filter(
-            (price) => price.currency === currency.toUpperCase(),
+            (price) => price.currency === effectiveCurrency,
           );
           return clonedCourse;
         }
@@ -765,6 +788,15 @@ const getAllCoursesWithLimits = async (req, res) => {
         facets: facets[0],
       },
     };
+
+    // Add currency fallback information to response for frontend awareness
+    if (shouldFallbackToUSD && requestedCurrency) {
+      response.data.currency_fallback = {
+        requested: requestedCurrency,
+        used: "USD",
+        message: `No courses found with ${requestedCurrency} pricing. Showing USD prices instead.`
+      };
+    }
 
     // Group courses by class type if requested
     if (req.query.group_by_class_type === 'true') {
