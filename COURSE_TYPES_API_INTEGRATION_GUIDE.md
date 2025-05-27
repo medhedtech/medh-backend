@@ -615,8 +615,8 @@ const FacetedFilters = ({ facets, activeFilters, onFilterChange }) => {
 
   const renderFacetGroup = (title, facetData, filterKey) => {
     if (!facetData || facetData.length === 0) return null;
-
-    return (
+  
+  return (
       <div className="facet-group">
         <h4>{title}</h4>
         <div className="facet-options">
@@ -634,9 +634,9 @@ const FacetedFilters = ({ facets, activeFilters, onFilterChange }) => {
             );
           })}
         </div>
-      </div>
-    );
-  };
+    </div>
+  );
+};
 
   return (
     <div className="faceted-filters">
@@ -719,7 +719,7 @@ import courseService from '../services/courseService';
 const MigrationDashboard = () => {
   const [migrationData, setMigrationData] = useState(null);
   const [loading, setLoading] = useState(true);
-
+  
   useEffect(() => {
     const fetchMigrationData = async () => {
       try {
@@ -737,7 +737,7 @@ const MigrationDashboard = () => {
         setLoading(false);
       }
     };
-
+    
     fetchMigrationData();
   }, []);
 
@@ -1080,7 +1080,7 @@ const courseCache = new CourseCache();
 ### 4. State Management
 
 #### Redux Integration
-```javascript
+   ```javascript
 // Redux slice for courses
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import courseService from '../services/courseService';
