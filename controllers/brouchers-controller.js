@@ -2,12 +2,186 @@ import emailService from "../services/emailService.js";
 
 import Broucher from "../models/broucker-model.js";
 import Course from "../models/course-model.js";
+import { BlendedCourse, LiveCourse, FreeCourse } from "../models/course-types/index.js";
 import { validateObjectId } from "../utils/validation-helpers.js";
 
 // Nodemailer Transporter Setup with AWS SES
 // Email service is imported and ready to use
 
 // Email service handles verification automatically
+
+/**
+ * Helper function to search for a course across all course types
+ * @param {string} searchTerm - Course title to search for
+ * @param {string} searchField - Field to search by (default: 'course_title')
+ * @returns {Object|null} - Found course with source information
+ */
+const findCourseAcrossTypes = async (searchTerm, searchField = 'course_title') => {
+  if (!searchTerm) return null;
+
+  // Create search filter
+  const searchFilter = { [searchField]: searchTerm };
+
+  try {
+    // Search in new course type models first
+    const [blendedCourse, liveCourse, freeCourse] = await Promise.all([
+      BlendedCourse.findOne(searchFilter).lean(),
+      LiveCourse.findOne(searchFilter).lean(),
+      FreeCourse.findOne(searchFilter).lean()
+    ]);
+
+    // Check which new model returned a course
+    if (blendedCourse) {
+      return {
+        ...blendedCourse,
+        course_type: "blended",
+        _source: "new_model",
+        _model: "BlendedCourse"
+      };
+    }
+    
+    if (liveCourse) {
+      return {
+        ...liveCourse,
+        course_type: "live",
+        _source: "new_model",
+        _model: "LiveCourse"
+      };
+    }
+    
+    if (freeCourse) {
+      return {
+        ...freeCourse,
+        course_type: "free",
+        _source: "new_model",
+        _model: "FreeCourse"
+      };
+    }
+
+    // Fall back to legacy Course model
+    const legacyCourse = await Course.findOne(searchFilter).lean();
+    if (legacyCourse) {
+      return {
+        ...legacyCourse,
+        course_type: determineCourseTypeFromLegacy(legacyCourse),
+        _source: "legacy_model",
+        _model: "Course"
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error searching across course types:', error);
+    throw new Error('Failed to search for course');
+  }
+};
+
+/**
+ * Helper function to find a course by ID across all course types
+ * @param {string} courseId - Course ID to search for
+ * @returns {Object|null} - Found course with source information
+ */
+const findCourseByIdAcrossTypes = async (courseId) => {
+  if (!validateObjectId(courseId)) return null;
+
+  try {
+    // Search in new course type models first
+    const [blendedCourse, liveCourse, freeCourse] = await Promise.all([
+      BlendedCourse.findById(courseId).lean(),
+      LiveCourse.findById(courseId).lean(),
+      FreeCourse.findById(courseId).lean()
+    ]);
+
+    // Check which new model returned a course
+    if (blendedCourse) {
+      return {
+        ...blendedCourse,
+        course_type: "blended",
+        _source: "new_model",
+        _model: "BlendedCourse"
+      };
+    }
+    
+    if (liveCourse) {
+      return {
+        ...liveCourse,
+        course_type: "live",
+        _source: "new_model",
+        _model: "LiveCourse"
+      };
+    }
+    
+    if (freeCourse) {
+      return {
+        ...freeCourse,
+        course_type: "free",
+        _source: "new_model",
+        _model: "FreeCourse"
+      };
+    }
+
+    // Fall back to legacy Course model
+    const legacyCourse = await Course.findById(courseId).lean();
+    if (legacyCourse) {
+      return {
+        ...legacyCourse,
+        course_type: determineCourseTypeFromLegacy(legacyCourse),
+        _source: "legacy_model",
+        _model: "Course"
+      };
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error searching course by ID across types:', error);
+    throw new Error('Failed to find course by ID');
+  }
+};
+
+/**
+ * Helper function to determine course type from legacy course data
+ * @param {Object} course - Legacy course object
+ * @returns {string} - Determined course type
+ */
+const determineCourseTypeFromLegacy = (course) => {
+  if (!course) return "free";
+  
+  const classType = (course.class_type || "").toLowerCase();
+  const categoryType = (course.category_type || "").toLowerCase();
+  
+  // Determine type based on various indicators
+  if (classType.includes("live") || categoryType.includes("live")) {
+    return "live";
+  }
+  
+  if (classType.includes("blend") || categoryType.includes("blend")) {
+    return "blended";
+  }
+  
+  if (course.isFree || classType.includes("self") || classType.includes("record")) {
+    return "free";
+  }
+  
+  return "free"; // Default fallback
+};
+
+/**
+ * Helper function to get brochures from a course object
+ * @param {Object} course - Course object from any model
+ * @returns {Array} - Array of brochure URLs
+ */
+const getBrochuresFromCourse = (course) => {
+  if (!course) return [];
+  
+  // New course types use 'brochures' field
+  if (course.brochures && Array.isArray(course.brochures)) {
+    return course.brochures;
+  }
+  
+  // Legacy courses might use 'brochures' field as well
+  // Some legacy courses might have it in different format
+  return [];
+};
 
 // Helper function to send emails with better error handling
 const sendEmail = async (mailOptions) => {
@@ -55,11 +229,8 @@ const createBrouchers = async (req, res) => {
       });
     }
 
-    // Fetch course details by course_title
-    const course = await Course.findOne({ course_title }).populate(
-      "course_videos",
-      "brouchers",
-    );
+    // Fetch course details by course_title from all course types
+    const course = await findCourseAcrossTypes(course_title);
 
     if (!course) {
       return res.status(404).json({
@@ -68,8 +239,11 @@ const createBrouchers = async (req, res) => {
       });
     }
 
+    // Get brochures from the course
+    const brochures = getBrochuresFromCourse(course);
+
     // Validate brochures for the course
-    if (!course.brochures || course.brochures.length === 0) {
+    if (!brochures || brochures.length === 0) {
       return res.status(404).json({
         success: false,
         message: `No brochures available for the course "${course_title}"`,
@@ -83,12 +257,12 @@ const createBrouchers = async (req, res) => {
       phone_number,
       course: course._id,
       course_title,
-      selected_brochure: course.brochures[0],
+      selected_brochure: brochures[0],
     });
 
     await newBroucher.save();
 
-    const attachments = course.brochures.map((b) => {
+    const attachments = brochures.map((b) => {
       return {
         filename: `${course_title}-brochure.pdf`,
         path: b,
@@ -100,7 +274,7 @@ const createBrouchers = async (req, res) => {
       from: process.env.EMAIL_FROM || "noreply@medh.co",
       to: email,
       subject: `Brochure for ${course_title}`,
-      text: `Hello ${full_name},\n\nThank you for your interest in our course "${course_title}". Please find the brochure attached.\n\nCourse Details:\nTitle: ${course.course_title}\nCategory: ${course.course_category}\nDuration: ${course.course_duration}\nFee: $${course.course_fee}\n\nBest regards,\nTeam Medh`,
+      text: `Hello ${full_name},\n\nThank you for your interest in our course "${course_title}". Please find the brochure attached.\n\nCourse Details:\nTitle: ${course.course_title}\nCategory: ${course.course_category}\nType: ${course.course_type || 'Standard'}\nDuration: ${course.course_duration || course.estimated_duration || 'Not specified'}\nFee: ${course.course_fee ? '$' + course.course_fee : (course.prices && course.prices.length > 0 ? 'Multiple pricing options available' : 'Contact for pricing')}\nSource: ${course._source || 'legacy'}\n\nBest regards,\nTeam Medh`,
       attachments: attachments,
     };
 
@@ -110,7 +284,12 @@ const createBrouchers = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Brochure created and email sent successfully",
-      data: newBroucher,
+      data: {
+        ...newBroucher.toObject(),
+        course_type: course.course_type,
+        course_source: course._source,
+        course_model: course._model
+      },
     });
   } catch (error) {
     console.error("Error in createBroucher:", error);
@@ -253,7 +432,7 @@ const updateBroucher = async (req, res) => {
     // If course title provided, verify course exists
     let courseData = {};
     if (course_title) {
-      const course = await Course.findOne({ course_title });
+      const course = await findCourseAcrossTypes(course_title);
       if (!course) {
         return res.status(404).json({
           success: false,
@@ -261,13 +440,11 @@ const updateBroucher = async (req, res) => {
         });
       }
 
+      const brochures = getBrochuresFromCourse(course);
       courseData = {
         course: course._id,
         course_title,
-        selected_brochure:
-          course.brochures && course.brochures.length > 0
-            ? course.brochures[0]
-            : null,
+        selected_brochure: brochures && brochures.length > 0 ? brochures[0] : null,
       };
     }
 
@@ -361,8 +538,8 @@ const downloadBrochure = async (req, res) => {
       });
     }
 
-    // Find the course
-    const course = await Course.findById(courseId);
+    // Find the course across all course types
+    const course = await findCourseByIdAcrossTypes(courseId);
     if (!course) {
       return res.status(404).json({
         success: false,
@@ -370,8 +547,11 @@ const downloadBrochure = async (req, res) => {
       });
     }
 
+    // Get brochures from the course
+    const brochures = getBrochuresFromCourse(course);
+
     // Check if course has brochures
-    if (!course.brochures || course.brochures.length === 0) {
+    if (!brochures || brochures.length === 0) {
       return res.status(404).json({
         success: false,
         message: `No brochures available for the course "${course.course_title}". Please contact support.`,
@@ -381,7 +561,7 @@ const downloadBrochure = async (req, res) => {
     // For GET requests, directly download the file
     if (req.method === "GET") {
       // Get the first brochure URL
-      const brochureUrl = course.brochures[0];
+      const brochureUrl = brochures[0];
 
       // Set headers for file download
       res.setHeader("Content-Type", "application/pdf");
@@ -406,7 +586,7 @@ const downloadBrochure = async (req, res) => {
     }
 
     // Get the first brochure URL (assuming it's the main brochure)
-    const brochureUrl = course.brochures[0];
+    const brochureUrl = brochures[0];
 
     // Create a record of the brochure download
     const broucherRecord = new Broucher({
@@ -432,8 +612,9 @@ const downloadBrochure = async (req, res) => {
           <ul style="list-style-type: none; padding-left: 0;">
             <li><strong>Title:</strong> ${course.course_title}</li>
             <li><strong>Category:</strong> ${course.course_category || "Not specified"}</li>
-            <li><strong>Duration:</strong> ${course.course_duration || "Not specified"}</li>
-            <li><strong>Fee:</strong> ${course.course_fee || "Not specified"}</li>
+            <li><strong>Type:</strong> ${course.course_type || "Standard"}</li>
+            <li><strong>Duration:</strong> ${course.course_duration || course.estimated_duration || "Not specified"}</li>
+            <li><strong>Fee:</strong> ${course.course_fee ? '$' + course.course_fee : (course.prices && course.prices.length > 0 ? 'Multiple pricing options available' : 'Contact for pricing')}</li>
           </ul>
         </div>
         
@@ -475,6 +656,9 @@ const downloadBrochure = async (req, res) => {
       data: {
         brochureUrl,
         course_title: course.course_title,
+        course_type: course.course_type,
+        course_source: course._source,
+        course_model: course._model,
         recordId: broucherRecord._id,
       },
     });

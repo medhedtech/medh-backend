@@ -406,6 +406,118 @@ export const getCoursesByType = asyncHandler(async (req, res) => {
 });
 
 /**
+ * @desc    Get all live courses without pagination (includes legacy courses)
+ * @route   GET /api/v1/courses/live
+ * @access  Public
+ */
+export const getAllLiveCourses = asyncHandler(async (req, res) => {
+  try {
+    const { 
+      include_legacy = "true",
+      search,
+      currency,
+      status = "Published",
+      course_grade
+    } = req.query;
+    
+    let courses = [];
+    
+    // First, get courses from the new LiveCourse model
+    try {
+      const newCourses = await LiveCourse.find()
+        .populate({
+          path: 'assigned_instructor',
+          select: 'full_name email role domain',
+          match: { role: { $in: ['instructor'] } }
+        })
+        .sort({ createdAt: -1 })
+        .lean();
+      courses = [...newCourses.map(c => ({ ...c, course_type: "live", _source: "new_model" }))];
+    } catch (error) {
+      console.log("LiveCourse model not available, will search legacy courses only");
+    }
+
+    // Always include legacy courses to show all available live courses
+    let legacyFilter = { status: { $regex: status, $options: "i" } };
+    
+    // Filter for live courses in legacy model
+    legacyFilter.$or = [
+      { class_type: { $regex: /live/i } },
+      { category_type: { $regex: /live/i } }
+    ];
+
+    // Add search filter if provided
+    if (search) {
+      const searchTerm = fullyDecodeURIComponent(search);
+      legacyFilter.$and = [
+        ...(legacyFilter.$and || []),
+        {
+          $or: [
+            { course_title: { $regex: createSafeRegex(searchTerm) } },
+            { course_category: { $regex: createSafeRegex(searchTerm) } },
+            { course_tag: { $regex: createSafeRegex(searchTerm) } },
+            { course_grade: { $regex: createSafeRegex(searchTerm) } }
+          ]
+        }
+      ];
+    }
+
+    // Add course grade filter if provided
+    if (course_grade) {
+      legacyFilter.course_grade = fullyDecodeURIComponent(course_grade);
+    }
+
+    const legacyCourses = await Course.find(legacyFilter)
+      .populate({
+        path: 'assigned_instructor',
+        select: 'full_name email role domain',
+        match: { role: { $in: ['instructor'] } }
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    // Map legacy courses to live type structure
+    const mappedLegacyCourses = legacyCourses.map(course => ({
+      ...mapLegacyCourseToType(course, "live"),
+      _source: "legacy_model"
+    }));
+    
+    courses = [...courses, ...mappedLegacyCourses];
+
+    // Apply currency filter if specified
+    if (currency) {
+      const upperCaseCurrency = currency.toUpperCase();
+      courses = courses.map(course => ({
+        ...course,
+        prices: (course.prices || []).filter(price => price.currency === upperCaseCurrency)
+      }));
+    }
+
+    // Apply formatting
+    const processedCourses = processCoursesResponse(courses);
+
+    res.json({
+      success: true,
+      count: processedCourses.length,
+      data: processedCourses,
+      sources: {
+        new_model: courses.filter(c => c._source === "new_model").length,
+        legacy_model: courses.filter(c => c._source === "legacy_model").length
+      },
+      filters_applied: {
+        search: search || null,
+        currency: currency || null,
+        status,
+        course_grade: course_grade || null,
+        include_legacy
+      }
+    });
+  } catch (error) {
+    throw new Error(`Failed to fetch live courses: ${error.message}`);
+  }
+});
+
+/**
  * @desc    Get a single course by ID (searches both new and legacy models)
  * @route   GET /api/v1/courses/:type/:id
  * @access  Public
@@ -1089,7 +1201,7 @@ export const searchAllCourses = asyncHandler(async (req, res) => {
           // Use exact matching for categories
           if (field === "course_category") {
             filter[field] = { $in: values };
-          } else {
+      } else {
             filter[field] = {
               $in: values.map((v) => createSafeRegex("^" + v + "$")),
             };
@@ -1382,7 +1494,7 @@ export const searchAllCourses = asyncHandler(async (req, res) => {
     const courseTypesToSearch = course_type ? [course_type] : ["blended", "live", "free"];
     let allResults = [];
     let totalCounts = { blended: 0, live: 0, free: 0, legacy: 0 };
-
+    
     for (const type of courseTypesToSearch) {
       try {
         const CourseModel = getCourseModel(type);
@@ -2430,24 +2542,24 @@ export const collaborativeCourseFetch = asyncHandler(async (req, res) => {
       
       try {
         const legacyResults = await Course.find(filter)
-          .populate({
-            path: 'assigned_instructor',
-            select: 'full_name email role domain',
-            match: { role: { $in: ['instructor'] } }
-          })
-          .sort(sortOptions)
-          .lean();
+      .populate({
+        path: 'assigned_instructor',
+        select: 'full_name email role domain',
+        match: { role: { $in: ['instructor'] } }
+      })
+      .sort(sortOptions)
+      .lean();
 
         legacyCourses = legacyResults.map(course => {
-          const detectedType = determineCourseType(course);
-          return {
-            ...mapLegacyCourseToType(course, detectedType),
+      const detectedType = determineCourseType(course);
+      return {
+        ...mapLegacyCourseToType(course, detectedType),
             _source: 'legacy_model',
             _model: 'Course',
             _detected_type: detectedType,
             _fetch_time: Date.now() - legacyStartTime
-          };
-        });
+      };
+    });
 
         metadata.performance.legacy_model = {
           fetch_time_ms: Date.now() - legacyStartTime,

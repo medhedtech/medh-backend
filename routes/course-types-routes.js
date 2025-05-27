@@ -2,6 +2,7 @@ import express from "express";
 import {
   createCourse,
   getCoursesByType,
+  getAllLiveCourses,
   getCourseById,
   updateCourse,
   deleteCourse,
@@ -32,6 +33,9 @@ const router = express.Router();
 router.get("/all", getAllCoursesUnified); // GET /api/v1/tcourse/all
 router.get("/search", searchAllCourses); // GET /api/v1/tcourse/search
 router.get("/collab", collaborativeCourseFetch); // GET /api/v1/tcourse/collab
+
+// Live courses without pagination
+router.get("/live", getAllLiveCourses); // GET /api/v1/tcourse/live
 
 // General course routes
 router.post("/", verifyToken, isAdmin, createCourse);
