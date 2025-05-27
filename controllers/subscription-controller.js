@@ -1,5 +1,5 @@
 import PDF from "html-pdf-chrome";
-import nodemailer from "nodemailer";
+import emailService from "../services/emailService.js";
 
 import CoorporateEnrolledModule from "../models/coorporate-enrolled-modules.model.js";
 import Subscription from "../models/subscription-model.js";
@@ -25,13 +25,7 @@ const pdfOptions = {
 };
 
 // Create a new subscription
-const transporter = nodemailer.createTransport({
-  service: "Gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+// Email service is imported and ready to use
 
 export const createSubscription = async (req, res) => {
   try {

@@ -30,6 +30,19 @@ export const ENV_VARS = {
   REDIS_PORT: process.env.REDIS_PORT || 6379,
   REDIS_PASSWORD: process.env.REDIS_PASSWORD,
   
+  // Email Configuration
+  EMAIL_HOST: process.env.EMAIL_HOST || "email-smtp.us-east-1.amazonaws.com",
+  EMAIL_PORT: process.env.EMAIL_PORT || 465,
+  EMAIL_SECURE: process.env.EMAIL_SECURE === "true" || true,
+  EMAIL_USER: process.env.EMAIL_USER,
+  EMAIL_PASS: process.env.EMAIL_PASS,
+  EMAIL_FROM: process.env.EMAIL_FROM || "noreply@medh.co",
+  EMAIL_SERVICE: process.env.EMAIL_SERVICE || "SES", // "Gmail" or "SES"
+  
+  // Razorpay Configuration
+  RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID,
+  RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET,
+  
   // Upload Constants (Update these values as needed)
   UPLOAD_CONSTANTS: {
     ALLOWED_MIME_TYPES: {

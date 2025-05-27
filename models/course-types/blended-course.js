@@ -94,7 +94,7 @@ const curriculumSectionSchema = new Schema(
   {
     id: {
       type: String,
-      required: [true, "Section ID is required"],
+      // ID will be auto-generated, not required on input
     },
     title: {
       type: String,
@@ -233,14 +233,16 @@ const blendedCourseSchema = new Schema({
     required: [true, "Session duration is required"],
     trim: true,
   },
-  curriculum: {
+  // Note: curriculum is now inherited from BaseCourse (uses week-based structure)
+  // The blended course specific curriculum sections are moved to modules for better organization
+  course_modules: {
     type: [curriculumSectionSchema],
-    required: [true, "Curriculum is required"],
+    default: [],
     validate: {
       validator: function(sections) {
-        return sections.length > 0;
+        return this.curriculum.length > 0 || sections.length > 0;
       },
-      message: "Course must have at least one section in the curriculum"
+      message: "Course must have either curriculum weeks or course modules"
     }
   },
   doubt_session_schedule: {
@@ -298,23 +300,27 @@ const blendedCourseSchema = new Schema({
       }
     }
   },
-  prices: {
-    individual: {
-      type: Number,
-      required: [true, "Individual price is required"],
-      min: [0, "Price cannot be negative"]
-    },
-    group: {
-      type: Number,
-      required: [true, "Group price is required"],
-      min: [0, "Price cannot be negative"]
-    },
-    enterprise: {
-      type: Number,
-      required: [true, "Enterprise price is required"],
-      min: [0, "Price cannot be negative"]
-    }
+  // Pricing is now handled in base schema with legacy-compatible structure
+});
+
+// Add pre-save hook for course modules ID assignment
+blendedCourseSchema.pre("save", function (next) {
+  // Assign IDs to course_modules sections and their lessons
+  if (this.course_modules && this.course_modules.length > 0) {
+    this.course_modules.forEach((section, sectionIndex) => {
+      if (!section.id) {
+        section.id = `module_${sectionIndex + 1}`;
+      }
+      if (section.lessons && section.lessons.length > 0) {
+        section.lessons.forEach((lesson, lessonIndex) => {
+          if (!lesson.id) {
+            lesson.id = `lesson_${section.id}_${lessonIndex + 1}`;
+          }
+        });
+      }
+    });
   }
+  next();
 });
 
 // Create the BlendedCourse model using discriminator

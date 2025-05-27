@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import ENV_VARS from "../config/env.js";
 import Bookmark from "../models/bookmark-model.js";
 import Course from "../models/course-model.js";
+import { BlendedCourse, LiveCourse, FreeCourse } from "../models/course-types/index.js";
 import EnrolledCourse from "../models/enrolled-courses-model.js";
 import Enrollment from "../models/enrollment-model.js";
 import Note from "../models/note-model.js";
@@ -293,13 +294,14 @@ const createCourse = async (req, res) => {
 };
 
 /**
- * @desc    Get all courses without pagination
+ * @desc    Get all courses without pagination (includes both legacy and new course types)
  * @route   GET /api/courses/get
  * @access  Public
  */
 const getAllCourses = async (req, res) => {
   try {
-    const courses = await Course.find(
+    // Get courses from legacy Course model
+    const legacyCourses = await Course.find(
       {},
       {
         course_title: 1,
@@ -310,18 +312,111 @@ const getAllCourses = async (req, res) => {
         isFree: 1,
         status: 1,
         category_type: 1,
+        class_type: 1,
         createdAt: 1,
         prices: 1,
         course_duration: 1,
+        assigned_instructor: 1,
       },
-    ).lean();
+    )
+    .populate({
+      path: 'assigned_instructor',
+      select: 'full_name email role domain',
+      match: { role: { $in: ['instructor'] } }
+    })
+    .lean();
+
+    // Get courses from new course-types models
+    const [blendedCourses, liveCourses, freeCourses] = await Promise.all([
+      BlendedCourse.find({}, {
+        course_title: 1,
+        course_category: 1,
+        course_tag: 1,
+        course_image: 1,
+        course_fee: 1,
+        isFree: 1,
+        status: 1,
+        category_type: 1,
+        class_type: 1,
+        createdAt: 1,
+        prices: 1,
+        course_duration: 1,
+        assigned_instructor: 1,
+      })
+      .populate({
+        path: 'assigned_instructor',
+        select: 'full_name email role domain',
+        match: { role: { $in: ['instructor'] } }
+      })
+      .lean(),
+      LiveCourse.find({}, {
+        course_title: 1,
+        course_category: 1,
+        course_tag: 1,
+        course_image: 1,
+        course_fee: 1,
+        isFree: 1,
+        status: 1,
+        category_type: 1,
+        class_type: 1,
+        createdAt: 1,
+        prices: 1,
+        course_duration: 1,
+        assigned_instructor: 1,
+      })
+      .populate({
+        path: 'assigned_instructor',
+        select: 'full_name email role domain',
+        match: { role: { $in: ['instructor'] } }
+      })
+      .lean(),
+      FreeCourse.find({}, {
+        course_title: 1,
+        course_category: 1,
+        course_tag: 1,
+        course_image: 1,
+        course_fee: 1,
+        isFree: 1,
+        status: 1,
+        category_type: 1,
+        class_type: 1,
+        createdAt: 1,
+        prices: 1,
+        course_duration: 1,
+        assigned_instructor: 1,
+      })
+      .populate({
+        path: 'assigned_instructor',
+        select: 'full_name email role domain',
+        match: { role: { $in: ['instructor'] } }
+      })
+      .lean()
+    ]);
+
+    // Combine all courses and mark course types
+    const newTypeCourses = [
+      ...blendedCourses.map(c => ({ ...c, course_type: "blended", _source: "new_model" })),
+      ...liveCourses.map(c => ({ ...c, course_type: "live", _source: "new_model" })),
+      ...freeCourses.map(c => ({ ...c, course_type: "free", _source: "new_model" }))
+    ];
+
+    const legacyCoursesMarked = legacyCourses.map(c => ({ ...c, _source: "legacy_model" }));
+    const allCourses = [...legacyCoursesMarked, ...newTypeCourses];
     
     // Format course durations
-    const processedCourses = processCoursesResponse(courses);
+    const processedCourses = processCoursesResponse(allCourses);
     
     res
       .status(200)
-      .json({ success: true, count: processedCourses.length, data: processedCourses });
+      .json({ 
+        success: true, 
+        count: processedCourses.length, 
+        data: processedCourses,
+        sources: {
+          legacy_model: legacyCoursesMarked.length,
+          new_model: newTypeCourses.length
+        }
+      });
   } catch (error) {
     console.error("Error fetching all courses:", error);
     res.status(500).json({
@@ -656,6 +751,7 @@ const getAllCoursesWithLimits = async (req, res) => {
       course_grade: 1,
       brochures: 1,
       final_evaluation: 1,
+      assigned_instructor: 1,
     };
 
     if (filter.$text) {
@@ -665,7 +761,32 @@ const getAllCoursesWithLimits = async (req, res) => {
     const aggregationPipeline = [
       { $match: filter },
       {
+        $lookup: {
+          from: "users",
+          localField: "assigned_instructor",
+          foreignField: "_id",
+          as: "assigned_instructor",
+          pipeline: [
+            {
+              $match: {
+                role: { $in: ["instructor"] }
+              }
+            },
+            {
+              $project: {
+                full_name: 1,
+                email: 1,
+                role: 1,
+                domain: 1,
+                phone_numbers: 1
+              }
+            }
+          ]
+        }
+      },
+      {
         $addFields: {
+          assigned_instructor: { $arrayElemAt: ["$assigned_instructor", 0] },
           ...textSearchFields,
           pricing_summary: {
             min_price: { $min: "$prices.individual" },
@@ -815,7 +936,7 @@ const getAllCoursesWithLimits = async (req, res) => {
 };
 
 /**
- * @desc    Get course by ID with extended curriculum details
+ * @desc    Get course by ID with extended curriculum details (searches both legacy and new course types)
  * @route   GET /api/courses/:id
  * @access  Public
  */
@@ -831,7 +952,56 @@ const getCourseById = async (req, res) => {
       });
     }
 
-    const course = await Course.findById(id).lean();
+    let course = null;
+    let source = "legacy_model";
+
+    // First, try to find in legacy Course model
+    course = await Course.findById(id)
+      .populate({
+        path: 'assigned_instructor',
+        select: 'full_name email role domain phone_numbers',
+        match: { role: { $in: ['instructor'] } }
+      })
+      .lean();
+
+    // If not found in legacy, search in new course-types models
+    if (!course) {
+      const [blendedCourse, liveCourse, freeCourse] = await Promise.all([
+        BlendedCourse.findById(id)
+          .populate({
+            path: 'assigned_instructor',
+            select: 'full_name email role domain phone_numbers',
+            match: { role: { $in: ['instructor'] } }
+          })
+          .lean(),
+        LiveCourse.findById(id)
+          .populate({
+            path: 'assigned_instructor',
+            select: 'full_name email role domain phone_numbers',
+            match: { role: { $in: ['instructor'] } }
+          })
+          .lean(),
+        FreeCourse.findById(id)
+          .populate({
+            path: 'assigned_instructor',
+            select: 'full_name email role domain phone_numbers',
+            match: { role: { $in: ['instructor'] } }
+          })
+          .lean()
+      ]);
+
+      // Check which model returned the course
+      if (blendedCourse) {
+        course = { ...blendedCourse, course_type: "blended" };
+        source = "new_model";
+      } else if (liveCourse) {
+        course = { ...liveCourse, course_type: "live" };
+        source = "new_model";
+      } else if (freeCourse) {
+        course = { ...freeCourse, course_type: "free" };
+        source = "new_model";
+      }
+    }
 
     if (!course) {
       return res.status(404).json({
@@ -858,6 +1028,7 @@ const getCourseById = async (req, res) => {
     res.status(200).json({
       success: true,
       data: processedCourse,
+      source: source,
     });
   } catch (error) {
     console.error("Error fetching course:", error);
@@ -3582,8 +3753,8 @@ const getCoursesWithFields = async (req, res) => {
       }
     }
 
-    // Execute query
-    const [queryResults, totalCount] = await Promise.all([
+    // Execute queries for both legacy and new course models
+    const [legacyResults, legacyCount] = await Promise.all([
       Course.find(queryFilters, requestedFields)
         .sort(sortOptions)
         .skip(skip)
@@ -3591,6 +3762,42 @@ const getCoursesWithFields = async (req, res) => {
         .lean(),
       Course.countDocuments(queryFilters),
     ]);
+
+    // Execute queries for new course-types models (with same filters)
+    const [blendedResults, liveResults, freeResults, blendedCount, liveCount, freeCount] = await Promise.all([
+      BlendedCourse.find(queryFilters, requestedFields)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(limitNum)
+        .lean()
+        .catch(() => []),
+      LiveCourse.find(queryFilters, requestedFields)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(limitNum)
+        .lean()
+        .catch(() => []),
+      FreeCourse.find(queryFilters, requestedFields)
+        .sort(sortOptions)
+        .skip(skip)
+        .limit(limitNum)
+        .lean()
+        .catch(() => []),
+      BlendedCourse.countDocuments(queryFilters).catch(() => 0),
+      LiveCourse.countDocuments(queryFilters).catch(() => 0),
+      FreeCourse.countDocuments(queryFilters).catch(() => 0)
+    ]);
+
+    // Combine results
+    const queryResults = [
+      ...legacyResults.map(r => ({ ...r, _source: "legacy_model" })),
+      ...blendedResults.map(r => ({ ...r, course_type: "blended", _source: "new_model" })),
+      ...liveResults.map(r => ({ ...r, course_type: "live", _source: "new_model" })),
+      ...freeResults.map(r => ({ ...r, course_type: "free", _source: "new_model" }))
+    ];
+
+    // Calculate total count
+    const totalCount = legacyCount + blendedCount + liveCount + freeCount;
 
     // Process courses based on filters
     let processedCourses = queryResults.map((course) => {
@@ -3667,6 +3874,10 @@ const getCoursesWithFields = async (req, res) => {
         hasNextPage: pageNum < totalPages,
         hasPrevPage: pageNum > 1,
       },
+      sources: {
+        legacy_model: legacyCount,
+        new_model: blendedCount + liveCount + freeCount
+      }
     });
   } catch (error) {
     console.error("Error in getCoursesWithFields:", error);

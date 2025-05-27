@@ -3,8 +3,7 @@ import mongoose from "mongoose";
 const assignmentResourceSchema = new mongoose.Schema({
   id: {
     type: String,
-    required: [true, "Resource ID is required"],
-    unique: true,
+    // ID will be auto-generated, not required on input
   },
   title: {
     type: String,
@@ -25,8 +24,7 @@ const assignmentSchema = new mongoose.Schema(
   {
     id: {
       type: String,
-      required: [true, "Assignment ID is required"],
-      unique: true,
+      // ID will be auto-generated, not required on input
     },
     course: {
       type: mongoose.Schema.Types.ObjectId,
@@ -141,6 +139,29 @@ assignmentSchema.methods.calculatePenalty = function (submissionDate) {
   );
   return (this.lateSubmissionPenalty / 100) * daysLate;
 };
+
+// Pre-save hook to auto-generate IDs
+assignmentSchema.pre("save", function (next) {
+  // Auto-generate assignment ID if not provided
+  if (!this.id) {
+    const { v4: uuidv4 } = require('uuid');
+    this.id = uuidv4();
+  }
+  
+  // Auto-generate resource IDs
+  if (this.resources && this.resources.length > 0) {
+    this.resources.forEach((resource, index) => {
+      if (!resource.id) {
+        resource.id = `resource_${this.id}_${index + 1}`;
+      }
+    });
+  }
+  
+  // Update meta.lastUpdated
+  this.meta.lastUpdated = Date.now();
+  
+  next();
+});
 
 const Assignment = mongoose.model("Assignment", assignmentSchema);
 export default Assignment;

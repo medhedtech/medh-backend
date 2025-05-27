@@ -146,9 +146,16 @@ const liveCourseSchema = new Schema({
     min: [1, "Course must have at least 1 session"],
   },
   session_duration: {
-    type: Number,
-    required: [true, "Session duration is required"],
-    min: [30, "Session duration must be at least 30 minutes"],
+    type: mongoose.Schema.Types.Mixed, // Allow both String and Number for backward compatibility
+    validate: {
+      validator: function(v) {
+        if (v === null || v === undefined) return true;
+        if (typeof v === 'string') return v.trim().length > 0;
+        if (typeof v === 'number') return v >= 30;
+        return false;
+      },
+      message: "Session duration must be a valid string or number (min 30 minutes if number)"
+    }
   },
   modules: {
     type: [moduleSchema],
@@ -160,32 +167,24 @@ const liveCourseSchema = new Schema({
       message: "Course must have at least one module"
     }
   },
+  // Note: curriculum is now inherited from BaseCourse
   instructors: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Instructor",
-    required: [true, "Course must have at least one instructor"],
+    ref: "User", // Changed from "Instructor" to "User" to match the migration
   }],
+  
+  // Legacy instructor assignment for backward compatibility
+  assigned_instructor: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null,
+  },
   max_students: {
     type: Number,
     required: [true, "Maximum number of students is required"],
     min: [1, "Course must allow at least 1 student"],
   },
-  prices: {
-    regular: {
-      type: Number,
-      required: [true, "Regular price is required"],
-      min: [0, "Price cannot be negative"],
-    },
-    early_bird: {
-      type: Number,
-      min: [0, "Early bird price cannot be negative"],
-    },
-    group_discount: {
-      type: Number,
-      min: [0, "Group discount cannot be negative"],
-      max: [100, "Group discount cannot exceed 100%"],
-    }
-  },
+  // Pricing is now handled in base schema with legacy-compatible structure
   prerequisites: [{
     type: String,
     trim: true,

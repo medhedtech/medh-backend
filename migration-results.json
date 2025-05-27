@@ -1,0 +1,811 @@
+{
+  "migrationReport": {
+    "timestamp": "2025-05-27T08:33:16.093Z",
+    "configuration": {
+      "dryRun": false,
+      "batchSize": 10,
+      "preserveOriginal": true
+    },
+    "summary": {
+      "totalLegacyCourses": 108,
+      "processedCourses": 108,
+      "successfulMigrations": 55,
+      "failedMigrations": 53,
+      "successRate": "50.9%"
+    },
+    "distribution": {
+      "original": {
+        "blended": 53,
+        "live": 54,
+        "free": 1
+      },
+      "migrated": {
+        "blended": 0,
+        "live": 54,
+        "free": 1
+      }
+    },
+    "migrated": [
+      {
+        "originalId": "67bd596b8a56e7688dd02274",
+        "newId": "683578bdbb2a07b92d7c5a61",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67bd74018a56e7688dd029a7",
+        "newId": "683578bdbb2a07b92d7c5a71",
+        "courseType": "live",
+        "title": "Personality Devlopement"
+      },
+      {
+        "originalId": "67bd79ad8a56e7688dd02e34",
+        "newId": "683578bdbb2a07b92d7c5a79",
+        "courseType": "live",
+        "title": "Personality Devlopement"
+      },
+      {
+        "originalId": "67bd7b698a56e7688dd0307e",
+        "newId": "683578bdbb2a07b92d7c5a82",
+        "courseType": "live",
+        "title": "Personality Devlopement"
+      },
+      {
+        "originalId": "67bd7cec8a56e7688dd0322b",
+        "newId": "683578bebb2a07b92d7c5a96",
+        "courseType": "live",
+        "title": "Personality Devlopement"
+      },
+      {
+        "originalId": "67bd7e868a56e7688dd0325b",
+        "newId": "683578bebb2a07b92d7c5a9b",
+        "courseType": "live",
+        "title": "Personality Devlopement"
+      },
+      {
+        "originalId": "67bd82da8a56e7688dd03497",
+        "newId": "683578bebb2a07b92d7c5aa0",
+        "courseType": "live",
+        "title": "Personality Devlopement"
+      },
+      {
+        "originalId": "67bd842a8a56e7688dd0350e",
+        "newId": "683578bebb2a07b92d7c5aa9",
+        "courseType": "live",
+        "title": "Personality Devlopement"
+      },
+      {
+        "originalId": "67bd87f68a56e7688dd035a8",
+        "newId": "683578bebb2a07b92d7c5ab2",
+        "courseType": "live",
+        "title": "Personality Devlopement"
+      },
+      {
+        "originalId": "67c022c68a56e7688ddbce30",
+        "newId": "683578bebb2a07b92d7c5abb",
+        "courseType": "live",
+        "title": "Personality Devlopement "
+      },
+      {
+        "originalId": "67c040678a56e7688ddbe68b",
+        "newId": "683578bfbb2a07b92d7c5ac4",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c04c9f8a56e7688ddbf848",
+        "newId": "683578bfbb2a07b92d7c5acd",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c04fcd8a56e7688ddbfd36",
+        "newId": "683578bfbb2a07b92d7c5ad6",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c0509f8a56e7688ddc0079",
+        "newId": "683578bfbb2a07b92d7c5adf",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c0518e8a56e7688ddc01fe",
+        "newId": "683578bfbb2a07b92d7c5ae8",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c052b28a56e7688ddc03f6",
+        "newId": "683578bfbb2a07b92d7c5af1",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c053498a56e7688ddc04bd",
+        "newId": "683578bfbb2a07b92d7c5afa",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c0540a8a56e7688ddc0588",
+        "newId": "683578bfbb2a07b92d7c5b03",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c054ca8a56e7688ddc0aee",
+        "newId": "683578bfbb2a07b92d7c5b0c",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c0556d8a56e7688ddc0bbf",
+        "newId": "683578bfbb2a07b92d7c5b15",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c056118a56e7688ddc0bca",
+        "newId": "683578c0bb2a07b92d7c5b1e",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c058498a56e7688ddc0fdc",
+        "newId": "683578c0bb2a07b92d7c5b27",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c058c08a56e7688ddc10c1",
+        "newId": "683578c0bb2a07b92d7c5b30",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c0597b8a56e7688ddc1496",
+        "newId": "683578c0bb2a07b92d7c5b39",
+        "courseType": "live",
+        "title": "Personality Development"
+      },
+      {
+        "originalId": "67c05c9b8a56e7688ddc361e",
+        "newId": "683578c0bb2a07b92d7c5b42",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c05dcf8a56e7688ddc3c71",
+        "newId": "683578c1bb2a07b92d7c5b47",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c05f768a56e7688ddc45d5",
+        "newId": "683578c1bb2a07b92d7c5b4c",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c0608f8a56e7688ddc502e",
+        "newId": "683578c1bb2a07b92d7c5b51",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c063678a56e7688ddc5358",
+        "newId": "683578c1bb2a07b92d7c5b56",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c0643a8a56e7688ddc5437",
+        "newId": "683578c1bb2a07b92d7c5b5b",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c064d08a56e7688ddc5c86",
+        "newId": "683578c2bb2a07b92d7c5b60",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c065568a56e7688ddc6423",
+        "newId": "683578c2bb2a07b92d7c5b69",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c065f98a56e7688ddc67b6",
+        "newId": "683578c2bb2a07b92d7c5b72",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c0733c8a56e7688ddcacb9",
+        "newId": "683578c2bb2a07b92d7c5b7b",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c074028a56e7688ddcb38f",
+        "newId": "683578c2bb2a07b92d7c5b84",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c074a08a56e7688ddcb8ae",
+        "newId": "683578c2bb2a07b92d7c5b8d",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c156578a56e7688ddcd54e",
+        "newId": "683578c2bb2a07b92d7c5b96",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c15b858a56e7688ddcd5bd",
+        "newId": "683578c2bb2a07b92d7c5b9f",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c15d328a56e7688ddcd5c9",
+        "newId": "683578c2bb2a07b92d7c5ba8",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c15dc88a56e7688ddcd75b",
+        "newId": "683578c2bb2a07b92d7c5bb1",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c15e6e8a56e7688ddcd764",
+        "newId": "683578c3bb2a07b92d7c5bba",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c15f1e8a56e7688ddcd770",
+        "newId": "683578c3bb2a07b92d7c5bc3",
+        "courseType": "live",
+        "title": "Vedic Mathematics"
+      },
+      {
+        "originalId": "67c17c968a56e7688ddcd9f3",
+        "newId": "683578c3bb2a07b92d7c5bcc",
+        "courseType": "live",
+        "title": "AI & Data Science"
+      },
+      {
+        "originalId": "67c17da78a56e7688ddcda02",
+        "newId": "683578c3bb2a07b92d7c5bd5",
+        "courseType": "live",
+        "title": "AI & Data Science"
+      },
+      {
+        "originalId": "67c17ebb8a56e7688ddcda15",
+        "newId": "683578c3bb2a07b92d7c5bde",
+        "courseType": "live",
+        "title": "AI & Data Science"
+      },
+      {
+        "originalId": "67c180788a56e7688ddcda2e",
+        "newId": "683578c3bb2a07b92d7c5be7",
+        "courseType": "live",
+        "title": "AI & Data Science"
+      },
+      {
+        "originalId": "67c18d6b8a56e7688ddce863",
+        "newId": "683578c3bb2a07b92d7c5bf0",
+        "courseType": "live",
+        "title": "Digital Marketing with Data Analytics"
+      },
+      {
+        "originalId": "67c18e4a8a56e7688ddce940",
+        "newId": "683578c3bb2a07b92d7c5bf9",
+        "courseType": "live",
+        "title": "Digital Marketing with Data Analytics"
+      },
+      {
+        "originalId": "67c194158a56e7688ddcf320",
+        "newId": "683578c3bb2a07b92d7c5c02",
+        "courseType": "live",
+        "title": "Digital Marketing with Data Analytics"
+      },
+      {
+        "originalId": "67c195368a56e7688ddcfe4d",
+        "newId": "683578c3bb2a07b92d7c5c0b",
+        "courseType": "live",
+        "title": "Digital Marketing with Data Analytics"
+      },
+      {
+        "originalId": "67e26cbf87546e5d28fbc9f5",
+        "newId": "683578c9bb2a07b92d7c5da7",
+        "courseType": "live",
+        "title": "ffffff"
+      },
+      {
+        "originalId": "67e27856a1555fe202aa9dbf",
+        "newId": "683578c9bb2a07b92d7c5dac",
+        "courseType": "live",
+        "title": "iblkjvljvhbjhsbv"
+      },
+      {
+        "originalId": "67e4ee23edcec0e36a09fb05",
+        "newId": "683578c9bb2a07b92d7c5db6",
+        "courseType": "live",
+        "title": "abhishek"
+      },
+      {
+        "originalId": "68355e8dc6a4840251b1ec5d",
+        "newId": "683578cbbb2a07b92d7c5de0",
+        "courseType": "live",
+        "title": "Live Data Science Bootcamp 1748328077106"
+      },
+      {
+        "originalId": "68355e8dc6a4840251b1ec64",
+        "newId": "683578cbbb2a07b92d7c5de6",
+        "courseType": "free",
+        "title": "Introduction to Programming - Free Course 1748328077129"
+      }
+    ],
+    "errors": [
+      {
+        "courseId": "67c1bc6e99fc86f3aae03456",
+        "title": "AI in Manufacturing and Supply Chain",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c28ba399fc86f3aae1cd74",
+        "title": "AI in Healthcare",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c28fce99fc86f3aae1db66",
+        "title": "AI in Finance",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c292ad99fc86f3aae1e3d5",
+        "title": "Marketing and Sales Strategy",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2943699fc86f3aae1eb03",
+        "title": "Business Analysis and Strategy",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2961399fc86f3aae1f5ca",
+        "title": "Entrepreneurship and Start-up Management",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c29b29a03dd003421857a8",
+        "title": "Personal Branding and Networking",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2a1d4a03dd0034218bbe2",
+        "title": "Job Search Strategies",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2a2aba03dd0034218c093",
+        "title": "Resume Writing and Interview Preparation",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2a45da03dd0034218d9a1",
+        "title": "Time Management and Productivity",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2a514a03dd0034218d9b8",
+        "title": "Emotional Intelligence",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2a5cca03dd0034218d9e7",
+        "title": "Public Speaking",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2a83fa03dd0034218e813",
+        "title": "Data Visualization",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2a94ba03dd0034218e858",
+        "title": "Big Data Management",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2aa5ba03dd0034218e8a6",
+        "title": "Predictive Analytics",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2ab75a03dd0034218f7d2",
+        "title": "Renewable Energy Technology",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2ac1ea03dd003421902a1",
+        "title": "Sustainable Agriculture",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2acbca03dd003421903f5",
+        "title": "Sustainable Housing",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2aecea03dd00342191850",
+        "title": "Finance for Start-ups",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2afd1a03dd00342191993",
+        "title": "Tax Computation & Return Filing (GST, PF, ESI, PT, TDS & IT)",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2b0e7a03dd003421919b0",
+        "title": "Financial Statement & MIS",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2b3c3a03dd00342193bbb",
+        "title": "Nutrition and Diet Planning",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2b993a03dd00342194bf7",
+        "title": "Yoga and Mindfulness Practices",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2bf00a03dd0034219673b",
+        "title": "Mental Health Awareness",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2c277a03dd0034219ab5d",
+        "title": "Healthcare (e.g., Medical Coding, Nursing Skills)",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2c377a03dd0034219c823",
+        "title": "Hospitality and Tourism",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2c539a03dd0034219de82",
+        "title": "Interior Designing",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2d048a03dd0034219f398",
+        "title": "Writing and Editing Skills",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2d15ca03dd0034219f3b3",
+        "title": "Learning Mandarin Language",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2d28da03dd0034219f3ce",
+        "title": "Learning Spanish Language",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2d3f4a03dd0034219f3e9",
+        "title": "Learning French Language",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2d50ea03dd0034219f404",
+        "title": "Business English Communication",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2d688a03dd0034219ff76",
+        "title": "Cyber Law India International",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2d746a03dd0034219ff87",
+        "title": "Compliance and Regulatory Affairs",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2d808a03dd0034219ff98",
+        "title": "Debt Recovery",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2d92ea03dd003421a08b1",
+        "title": "Stress Management",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2d9f5a03dd003421a08c2",
+        "title": "Goal Setting and Self-Motivation",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2daaba03dd003421a08d3",
+        "title": "Personal Finance and Budgeting",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2dd37a03dd003421a16bd",
+        "title": "Social Media Marketing",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2de6ba03dd003421a18db",
+        "title": "Brand Management",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2dfa5a03dd003421a1af5",
+        "title": "Online Reputation Management",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2e1e0a03dd003421a274a",
+        "title": "Programming Languages (Python, Scala, R)",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2e30ca03dd003421a2765",
+        "title": "Cybersecurity",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67c2e451a03dd003421a2893",
+        "title": "Cloud Computing",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67dce45f3321e3ccc478e271",
+        "title": "Master Quantum Computing: From Fundamentals to Advanced Applications",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67e14360cd2f46d71bf0587c",
+        "title": "Master Quantum Computing: From Fundamentals to Advanced Applications",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67e2877c75c0feb91aa7c0f1",
+        "title": "fffffff",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67e5093a3b42cf58b514568f",
+        "title": "ffffff",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67e52fb080ad4a05b0b9262b",
+        "title": "DevOps Course",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67eb885ef04655d73ea549d5",
+        "title": "DevOps Master Program",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "67eba89251d0681af17163a0",
+        "title": "Learning Mandarin Language",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "682db6ada4f160e84103ed75",
+        "title": "dksbksadjb",
+        "error": "Request failed with status code 500"
+      },
+      {
+        "courseId": "68355e8dc6a4840251b1ec55",
+        "title": "Full Stack Web Development Blended Course 1748328077051",
+        "error": "Request failed with status code 500"
+      }
+    ],
+    "analysis": {
+      "total": 108,
+      "byType": {
+        "blended": 53,
+        "live": 54,
+        "free": 1
+      },
+      "byCategoryType": {
+        "Live": 7,
+        "Paid": 13,
+        "undefined": 43,
+        "Pre-Recorded": 43,
+        "Hybrid": 1,
+        "Free": 1
+      },
+      "byClassType": {
+        "Live Courses": 54,
+        "Blended Courses": 52,
+        "Pre-Recorded": 1,
+        "Self-Paced": 1
+      },
+      "withoutCategoryType": 43,
+      "withPricing": 91,
+      "withCurriculum": 0,
+      "samples": {
+        "blended": {
+          "_id": "67c1bc6e99fc86f3aae03456",
+          "course_category": "AI For Professionals",
+          "course_title": "AI in Manufacturing and Supply Chain",
+          "course_fee": 99,
+          "prices": [
+            {
+              "currency": "INR",
+              "individual": 2999,
+              "batch": 2999,
+              "min_batch_size": 2,
+              "max_batch_size": 10,
+              "early_bird_discount": 0,
+              "group_discount": 0,
+              "is_active": true,
+              "_id": "67f4d9ac59ce11096e79be62"
+            },
+            {
+              "currency": "USD",
+              "individual": 79,
+              "batch": 79,
+              "min_batch_size": 2,
+              "max_batch_size": 10,
+              "early_bird_discount": 0,
+              "group_discount": 0,
+              "is_active": true,
+              "_id": "67f4d9ac59ce11096e79be63"
+            },
+            {
+              "currency": "EUR",
+              "individual": 79,
+              "batch": 79,
+              "min_batch_size": 2,
+              "max_batch_size": 10,
+              "early_bird_discount": 0,
+              "group_discount": 0,
+              "is_active": true,
+              "_id": "67f4d9ac59ce11096e79be64"
+            },
+            {
+              "currency": "AED",
+              "individual": 299,
+              "batch": 299,
+              "min_batch_size": 2,
+              "max_batch_size": 10,
+              "early_bird_discount": 0,
+              "group_discount": 0,
+              "is_active": true,
+              "_id": "67f4d9ac59ce11096e79be65"
+            },
+            {
+              "currency": "GBP",
+              "individual": 69,
+              "batch": 69,
+              "min_batch_size": 2,
+              "max_batch_size": 10,
+              "early_bird_discount": 0,
+              "group_discount": 0,
+              "is_active": true,
+              "_id": "67f4d9ac59ce11096e79be66"
+            }
+          ],
+          "status": "Published",
+          "isFree": false,
+          "assigned_instructor": null,
+          "course_image": "https://medhdocuments.s3.ap-south-1.amazonaws.com/images-paper/1740749540571.jpeg",
+          "class_type": "Blended Courses",
+          "category_type": "Pre-Recorded",
+          "createdAt": "2025-02-28T13:38:54.217Z",
+          "course_duration": "3 weeks",
+          "_source": "legacy_model",
+          "delivery_format": "Blended",
+          "delivery_type": "Blended"
+        },
+        "live": {
+          "_id": "67bd596b8a56e7688dd02274",
+          "course_category": "Personality Development",
+          "course_title": "Personality Development",
+          "course_duration": "3 months 12 weeks",
+          "course_fee": 290,
+          "status": "Published",
+          "isFree": false,
+          "assigned_instructor": null,
+          "course_image": "https://medhdocuments.s3.ap-south-1.amazonaws.com/images-paper/1740462265108.jpeg",
+          "class_type": "Live Courses",
+          "createdAt": "2025-02-25T05:47:23.636Z",
+          "course_tag": "Live",
+          "category_type": "Live",
+          "prices": [
+            {
+              "currency": "USD",
+              "individual": 299,
+              "batch": 299,
+              "min_batch_size": 2,
+              "max_batch_size": 10,
+              "early_bird_discount": 0,
+              "group_discount": 0,
+              "is_active": true,
+              "_id": "67f4d9ac59ce11096e79be71"
+            },
+            {
+              "currency": "EUR",
+              "individual": 269,
+              "batch": 269,
+              "min_batch_size": 2,
+              "max_batch_size": 10,
+              "early_bird_discount": 0,
+              "group_discount": 0,
+              "is_active": true,
+              "_id": "67f4d9ac59ce11096e79be72"
+            },
+            {
+              "currency": "AED",
+              "individual": 1069,
+              "batch": 1069,
+              "min_batch_size": 2,
+              "max_batch_size": 10,
+              "early_bird_discount": 0,
+              "group_discount": 0,
+              "is_active": true,
+              "_id": "67f4d9ac59ce11096e79be73"
+            },
+            {
+              "currency": "GBP",
+              "individual": 239,
+              "batch": 239,
+              "min_batch_size": 2,
+              "max_batch_size": 10,
+              "early_bird_discount": 0,
+              "group_discount": 0,
+              "is_active": true,
+              "_id": "67f4d9ac59ce11096e79be74"
+            }
+          ],
+          "_source": "legacy_model",
+          "delivery_format": "Live",
+          "delivery_type": "Live"
+        },
+        "free": {
+          "_id": "68355e8dc6a4840251b1ec64",
+          "course_category": "Technology",
+          "course_title": "Introduction to Programming - Free Course 1748328077129",
+          "course_tag": "intro-programming-free-1748328077129",
+          "course_duration": "4 weeks",
+          "prices": [],
+          "status": "Published",
+          "category_type": "Free",
+          "isFree": true,
+          "assigned_instructor": null,
+          "course_image": "https://example.com/programming-basics.jpg",
+          "class_type": "Self-Paced",
+          "createdAt": "2025-05-27T06:41:17.132Z",
+          "_source": "legacy_model",
+          "delivery_format": "Self-Paced",
+          "delivery_type": "Self-Paced"
+        }
+      }
+    }
+  }
+}

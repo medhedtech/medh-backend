@@ -349,12 +349,21 @@ export const getEnrolledCourseByStudentId = async (req, res, next) => {
     }
 
     const enrollments = await EnrolledCourse.find(query)
-      .populate("student_id", "name email role profile_image")
+      .populate({
+        path: "student_id", 
+        select: "full_name email role profile_image assigned_instructor instructor_assignment_date instructor_assignment_type instructor_assignment_notes",
+        populate: {
+          path: 'assigned_instructor',
+          select: 'full_name email role domain phone_numbers',
+          match: { role: { $in: ['instructor'] } }
+        }
+      })
       .populate({
         path: "course_id",
         populate: {
           path: "assigned_instructor",
-          model: "AssignedInstructor",
+          select: 'full_name email role domain phone_numbers',
+          match: { role: { $in: ['instructor'] } }
         },
       })
       .sort({ enrollment_date: -1 });
@@ -814,12 +823,22 @@ export const getAllStudentsWithEnrolledCourses = async (req, res, next) => {
           match: { role: "student" },
           model: "User",
           select:
-            "full_name email phone_numbers role role_description status facebook_link instagram_link linkedin_link user_image meta age_group",
+            "full_name email phone_numbers role role_description status facebook_link instagram_link linkedin_link user_image meta age_group assigned_instructor instructor_assignment_date instructor_assignment_type instructor_assignment_notes",
+          populate: {
+            path: 'assigned_instructor',
+            select: 'full_name email role domain phone_numbers',
+            match: { role: { $in: ['instructor'] } }
+          }
         },
         {
           path: "course_id",
           model: "Course",
-          select: "course_title description thumbnail",
+          select: "course_title description thumbnail assigned_instructor",
+          populate: {
+            path: 'assigned_instructor',
+            select: 'full_name email role domain phone_numbers',
+            match: { role: { $in: ['instructor'] } }
+          }
         },
       ],
     };

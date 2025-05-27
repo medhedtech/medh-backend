@@ -57,10 +57,13 @@ class AuthController {
         role = [USER_ROLES.STUDENT],
       } = value;
 
+      // Normalize email to lowercase for case-insensitive handling
+      const normalizedEmail = email.toLowerCase().trim();
+
       // Check if user already exists
-      const existingUser = await User.findOne({ email });
+      const existingUser = await User.findOne({ email: normalizedEmail });
       if (existingUser) {
-        logger.auth.warn("Registration attempt with existing email", { email });
+        logger.auth.warn("Registration attempt with existing email", { email: normalizedEmail });
         return res.status(400).json({
           success: false,
           message: "User already exists",
@@ -74,7 +77,7 @@ class AuthController {
       // Create user with specified role or default student role
       const user = new User({
         full_name,
-        email,
+        email: normalizedEmail,
         phone_numbers,
         password,
         agree_terms,
@@ -109,16 +112,16 @@ class AuthController {
 
       logger.auth.info("User registered successfully", {
         userId: user._id,
-        email,
+        email: normalizedEmail,
       });
 
       // Send OTP verification email to the user
       try {
-        await emailService.sendOTPVerificationEmail(email, full_name, otp);
+        await emailService.sendOTPVerificationEmail(normalizedEmail, full_name, otp);
       } catch (emailError) {
         logger.auth.error("OTP verification email sending failed", {
           error: emailError,
-          email,
+          email: normalizedEmail,
         });
         // Continue registration even if email sending fails
       }
@@ -162,8 +165,11 @@ class AuthController {
         });
       }
 
+      // Normalize email to lowercase for case-insensitive handling
+      const normalizedEmail = email.toLowerCase().trim();
+
       // Find user by email
-      const user = await User.findOne({ email });
+      const user = await User.findOne({ email: normalizedEmail });
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -191,11 +197,11 @@ class AuthController {
 
       // Send welcome email to the user
       try {
-        await emailService.sendWelcomeEmail(email, user.full_name, {});
+        await emailService.sendWelcomeEmail(normalizedEmail, user.full_name, {});
       } catch (emailError) {
         logger.auth.error("Welcome email sending failed", {
           error: emailError,
-          email,
+          email: normalizedEmail,
         });
       }
 
@@ -232,8 +238,11 @@ class AuthController {
         });
       }
 
+      // Normalize email to lowercase for case-insensitive handling
+      const normalizedEmail = email.toLowerCase().trim();
+
       // Find user by email
-      const user = await User.findOne({ email });
+      const user = await User.findOne({ email: normalizedEmail });
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -260,11 +269,11 @@ class AuthController {
 
       // Send new OTP verification email
       try {
-        await emailService.sendOTPVerificationEmail(email, user.full_name, otp);
+        await emailService.sendOTPVerificationEmail(normalizedEmail, user.full_name, otp);
       } catch (emailError) {
         logger.auth.error("OTP verification email sending failed", {
           error: emailError,
-          email,
+          email: normalizedEmail,
         });
         return res.status(500).json({
           success: false,
@@ -305,10 +314,13 @@ class AuthController {
         });
       }
 
+      // Normalize email to lowercase for case-insensitive handling
+      const normalizedEmail = email.toLowerCase().trim();
+
       // Find user by email
-      const user = await User.findOne({ email });
+      const user = await User.findOne({ email: normalizedEmail });
       if (!user) {
-        logger.auth.warn("Login attempt with non-existent email", { email });
+        logger.auth.warn("Login attempt with non-existent email", { email: normalizedEmail });
         return res.status(401).json({
           success: false,
           message: "Invalid credentials",
@@ -319,7 +331,7 @@ class AuthController {
       if (user.status !== "Active") {
         logger.auth.warn("Login attempt with inactive account", { 
           userId: user._id, 
-          email, 
+          email: normalizedEmail, 
           status: user.status 
         });
         return res.status(401).json({
@@ -333,7 +345,7 @@ class AuthController {
       if (!isMatch) {
         logger.auth.warn("Login attempt with invalid password", { 
           userId: user._id, 
-          email 
+          email: normalizedEmail 
         });
         return res.status(401).json({
           success: false,
@@ -347,7 +359,7 @@ class AuthController {
       
       logger.auth.info("User logged in successfully", { 
         userId: user._id, 
-        email, 
+        email: normalizedEmail, 
         role: user.role 
       });
 
@@ -384,36 +396,96 @@ class AuthController {
    */
   async refreshToken(req, res) {
     try {
-      const { refresh_token } = req.body;
+      // Extract refresh token from multiple possible sources
+      let refresh_token = req.body.refresh_token || 
+                         req.body.refreshToken || 
+                         req.body.refresh_token || 
+                         req.headers['x-refresh-token'];
+
+      // Log the request details for debugging
+      logger.auth.debug("Refresh token request received", {
+        bodyKeys: Object.keys(req.body || {}),
+        hasRefreshToken: !!refresh_token,
+        bodyContent: req.body,
+        headers: {
+          contentType: req.headers['content-type'],
+          authorization: req.headers.authorization ? 'present' : 'missing',
+          xRefreshToken: req.headers['x-refresh-token'] ? 'present' : 'missing'
+        },
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      });
       
-      // Check if refresh token exists in request body
+      // Check if refresh token exists
       if (!refresh_token) {
         logger.auth.warn("Refresh token missing from request", {
           ip: req.ip,
-          userAgent: req.headers['user-agent']
+          userAgent: req.headers['user-agent'],
+          bodyKeys: Object.keys(req.body || {}),
+          requestBody: req.body
         });
         return res.status(400).json({
           success: false,
-          message: "Refresh token is required"
+          message: "Refresh token is required",
+          error_code: "MISSING_REFRESH_TOKEN",
+          hint: "Include refresh_token in request body or x-refresh-token header",
+          received: {
+            bodyKeys: Object.keys(req.body || {}),
+            hasBody: !!req.body
+          }
+        });
+      }
+      
+      // Validate refresh token format
+      if (typeof refresh_token !== 'string' || refresh_token.length < 10) {
+        logger.auth.warn("Invalid refresh token format", {
+          tokenType: typeof refresh_token,
+          tokenLength: refresh_token ? refresh_token.length : 0,
+          ip: req.ip
+        });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid refresh token format",
+          error_code: "INVALID_REFRESH_TOKEN_FORMAT"
         });
       }
       
       // Get user by ID function for token refresh
       const getUserById = async (userId) => {
-        return await User.findById(userId);
+        try {
+          const user = await User.findById(userId);
+          if (!user) {
+            logger.auth.warn("User not found during token refresh", { userId });
+          }
+          return user;
+        } catch (error) {
+          logger.auth.error("Error fetching user during token refresh", { 
+            userId, 
+            error: error.message 
+          });
+          return null;
+        }
       };
+      
+      logger.auth.debug("Attempting token refresh", {
+        tokenPrefix: refresh_token.substr(0, 20) + '...',
+        tokenLength: refresh_token.length
+      });
       
       // Verify and refresh tokens
       const tokens = await jwtUtils.refreshAccessToken(refresh_token, getUserById);
       
       if (!tokens) {
-        logger.auth.warn("Invalid or expired refresh token", {
+        logger.auth.warn("Token refresh failed - invalid or expired refresh token", {
           ip: req.ip,
-          userAgent: req.headers['user-agent']
+          userAgent: req.headers['user-agent'],
+          tokenPrefix: refresh_token.substr(0, 20) + '...'
         });
         return res.status(401).json({
           success: false,
-          message: "Invalid or expired refresh token"
+          message: "Invalid or expired refresh token",
+          error_code: "INVALID_REFRESH_TOKEN",
+          hint: "Please login again to get new tokens"
         });
       }
       
@@ -435,11 +507,13 @@ class AuthController {
         error: error.message,
         stack: error.stack,
         ip: req.ip,
-        userAgent: req.headers['user-agent']
+        userAgent: req.headers['user-agent'],
+        requestBody: req.body
       });
       return res.status(500).json({
         success: false,
-        message: "Server error during token refresh"
+        message: "Server error during token refresh",
+        error_code: "TOKEN_REFRESH_SERVER_ERROR"
       });
     }
   }
@@ -598,6 +672,11 @@ class AuthController {
       // Execute query with pagination and sorting
       const students = await User.find(query)
         .select("-password")
+        .populate({
+          path: 'assigned_instructor',
+          select: 'full_name email role domain phone_numbers',
+          match: { role: { $in: ['instructor'] } }
+        })
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit));
@@ -668,7 +747,9 @@ class AuthController {
   async getUserByEmail(req, res) {
     try {
       const { email } = req.params;
-      const user = await User.findOne({ email }).select("-password");
+      // Normalize email to lowercase for case-insensitive handling
+      const normalizedEmail = email.toLowerCase().trim();
+      const user = await User.findOne({ email: normalizedEmail }).select("-password");
 
       if (!user) {
         return res.status(404).json({
@@ -747,13 +828,16 @@ class AuthController {
       const { email } = req.params;
       const updateData = req.body;
 
+      // Normalize email to lowercase for case-insensitive handling
+      const normalizedEmail = email.toLowerCase().trim();
+
       // Prevent password update via this endpoint
       if (updateData.password) {
         delete updateData.password;
       }
 
       // Find user first to check if it exists
-      const existingUser = await User.findOne({ email });
+      const existingUser = await User.findOne({ email: normalizedEmail });
       if (!existingUser) {
         return res.status(404).json({
           success: false,
@@ -763,7 +847,7 @@ class AuthController {
 
       // Update user
       const user = await User.findOneAndUpdate(
-        { email },
+        { email: normalizedEmail },
         { $set: updateData },
         { new: true, runValidators: true },
       ).select("-password");
@@ -983,11 +1067,14 @@ class AuthController {
     try {
       const { email } = req.body;
 
+      // Normalize email to lowercase for case-insensitive handling
+      const normalizedEmail = email.toLowerCase().trim();
+
       // Find the user
-      const user = await User.findOne({ email });
+      const user = await User.findOne({ email: normalizedEmail });
       if (!user) {
         logger.auth.warn("Forgot password attempt for non-existent user", {
-          email,
+          email: normalizedEmail,
         });
         return res.status(404).json({
           success: false,
@@ -1024,12 +1111,12 @@ class AuthController {
       // Send email with temporary password using the improved email service
       try {
         await emailService.sendPasswordResetEmail(
-          email,
+          normalizedEmail,
           user.full_name,
           tempPassword,
         );
 
-        logger.auth.info("Password reset email sent", { email });
+        logger.auth.info("Password reset email sent", { email: normalizedEmail });
         return res.status(200).json({
           success: true,
           message: "Password reset email sent",
@@ -1037,7 +1124,7 @@ class AuthController {
       } catch (emailError) {
         logger.auth.error("Failed to send password reset email", {
           error: emailError,
-          email,
+          email: normalizedEmail,
         });
         return res.status(500).json({
           success: false,

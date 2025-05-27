@@ -47,6 +47,7 @@ import subscriptionRoute from "./subscription-Routes.js";
 import trackSessionRoute from "./track-sessionsRoutes.js";
 import uploadRoutes from "./uploadRoutes.js";
 import zoomRoutes from "./zoom.js";
+import enhancedPaymentRoutes from "./enhanced-payment-routes.js";
 
 const router = express.Router();
 
@@ -68,7 +69,7 @@ const moduleRoutes = [
     route: courseRoutes,
   },
   {
-    path: "/course-types",
+    path: "/tcourse",
     route: courseTypesRoutes,
   },
   {
@@ -219,6 +220,10 @@ const moduleRoutes = [
     path: "/enrollments",
     route: enrollmentRoutes,
   },
+  {
+    path: "/enhanced-payments",
+    route: enhancedPaymentRoutes,
+  }
 ];
 
 moduleRoutes.forEach((route) => {
@@ -337,6 +342,62 @@ router.post("/system/reset-metrics", (req, res) => {
         ENV_VARS.NODE_ENV === "production"
           ? "Internal server error"
           : error.message,
+    });
+  }
+});
+
+// Add a test endpoint for diagnosing authentication issues
+router.get("/auth-test", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    const authStatus = {
+      hasAuthHeader: !!authHeader,
+      hasToken: !!token,
+      tokenPrefix: token ? token.substr(0, 20) + '...' : null,
+      tokenLength: token ? token.length : 0,
+      timestamp: new Date().toISOString(),
+      environment: ENV_VARS.NODE_ENV,
+      jwtSecretExists: !!ENV_VARS.JWT_SECRET_KEY,
+      redisEnabled: ENV_VARS.REDIS_ENABLED
+    };
+
+    // Try to verify token if present
+    if (token) {
+      try {
+        const { verifyAccessToken } = await import('../utils/jwt.js');
+        const decoded = verifyAccessToken(token);
+        authStatus.tokenValid = !!decoded;
+        authStatus.tokenData = decoded ? {
+          id: decoded.id,
+          email: decoded.email,
+          role: decoded.role,
+          type: decoded.type,
+          exp: decoded.exp,
+          iat: decoded.iat
+        } : null;
+        authStatus.tokenExpired = decoded ? (decoded.exp * 1000 < Date.now()) : null;
+      } catch (error) {
+        authStatus.tokenVerificationError = error.message;
+      }
+    }
+
+    logger.info("Auth Test Request", {
+      ip: req.ip,
+      userAgent: req.headers['user-agent'],
+      authStatus
+    });
+
+    return res.status(200).json({
+      message: "Authentication test completed",
+      status: authStatus
+    });
+  } catch (error) {
+    logger.error("Auth test failed", { error: error.message });
+    return res.status(500).json({
+      message: "Auth test failed",
+      error: ENV_VARS.NODE_ENV === "production" ? "Internal server error" : error.message
     });
   }
 });

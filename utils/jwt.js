@@ -5,25 +5,68 @@ import logger from './logger.js';
 
 // Import Redis client if available
 let redisClient;
-if (ENV_VARS.REDIS_ENABLED) {
-  try {
-    const { createClient } = await import('redis');
-    redisClient = createClient({
-      url: `redis://${ENV_VARS.REDIS_PASSWORD ? `:${ENV_VARS.REDIS_PASSWORD}@` : ''}${ENV_VARS.REDIS_HOST}:${ENV_VARS.REDIS_PORT}`
-    });
-    
-    await redisClient.connect();
-    
-    redisClient.on('error', (err) => {
-      logger.error('Redis Client Error', { error: err.message });
-    });
-    
-    logger.info('Redis connected for JWT token management');
-  } catch (error) {
-    logger.error('Failed to connect to Redis for JWT management', { error: error.message });
-    // Continue without Redis - will use in-memory storage as fallback
+let redisConnectionAttempted = false;
+
+const initializeRedis = async () => {
+  if (redisConnectionAttempted) return;
+  redisConnectionAttempted = true;
+
+  if (ENV_VARS.REDIS_ENABLED) {
+    try {
+      const { createClient } = await import('redis');
+      redisClient = createClient({
+        url: `redis://${ENV_VARS.REDIS_PASSWORD ? `:${ENV_VARS.REDIS_PASSWORD}@` : ''}${ENV_VARS.REDIS_HOST}:${ENV_VARS.REDIS_PORT}`,
+        socket: {
+          connectTimeout: 5000,
+          lazyConnect: true
+        },
+        retry_strategy: (options) => {
+          if (options.error && options.error.code === 'ECONNREFUSED') {
+            // End reconnecting on a specific error and flush all commands with a individual error
+            return new Error('The server refused the connection');
+          }
+          if (options.total_retry_time > 1000 * 60 * 60) {
+            // End reconnecting after a specific timeout and flush all commands with a individual error
+            return new Error('Retry time exhausted');
+          }
+          if (options.attempt > 10) {
+            // End reconnecting with built in error
+            return undefined;
+          }
+          // reconnect after
+          return Math.min(options.attempt * 100, 3000);
+        }
+      });
+      
+      redisClient.on('error', (err) => {
+        logger.error('Redis Client Error', { error: err.message });
+        // Don't set redisClient to null here, just log the error
+      });
+
+      redisClient.on('connect', () => {
+        logger.info('Redis client connected successfully');
+      });
+
+      redisClient.on('reconnecting', () => {
+        logger.info('Redis client reconnecting...');
+      });
+
+      redisClient.on('end', () => {
+        logger.warn('Redis client connection ended');
+      });
+      
+      await redisClient.connect();
+      logger.info('Redis connected for JWT token management');
+    } catch (error) {
+      logger.error('Failed to connect to Redis for JWT management', { error: error.message });
+      redisClient = null;
+      // Continue without Redis - will use in-memory storage as fallback
+    }
   }
-}
+};
+
+// Initialize Redis connection
+initializeRedis();
 
 // In-memory token store as fallback (not for production use without Redis)
 const tokenStore = {
@@ -36,11 +79,11 @@ const tokenStore = {
  */
 const TOKEN_TYPES = {
   ACCESS: {
-    expiresIn: '15m',  // Short-lived access token
+    expiresIn: '24h',  // Longer-lived access token for better UX
     algorithm: 'HS256'
   },
   REFRESH: {
-    expiresIn: '7d',   // Longer-lived refresh token
+    expiresIn: '30d',   // Much longer refresh token
     algorithm: 'HS256'
   }
 };
@@ -99,29 +142,34 @@ export const generateRefreshToken = async (user) => {
   );
   
   // Store refresh token with user association
-  if (redisClient) {
+  const tokenData = {
+    userId,
+    createdAt: new Date().toISOString()
+  };
+
+  let redisStored = false;
+  
+  if (redisClient && redisClient.isReady) {
     try {
       // Store token in Redis with expiration
-      const expiresInSeconds = 7 * 24 * 60 * 60; // 7 days in seconds
+      const expiresInSeconds = 30 * 24 * 60 * 60; // 30 days in seconds
       await redisClient.set(
         `refresh_token:${refreshToken}`, 
-        JSON.stringify({ userId, createdAt: new Date().toISOString() }),
+        JSON.stringify(tokenData),
         { EX: expiresInSeconds }
       );
+      redisStored = true;
+      logger.debug('Refresh token stored in Redis', { userId });
     } catch (error) {
       logger.error('Error storing refresh token in Redis', { error: error.message, userId });
-      // Fall back to in-memory storage
-      tokenStore.refreshTokens.set(refreshToken, {
-        userId,
-        createdAt: new Date().toISOString()
-      });
+      // Will fall back to in-memory storage below
     }
-  } else {
-    // Use in-memory storage if Redis is not available
-    tokenStore.refreshTokens.set(refreshToken, {
-      userId,
-      createdAt: new Date().toISOString()
-    });
+  }
+
+  // Always store in memory as backup (or primary if Redis is not available)
+  if (!redisStored || !redisClient) {
+    tokenStore.refreshTokens.set(refreshToken, tokenData);
+    logger.debug('Refresh token stored in memory', { userId, redisAvailable: !!redisClient });
   }
 
   return signedToken;
@@ -134,6 +182,11 @@ export const generateRefreshToken = async (user) => {
  */
 export const verifyAccessToken = (token) => {
   try {
+    if (!token || typeof token !== 'string') {
+      logger.warn('Invalid token format', { tokenType: typeof token });
+      return null;
+    }
+
     // Check if token has been revoked
     if (tokenStore.revokedTokens.has(token)) {
       logger.warn('Attempt to use revoked token');
@@ -142,15 +195,122 @@ export const verifyAccessToken = (token) => {
     
     const decoded = jwt.verify(token, ENV_VARS.JWT_SECRET_KEY);
     
-    // Ensure it's an access token
-    if (decoded.type !== 'access') {
-      logger.warn('Invalid token type used for access');
+    // Log the decoded token structure for debugging
+    logger.debug('Token decoded successfully', {
+      keys: Object.keys(decoded),
+      hasType: !!decoded.type,
+      hasUser: !!decoded.user,
+      hasId: !!decoded.id,
+      hasSub: !!decoded.sub,
+      tokenStructure: {
+        type: decoded.type,
+        user: decoded.user ? Object.keys(decoded.user) : null,
+        directFields: {
+          id: decoded.id,
+          sub: decoded.sub,
+          role: decoded.role,
+          email: decoded.email
+        }
+      }
+    });
+    
+    // Handle different token formats
+    let user = null;
+    
+    if (decoded.type === 'access') {
+      // New token format
+      user = {
+        id: decoded.id,
+        email: decoded.email,
+        role: decoded.role,
+        type: decoded.type
+      };
+      
+      // Validate required fields for new format
+      if (!decoded.id || !decoded.email || !decoded.role) {
+        logger.warn('New format token missing required fields', { 
+          hasId: !!decoded.id, 
+          hasEmail: !!decoded.email, 
+          hasRole: !!decoded.role 
+        });
+        return null;
+      }
+    } else if (decoded.user && decoded.user.id) {
+      // Old token format (from legacy auth service)
+      user = {
+        id: decoded.user.id,
+        role: decoded.user.role,
+        _id: decoded.user.id
+      };
+      
+      // Validate required fields for old format
+      if (!decoded.user.id || !decoded.user.role) {
+        logger.warn('Old format token missing required fields', { 
+          hasId: !!decoded.user.id, 
+          hasRole: !!decoded.user.role 
+        });
+        return null;
+      }
+    } else if (decoded.id && decoded.role) {
+      // Direct format (user data directly in token)
+      user = {
+        id: decoded.id,
+        role: decoded.role,
+        email: decoded.email,
+        _id: decoded.id
+      };
+    } else if (decoded.sub) {
+      // Generic JWT format - try to map to user format
+      // This is for compatibility with standard JWT tokens
+      user = {
+        id: decoded.sub,
+        role: decoded.admin ? 'admin' : 'student', // Fallback role mapping
+        email: decoded.email,
+        name: decoded.name,
+        _id: decoded.sub
+      };
+      
+      logger.debug('Mapped generic JWT to user format', {
+        originalSub: decoded.sub,
+        mappedRole: user.role,
+        hasName: !!decoded.name
+      });
+    } else if (decoded.type === 'refresh') {
+      // This is a refresh token being used as access token
+      logger.warn('Refresh token used where access token expected');
+      return null;
+    } else {
+      logger.warn('Unknown token format', { 
+        hasType: !!decoded.type,
+        hasUser: !!decoded.user,
+        hasId: !!decoded.id,
+        hasSub: !!decoded.sub,
+        keys: Object.keys(decoded),
+        fullDecoded: decoded
+      });
       return null;
     }
     
-    return decoded;
+    logger.debug('Token verification successful', {
+      userId: user.id,
+      userRole: user.role,
+      tokenFormat: decoded.type === 'access' ? 'new' : 
+                   decoded.user ? 'legacy' : 
+                   decoded.sub ? 'generic' : 'direct'
+    });
+    
+    return user;
   } catch (error) {
-    logger.warn('Token verification failed', { error: error.message });
+    if (error.name === 'TokenExpiredError') {
+      logger.warn('Token expired', { 
+        expiredAt: error.expiredAt,
+        now: new Date()
+      });
+    } else if (error.name === 'JsonWebTokenError') {
+      logger.warn('Invalid token signature or format', { error: error.message });
+    } else {
+      logger.warn('Token verification failed', { error: error.message, errorType: error.name });
+    }
     return null;
   }
 };
@@ -178,33 +338,55 @@ export const verifyRefreshToken = async (token) => {
     const refreshToken = decoded.token;
     
     // Check if the refresh token exists in our store
-    let tokenData;
+    let tokenData = null;
     
+    // Try Redis first
     if (redisClient && redisClient.isReady) {
       try {
         const data = await redisClient.get(`refresh_token:${refreshToken}`);
         tokenData = data ? JSON.parse(data) : null;
+        if (tokenData) {
+          logger.debug('Refresh token found in Redis', { userId: tokenData.userId });
+        }
       } catch (error) {
         logger.error('Error retrieving refresh token from Redis', { error: error.message });
-        // Fall back to in-memory check
-        tokenData = tokenStore.refreshTokens.get(refreshToken);
+        // Continue to check in-memory storage
       }
-    } else {
+    }
+    
+    // Fallback to in-memory storage if Redis failed or returned null
+    if (!tokenData) {
       tokenData = tokenStore.refreshTokens.get(refreshToken);
+      if (tokenData) {
+        logger.debug('Refresh token found in memory', { userId: tokenData.userId });
+      }
     }
     
     if (!tokenData) {
-      logger.warn('Refresh token not found in store', { refreshToken: refreshToken.substr(0, 10) + '...' });
+      logger.warn('Refresh token not found in any store', { 
+        refreshToken: refreshToken.substr(0, 10) + '...',
+        redisAvailable: !!(redisClient && redisClient.isReady),
+        memoryTokenCount: tokenStore.refreshTokens.size
+      });
       return null;
     }
     
     return { userId: tokenData.userId, refreshToken };
   } catch (error) {
-    logger.warn('Refresh token verification failed', { 
-      error: error.message,
-      errorType: error.name,
-      tokenPrefix: token ? token.substr(0, 10) + '...' : 'undefined' 
-    });
+    if (error.name === 'TokenExpiredError') {
+      logger.warn('Refresh token expired', { 
+        expiredAt: error.expiredAt,
+        now: new Date()
+      });
+    } else if (error.name === 'JsonWebTokenError') {
+      logger.warn('Invalid refresh token signature or format', { error: error.message });
+    } else {
+      logger.warn('Refresh token verification failed', { 
+        error: error.message,
+        errorType: error.name,
+        tokenPrefix: token ? token.substr(0, 10) + '...' : 'undefined' 
+      });
+    }
     return null;
   }
 };

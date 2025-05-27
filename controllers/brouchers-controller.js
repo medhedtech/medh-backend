@@ -1,40 +1,13 @@
-import nodemailer from "nodemailer";
+import emailService from "../services/emailService.js";
 
 import Broucher from "../models/broucker-model.js";
 import Course from "../models/course-model.js";
 import { validateObjectId } from "../utils/validation-helpers.js";
 
 // Nodemailer Transporter Setup with AWS SES
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || "email-smtp.us-east-1.amazonaws.com",
-  port: process.env.EMAIL_PORT || 465,
-  secure: process.env.EMAIL_SECURE === "true" || true, // true for 465, false for other ports like 587
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+// Email service is imported and ready to use
 
-// Add error handling for transporter
-transporter.verify(function (error, success) {
-  if (error) {
-    console.error("Email configuration error:", error);
-    // Log more details about the error
-    if (error.code === "EAUTH") {
-      console.error("Authentication failed. Please check your credentials.");
-      console.error("If using Gmail, make sure to:");
-      console.error("1. Enable 2-Step Verification in your Google Account");
-      console.error("2. Generate an App Password from Google Account settings");
-      console.error("3. Use the App Password instead of your regular password");
-    } else if (error.code === "EDNS") {
-      console.error(
-        "DNS lookup failed. Please check your internet connection and SMTP server settings.",
-      );
-    }
-  } else {
-    console.log("Email server is ready to send messages");
-  }
-});
+// Email service handles verification automatically
 
 // Helper function to send emails with better error handling
 const sendEmail = async (mailOptions) => {
@@ -44,7 +17,7 @@ const sendEmail = async (mailOptions) => {
       mailOptions.from = process.env.EMAIL_FROM || "noreply@medh.co";
     }
 
-    const info = await transporter.sendMail(mailOptions);
+    const info = await emailService.sendEmail(mailOptions, { priority: "normal" });
     console.log("Email sent successfully:", info.messageId);
     return true;
   } catch (error) {
