@@ -242,7 +242,7 @@ const faqSchema = new Schema({
 const lessonResourceSchema = new Schema({
   id: {
     type: String,
-    required: [true, "Resource ID is required"],
+    // ID will be auto-generated, not required on input
   },
   title: {
     type: String,
@@ -273,7 +273,7 @@ const curriculumSectionSchema = new Schema(
   {
     id: {
       type: String,
-      required: [true, "Section ID is required"],
+      // ID will be auto-generated, not required on input
     },
     title: {
       type: String,
@@ -326,8 +326,7 @@ const curriculumWeekSchema = new Schema(
   {
     id: {
       type: String,
-      required: [true, "Week ID is required"],
-      unique: true,
+      // ID will be auto-generated, not required on input
     },
     weekTitle: {
       type: String,

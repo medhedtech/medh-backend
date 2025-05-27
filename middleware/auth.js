@@ -12,7 +12,7 @@ import { verifyAccessToken } from '../utils/jwt.js';
  * @param {Object} res - Express response object
  * @param {Function} next - Express next function
  */
-export const authenticateToken = (req, res, next) => {
+export const authenticateToken = async (req, res, next) => {
   try {
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
@@ -21,31 +21,92 @@ export const authenticateToken = (req, res, next) => {
     if (!token) {
       logger.warn('Authentication failed: No token provided', { 
         ip: req.ip, 
-        path: req.originalUrl
+        path: req.originalUrl,
+        userAgent: req.headers['user-agent']
       });
-      return res.status(401).json({ success: false, message: 'Authentication required' });
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Authentication required',
+        error_code: 'NO_TOKEN_PROVIDED',
+        hint: 'Please include Authorization header with Bearer token'
+      });
     }
 
-    // Verify token
-    const user = verifyAccessToken(token);
+    // Try to verify token with new JWT utility first
+    let user = verifyAccessToken(token);
+    
+    // If new verification fails, try old verification method as fallback
+    if (!user) {
+      try {
+        const decoded = jwt.verify(token, ENV_VARS.JWT_SECRET_KEY);
+        
+        // Handle legacy token formats
+        if (decoded.user) {
+          // Old auth service format
+          user = {
+            id: decoded.user.id,
+            role: decoded.user.role,
+            _id: decoded.user.id
+          };
+        } else if (decoded.id) {
+          // Direct format
+          user = {
+            id: decoded.id,
+            role: decoded.role,
+            email: decoded.email,
+            _id: decoded.id
+          };
+        }
+        
+        if (user) {
+          logger.debug('Token verified using fallback method', { 
+            userId: user.id, 
+            format: decoded.user ? 'legacy' : 'direct'
+          });
+        }
+      } catch (fallbackError) {
+        logger.warn('Both primary and fallback token verification failed', {
+          primaryError: 'verifyAccessToken returned null',
+          fallbackError: fallbackError.message
+        });
+      }
+    }
     
     if (!user) {
-      logger.warn('Authentication failed: Invalid token', { 
+      logger.warn('Token verification failed', { 
         ip: req.ip, 
-        path: req.originalUrl 
+        path: req.originalUrl,
+        tokenPrefix: token.substr(0, 20) + '...',
+        userAgent: req.headers['user-agent']
       });
-      return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid or expired token',
+        error_code: 'INVALID_TOKEN',
+        hint: 'Please refresh your token or login again'
+      });
     }
 
     // Attach user to request
     req.user = user;
+    logger.debug('Authentication successful', { 
+      userId: user.id, 
+      role: user.role, 
+      path: req.originalUrl 
+    });
     next();
   } catch (error) {
     logger.error('Authentication error', { 
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
+      ip: req.ip,
+      path: req.originalUrl
     });
-    return res.status(500).json({ success: false, message: 'Authentication error' });
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Authentication error',
+      error_code: 'AUTH_SERVER_ERROR'
+    });
   }
 };
 
@@ -68,8 +129,11 @@ export const authorize = (roles) => {
         return res.status(401).json({ success: false, message: 'Authentication required' });
       }
 
-      // Check if user's role is in the allowed roles
-      if (!allowedRoles.includes(req.user.role)) {
+      // Handle both string and array roles
+      const userRoles = Array.isArray(req.user.role) ? req.user.role : [req.user.role];
+      const hasPermission = userRoles.some(role => allowedRoles.includes(role));
+      
+      if (!hasPermission) {
         logger.warn('Authorization failed: Insufficient permissions', { 
           userId: req.user.id, 
           userRole: req.user.role, 
@@ -153,11 +217,14 @@ export const verifyToken = async (req, res, next) => {
 
 // Check if user is admin
 export const isAdmin = (req, res, next) => {
-  if (req.user && req.user.role === "admin") {
-    next();
-  } else {
-    next(new AppError("Access denied. Admin only.", 403));
+  if (req.user) {
+    // Handle both array and string roles
+    const userRoles = Array.isArray(req.user.role) ? req.user.role : [req.user.role];
+    if (userRoles.includes("admin")) {
+      return next();
+    }
   }
+  next(new AppError("Access denied. Admin only.", 403));
 };
 
 // Check if user is instructor

@@ -16,19 +16,20 @@ const connectDB = async (retryCount = 0, maxRetries = 5) => {
       );
     }
 
-    // Connection options with increased timeouts
+    // Connection options with increased timeouts and better resilience
     const options = {
-      serverSelectionTimeoutMS: 30000, // Increase from 5000 to 30000
-      socketTimeoutMS: 45000,
-      connectTimeoutMS: 30000, // Add explicit connect timeout
-      maxPoolSize: 10, // Add connection pool size
-      minPoolSize: 5, // Add minimum pool size
-      maxIdleTimeMS: 30000, // Add max idle time
-      heartbeatFrequencyMS: 10000, // Add heartbeat frequency
+      serverSelectionTimeoutMS: 60000, // Increase to 60 seconds
+      socketTimeoutMS: 60000, // Increase socket timeout
+      connectTimeoutMS: 60000, // Increase connect timeout
+      maxPoolSize: 10, // Connection pool size
+      minPoolSize: 2, // Reduce minimum pool size
+      maxIdleTimeMS: 300000, // Increase max idle time to 5 minutes
+      heartbeatFrequencyMS: 10000, // Heartbeat frequency
       retryWrites: true, // Enable retry for write operations
       retryReads: true, // Enable retry for read operations
       w: "majority", // Write concern for better consistency
-      readPreference: "secondaryPreferred", // Read preference for better performance
+      readPreference: "primaryPreferred", // Prefer primary but fallback to secondary
+      readConcern: { level: "majority" }, // Read concern for consistency
     };
 
     // Connect to MongoDB

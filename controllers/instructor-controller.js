@@ -1,16 +1,6 @@
 import bcrypt from "bcryptjs";
-import nodemailer from "nodemailer";
-
 import User from "../models/user-modal.js";
-
-// Set up the email transporter
-const transporter = nodemailer.createTransport({
-  service: "Gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+import emailService from "../services/emailService.js";
 
 // Create Instructor
 export const createInstructor = async (req, res) => {
@@ -45,8 +35,8 @@ export const createInstructor = async (req, res) => {
     });
     await instructor.save();
 
+    // Prepare email content
     const mailOptions = {
-      from: process.env.EMAIL_USER,
       to: email,
       subject: "Welcome to Medh Learning Platform",
       html: `
@@ -60,14 +50,26 @@ export const createInstructor = async (req, res) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
-
-    res.status(201).json({
-      success: true,
-      message:
-        "Instructor created successfully, and email sent to the instructor.",
-      instructor,
-    });
+    try {
+      // Send email using the existing email service
+      const emailResult = await emailService.sendEmail(mailOptions, { priority: "high" });
+      
+      res.status(201).json({
+        success: true,
+        message: "Instructor created successfully, and email sent to the instructor.",
+        instructor,
+        emailResult,
+      });
+    } catch (emailError) {
+      console.error("Error sending email:", emailError.message);
+      // Still return success for instructor creation, but note email failure
+      res.status(201).json({
+        success: true,
+        message: "Instructor created successfully, but email notification failed to send.",
+        instructor,
+        emailError: emailError.message,
+      });
+    }
   } catch (error) {
     console.error("Error creating instructor:", error.message);
     res.status(500).json({

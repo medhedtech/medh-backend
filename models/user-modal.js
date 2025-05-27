@@ -247,6 +247,31 @@ const userSchema = new Schema(
     emailVerificationOTPExpires: {
       type: Date,
     },
+    // Instructor assignment fields for students
+    assigned_instructor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      validate: {
+        validator: async function(v) {
+          if (!v) return true; // Allow null/undefined
+          const instructor = await mongoose.model('User').findById(v);
+          return instructor && instructor.role.includes('instructor');
+        },
+        message: 'Assigned instructor must have instructor role'
+      }
+    },
+    instructor_assignment_date: {
+      type: Date,
+    },
+    instructor_assignment_type: {
+      type: String,
+      enum: ["mentor", "tutor", "advisor", "supervisor"],
+      default: "mentor",
+    },
+    instructor_assignment_notes: {
+      type: String,
+      trim: true,
+    },
   },
   {
     timestamps: true,
@@ -377,6 +402,7 @@ userSchema.index({ role: 1 });
 userSchema.index({ status: 1 });
 userSchema.index({ admin_role: 1 });
 userSchema.index({ "phone_numbers.number": 1 });
+userSchema.index({ assigned_instructor: 1 });
 
 // Export model constants for use in other files
 export const USER_ROLES = ROLES;

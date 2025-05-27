@@ -37,7 +37,12 @@ export const createStudent = async (req, res) => {
 // Get all students
 export const getAllStudents = async (req, res) => {
   try {
-    const students = await Student.find();
+    const students = await Student.find()
+      .populate({
+        path: 'assigned_instructor',
+        select: 'full_name email role domain phone_numbers',
+        match: { role: { $in: ['instructor'] } }
+      });
     const activeStudents = await Student.countDocuments({
       status: "Active",
     });
@@ -57,7 +62,12 @@ export const getAllStudents = async (req, res) => {
 export const getStudentById = async (req, res) => {
   try {
     const { id } = req.params;
-    const student = await Student.findById(id);
+    const student = await Student.findById(id)
+      .populate({
+        path: 'assigned_instructor',
+        select: 'full_name email role domain phone_numbers',
+        match: { role: { $in: ['instructor'] } }
+      });
 
     if (!student) {
       return res.status(404).json({ message: "Student not found" });

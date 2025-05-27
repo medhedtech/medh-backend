@@ -13,8 +13,7 @@ const baseLessonSchema = new Schema(
   {
     id: {
       type: String,
-      required: [true, "Lesson ID is required"],
-      unique: true,
+      // ID will be auto-generated, not required on input
     },
     title: {
       type: String,
@@ -40,7 +39,7 @@ const baseLessonSchema = new Schema(
     },
     resources: [
       {
-        id: { type: String, unique: true },
+        id: { type: String }, // ID will be auto-generated
         title: {
           type: String,
           required: [true, "Resource title is required"],

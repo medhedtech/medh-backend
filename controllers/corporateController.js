@@ -1,16 +1,10 @@
 import bcrypt from "bcryptjs";
-import nodemailer from "nodemailer";
+import emailService from "../services/emailService.js";
 
 import User from "../models/user-modal.js";
 
 // Set up the email transporter
-const transporter = nodemailer.createTransport({
-  service: "Gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+// Email service is imported and ready to use
 
 // Create Corporate User
 export const createCorporate = async (req, res) => {
@@ -83,7 +77,7 @@ export const createCorporate = async (req, res) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    await emailService.sendEmail(mailOptions, { priority: "high" });
 
     res.status(201).json({
       success: true,

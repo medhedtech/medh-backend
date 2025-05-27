@@ -1,5 +1,5 @@
 import PDF from "html-pdf-chrome";
-import nodemailer from "nodemailer";
+import emailService from "../services/emailService.js";
 
 import Course from "../models/course-model.js";
 import EnrolledCourse from "../models/enrolled-courses-model.js";
@@ -28,13 +28,7 @@ const pdfOptions = {
 };
 
 // Create transporter for sending emails
-const transporter = nodemailer.createTransport({
-  service: "Gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+// Email service is imported and ready to use
 
 // Create a reusable function for generating and uploading PDF receipts
 const generateAndUploadReceipt = async (data, type) => {
@@ -128,8 +122,7 @@ const sendReceiptEmail = async (email, receiptUrl, paymentDetails, type) => {
       </div>
     `;
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    await emailService.sendEmail({
       to: email,
       subject,
       html,
@@ -141,7 +134,7 @@ const sendReceiptEmail = async (email, receiptUrl, paymentDetails, type) => {
             },
           ]
         : [],
-    });
+    }, { priority: "high" });
 
     logger.info(`Receipt email sent to ${email}`);
     return true;

@@ -1,6 +1,7 @@
 import crypto from "crypto";
 
-import razorpay from "../config/razorpay.js";
+import razorpayConfig from "../config/razorpay.js";
+import { ENV_VARS } from "../config/envVars.js";
 import Order from "../models/Order.js";
 
 /**
@@ -10,6 +11,12 @@ import Order from "../models/Order.js";
  */
 export const createOrder = async (orderData) => {
   try {
+    const razorpay = await razorpayConfig.getInstance();
+    
+    if (!razorpay) {
+      throw new Error("Razorpay is not initialized. Please check your credentials.");
+    }
+
     const {
       amount,
       currency = "INR",
@@ -63,7 +70,7 @@ export const verifyPayment = async (paymentData) => {
     // Verify signature
     const body = orderId + "|" + paymentId;
     const expectedSignature = crypto
-      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .createHmac("sha256", ENV_VARS.RAZORPAY_KEY_SECRET)
       .update(body)
       .digest("hex");
 
@@ -98,6 +105,12 @@ export const verifyPayment = async (paymentData) => {
  */
 export const getPaymentDetails = async (paymentId) => {
   try {
+    const razorpay = await razorpayConfig.getInstance();
+    
+    if (!razorpay) {
+      throw new Error("Razorpay is not initialized. Please check your credentials.");
+    }
+
     const payment = await razorpay.payments.fetch(paymentId);
     return payment;
   } catch (error) {
@@ -134,4 +147,13 @@ export const getOrderById = async (orderId) => {
   } catch (error) {
     throw new Error(`Failed to fetch order: ${error.message}`);
   }
+};
+
+// Export as default object for easier importing
+export default {
+  createOrder,
+  verifyPayment,
+  getPaymentDetails,
+  getUserOrders,
+  getOrderById
 };
