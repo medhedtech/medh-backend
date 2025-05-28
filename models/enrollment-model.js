@@ -286,14 +286,31 @@ enrollmentSchema.virtual('isIndividualEnrollment').get(function() {
 });
 
 // Pre-save middleware for validation
-enrollmentSchema.pre('save', function(next) {
+enrollmentSchema.pre('save', async function(next) {
   // Validate batch enrollment requirements
   if (this.enrollment_type === 'batch') {
     if (!this.batch) {
       return next(new Error('Batch reference is required for batch enrollments'));
     }
-    if (this.batch_info.batch_size < 2) {
-      return next(new Error('Batch size must be at least 2 for batch enrollments'));
+    
+    // Get batch details to check batch_type
+    const Batch = mongoose.model('Batch');
+    const batch = await Batch.findById(this.batch);
+    
+    if (!batch) {
+      return next(new Error('Referenced batch not found'));
+    }
+    
+    // For individual batches, allow batch_size = 1
+    // For group batches, require batch_size >= 2
+    if (batch.batch_type === 'individual') {
+      if (this.batch_info.batch_size !== 1) {
+        return next(new Error('Individual batch enrollments must have batch_size = 1'));
+      }
+    } else if (batch.batch_type === 'group') {
+      if (this.batch_info.batch_size < 2) {
+        return next(new Error('Group batch enrollments must have batch_size >= 2'));
+      }
     }
   }
   
