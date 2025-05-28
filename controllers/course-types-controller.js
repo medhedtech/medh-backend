@@ -440,10 +440,11 @@ export const getAllLiveCourses = asyncHandler(async (req, res) => {
     // Always include legacy courses to show all available live courses
     let legacyFilter = { status: { $regex: status, $options: "i" } };
     
-    // Filter for live courses in legacy model
+    // Filter for live courses in legacy model - match "Live Courses" exactly
     legacyFilter.$or = [
-      { class_type: { $regex: /live/i } },
-      { category_type: { $regex: /live/i } }
+      { class_type: "Live Courses" },
+      { class_type: { $regex: /^live courses$/i } },
+      { category_type: { $regex: /^live$/i } }
     ];
 
     // Add search filter if provided

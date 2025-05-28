@@ -133,8 +133,8 @@ const batchSchema = new Schema(
     },
     assigned_instructor: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Instructor",
-      required: [true, "Instructor assignment is required for a batch"],
+      ref: "User",
+      default: null,
     },
     schedule: [
       {
@@ -161,6 +161,49 @@ const batchSchema = new Schema(
               return endMins > startMins;
             },
             message: "End time must be after start time",
+          },
+        },
+        // Recorded lessons for this scheduled session
+        recorded_lessons: [
+          {
+            title: {
+              type: String,
+              required: [true, "Recorded lesson title is required"],
+              trim: true,
+            },
+            url: {
+              type: String,
+              required: [true, "Recorded lesson URL is required"],
+              trim: true,
+            },
+            recorded_date: {
+              type: Date,
+              default: Date.now,
+            },
+            created_by: {
+              type: mongoose.Schema.Types.ObjectId,
+              ref: "User",
+              required: [true, "Creator reference is required for recorded lesson"],
+            },
+          },
+        ],
+        // Zoom meeting details for this scheduled session
+        zoom_meeting: {
+          meeting_id: {
+            type: String,
+            trim: true,
+          },
+          join_url: {
+            type: String,
+            trim: true,
+          },
+          topic: {
+            type: String,
+            trim: true,
+          },
+          password: {
+            type: String,
+            trim: true,
           },
         },
       },
@@ -716,7 +759,7 @@ const courseSchema = new Schema(
     },
     assigned_instructor: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "AssignedInstructor",
+      ref: "User",
       default: null,
     },
     specifications: {
@@ -1159,8 +1202,12 @@ courseSchema.statics.assignInstructorToBatch = async function(batchId, instructo
     throw new Error('Batch not found');
   }
   
-  // Check if instructor exists
-  const instructor = await mongoose.model('Instructor').findById(instructorId);
+  // Check if instructor exists and has instructor role
+  const instructor = await mongoose.model('User').findOne({
+    _id: instructorId,
+    role: { $in: ['instructor'] },
+    status: 'Active'
+  });
   if (!instructor) {
     throw new Error('Instructor not found');
   }

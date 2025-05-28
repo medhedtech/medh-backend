@@ -1,8 +1,8 @@
- import { validationResult } from "express-validator";
+import { validationResult } from "express-validator";
 import mongoose from "mongoose";
 import Enrollment from "../models/enrollment-model.js";
 import { Course, Batch } from "../models/course-model.js";
-import Student from "../models/student-model.js"; // Adjust path if needed
+import User from "../models/user-modal.js"; // Use User model instead of Student
 
 /**
  * Enroll a student in a course batch
@@ -19,12 +19,28 @@ export const enrollStudentInBatch = async (req, res) => {
     const { studentId } = req.params;
     const { courseId, batchId, paymentDetails } = req.body;
 
-    // Verify student exists
-    const student = await Student.findById(studentId);
+    // Verify student exists using User model
+    const student = await User.findById(studentId);
     if (!student) {
       return res.status(404).json({
         success: false,
         message: "Student not found",
+      });
+    }
+
+    // Additional check: ensure the user has student role
+    if (!student.role || !student.role.includes('student')) {
+      return res.status(400).json({
+        success: false,
+        message: "User is not a student",
+      });
+    }
+
+    // Check if student is active
+    if (student.status === "Inactive") {
+      return res.status(400).json({
+        success: false,
+        message: "Student account is inactive. Please contact administrator.",
       });
     }
 
@@ -72,6 +88,29 @@ export const enrollStudentInBatch = async (req, res) => {
     const accessExpiryDate = new Date(batch.end_date);
     accessExpiryDate.setDate(accessExpiryDate.getDate() + 30); // Add 30 days grace period after batch ends
 
+    // Get course pricing for the enrollment
+    const coursePricing = course.prices?.[0] || { batch: 0, individual: 0, currency: 'INR' };
+    const enrollmentType = req.body.enrollment_type || "batch";
+    
+    // Calculate pricing based on enrollment type
+    let originalPrice, finalPrice, pricingType;
+    if (enrollmentType === "individual") {
+      originalPrice = coursePricing.individual || 0;
+      finalPrice = originalPrice;
+      pricingType = "individual";
+    } else {
+      originalPrice = coursePricing.batch || 0;
+      finalPrice = originalPrice;
+      pricingType = "batch";
+    }
+
+    // Apply discount if provided
+    let discountApplied = 0;
+    if (req.body.discount_applied && req.body.discount_applied > 0) {
+      discountApplied = req.body.discount_applied;
+      finalPrice = Math.max(0, finalPrice - discountApplied);
+    }
+
     // Create new enrollment
     const enrollment = new Enrollment({
       student: studentId,
@@ -80,9 +119,30 @@ export const enrollStudentInBatch = async (req, res) => {
       enrollment_date: new Date(),
       status: "active",
       access_expiry_date: accessExpiryDate,
-      enrollment_type: req.body.enrollment_type || "individual",
+      enrollment_type: enrollmentType,
       enrollment_source: req.body.enrollment_source || "website",
       created_by: req.user.id,
+      // Required pricing_snapshot fields
+      pricing_snapshot: {
+        original_price: originalPrice,
+        final_price: finalPrice,
+        currency: coursePricing.currency || "INR",
+        pricing_type: pricingType,
+        discount_applied: discountApplied,
+        discount_code: req.body.discount_code || null
+      },
+      // Progress tracking initialization
+      progress: {
+        overall_percentage: 0,
+        lessons_completed: 0,
+        last_activity_date: new Date()
+      },
+      // Batch-specific information (required for batch enrollments)
+      batch_info: {
+        batch_size: enrollmentType === "batch" ? (req.body.batch_size || 2) : 1,
+        is_batch_leader: enrollmentType === "batch",
+        batch_members: enrollmentType === "batch" ? (req.body.batch_members || []) : []
+      }
     });
 
     // If payment details are provided, add them
@@ -331,7 +391,7 @@ export const getStudentEnrollments = async (req, res) => {
     const { studentId } = req.params;
 
     // Verify student exists
-    const student = await Student.findById(studentId);
+    const student = await User.findById(studentId);
     if (!student) {
       return res.status(404).json({
         success: false,
