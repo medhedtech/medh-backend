@@ -15,8 +15,11 @@ import {
   updateStudentStatusInBatch,
   updateBatchStatus,
   addRecordedLessonToBatch,
+  getRecordedLessonsForSession,
+  getRecordedLessonsForStudent,
   addScheduledSessionToBatch,
   createZoomMeetingForSession,
+  getBatchesForStudent,
 } from "../controllers/batch-controller.js";
 
 import {
@@ -134,6 +137,15 @@ router.post(
   validateScheduleSessionId,
   validateRecordedLesson,
   addRecordedLessonToBatch
+);
+
+// Add route to fetch recorded lessons for a scheduled session
+router.get(
+  "/:batchId/schedule/:sessionId/recorded-lessons",
+  isAuthenticated,
+  validateBatchId,
+  validateScheduleSessionId,
+  getRecordedLessonsForSession
 );
 
 // Add route to schedule a new class session
@@ -254,6 +266,24 @@ router.get(
   isAuthenticated,
   authorize(["admin", "super-admin"]),
   getInstructorAnalysis
+);
+
+// Add route to get batches for a student by their ID
+router.get(
+  "/students/:studentId",
+  isAuthenticated,
+  authorize(["admin", "instructor", "super-admin", "student"]),
+  validateStudentId,
+  getBatchesForStudent
+);
+
+// Add route to fetch all recorded lessons for a student
+router.get(
+  "/students/:studentId/recorded-lessons",
+  isAuthenticated,
+  authorize(["admin", "instructor", "super-admin", "student"]),
+  validateStudentId,
+  getRecordedLessonsForStudent
 );
 
 export default router; 

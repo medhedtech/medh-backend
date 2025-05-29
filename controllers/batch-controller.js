@@ -1154,6 +1154,73 @@ export const addRecordedLessonToBatch = async (req, res) => {
   }
 };
 
+// Controller to get recorded lessons for a scheduled session
+export const getRecordedLessonsForSession = async (req, res) => {
+  try {
+    const { batchId, sessionId } = req.params;
+    const batch = await Batch.findById(batchId);
+    if (!batch) {
+      return res.status(404).json({ success: false, message: "Batch not found" });
+    }
+    const session = batch.schedule.id(sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, message: "Scheduled session not found" });
+    }
+    const lessons = session.recorded_lessons || [];
+    res.status(200).json({ success: true, data: lessons });
+  } catch (error) {
+    console.error("Error fetching recorded lessons:", error.message);
+    res.status(500).json({ success: false, message: "Server error while fetching recorded lessons", error: error.message });
+  }
+};
+
+// Controller to get recorded lessons for a student across all sessions
+export const getRecordedLessonsForStudent = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    // Authorization: students can only access their own recorded lessons
+    if (req.user.role === 'student' && req.user.id !== studentId) {
+      return res.status(403).json({ success: false, message: "Unauthorized to access other student's recorded lessons" });
+    }
+    // Verify student exists
+    const student = await User.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+    // Find active enrollments for the student
+    const enrollments = await Enrollment.find({ student: studentId, status: 'active' })
+      .populate({ path: 'batch', select: 'batch_name schedule' })
+      .lean();
+    const lessonsData = [];
+    // Iterate through enrollments and collect recorded lessons
+    for (const enrollment of enrollments) {
+      const batch = enrollment.batch;
+      if (!batch || !batch.schedule) continue;
+      for (const session of batch.schedule) {
+        if (session.recorded_lessons && session.recorded_lessons.length) {
+          lessonsData.push({
+            batch: {
+              id: batch._id,
+              name: batch.batch_name
+            },
+            session: {
+              id: session._id,
+              day: session.day,
+              start_time: session.start_time,
+              end_time: session.end_time
+            },
+            recorded_lessons: session.recorded_lessons
+          });
+        }
+      }
+    }
+    res.status(200).json({ success: true, count: lessonsData.length, data: lessonsData });
+  } catch (error) {
+    console.error("Error fetching recorded lessons for student:", error.message);
+    res.status(500).json({ success: false, message: "Server error while fetching recorded lessons for student", error: error.message });
+  }
+};
+
 // Add controller to schedule a new class session for a batch
 export const addScheduledSessionToBatch = async (req, res) => {
   try {
@@ -1210,5 +1277,52 @@ export const createZoomMeetingForSession = async (req, res) => {
   } catch (error) {
     console.error("Error creating Zoom meeting for session:", error.message);
     res.status(500).json({ success: false, message: "Server error while creating Zoom meeting", error: error.message });
+  }
+};
+
+// Add controller to get batches for a student by their ID
+export const getBatchesForStudent = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    // Authorization: students can only access their own batches
+    if (req.user.role === 'student' && req.user.id !== studentId) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to access other student's batches",
+      });
+    }
+    // Verify student exists
+    const student = await User.findById(studentId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+    // Fetch enrollments for student with batch and course details
+    const enrollments = await Enrollment.find({ student: studentId })
+      .populate('batch', 'batch_name batch_code start_date end_date schedule status')
+      .populate('course', 'course_title');
+    // Transform enrollments to batch list
+    const batches = enrollments
+      .filter(e => e.batch)
+      .map(e => ({
+        batch: e.batch,
+        course: e.course,
+        enrollmentDate: e.enrollment_date,
+        enrollmentStatus: e.status
+      }));
+    return res.status(200).json({
+      success: true,
+      count: batches.length,
+      data: batches,
+    });
+  } catch (error) {
+    console.error("Error fetching student batches:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while fetching student batches",
+      error: error.message,
+    });
   }
 }; 
