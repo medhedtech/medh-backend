@@ -86,6 +86,15 @@ const userMetaSchema = new Schema(
     course_name: {
       type: String,
     },
+    date_of_birth: {
+      type: Date,
+    },
+    education_level: {
+      type: String,
+    },
+    language: {
+      type: String,
+    },
     age_group: {
       type: String,
       enum: AGE_GROUPS,

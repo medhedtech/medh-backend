@@ -146,6 +146,12 @@ const userValidation = joi.object({
   meta: joi
     .object({
       course_name: joi.string().optional(),
+      date_of_birth: joi.date().iso().optional().messages({
+        "date.base": "Date of birth must be a valid date",
+        "date.format": "Date of birth must be in ISO 8601 date format",
+      }),
+      education_level: joi.string().optional(),
+      language: joi.string().optional(),
       age: joi
         .string()
         .pattern(/^\d{1,3}$/)

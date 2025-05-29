@@ -49,9 +49,12 @@ export const ENV_VARS = {
       "image/jpeg": "jpg",
       "image/png": "png",
       "application/pdf": "pdf",
+      "video/mp4": "mp4",
+      "video/quicktime": "mov",
+      "video/webm": "webm",
     },
-    MAX_FILE_SIZE: 10 * 1024 * 1024, // 10 MB
+    MAX_FILE_SIZE: 10 * 1024 * 1024 * 1024, // 10 GB
     BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME || "medhdocuments", // Using environment variable or fallback
-    MAX_FILES: 5, // Placeholder for maximum number of files in multi-upload
+    MAX_FILES: 10, // Placeholder for maximum number of files in multi-upload
   },
 };
