@@ -4,6 +4,8 @@ import { ENV_VARS } from "../../config/envVars.js";
 import {
   uploadFile,
   uploadBase64File,
+  uploadBase64FileOptimized,
+  uploadBase64FileChunked,
   UploadError,
 } from "../../utils/uploadFile.js";
 
@@ -232,6 +234,121 @@ export const handleBase64Upload = async (req, res) => {
       success: false,
       message: error.message,
       error: error.code,
+    });
+  }
+};
+
+// Optimized base64 upload handler with streaming support
+export const handleBase64UploadOptimized = async (req, res) => {
+  try {
+    // Set CORS headers
+    const origin = req.headers.origin;
+    if (origin) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, x-access-token");
+      res.header("Access-Control-Allow-Credentials", "true");
+    }
+
+    // Early validation
+    if (!req.body || !req.body.base64String || !req.body.fileType) {
+      throw new UploadError(
+        "Missing required fields: base64String and fileType",
+        "INVALID_REQUEST"
+      );
+    }
+
+    const { base64String, fileType } = req.body;
+    
+    // Quick validation
+    const validFileTypes = ["image", "document", "video"];
+    if (!validFileTypes.includes(fileType)) {
+      throw new UploadError(
+        `Invalid file type. Must be one of: ${validFileTypes.join(", ")}`,
+        "INVALID_FILE_TYPE"
+      );
+    }
+
+    // Performance optimization: Use a single regex match and async processing
+    let mimeType;
+    let base64Data;
+    
+    // Use Promise.resolve to make this async and non-blocking
+    const parseResult = await Promise.resolve().then(() => {
+      const dataUriMatch = base64String.match(/^data:(.*?);base64,(.*)$/);
+      if (dataUriMatch) {
+        return {
+          mimeType: dataUriMatch[1],
+          base64Data: dataUriMatch[2]
+        };
+      } else {
+        // Raw base64 string
+        const mimeTypeMap = {
+          image: "image/jpeg",
+          document: "application/pdf",
+          video: "video/mp4"
+        };
+        return {
+          mimeType: mimeTypeMap[fileType],
+          base64Data: base64String
+        };
+      }
+    });
+
+    mimeType = parseResult.mimeType;
+    base64Data = parseResult.base64Data;
+
+    // Validate MIME type prefix
+    const mimeTypePrefix = mimeType.split("/")[0];
+    const expectedPrefix = fileType === "document" ? "application" : fileType;
+    if (!mimeType.startsWith(expectedPrefix)) {
+      throw new UploadError(
+        `Invalid MIME type for ${fileType}. Expected ${expectedPrefix}/*`,
+        "INVALID_MIME_TYPE"
+      );
+    }
+
+    // Quick size estimation (base64 is ~33% larger than binary)
+    const estimatedSize = (base64Data.length * 3) / 4;
+    if (estimatedSize > ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE) {
+      throw new UploadError(
+        `File size exceeds maximum limit of ${ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE / (1024 * 1024)}MB`,
+        "FILE_TOO_LARGE"
+      );
+    }
+
+    // Choose processing method based on file size
+    const folder = `${fileType}s`;
+    const CHUNKED_THRESHOLD = 25 * 1024 * 1024; // 25MB threshold for chunked processing
+    
+    let result;
+    if (estimatedSize > CHUNKED_THRESHOLD) {
+      // Use chunked processing for large files
+      result = await uploadBase64FileChunked(base64Data, mimeType, folder);
+    } else {
+      // Use optimized processing for smaller files
+      result = await uploadBase64FileOptimized(base64Data, mimeType, folder);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "File uploaded successfully",
+      data: result.data,
+    });
+  } catch (error) {
+    console.error("Optimized base64 upload error:", error);
+    
+    // Determine appropriate status code
+    let statusCode = 500;
+    if (error.code === "INVALID_REQUEST" || error.code === "INVALID_FILE_TYPE" || 
+        error.code === "INVALID_MIME_TYPE" || error.code === "FILE_TOO_LARGE") {
+      statusCode = 400;
+    }
+    
+    res.status(statusCode).json({
+      success: false,
+      message: error.message,
+      error: error.code || "UPLOAD_ERROR",
     });
   }
 };

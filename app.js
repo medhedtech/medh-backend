@@ -49,8 +49,18 @@ app.use(helmet({
   // Disable contentSecurityPolicy as it can interfere with CORS
   contentSecurityPolicy: false
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Configure JSON parser with increased limit for base64 uploads
+app.use(express.json({ 
+  limit: '50mb',  // Increase limit for base64 uploads
+  verify: (req, res, buf, encoding) => {
+    // Store raw body for potential streaming use
+    if (req.headers['content-type'] === 'application/json' && req.url.includes('/upload/base64')) {
+      req.rawBody = buf.toString(encoding || 'utf8');
+    }
+  }
+}));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(morgan("dev"));
 
 // Static files
