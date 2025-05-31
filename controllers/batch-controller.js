@@ -240,7 +240,8 @@ export const getAllBatches = async (req, res) => {
       batch_type,
       search,
       sort_by = 'createdAt',
-      sort_order = 'desc'
+      sort_order = 'desc',
+      include_students = 'true'
     } = req.query;
 
     const skip = (page - 1) * limit;
@@ -278,14 +279,19 @@ export const getAllBatches = async (req, res) => {
       .limit(parseInt(limit))
       .lean();
 
-    // Calculate actual enrolled students count for each batch
-    const batchesWithCorrectCount = await Promise.all(
+    // Calculate actual enrolled students count and optionally get student details
+    const batchesWithStudentInfo = await Promise.all(
       batches.map(async (batch) => {
-        // Count active enrollments for this batch
-        const actualEnrolledCount = await Enrollment.countDocuments({
+        // Get active enrollments for this batch
+        const enrollments = await Enrollment.find({
           batch: batch._id,
           status: 'active'
-        });
+        })
+        .populate('student', 'full_name email phone_numbers user_image status')
+        .select('student enrollment_date status progress.overall_percentage payment_plan')
+        .lean();
+
+        const actualEnrolledCount = enrollments.length;
 
         // Update the batch document if the count is different
         if (actualEnrolledCount !== batch.enrolled_students) {
@@ -294,10 +300,24 @@ export const getAllBatches = async (req, res) => {
           });
         }
 
-        return {
+        // Prepare batch data
+        const batchWithStudents = {
           ...batch,
-          enrolled_students: actualEnrolledCount
+          enrolled_students: actualEnrolledCount,
         };
+
+        // Include student details if requested
+        if (include_students === 'true') {
+          batchWithStudents.enrolled_students_details = enrollments.map(enrollment => ({
+            student: enrollment.student,
+            enrollment_date: enrollment.enrollment_date,
+            enrollment_status: enrollment.status,
+            progress: enrollment.progress?.overall_percentage || 0,
+            payment_plan: enrollment.payment_plan
+          }));
+        }
+
+        return batchWithStudents;
       })
     );
 
@@ -305,21 +325,40 @@ export const getAllBatches = async (req, res) => {
     const totalBatches = await Batch.countDocuments(filter);
     const totalPages = Math.ceil(totalBatches / limit);
 
+    // Calculate summary statistics
+    const totalEnrolledStudents = batchesWithStudentInfo.reduce((sum, batch) => sum + batch.enrolled_students, 0);
+    const activeBatches = batchesWithStudentInfo.filter(batch => batch.status === 'active').length;
+    const upcomingBatches = batchesWithStudentInfo.filter(batch => batch.status === 'Upcoming').length;
+
     res.status(200).json({
       success: true,
-      count: batchesWithCorrectCount.length,
+      count: batchesWithStudentInfo.length,
       totalBatches,
       totalPages,
       currentPage: parseInt(page),
       hasNextPage: page < totalPages,
       hasPrevPage: page > 1,
-      data: batchesWithCorrectCount,
+      summary: {
+        total_enrolled_students: totalEnrolledStudents,
+        active_batches: activeBatches,
+        upcoming_batches: upcomingBatches,
+        completed_batches: batchesWithStudentInfo.filter(b => b.status === 'Completed').length,
+        cancelled_batches: batchesWithStudentInfo.filter(b => b.status === 'Cancelled').length,
+      },
+      filters_applied: {
+        status: status || 'all',
+        batch_type: batch_type || 'all',
+        search: search || null,
+        include_students: include_students === 'true'
+      },
+      data: batchesWithStudentInfo,
     });
   } catch (error) {
     console.error("Error fetching all batches:", error.message);
     res.status(500).json({
       success: false,
       message: "Server error while fetching batches",
+      error: error.message,
     });
   }
 };
@@ -1225,7 +1264,7 @@ export const getRecordedLessonsForStudent = async (req, res) => {
 export const addScheduledSessionToBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
-    const { day, start_time, end_time } = req.body;
+    const { date, start_time, end_time, title, description } = req.body;
 
     // Find the batch
     const batch = await Batch.findById(batchId);
@@ -1233,15 +1272,86 @@ export const addScheduledSessionToBatch = async (req, res) => {
       return res.status(404).json({ success: false, message: "Batch not found" });
     }
 
-    // Add the new scheduled session
-    batch.schedule.push({ day, start_time, end_time, recorded_lessons: [], zoom_meeting: {} });
+    // Check if session date is within batch duration
+    const sessionDate = new Date(date);
+    const batchStartDate = new Date(batch.start_date);
+    const batchEndDate = new Date(batch.end_date);
+    
+    if (sessionDate < batchStartDate || sessionDate > batchEndDate) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Session date must be within batch start and end dates",
+        batch_duration: {
+          start_date: batch.start_date,
+          end_date: batch.end_date
+        }
+      });
+    }
+
+    // Check for duplicate sessions on the same date and overlapping times
+    const existingSession = batch.schedule.find(session => {
+      if (!session.date) return false; // Skip old day-based sessions
+      
+      const existingSessionDate = new Date(session.date);
+      const isSameDate = existingSessionDate.toDateString() === sessionDate.toDateString();
+      
+      if (!isSameDate) return false;
+      
+      // Check for time overlap
+      const newStart = start_time;
+      const newEnd = end_time;
+      const existingStart = session.start_time;
+      const existingEnd = session.end_time;
+      
+      const newStartMins = newStart.split(':').reduce((acc, time) => (60 * acc) + +time);
+      const newEndMins = newEnd.split(':').reduce((acc, time) => (60 * acc) + +time);
+      const existingStartMins = existingStart.split(':').reduce((acc, time) => (60 * acc) + +time);
+      const existingEndMins = existingEnd.split(':').reduce((acc, time) => (60 * acc) + +time);
+      
+      return (newStartMins < existingEndMins && newEndMins > existingStartMins);
+    });
+
+    if (existingSession) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "A session already exists at this date and time",
+        conflicting_session: {
+          date: existingSession.date,
+          start_time: existingSession.start_time,
+          end_time: existingSession.end_time
+        }
+      });
+    }
+
+    // Add the new scheduled session with date instead of day
+    const newSessionData = {
+      date: date,
+      start_time: start_time,
+      end_time: end_time,
+      title: title || `Session on ${sessionDate.toLocaleDateString()}`,
+      description: description || '',
+      recorded_lessons: [],
+      zoom_meeting: {},
+      created_by: req.user.id,
+      created_at: new Date()
+    };
+
+    batch.schedule.push(newSessionData);
     await batch.save();
 
     const newSession = batch.schedule[batch.schedule.length - 1];
-    res.status(201).json({ success: true, data: newSession });
+    res.status(201).json({ 
+      success: true, 
+      message: "Session scheduled successfully",
+      data: newSession 
+    });
   } catch (error) {
     console.error("Error scheduling session for batch:", error.message);
-    res.status(500).json({ success: false, message: "Server error while scheduling session", error: error.message });
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error while scheduling session", 
+      error: error.message 
+    });
   }
 };
 
@@ -1322,6 +1432,277 @@ export const getBatchesForStudent = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error while fetching student batches",
+      error: error.message,
+    });
+  }
+};
+
+// Get upcoming sessions for a specific batch
+export const getUpcomingSessionsForBatch = async (req, res) => {
+  try {
+    const { batchId } = req.params;
+    const { limit = 10, days_ahead = 28 } = req.query;
+
+    // Find the batch
+    const batch = await Batch.findById(batchId)
+      .populate('assigned_instructor', 'full_name email')
+      .lean();
+    
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: "Batch not found",
+      });
+    }
+
+    // Check if batch has a schedule
+    if (!batch.schedule || batch.schedule.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "Batch has no scheduled sessions",
+        data: [],
+        count: 0,
+      });
+    }
+
+    const now = new Date();
+    const searchEndDate = new Date(now.getTime() + (parseInt(days_ahead) * 24 * 60 * 60 * 1000));
+    const batchEndDate = batch.end_date ? new Date(batch.end_date) : null;
+    const actualEndDate = batchEndDate && batchEndDate < searchEndDate ? batchEndDate : searchEndDate;
+    
+    // Filter sessions that are in the future and within the time range
+    const upcomingSessions = batch.schedule
+      .filter(session => {
+        // Handle both old day-based and new date-based sessions
+        if (session.date) {
+          // New date-based session
+          const sessionDate = new Date(session.date);
+        const [hours, minutes] = session.start_time.split(':').map(Number);
+        sessionDate.setHours(hours, minutes, 0, 0);
+        
+          return sessionDate > now && sessionDate <= actualEndDate;
+        } else if (session.day) {
+          // Legacy day-based session - we'll keep this for backward compatibility
+          // but won't generate recurring sessions anymore
+          return false;
+        }
+        return false;
+      })
+      .map(session => {
+        const sessionDate = new Date(session.date);
+        const [startHours, startMinutes] = session.start_time.split(':').map(Number);
+        const [endHours, endMinutes] = session.end_time.split(':').map(Number);
+        
+        sessionDate.setHours(startHours, startMinutes, 0, 0);
+        const sessionEndDate = new Date(sessionDate);
+        sessionEndDate.setHours(endHours, endMinutes, 0, 0);
+        
+        return {
+            session_id: session._id,
+            session_date: sessionDate,
+            session_end_date: sessionEndDate,
+          date: session.date,
+            start_time: session.start_time,
+            end_time: session.end_time,
+          title: session.title || `Session on ${sessionDate.toLocaleDateString()}`,
+          description: session.description || '',
+            batch: {
+              id: batch._id,
+              name: batch.batch_name,
+              code: batch.batch_code,
+              status: batch.status,
+              start_date: batch.start_date,
+              end_date: batch.end_date,
+            },
+            instructor: batch.assigned_instructor,
+            zoom_meeting: session.zoom_meeting,
+            has_recorded_lessons: session.recorded_lessons?.length > 0,
+          is_upcoming: true,
+        };
+      })
+      .sort((a, b) => a.session_date - b.session_date)
+      .slice(0, parseInt(limit));
+
+    res.status(200).json({
+      success: true,
+      count: upcomingSessions.length,
+      batch_status: batch.status,
+      search_period: {
+        from: now.toISOString(),
+        to: actualEndDate.toISOString(),
+        batch_end_date: batch.end_date,
+      },
+      data: upcomingSessions,
+    });
+  } catch (error) {
+    console.error("Error fetching upcoming sessions for batch:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching upcoming sessions",
+      error: error.message,
+    });
+  }
+};
+
+// Get upcoming sessions for a student across all their enrolled batches
+export const getUpcomingSessionsForStudent = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { limit = 20, days_ahead = 28 } = req.query;
+
+    // Authorization: students can only access their own sessions
+    if (req.user.role === 'student' && req.user.id !== studentId) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to access other student's sessions",
+      });
+    }
+
+    // Verify student exists
+    const student = await User.findById(studentId);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+
+    // Check if user has student role
+    if (!student.role.includes('student')) {
+      return res.status(400).json({
+        success: false,
+        message: "User is not a student",
+      });
+    }
+
+    // Find active enrollments for the student
+    const enrollments = await Enrollment.find({ 
+      student: studentId, 
+      status: 'active' 
+    })
+    .populate({
+      path: 'batch',
+      select: 'batch_name batch_code schedule status assigned_instructor start_date end_date',
+      populate: {
+        path: 'assigned_instructor',
+        select: 'full_name email'
+      }
+    })
+    .populate('course', 'course_title')
+    .lean();
+
+    const upcomingSessions = [];
+    const now = new Date();
+    const searchEndDate = new Date(now.getTime() + (parseInt(days_ahead) * 24 * 60 * 60 * 1000));
+
+    // Iterate through each enrollment
+    enrollments.forEach(enrollment => {
+      const batch = enrollment.batch;
+      
+      // Skip if batch doesn't exist or has no schedule
+      if (!batch || !batch.schedule || batch.schedule.length === 0) {
+        return;
+      }
+
+      // Consider batch end date
+      const batchEndDate = batch.end_date ? new Date(batch.end_date) : null;
+      const actualEndDate = batchEndDate && batchEndDate < searchEndDate ? batchEndDate : searchEndDate;
+
+      // Filter and process sessions for this batch
+      batch.schedule.forEach(session => {
+        // Handle both old day-based and new date-based sessions
+        if (session.date) {
+          // New date-based session
+          const sessionDate = new Date(session.date);
+          const [startHours, startMinutes] = session.start_time.split(':').map(Number);
+          const [endHours, endMinutes] = session.end_time.split(':').map(Number);
+          
+          sessionDate.setHours(startHours, startMinutes, 0, 0);
+          const sessionEndDate = new Date(sessionDate);
+          sessionEndDate.setHours(endHours, endMinutes, 0, 0);
+          
+          // Only include sessions that are in the future and within the time range
+          const isInFuture = sessionDate > now;
+          const isWithinRange = sessionDate <= actualEndDate;
+          const isAfterBatchStart = !batch.start_date || sessionDate >= new Date(batch.start_date);
+          
+          if (isInFuture && isWithinRange && isAfterBatchStart) {
+            upcomingSessions.push({
+              session_id: session._id,
+              session_date: sessionDate,
+              session_end_date: sessionEndDate,
+              date: session.date,
+              start_time: session.start_time,
+              end_time: session.end_time,
+              title: session.title || `Session on ${sessionDate.toLocaleDateString()}`,
+              description: session.description || '',
+              batch: {
+                id: batch._id,
+                name: batch.batch_name,
+                code: batch.batch_code,
+                status: batch.status,
+                start_date: batch.start_date,
+                end_date: batch.end_date,
+              },
+              course: {
+                id: enrollment.course._id,
+                title: enrollment.course.course_title,
+              },
+              instructor: batch.assigned_instructor,
+              zoom_meeting: session.zoom_meeting,
+              has_recorded_lessons: session.recorded_lessons?.length > 0,
+              enrollment_status: enrollment.status,
+              is_upcoming: true,
+            });
+          }
+      }
+        // Note: We're not processing legacy day-based sessions anymore
+      });
+    });
+
+    // Sort by session date
+    upcomingSessions.sort((a, b) => a.session_date - b.session_date);
+
+    // Apply limit
+    const limitedSessions = upcomingSessions.slice(0, parseInt(limit));
+
+    // Count batches by status (but only those with actual upcoming sessions)
+    const batchesWithUpcomingSessions = [...new Set(upcomingSessions.map(s => s.batch.id))];
+    const activeBatches = enrollments.filter(e => 
+      e.batch && 
+      e.batch.status === 'active' && 
+      batchesWithUpcomingSessions.includes(e.batch._id.toString())
+    ).length;
+    const upcomingBatches = enrollments.filter(e => 
+      e.batch && 
+      e.batch.status === 'Upcoming' && 
+      batchesWithUpcomingSessions.includes(e.batch._id.toString())
+    ).length;
+
+    res.status(200).json({
+      success: true,
+      count: limitedSessions.length,
+      total_upcoming: upcomingSessions.length,
+      active_batches: activeBatches,
+      upcoming_batches: upcomingBatches,
+      total_batches: activeBatches + upcomingBatches,
+      days_ahead: parseInt(days_ahead),
+      search_period: {
+        from: now.toISOString(),
+        to: searchEndDate.toISOString(),
+      },
+      student: {
+        id: student._id,
+        name: student.full_name,
+        email: student.email
+      },
+      data: limitedSessions,
+    });
+  } catch (error) {
+    console.error("Error fetching upcoming sessions for student:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching upcoming sessions",
       error: error.message,
     });
   }

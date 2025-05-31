@@ -20,6 +20,8 @@ import {
   addScheduledSessionToBatch,
   createZoomMeetingForSession,
   getBatchesForStudent,
+  getUpcomingSessionsForBatch,
+  getUpcomingSessionsForStudent,
 } from "../controllers/batch-controller.js";
 
 import {
@@ -284,6 +286,24 @@ router.get(
   authorize(["admin", "instructor", "super-admin", "student"]),
   validateStudentId,
   getRecordedLessonsForStudent
+);
+
+// Add route to get upcoming sessions for a batch
+router.get(
+  "/:batchId/upcoming-sessions",
+  isAuthenticated,
+  authorize(["admin", "instructor", "super-admin"]),
+  validateBatchId,
+  getUpcomingSessionsForBatch
+);
+
+// Add route to get upcoming sessions for a student across all their enrolled batches
+router.get(
+  "/students/:studentId/upcoming-sessions",
+  isAuthenticated,
+  authorize(["admin", "instructor", "super-admin", "student"]),
+  validateStudentId,
+  getUpcomingSessionsForStudent
 );
 
 export default router; 

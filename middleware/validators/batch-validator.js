@@ -105,11 +105,51 @@ export const validateBatchCreate = [
     .isArray()
     .withMessage("Schedule must be an array")
     .notEmpty()
-    .withMessage("Schedule is required"),
+    .withMessage("Schedule is required")
+    .custom((scheduleArray) => {
+      // Validate each schedule item
+      for (let i = 0; i < scheduleArray.length; i++) {
+        const scheduleItem = scheduleArray[i];
+        const hasDay = scheduleItem.day && scheduleItem.day.trim() !== '';
+        const hasDate = scheduleItem.date;
+        
+        // Either day or date must be provided, but not both
+        if (!hasDay && !hasDate) {
+          throw new Error(`Schedule item ${i + 1}: Either 'day' or 'date' must be provided`);
+        }
+        
+        if (hasDay && hasDate) {
+          throw new Error(`Schedule item ${i + 1}: Cannot have both 'day' and 'date' fields. Use either day-based or date-based scheduling`);
+        }
+        
+        // Validate day if provided
+        if (hasDay) {
+          const validDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+          if (!validDays.includes(scheduleItem.day)) {
+            throw new Error(`Schedule item ${i + 1}: Invalid day '${scheduleItem.day}'. Must be one of: ${validDays.join(', ')}`);
+          }
+        }
+        
+        // Validate date if provided
+        if (hasDate) {
+          const dateObj = new Date(scheduleItem.date);
+          if (isNaN(dateObj.getTime())) {
+            throw new Error(`Schedule item ${i + 1}: Invalid date format. Date must be in ISO 8601 format (YYYY-MM-DD)`);
+          }
+        }
+      }
+      return true;
+    }),
   
   body("schedule.*.day")
+    .optional()
     .isIn(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
     .withMessage("Invalid day in schedule"),
+  
+  body("schedule.*.date")
+    .optional()
+    .isISO8601()
+    .withMessage("Session date must be a valid date in ISO 8601 format"),
   
   body("schedule.*.start_time")
     .matches(/^([01]\d|2[0-3]):([0-5]\d)$/)
@@ -201,12 +241,53 @@ export const validateBatchUpdate = [
   body("schedule")
     .optional()
     .isArray()
-    .withMessage("Schedule must be an array"),
+    .withMessage("Schedule must be an array")
+    .custom((scheduleArray) => {
+      if (!scheduleArray) return true; // Optional field
+      
+      // Validate each schedule item
+      for (let i = 0; i < scheduleArray.length; i++) {
+        const scheduleItem = scheduleArray[i];
+        const hasDay = scheduleItem.day && scheduleItem.day.trim() !== '';
+        const hasDate = scheduleItem.date;
+        
+        // Either day or date must be provided, but not both
+        if (!hasDay && !hasDate) {
+          throw new Error(`Schedule item ${i + 1}: Either 'day' or 'date' must be provided`);
+        }
+        
+        if (hasDay && hasDate) {
+          throw new Error(`Schedule item ${i + 1}: Cannot have both 'day' and 'date' fields. Use either day-based or date-based scheduling`);
+        }
+        
+        // Validate day if provided
+        if (hasDay) {
+          const validDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+          if (!validDays.includes(scheduleItem.day)) {
+            throw new Error(`Schedule item ${i + 1}: Invalid day '${scheduleItem.day}'. Must be one of: ${validDays.join(', ')}`);
+          }
+        }
+        
+        // Validate date if provided
+        if (hasDate) {
+          const dateObj = new Date(scheduleItem.date);
+          if (isNaN(dateObj.getTime())) {
+            throw new Error(`Schedule item ${i + 1}: Invalid date format. Date must be in ISO 8601 format (YYYY-MM-DD)`);
+          }
+        }
+      }
+      return true;
+    }),
   
   body("schedule.*.day")
     .optional()
     .isIn(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
     .withMessage("Invalid day in schedule"),
+  
+  body("schedule.*.date")
+    .optional()
+    .isISO8601()
+    .withMessage("Session date must be a valid date in ISO 8601 format"),
   
   body("schedule.*.start_time")
     .optional()
@@ -411,9 +492,21 @@ export const validateScheduleSessionId = [
 
 // Validate scheduling a new session for a batch
 export const validateScheduledSession = [
-  body("day")
-    .isIn(["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"])
-    .withMessage("Invalid day for scheduled session"),
+  body("date")
+    .notEmpty()
+    .withMessage("Session date is required")
+    .isISO8601()
+    .withMessage("Session date must be a valid date in ISO 8601 format")
+    .custom((value) => {
+      const sessionDate = new Date(value);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Reset time to start of day for comparison
+      
+      if (sessionDate < today) {
+        throw new Error("Session date cannot be in the past");
+      }
+      return true;
+    }),
   body("start_time")
     .matches(/^([01]\d|2[0-3]):([0-5]\d)$/)
     .withMessage("Start time must be in HH:MM format (24-hour)"),
@@ -430,6 +523,16 @@ export const validateScheduledSession = [
       }
       return true;
     }),
+  body("title")
+    .optional()
+    .trim()
+    .isLength({ max: 200 })
+    .withMessage("Session title must be maximum 200 characters"),
+  body("description")
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage("Session description must be maximum 500 characters"),
   (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {

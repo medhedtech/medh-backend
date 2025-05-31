@@ -138,10 +138,16 @@ const batchSchema = new Schema(
     },
     schedule: [
       {
+        // Legacy field for recurring day-based scheduling (kept for backward compatibility)
         day: {
           type: String,
           enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-          required: true,
+          required: false, // Made optional to support date-based scheduling
+        },
+        // New field for specific date-based scheduling
+        date: {
+          type: Date,
+          required: false, // Either day or date should be provided
         },
         start_time: {
           type: String,
@@ -162,6 +168,17 @@ const batchSchema = new Schema(
             },
             message: "End time must be after start time",
           },
+        },
+        // Optional fields for session metadata
+        title: {
+          type: String,
+          trim: true,
+          maxlength: [200, "Session title cannot exceed 200 characters"],
+        },
+        description: {
+          type: String,
+          trim: true,
+          maxlength: [500, "Session description cannot exceed 500 characters"],
         },
         // Recorded lessons for this scheduled session
         recorded_lessons: [
@@ -206,6 +223,15 @@ const batchSchema = new Schema(
             trim: true,
           },
         },
+        // Audit fields for date-based sessions
+        created_by: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+        },
+        created_at: {
+          type: Date,
+          default: Date.now,
+        },
       },
     ],
     batch_notes: {
@@ -222,6 +248,30 @@ const batchSchema = new Schema(
     timestamps: true,
   }
 );
+
+// Add custom validation for schedule items
+batchSchema.path('schedule').validate(function(scheduleArray) {
+  if (!scheduleArray || scheduleArray.length === 0) {
+    return true; // Let other validators handle empty schedule
+  }
+  
+  for (let i = 0; i < scheduleArray.length; i++) {
+    const scheduleItem = scheduleArray[i];
+    const hasDay = scheduleItem.day && scheduleItem.day.trim() !== '';
+    const hasDate = scheduleItem.date;
+    
+    // Either day or date must be provided, but not both
+    if (!hasDay && !hasDate) {
+      throw new Error(`Schedule item ${i + 1}: Either 'day' or 'date' must be provided`);
+    }
+    
+    if (hasDay && hasDate) {
+      throw new Error(`Schedule item ${i + 1}: Cannot have both 'day' and 'date' fields. Use either day-based or date-based scheduling`);
+    }
+  }
+  
+  return true;
+}, 'Schedule validation failed');
 
 /* ------------------------------ */
 /* Schemas                        */
