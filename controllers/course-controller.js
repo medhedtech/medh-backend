@@ -4134,6 +4134,11 @@ export {
   groupCoursesByClassType,
   getHomeCourses,
   toggleShowInHome,
+  schedulePublish,
+  getScheduledPublish,
+  cancelScheduledPublish,
+  getAllScheduledPublishes,
+  executeScheduledPublishes,
 };
 
 // List all courses with show_in_home tag for home page
@@ -4184,3 +4189,322 @@ const toggleShowInHome = async (req, res) => {
     });
   }
 };
+
+/**
+ * Schedule course publishing
+ * @route POST /api/courses/:id/schedule-publish
+ * @access Admin
+ */
+const schedulePublish = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { publishDate, publishTime, timezone = 'UTC' } = req.body;
+
+  // Validate required fields
+  if (!publishDate) {
+    return res.status(400).json(
+      responseFormatter(false, "Publish date is required", null, 400)
+    );
+  }
+
+  // Validate course exists
+  const course = await Course.findById(id);
+  if (!course) {
+    return res.status(404).json(
+      responseFormatter(false, "Course not found", null, 404)
+    );
+  }
+
+  // Create scheduled publish datetime
+  let scheduledDateTime;
+  try {
+    if (publishTime) {
+      // Combine date and time
+      const dateTimeString = `${publishDate}T${publishTime}:00.000Z`;
+      scheduledDateTime = new Date(dateTimeString);
+    } else {
+      // Use date only (default to midnight UTC)
+      scheduledDateTime = new Date(`${publishDate}T00:00:00.000Z`);
+    }
+
+    // Validate the date is in the future
+    const now = new Date();
+    if (scheduledDateTime <= now) {
+      return res.status(400).json(
+        responseFormatter(false, "Scheduled publish date must be in the future", null, 400)
+      );
+    }
+  } catch (error) {
+    return res.status(400).json(
+      responseFormatter(false, "Invalid date or time format", null, 400)
+    );
+  }
+
+  // Update course with scheduled publish information
+  const updatedCourse = await Course.findByIdAndUpdate(
+    id,
+    {
+      $set: {
+        scheduledPublishDate: scheduledDateTime,
+        scheduledPublishTimezone: timezone,
+        status: course.status === 'Published' ? 'Published' : 'Upcoming', // Keep published courses as published
+        'meta.lastUpdated': new Date()
+      }
+    },
+    { new: true, runValidators: true }
+  );
+
+  logger.info(`Course ${id} scheduled for publishing on ${scheduledDateTime.toISOString()}`);
+
+  res.status(200).json(
+    responseFormatter(
+      true,
+      "Course publishing scheduled successfully",
+      {
+        course: {
+          id: updatedCourse._id,
+          title: updatedCourse.course_title,
+          status: updatedCourse.status,
+          scheduledPublishDate: updatedCourse.scheduledPublishDate,
+          scheduledPublishTimezone: updatedCourse.scheduledPublishTimezone,
+          currentTime: new Date().toISOString()
+        }
+      },
+      200
+    )
+  );
+});
+
+/**
+ * Get scheduled publish information for a course
+ * @route GET /api/courses/:id/schedule-publish
+ * @access Admin
+ */
+const getScheduledPublish = catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const course = await Course.findById(id).select(
+    'course_title status scheduledPublishDate scheduledPublishTimezone meta.lastUpdated'
+  );
+
+  if (!course) {
+    return res.status(404).json(
+      responseFormatter(false, "Course not found", null, 404)
+    );
+  }
+
+  const scheduleInfo = {
+    courseId: course._id,
+    title: course.course_title,
+    status: course.status,
+    scheduledPublishDate: course.scheduledPublishDate || null,
+    scheduledPublishTimezone: course.scheduledPublishTimezone || null,
+    isScheduled: !!course.scheduledPublishDate,
+    currentTime: new Date().toISOString()
+  };
+
+  // Add time remaining if scheduled
+  if (course.scheduledPublishDate) {
+    const now = new Date();
+    const timeRemaining = course.scheduledPublishDate.getTime() - now.getTime();
+    scheduleInfo.timeRemainingMs = Math.max(0, timeRemaining);
+    scheduleInfo.isPastDue = timeRemaining <= 0;
+  }
+
+  res.status(200).json(
+    responseFormatter(
+      true,
+      "Schedule information retrieved successfully",
+      scheduleInfo,
+      200
+    )
+  );
+});
+
+/**
+ * Cancel scheduled publishing for a course
+ * @route DELETE /api/courses/:id/schedule-publish
+ * @access Admin
+ */
+const cancelScheduledPublish = catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const course = await Course.findById(id);
+  if (!course) {
+    return res.status(404).json(
+      responseFormatter(false, "Course not found", null, 404)
+    );
+  }
+
+  if (!course.scheduledPublishDate) {
+    return res.status(400).json(
+      responseFormatter(false, "No scheduled publishing found for this course", null, 400)
+    );
+  }
+
+  // Remove scheduled publish information
+  const updatedCourse = await Course.findByIdAndUpdate(
+    id,
+    {
+      $unset: {
+        scheduledPublishDate: 1,
+        scheduledPublishTimezone: 1
+      },
+      $set: {
+        'meta.lastUpdated': new Date()
+      }
+    },
+    { new: true, runValidators: true }
+  );
+
+  logger.info(`Scheduled publishing cancelled for course ${id}`);
+
+  res.status(200).json(
+    responseFormatter(
+      true,
+      "Scheduled publishing cancelled successfully",
+      {
+        courseId: updatedCourse._id,
+        title: updatedCourse.course_title,
+        status: updatedCourse.status
+      },
+      200
+    )
+  );
+});
+
+/**
+ * Get all courses with scheduled publishing
+ * @route GET /api/courses/scheduled-publishes
+ * @access Admin
+ */
+const getAllScheduledPublishes = catchAsync(async (req, res) => {
+  const { status, upcoming } = req.query;
+  
+  // Build filter
+  const filter = {
+    scheduledPublishDate: { $exists: true, $ne: null }
+  };
+
+  if (status && status !== 'all') {
+    filter.status = status;
+  }
+
+  if (upcoming === 'true') {
+    filter.scheduledPublishDate = { $gt: new Date() };
+  }
+
+  const courses = await Course.find(filter)
+    .select('course_title status scheduledPublishDate scheduledPublishTimezone meta.lastUpdated createdAt')
+    .sort({ scheduledPublishDate: 1 });
+
+  const now = new Date();
+  const scheduledCourses = courses.map(course => ({
+    courseId: course._id,
+    title: course.course_title,
+    status: course.status,
+    scheduledPublishDate: course.scheduledPublishDate,
+    scheduledPublishTimezone: course.scheduledPublishTimezone,
+    timeRemainingMs: Math.max(0, course.scheduledPublishDate.getTime() - now.getTime()),
+    isPastDue: course.scheduledPublishDate <= now,
+    createdAt: course.createdAt,
+    lastUpdated: course.meta.lastUpdated
+  }));
+
+  res.status(200).json(
+    responseFormatter(
+      true,
+      "Scheduled publishes retrieved successfully",
+      {
+        courses: scheduledCourses,
+        total: scheduledCourses.length,
+        filters: { status: status || 'all', upcoming: upcoming === 'true' }
+      },
+      200
+    )
+  );
+});
+
+/**
+ * Execute scheduled publishing (typically called by cron job)
+ * @route POST /api/courses/execute-scheduled-publishes
+ * @access Admin/System
+ */
+const executeScheduledPublishes = catchAsync(async (req, res) => {
+  const now = new Date();
+  
+  // Find courses that are scheduled to be published and past their publish date
+  const coursesToPublish = await Course.find({
+    scheduledPublishDate: { $lte: now },
+    status: { $ne: 'Published' }
+  });
+
+  if (coursesToPublish.length === 0) {
+    return res.status(200).json(
+      responseFormatter(
+        true,
+        "No courses ready for publishing",
+        { publishedCount: 0 },
+        200
+      )
+    );
+  }
+
+  const publishResults = [];
+  
+  for (const course of coursesToPublish) {
+    try {
+      // Update course status to Published and remove scheduling fields
+      const updatedCourse = await Course.findByIdAndUpdate(
+        course._id,
+        {
+          $set: {
+            status: 'Published',
+            'meta.lastUpdated': new Date()
+          },
+          $unset: {
+            scheduledPublishDate: 1,
+            scheduledPublishTimezone: 1
+          }
+        },
+        { new: true, runValidators: true }
+      );
+
+      publishResults.push({
+        courseId: course._id,
+        title: course.course_title,
+        previousStatus: course.status,
+        newStatus: 'Published',
+        scheduledDate: course.scheduledPublishDate,
+        publishedAt: new Date(),
+        success: true
+      });
+
+      logger.info(`Course ${course._id} (${course.course_title}) published successfully via scheduled publishing`);
+    } catch (error) {
+      publishResults.push({
+        courseId: course._id,
+        title: course.course_title,
+        error: error.message,
+        success: false
+      });
+
+      logger.error(`Failed to publish course ${course._id}: ${error.message}`);
+    }
+  }
+
+  const successCount = publishResults.filter(result => result.success).length;
+  const failureCount = publishResults.filter(result => !result.success).length;
+
+  res.status(200).json(
+    responseFormatter(
+      true,
+      `Scheduled publishing executed: ${successCount} published, ${failureCount} failed`,
+      {
+        publishedCount: successCount,
+        failedCount: failureCount,
+        results: publishResults
+      },
+      200
+    )
+  );
+});

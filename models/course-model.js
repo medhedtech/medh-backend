@@ -981,6 +981,19 @@ const courseSchema = new Schema(
       default: false,
       index: true,
     },
+    /**
+     * Scheduled publishing fields for course automation
+     */
+    scheduledPublishDate: {
+      type: Date,
+      default: null,
+      index: true,
+    },
+    scheduledPublishTimezone: {
+      type: String,
+      default: 'UTC',
+      trim: true,
+    },
   },
   {
     timestamps: true,
@@ -1015,6 +1028,7 @@ courseSchema.index({ category_type: 1, status: 1, course_fee: 1 });
 courseSchema.index({ course_category: 1, isFree: 1 });
 courseSchema.index({ createdAt: -1 });
 courseSchema.index({ slug: 1 }, { unique: true, sparse: true });
+courseSchema.index({ scheduledPublishDate: 1 }, { sparse: true });
 
 /* ------------------------------ */
 /* Virtual Fields                 */

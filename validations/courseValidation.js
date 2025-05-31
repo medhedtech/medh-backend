@@ -1,4 +1,5 @@
 import Joi from "joi";
+import { body, validationResult } from "express-validator";
 
 /**
  * Validates course data
@@ -94,3 +95,48 @@ export const validateQuizLessonData = (data) => {
 
   return schema.validate(data);
 };
+
+/**
+ * Validate schedule publish request
+ */
+export const validateSchedulePublish = [
+  body("publishDate")
+    .notEmpty()
+    .withMessage("Publish date is required")
+    .isISO8601()
+    .withMessage("Publish date must be in ISO 8601 format (YYYY-MM-DD)")
+    .custom((value) => {
+      const publishDate = new Date(value);
+      const now = new Date();
+      now.setHours(0, 0, 0, 0); // Reset time to start of day for date comparison
+      
+      if (publishDate < now) {
+        throw new Error("Publish date must be today or in the future");
+      }
+      return true;
+    }),
+  
+  body("publishTime")
+    .optional()
+    .matches(/^([01]\d|2[0-3]):([0-5]\d)$/)
+    .withMessage("Publish time must be in HH:MM format (24-hour)"),
+  
+  body("timezone")
+    .optional()
+    .isString()
+    .withMessage("Timezone must be a string")
+    .isLength({ min: 1, max: 50 })
+    .withMessage("Timezone must be between 1 and 50 characters"),
+  
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation failed",
+        errors: errors.array(),
+      });
+    }
+    next();
+  },
+];
