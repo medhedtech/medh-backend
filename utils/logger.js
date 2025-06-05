@@ -349,10 +349,10 @@ if (process.env.NODE_ENV !== "production") {
       // Create a custom Sentry transport
       class SentryTransport extends winston.Transport {
         log(info, callback) {
-          const { level, message, metadata } = info;
+          const { level, message, metadata = {} } = info;
 
           if (level === "error" || level === "fatal") {
-            if (metadata.error instanceof Error) {
+            if (metadata && metadata.error instanceof Error) {
               Sentry.captureException(metadata.error, {
                 extra: metadata,
                 level: Sentry.Severity.Error,
