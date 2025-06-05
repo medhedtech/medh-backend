@@ -21,7 +21,7 @@ if (metadata && metadata.error instanceof Error) {
 ### 2. Invalid Sentry DSN Configuration
 **Problem**: `Invalid Sentry Dsn: your_sentry_dsn`
 
-**Fix Applied**:
+**Fix Applied**:p
 - Updated `.env` file to use empty SENTRY_DSN instead of placeholder value
 - This allows the application to run without Sentry integration
 
