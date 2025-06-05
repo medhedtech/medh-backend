@@ -293,10 +293,18 @@ const PORT = ENV_VARS.PORT;
 const HTTPS_PORT = ENV_VARS.HTTPS_PORT || 443;
 let httpServer, httpsServer;
 
-// In production, use HTTPS if certificates are available
-if (ENV_VARS.NODE_ENV === 'production' && ENV_VARS.TLS_CERT_PATH) {
+// In production, use HTTPS if certificates are available and USE_HTTPS is enabled
+if (ENV_VARS.NODE_ENV === 'production' && ENV_VARS.USE_HTTPS === 'true' && ENV_VARS.TLS_CERT_PATH && ENV_VARS.TLS_CERT_PATH.trim()) {
   try {
     const certPath = ENV_VARS.TLS_CERT_PATH;
+    
+    // Validate certificate files exist before creating HTTPS server
+    const certFile = path.join(certPath, 'fullchain.pem');
+    const keyFile = path.join(certPath, 'privkey.pem');
+    
+    if (!fs.existsSync(certFile) || !fs.existsSync(keyFile)) {
+      throw new Error(`Certificate files not found: ${certFile} or ${keyFile}`);
+    }
     
     // Create HTTPS server
     httpsServer = https.createServer(tlsConfig.production(certPath), app);
@@ -327,6 +335,10 @@ if (ENV_VARS.NODE_ENV === 'production' && ENV_VARS.TLS_CERT_PATH) {
     httpServer = http.createServer(app);
     httpServer.listen(PORT, () => {
       logger.info(`Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode (HTTP fallback)`);
+      logger.connection.success("HTTP Server", {
+        port: PORT,
+        environment: ENV_VARS.NODE_ENV,
+      });
     });
   }
 } else if (ENV_VARS.NODE_ENV === 'development' && ENV_VARS.USE_HTTPS === 'true') {
@@ -361,5 +373,45 @@ if (ENV_VARS.NODE_ENV === 'production' && ENV_VARS.TLS_CERT_PATH) {
 // Register shutdown handlers
 process.on("SIGTERM", gracefulShutdown);
 process.on("SIGINT", gracefulShutdown);
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Promise Rejection', {
+    reason: reason.toString(),
+    stack: reason.stack || 'No stack trace available',
+    promise: promise
+  });
+  
+  // In production, we might want to shutdown gracefully
+  if (ENV_VARS.NODE_ENV === 'production') {
+    logger.error('Unhandled rejection detected, shutting down gracefully...');
+    setTimeout(() => {
+      gracefulShutdown();
+    }, 1000);
+  }
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception', {
+    message: error.message,
+    stack: error.stack,
+    name: error.name
+  });
+  
+  // In production, we should shutdown gracefully on uncaught exceptions
+  if (ENV_VARS.NODE_ENV === 'production') {
+    logger.error('Uncaught exception detected, shutting down gracefully...');
+    setTimeout(() => {
+      gracefulShutdown();
+    }, 1000);
+  }
+});
+
+// PM2 ready signal
+if (process.send) {
+  process.send('ready');
+  logger.info('Process ready signal sent to PM2');
+}
 
 export default app;

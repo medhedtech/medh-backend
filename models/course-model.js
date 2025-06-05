@@ -987,7 +987,6 @@ const courseSchema = new Schema(
     scheduledPublishDate: {
       type: Date,
       default: null,
-      index: true,
     },
     scheduledPublishTimezone: {
       type: String,
