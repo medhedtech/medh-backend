@@ -336,56 +336,8 @@ if (process.env.NODE_ENV !== "production") {
     }),
   );
 
-  // If Sentry is available, integrate with it for production error tracking
-  if (Sentry) {
-    try {
-      Sentry.init({
-        dsn: process.env.SENTRY_DSN,
-        environment: process.env.NODE_ENV,
-        release: process.env.npm_package_version,
-        tracesSampleRate: 0.2,
-      });
-
-      // Create a custom Sentry transport
-      class SentryTransport extends winston.Transport {
-        log(info, callback) {
-          const { level, message, metadata = {} } = info;
-
-          if (level === "error" || level === "fatal") {
-            if (metadata && metadata.error instanceof Error) {
-              Sentry.captureException(metadata.error, {
-                extra: metadata,
-                level: Sentry.Severity.Error,
-              });
-            } else {
-              Sentry.captureMessage(message, {
-                extra: metadata,
-                level: Sentry.Severity.Error,
-              });
-            }
-          } else if (level === "warn") {
-            Sentry.captureMessage(message, {
-              extra: metadata,
-              level: Sentry.Severity.Warning,
-            });
-          }
-
-          callback();
-        }
-      }
-
-      // Add Sentry transport for error tracking
-      logger.add(
-        new SentryTransport({
-          level: "warn",
-        }),
-      );
-
-      logger.info("Sentry error tracking enabled");
-    } catch (err) {
-      logger.error("Failed to initialize Sentry", { error: err });
-    }
-  }
+  // Sentry integration temporarily disabled to prevent crashes
+  logger.info("Sentry integration disabled to prevent logger crashes");
 }
 
 // Enhanced request context middleware
@@ -433,16 +385,7 @@ logger.uiError = (error, context = {}) => {
   });
 
   // If Sentry is available, send the error
-  if (Sentry && process.env.NODE_ENV === "production") {
-    if (error instanceof Error) {
-      Sentry.captureException(error, { extra: context });
-    } else {
-      Sentry.captureMessage(JSON.stringify(error), {
-        level: Sentry.Severity.Error,
-        extra: context,
-      });
-    }
-  }
+  // Sentry error reporting disabled to prevent crashes
 };
 
 // Enhanced performance tracking
@@ -506,16 +449,7 @@ logger.logError = (error, context = {}) => {
   });
 
   // If Sentry is available, send the error
-  if (Sentry && process.env.NODE_ENV === "production") {
-    if (error instanceof Error) {
-      Sentry.captureException(error, { extra: context });
-    } else {
-      Sentry.captureMessage(JSON.stringify(error), {
-        level: Sentry.Severity.Error,
-        extra: context,
-      });
-    }
-  }
+  // Sentry error reporting disabled to prevent crashes
 };
 
 // Add system and security logging
@@ -542,11 +476,8 @@ logger.fatal = (message, meta = {}) => {
   logger.log("fatal", message, meta);
 
   // Always sent to Sentry regardless of environment
-  if (Sentry) {
-    Sentry.captureMessage(message, {
-      level: Sentry.Severity.Fatal,
-      extra: meta,
-    });
+  if (Sentry && process.env.SENTRY_DSN && process.env.SENTRY_DSN.startsWith('https://')) {
+    // Sentry.captureMessage disabled to prevent crashes
   }
 };
 
