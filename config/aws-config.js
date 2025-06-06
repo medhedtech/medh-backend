@@ -15,6 +15,38 @@ import logger from "../utils/logger.js";
 
 import { ENV_VARS } from "./envVars.js";
 
+// Validate required AWS environment variables
+function validateAWSConfig() {
+  const issues = [];
+  
+  if (!ENV_VARS.AWS_ACCESS_KEY) {
+    issues.push("IM_AWS_ACCESS_KEY environment variable is missing");
+  }
+  
+  if (!ENV_VARS.AWS_SECRET_KEY) {
+    issues.push("IM_AWS_SECRET_KEY environment variable is missing");
+  }
+  
+  if (!ENV_VARS.AWS_REGION) {
+    issues.push("AWS_REGION environment variable is missing");
+  }
+  
+  if (!ENV_VARS.AWS_S3_BUCKET_NAME) {
+    issues.push("AWS_S3_BUCKET_NAME environment variable is missing");
+  }
+  
+  if (issues.length > 0) {
+    logger.error("AWS Configuration Issues:", issues);
+    throw new Error(`AWS Configuration Error: ${issues.join(', ')}`);
+  }
+  
+  logger.info("AWS configuration validation passed");
+  return true;
+}
+
+// Validate AWS configuration on startup
+validateAWSConfig();
+
 // Common AWS configuration
 const awsConfig = {
   credentials: {
@@ -23,6 +55,16 @@ const awsConfig = {
   },
   region: ENV_VARS.AWS_REGION, // Use the configured region directly
 };
+
+// Log AWS configuration (without sensitive data)
+logger.info("AWS Configuration:", {
+  region: awsConfig.region,
+  accessKeyId: awsConfig.credentials.accessKeyId ? 
+    `${awsConfig.credentials.accessKeyId.substring(0, 10)}...` : 'NOT SET',
+  secretAccessKey: awsConfig.credentials.secretAccessKey ? 
+    `${awsConfig.credentials.secretAccessKey.substring(0, 10)}...` : 'NOT SET',
+  bucketName: ENV_VARS.AWS_S3_BUCKET_NAME
+});
 
 // Create client instances
 const s3Client = new S3Client(awsConfig);
@@ -44,6 +86,18 @@ const testAWSConnection = async () => {
     return true;
   } catch (error) {
     logger.error("AWS connection error:", error);
+    
+    // Provide specific error messages for common issues
+    if (error.name === 'UnrecognizedClientException') {
+      logger.error("Invalid AWS Access Key ID");
+    } else if (error.name === 'SignatureDoesNotMatch') {
+      logger.error("Invalid AWS Secret Access Key");
+    } else if (error.name === 'InvalidUserID.NotFound') {
+      logger.error("AWS Access Key ID does not exist");
+    } else if (error.name === 'UnknownEndpoint') {
+      logger.error("Invalid AWS region specified");
+    }
+    
     return false;
   }
 };
