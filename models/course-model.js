@@ -615,13 +615,15 @@ const bonusModuleSchema = new Schema({
 /* ------------------------------ */
 /* Price Schema                   */
 /* ------------------------------ */
+import { SUPPORTED_CURRENCIES } from "../config/currencies.js";
+
 const priceSchema = new Schema({
   currency: {
     type: String,
     required: [true, "Currency is required"],
     trim: true,
     enum: {
-      values: ["USD", "EUR", "INR", "GBP", "AUD", "CAD"],
+      values: SUPPORTED_CURRENCIES,
       message: "{VALUE} is not a supported currency",
     },
     uppercase: true,
@@ -701,31 +703,35 @@ const courseSchema = new Schema(
       index: true,
     },
     course_description: {
-      type: {
-        program_overview: {
-          type: String,
-          required: [true, "Program overview is required"],
-          trim: true,
-        },
-        benefits: {
-          type: String,
-          required: [true, "Benefits description is required"],
-          trim: true,
-        },
-        learning_objectives: {
-          type: [String],
-          default: [],
-        },
-        course_requirements: {
-          type: [String],
-          default: [],
-        },
-        target_audience: {
-          type: [String],
-          default: [],
-        },
-      },
+      type: Schema.Types.Mixed, // Allow both string and object for backward compatibility
       required: [true, "Course description is required"],
+      validate: {
+        validator: function(v) {
+          // Allow strings for backward compatibility
+          if (typeof v === 'string') {
+            return v.trim().length > 0;
+          }
+          // Validate object structure if it's an object
+          if (typeof v === 'object' && v !== null) {
+            return v.program_overview && v.benefits;
+          }
+          return false;
+        },
+        message: "Course description must be a non-empty string or object with program_overview and benefits"
+      },
+      set: function(v) {
+        // If it's a string, convert to object structure
+        if (typeof v === 'string' && v.trim()) {
+          return {
+            program_overview: v.trim(),
+            benefits: v.trim(),
+            learning_objectives: [],
+            course_requirements: [],
+            target_audience: []
+          };
+        }
+        return v;
+      }
     },
     course_level: {
       type: String,
