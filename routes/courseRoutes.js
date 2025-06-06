@@ -50,6 +50,11 @@ import {
   cancelScheduledPublish,
   getAllScheduledPublishes,
   executeScheduledPublishes,
+  uploadCourseImage,
+  uploadCourseImageFile,
+  addVideoLessonToCourse,
+  updateVideoLesson,
+  deleteVideoLesson,
 } from "../controllers/course-controller.js";
 import { authenticateToken } from "../middleware/auth.js";
 import {
@@ -111,6 +116,31 @@ router.post(
   handleUploadError,
   handleMultipleUpload,
 );
+
+// Course Image Upload Routes (Protected) - Course-specific uploads
+router.post("/:id/upload-image", authenticateToken, uploadCourseImage);
+router.post(
+  "/:id/upload-image-file",
+  authenticateToken,
+  upload.single("image"),
+  handleUploadError,
+  uploadCourseImageFile,
+);
+
+// Legacy Course Image Upload Routes (Protected) - Keep for backward compatibility
+router.post("/upload-image", authenticateToken, uploadCourseImage);
+router.post(
+  "/upload-image-file",
+  authenticateToken,
+  upload.single("image"),
+  handleUploadError,
+  uploadCourseImageFile,
+);
+
+// Video Lesson Management Routes (Admin Protected)
+router.post("/:courseId/video-lessons", authenticateToken, addVideoLessonToCourse);
+router.put("/:courseId/video-lessons/:lessonId", authenticateToken, updateVideoLesson);
+router.delete("/:courseId/video-lessons/:lessonId", authenticateToken, deleteVideoLesson);
 
 // Student Routes (Protected)
 router.get("/:courseId/sections", authenticateToken, getCourseSections);
