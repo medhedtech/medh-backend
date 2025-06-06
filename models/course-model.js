@@ -831,6 +831,16 @@ const courseSchema = new Schema(
       type: String,
       required: [true, "Course image URL is required"],
       trim: true,
+      validate: {
+        validator: function(v) {
+          // Allow empty during creation if course_image_base64 is provided
+          if (!v && this.isNew && this.course_image_base64) {
+            return true;
+          }
+          return v && v.length > 0;
+        },
+        message: "Course image URL is required"
+      }
     },
     course_grade: {
       type: String,

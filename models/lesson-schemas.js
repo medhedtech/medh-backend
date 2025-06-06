@@ -33,6 +33,11 @@ const baseLessonSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    lessonType: {
+      type: String,
+      enum: ["video", "quiz", "assessment", "text"],
+      default: "text",
+    },
     meta: {
       type: Schema.Types.Mixed,
       default: {},
@@ -74,7 +79,11 @@ const videoLessonSchema = new Schema(
       required: [true, "Video URL is required"],
       trim: true,
       validate: {
-        validator: (v) => /^(http(s)?:\/\/)/.test(v),
+        validator: (v) => {
+          // Allow empty string for optional video_url or validate URL format
+          if (!v || v === '') return true;
+          return /^(http(s)?:\/\/)/.test(v);
+        },
         message: "Video URL must be a valid URL",
       },
     },
@@ -82,6 +91,16 @@ const videoLessonSchema = new Schema(
       type: String,
       default: "",
       trim: true,
+    },
+    video_thumbnail: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    video_quality: {
+      type: String,
+      enum: ["720p", "1080p", "4K", "auto"],
+      default: "auto",
     },
   },
   lessonOptions,
@@ -95,6 +114,17 @@ const quizLessonSchema = new Schema(
       ref: "Quiz",
       required: [true, "Quiz ID is required"],
     },
+    passing_score: {
+      type: Number,
+      default: 70,
+      min: 0,
+      max: 100,
+    },
+    max_attempts: {
+      type: Number,
+      default: 3,
+      min: 1,
+    },
   },
   lessonOptions,
 );
@@ -107,13 +137,34 @@ const assessmentLessonSchema = new Schema(
       ref: "Assignment",
       required: [true, "Assignment ID is required"],
     },
+    submission_deadline: {
+      type: Date,
+    },
+    max_file_size: {
+      type: Number,
+      default: 10, // MB
+    },
+    allowed_file_types: [{
+      type: String,
+      enum: ["pdf", "doc", "docx", "txt", "zip"],
+    }],
   },
   lessonOptions,
 );
+
+// Create discriminator models
+const LessonModel = mongoose.model('Lesson', baseLessonSchema);
+const VideoLesson = LessonModel.discriminator('video', videoLessonSchema);
+const QuizLesson = LessonModel.discriminator('quiz', quizLessonSchema);
+const AssessmentLesson = LessonModel.discriminator('assessment', assessmentLessonSchema);
 
 export {
   baseLessonSchema,
   videoLessonSchema,
   quizLessonSchema,
   assessmentLessonSchema,
+  LessonModel,
+  VideoLesson,
+  QuizLesson,
+  AssessmentLesson,
 };

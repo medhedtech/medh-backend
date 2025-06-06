@@ -18,6 +18,17 @@ const assignCurriculumIds = (curriculum) => {
     if (week.lessons && week.lessons.length) {
       week.lessons.forEach((lesson, lessonIndex) => {
         lesson.id = `lesson_w${weekIndex + 1}_${lessonIndex + 1}`;
+        
+        // Ensure lesson has lessonType (default to 'text' if not specified)
+        if (!lesson.lessonType) {
+          lesson.lessonType = lesson.video_url ? 'video' : 'text';
+        }
+        
+        // Validate video lesson fields
+        if (lesson.lessonType === 'video' && !lesson.video_url) {
+          lesson.video_url = '';
+        }
+        
         if (lesson.resources && lesson.resources.length) {
           lesson.resources.forEach((resource, resourceIndex) => {
             resource.id = `resource_${lesson.id}_${resourceIndex + 1}`;
@@ -42,6 +53,17 @@ const assignCurriculumIds = (curriculum) => {
         if (section.lessons && section.lessons.length) {
           section.lessons.forEach((lesson, lessonIndex) => {
             lesson.id = `lesson_${weekIndex + 1}_${sectionIndex + 1}_${lessonIndex + 1}`;
+            
+            // Ensure lesson has lessonType (default to 'text' if not specified)
+            if (!lesson.lessonType) {
+              lesson.lessonType = lesson.video_url ? 'video' : 'text';
+            }
+            
+            // Validate video lesson fields
+            if (lesson.lessonType === 'video' && !lesson.video_url) {
+              lesson.video_url = '';
+            }
+            
             if (lesson.resources && lesson.resources.length) {
               lesson.resources.forEach((resource, resourceIndex) => {
                 resource.id = `resource_${lesson.id}_${resourceIndex + 1}`;
@@ -1982,11 +2004,84 @@ export const deleteWeekFromCurriculum = asyncHandler(async (req, res) => {
 export const addLessonToWeek = asyncHandler(async (req, res) => {
   try {
     const { type, id, weekId } = req.params;
-    const { lessonData, sectionId } = req.body; // sectionId is optional - if provided, add to section, otherwise add directly to week
+    
+    // Handle both payload formats:
+    // Format 1: { lessonData: {...}, sectionId: "..." }
+    // Format 2: { title: "...", description: "...", ... } (direct lesson data)
+    let lessonData, sectionId;
+    
+    if (req.body.lessonData) {
+      // Format 1: Structured payload
+      lessonData = req.body.lessonData;
+      sectionId = req.body.sectionId;
+    } else {
+      // Format 2: Direct lesson data
+      const { sectionId: extractedSectionId, ...directLessonData } = req.body;
+      lessonData = directLessonData;
+      sectionId = extractedSectionId;
+    }
     
     if (!validateObjectId(id)) {
       res.status(400);
       throw new Error("Invalid course ID format");
+    }
+    
+    // Validate lesson data
+    if (!lessonData || !lessonData.title) {
+      res.status(400);
+      throw new Error("Lesson data with title is required");
+    }
+    
+    // Transform and standardize lesson data to match schema
+    const processedLessonData = {
+      title: lessonData.title,
+      description: lessonData.description || '',
+      order: lessonData.order || 0,
+      isPreview: lessonData.isPreview || lessonData.is_preview || false,
+      lessonType: lessonData.lessonType || lessonData.content_type || 'video',
+      meta: lessonData.meta || {},
+      resources: lessonData.resources || [],
+    };
+    
+    // Handle video-specific fields
+    if (processedLessonData.lessonType === 'video') {
+      // Map content_url to video_url if needed
+      processedLessonData.video_url = lessonData.video_url || lessonData.content_url;
+      
+      // Ensure duration is a string
+      if (lessonData.duration) {
+        if (typeof lessonData.duration === 'number') {
+          processedLessonData.duration = `${lessonData.duration} minutes`;
+        } else {
+          processedLessonData.duration = lessonData.duration;
+        }
+      }
+      
+      // Validate required video fields
+      if (!processedLessonData.video_url) {
+        res.status(400);
+        throw new Error("Video lessons require either video_url or content_url");
+      }
+    }
+    
+    // Handle quiz-specific fields
+    if (processedLessonData.lessonType === 'quiz') {
+      if (lessonData.quiz_id) {
+        processedLessonData.quiz_id = lessonData.quiz_id;
+      } else {
+        res.status(400);
+        throw new Error("Quiz lessons require quiz_id");
+      }
+    }
+    
+    // Handle assessment-specific fields
+    if (processedLessonData.lessonType === 'assessment') {
+      if (lessonData.assignment_id) {
+        processedLessonData.assignment_id = lessonData.assignment_id;
+      } else {
+        res.status(400);
+        throw new Error("Assessment lessons require assignment_id");
+      }
     }
 
     let course = null;
@@ -2013,7 +2108,8 @@ export const addLessonToWeek = asyncHandler(async (req, res) => {
     const week = course.curriculum.find(w => w.id === weekId);
     if (!week) {
       res.status(404);
-      throw new Error("Week not found");
+      const availableWeeks = course.curriculum.map(w => w.id).join(', ');
+      throw new Error(`Week not found. Available weeks: [${availableWeeks}]. Requested: ${weekId}`);
     }
 
     let addedLesson;
@@ -2030,7 +2126,7 @@ export const addLessonToWeek = asyncHandler(async (req, res) => {
         section.lessons = [];
       }
       
-      section.lessons.push(lessonData);
+      section.lessons.push(processedLessonData);
       addedLesson = section.lessons[section.lessons.length - 1];
     } else {
       // Add lesson directly to the week
@@ -2038,7 +2134,7 @@ export const addLessonToWeek = asyncHandler(async (req, res) => {
         week.lessons = [];
       }
       
-      week.lessons.push(lessonData);
+      week.lessons.push(processedLessonData);
       addedLesson = week.lessons[week.lessons.length - 1];
     }
 
@@ -2054,6 +2150,110 @@ export const addLessonToWeek = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     throw new Error(`Failed to add lesson: ${error.message}`);
+  }
+});
+
+/**
+ * @desc    Add a video lesson to a week
+ * @route   POST /api/v1/courses/:type/:id/curriculum/weeks/:weekId/video-lessons
+ * @access  Private/Admin
+ */
+export const addVideoLessonToWeek = asyncHandler(async (req, res) => {
+  try {
+    const { type, id, weekId } = req.params;
+    const { sectionId, title, description, video_url, duration, video_thumbnail, order, isPreview = false } = req.body;
+    
+    if (!validateObjectId(id)) {
+      res.status(400);
+      throw new Error("Invalid course ID format");
+    }
+    
+    // Validate video lesson data
+    if (!title || !video_url) {
+      res.status(400);
+      throw new Error("Title and video URL are required for video lessons");
+    }
+    
+    // Create the video lesson object
+    const videoLessonData = {
+      title,
+      description: description || '',
+      lessonType: 'video',
+      video_url,
+      duration: duration || '',
+      video_thumbnail: video_thumbnail || '',
+      order: order || 0,
+      isPreview,
+      meta: {},
+      resources: [],
+    };
+
+    let course = null;
+
+    // Try to find in the new type-specific model first
+    try {
+      const CourseModel = getCourseModel(type);
+      course = await CourseModel.findById(id);
+    } catch (error) {
+      console.log(`No specific model for type ${type}, trying legacy model`);
+    }
+
+    // If not found in new model, try legacy model
+    if (!course) {
+      course = await Course.findById(id);
+    }
+
+    if (!course) {
+      res.status(404);
+      throw new Error("Course not found");
+    }
+
+    // Find the week
+    const week = course.curriculum.find(w => w.id === weekId);
+    if (!week) {
+      res.status(404);
+      const availableWeeks = course.curriculum.map(w => w.id).join(', ');
+      throw new Error(`Week not found. Available weeks: [${availableWeeks}]. Requested: ${weekId}`);
+    }
+
+    let addedLesson;
+
+    if (sectionId) {
+      // Add video lesson to a specific section
+      const section = week.sections.find(s => s.id === sectionId);
+      if (!section) {
+        res.status(404);
+        throw new Error("Section not found");
+      }
+      
+      if (!section.lessons) {
+        section.lessons = [];
+      }
+      
+      section.lessons.push(videoLessonData);
+      addedLesson = section.lessons[section.lessons.length - 1];
+    } else {
+      // Add video lesson directly to the week
+      if (!week.lessons) {
+        week.lessons = [];
+      }
+      
+      week.lessons.push(videoLessonData);
+      addedLesson = week.lessons[week.lessons.length - 1];
+    }
+
+    // Reassign all IDs to maintain consistency
+    assignCurriculumIds(course.curriculum);
+
+    await course.save();
+
+    res.status(201).json({
+      success: true,
+      message: `Video lesson added to ${sectionId ? 'section' : 'week'} successfully`,
+      data: addedLesson
+    });
+  } catch (error) {
+    throw new Error(`Failed to add video lesson: ${error.message}`);
   }
 });
 
@@ -2817,3 +3017,65 @@ const generateComparison = (newCourses, legacyCourses, mode) => {
 
   return comparison;
 };
+
+/**
+ * @desc    Get a specific week from course curriculum
+ * @route   GET /api/v1/tcourse/:type/:id/curriculum/weeks/:weekId
+ * @access  Public
+ */
+export const getCurriculumWeek = asyncHandler(async (req, res) => {
+  try {
+    const { type, id, weekId } = req.params;
+    
+    if (!validateObjectId(id)) {
+      res.status(400);
+      throw new Error("Invalid course ID format");
+    }
+
+    let course = null;
+
+    // Try to find in the new type-specific model first
+    try {
+      const CourseModel = getCourseModel(type);
+      course = await CourseModel.findById(id).select('curriculum course_title');
+    } catch (error) {
+      console.log(`No specific model for type ${type}, trying legacy model`);
+    }
+
+    // If not found in new model, try legacy model
+    if (!course) {
+      course = await Course.findById(id).select('curriculum course_title');
+    }
+
+    if (!course) {
+      res.status(404);
+      throw new Error("Course not found");
+    }
+
+    if (!course.curriculum || course.curriculum.length === 0) {
+      res.status(404);
+      throw new Error("No curriculum found for this course");
+    }
+
+    // Find the specific week by ID
+    const week = course.curriculum.find(week => week.id === weekId);
+    if (!week) {
+      res.status(404);
+      throw new Error("Week not found in curriculum");
+    }
+
+    res.json({
+      success: true,
+      data: {
+        course_id: course._id,
+        course_title: course.course_title,
+        week: week,
+        total_weeks: course.curriculum.length,
+        current_week_index: course.curriculum.findIndex(w => w.id === weekId) + 1,
+        source: course._legacy ? "legacy_model" : "new_model"
+      }
+    });
+  } catch (error) {
+    throw new Error(`Failed to fetch curriculum week: ${error.message}`);
+  }
+});

@@ -16,10 +16,12 @@ import {
   updateAccessSettings,
   // Curriculum management methods
   getCurriculum,
+  getCurriculumWeek,
   addWeekToCurriculum,
   updateWeekInCurriculum,
   deleteWeekFromCurriculum,
   addLessonToWeek,
+  addVideoLessonToWeek,
   addSectionToWeek,
   addLiveClassToWeek,
   getCurriculumStats,
@@ -57,11 +59,13 @@ router.put("/free/:id/access", verifyToken, isAdmin, updateAccessSettings);
 
 // Curriculum management routes (work with all course types)
 router.get("/:type/:id/curriculum", getCurriculum);
+router.get("/:type/:id/curriculum/weeks/:weekId", getCurriculumWeek);
 router.get("/:type/:id/curriculum/stats", getCurriculumStats);
 router.post("/:type/:id/curriculum/weeks", verifyToken, isAdmin, addWeekToCurriculum);
 router.put("/:type/:id/curriculum/weeks/:weekId", verifyToken, isAdmin, updateWeekInCurriculum);
 router.delete("/:type/:id/curriculum/weeks/:weekId", verifyToken, isAdmin, deleteWeekFromCurriculum);
 router.post("/:type/:id/curriculum/weeks/:weekId/lessons", verifyToken, isAdmin, addLessonToWeek);
+router.post("/:type/:id/curriculum/weeks/:weekId/video-lessons", verifyToken, isAdmin, addVideoLessonToWeek);
 router.post("/:type/:id/curriculum/weeks/:weekId/sections", verifyToken, isAdmin, addSectionToWeek);
 router.post("/:type/:id/curriculum/weeks/:weekId/live-classes", verifyToken, isAdmin, addLiveClassToWeek);
 router.put("/:type/:id/curriculum/reorder", verifyToken, isAdmin, reorderCurriculumWeeks);

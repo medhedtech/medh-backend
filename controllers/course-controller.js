@@ -20,6 +20,11 @@ import {
   deleteS3Object,
 } from "../utils/s3Service.js";
 import {
+  uploadBase64FileOptimized,
+  uploadFile,
+  UploadError,
+} from "../utils/uploadFile.js";
+import {
   validateCourseData,
   validateVideoLessonData,
   validateQuizLessonData,
@@ -198,6 +203,17 @@ const assignCurriculumIds = (curriculum) => {
     if (week.lessons && week.lessons.length) {
       week.lessons.forEach((lesson, lessonIndex) => {
         lesson.id = `lesson_w${weekIndex + 1}_${lessonIndex + 1}`;
+        
+        // Ensure lesson has lessonType (default to 'text' if not specified)
+        if (!lesson.lessonType) {
+          lesson.lessonType = lesson.video_url ? 'video' : 'text';
+        }
+        
+        // Validate video lesson fields
+        if (lesson.lessonType === 'video' && !lesson.video_url) {
+          lesson.video_url = '';
+        }
+        
         if (lesson.resources && lesson.resources.length) {
           lesson.resources.forEach((resource, resourceIndex) => {
             resource.id = `resource_${lesson.id}_${resourceIndex + 1}`;
@@ -222,6 +238,17 @@ const assignCurriculumIds = (curriculum) => {
         if (section.lessons && section.lessons.length) {
           section.lessons.forEach((lesson, lessonIndex) => {
             lesson.id = `lesson_${weekIndex + 1}_${sectionIndex + 1}_${lessonIndex + 1}`;
+            
+            // Ensure lesson has lessonType (default to 'text' if not specified)
+            if (!lesson.lessonType) {
+              lesson.lessonType = lesson.video_url ? 'video' : 'text';
+            }
+            
+            // Validate video lesson fields
+            if (lesson.lessonType === 'video' && !lesson.video_url) {
+              lesson.video_url = '';
+            }
+            
             if (lesson.resources && lesson.resources.length) {
               lesson.resources.forEach((resource, resourceIndex) => {
                 resource.id = `resource_${lesson.id}_${resourceIndex + 1}`;
@@ -232,6 +259,226 @@ const assignCurriculumIds = (curriculum) => {
       });
     }
   });
+};
+
+/* ------------------------------ */
+/* COURSE IMAGE UPLOAD FUNCTIONS */
+/* ------------------------------ */
+
+/**
+ * @desc    Upload course image using base64 and optionally update course
+ * @route   POST /api/courses/upload-image OR POST /api/courses/:id/upload-image
+ * @access  Private/Admin
+ */
+const uploadCourseImage = async (req, res) => {
+  try {
+    const { base64String, fileType = "image" } = req.body;
+    const { id: courseId } = req.params; // Get course ID from URL if present
+
+    if (!base64String) {
+      return res.status(400).json({
+        success: false,
+        message: "Base64 string is required",
+      });
+    }
+
+    // Validate that it's an image
+    if (fileType !== "image") {
+      return res.status(400).json({
+        success: false,
+        message: "Only image files are allowed for course images",
+      });
+    }
+
+    // If course ID is provided, validate it exists
+    let course = null;
+    if (courseId) {
+      if (!mongoose.isValidObjectId(courseId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid course ID format",
+        });
+      }
+
+      course = await Course.findById(courseId);
+      if (!course) {
+        return res.status(404).json({
+          success: false,
+          message: "Course not found",
+        });
+      }
+    }
+
+    // Handle both raw base64 strings and data URIs
+    let mimeType;
+    let base64Data;
+    
+    if (base64String.startsWith("data:")) {
+      // It's already a data URI, extract MIME type
+      const mimeTypeMatch = base64String.match(/^data:(.*?);base64,(.*)$/);
+      if (!mimeTypeMatch) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid data URI format",
+        });
+      }
+      mimeType = mimeTypeMatch[1];
+      base64Data = mimeTypeMatch[2];
+    } else {
+      // It's a raw base64 string, assume JPEG
+      mimeType = "image/jpeg";
+      base64Data = base64String;
+    }
+
+    // Validate that it's an image MIME type
+    if (!mimeType.startsWith("image/")) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid file type. Only images are allowed",
+      });
+    }
+
+    // Upload the image
+    const result = await uploadBase64FileOptimized(base64Data, mimeType, "images");
+
+    // If course ID is provided, update the course with the new image
+    if (course) {
+      course.course_image = result.data.url;
+      await course.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Course image uploaded and course updated successfully",
+        data: {
+          courseId: course._id,
+          imageUrl: result.data.url,
+          key: result.data.key,
+          size: result.data.size,
+          course: {
+            id: course._id,
+            title: course.course_title,
+            image: course.course_image,
+          },
+        },
+      });
+    }
+
+    // If no course ID, just return the upload result
+    res.status(200).json({
+      success: true,
+      message: "Course image uploaded successfully",
+      data: {
+        imageUrl: result.data.url,
+        key: result.data.key,
+        size: result.data.size,
+      },
+    });
+  } catch (error) {
+    console.error("Course image upload error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to upload course image",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * @desc    Upload course image using multipart form data and optionally update course
+ * @route   POST /api/courses/upload-image-file OR POST /api/courses/:id/upload-image-file
+ * @access  Private/Admin
+ */
+const uploadCourseImageFile = async (req, res) => {
+  try {
+    const { id: courseId } = req.params; // Get course ID from URL if present
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No image file uploaded",
+      });
+    }
+
+    // Validate that it's an image
+    if (!req.file.mimetype.startsWith("image/")) {
+      return res.status(400).json({
+        success: false,
+        message: "Only image files are allowed",
+      });
+    }
+
+    // If course ID is provided, validate it exists
+    let course = null;
+    if (courseId) {
+      if (!mongoose.isValidObjectId(courseId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid course ID format",
+        });
+      }
+
+      course = await Course.findById(courseId);
+      if (!course) {
+        return res.status(404).json({
+          success: false,
+          message: "Course not found",
+        });
+      }
+    }
+
+    // Generate a unique key for the image
+    const ext = req.file.mimetype.split("/")[1];
+    const key = `images/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+
+    const uploadParams = {
+      key,
+      file: req.file.buffer,
+      contentType: req.file.mimetype,
+      fileSize: req.file.size,
+    };
+
+    const result = await uploadFile(uploadParams);
+
+    // If course ID is provided, update the course with the new image
+    if (course) {
+      course.course_image = result.data.url;
+      await course.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Course image uploaded and course updated successfully",
+        data: {
+          courseId: course._id,
+          imageUrl: result.data.url,
+          key: result.data.key,
+          size: result.data.size,
+          course: {
+            id: course._id,
+            title: course.course_title,
+            image: course.course_image,
+          },
+        },
+      });
+    }
+
+    // If no course ID, just return the upload result
+    res.status(200).json({
+      success: true,
+      message: "Course image uploaded successfully",
+      data: {
+        imageUrl: result.data.url,
+        key: result.data.key,
+        size: result.data.size,
+      },
+    });
+  } catch (error) {
+    console.error("Course image file upload error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to upload course image",
+      error: error.message,
+    });
+  }
 };
 
 /* ------------------------------ */
@@ -249,8 +496,57 @@ const createCourse = async (req, res) => {
       return res.status(400).json({ success: false, message: req.fileError });
     }
 
+    // Handle file upload if present
     if (req.file) {
       req.body.course_image = req.file.location;
+    }
+
+    // Handle base64 image upload if present
+    if (req.body.course_image_base64 && !req.body.course_image) {
+      try {
+        const { course_image_base64 } = req.body;
+        
+        // Handle both raw base64 strings and data URIs
+        let mimeType;
+        let base64Data;
+        
+        if (course_image_base64.startsWith("data:")) {
+          const mimeTypeMatch = course_image_base64.match(/^data:(.*?);base64,(.*)$/);
+          if (!mimeTypeMatch) {
+            return res.status(400).json({
+              success: false,
+              message: "Invalid course image data URI format",
+            });
+          }
+          mimeType = mimeTypeMatch[1];
+          base64Data = mimeTypeMatch[2];
+        } else {
+          mimeType = "image/jpeg";
+          base64Data = course_image_base64;
+        }
+
+        // Validate that it's an image MIME type
+        if (!mimeType.startsWith("image/")) {
+          return res.status(400).json({
+            success: false,
+            message: "Course image must be a valid image file",
+          });
+        }
+
+        // Upload the image
+        const uploadResult = await uploadBase64FileOptimized(base64Data, mimeType, "images");
+        req.body.course_image = uploadResult.data.url;
+        
+        // Remove the base64 data from the request body
+        delete req.body.course_image_base64;
+      } catch (uploadError) {
+        console.error("Error uploading course image:", uploadError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload course image",
+          error: uploadError.message,
+        });
+      }
     }
 
     // Extract course data from request body
@@ -1053,8 +1349,57 @@ const updateCourse = async (req, res) => {
 
     const courseData = { ...req.body };
 
+    // Handle file upload if present
     if (req.file) {
       courseData.course_image = req.file.location;
+    }
+
+    // Handle base64 image upload if present
+    if (courseData.course_image_base64 && !courseData.course_image) {
+      try {
+        const { course_image_base64 } = courseData;
+        
+        // Handle both raw base64 strings and data URIs
+        let mimeType;
+        let base64Data;
+        
+        if (course_image_base64.startsWith("data:")) {
+          const mimeTypeMatch = course_image_base64.match(/^data:(.*?);base64,(.*)$/);
+          if (!mimeTypeMatch) {
+            return res.status(400).json({
+              success: false,
+              message: "Invalid course image data URI format",
+            });
+          }
+          mimeType = mimeTypeMatch[1];
+          base64Data = mimeTypeMatch[2];
+        } else {
+          mimeType = "image/jpeg";
+          base64Data = course_image_base64;
+        }
+
+        // Validate that it's an image MIME type
+        if (!mimeType.startsWith("image/")) {
+          return res.status(400).json({
+            success: false,
+            message: "Course image must be a valid image file",
+          });
+        }
+
+        // Upload the image
+        const uploadResult = await uploadBase64FileOptimized(base64Data, mimeType, "images");
+        courseData.course_image = uploadResult.data.url;
+        
+        // Remove the base64 data from the course data
+        delete courseData.course_image_base64;
+      } catch (uploadError) {
+        console.error("Error uploading course image:", uploadError);
+        return res.status(500).json({
+          success: false,
+          message: "Failed to upload course image",
+          error: uploadError.message,
+        });
+      }
     }
 
     // If curriculum data is provided as JSON string, parse it
@@ -4089,6 +4434,257 @@ export const getCourseMaterial = catchAsync(async (req, res) => {
   }
 });
 
+/**
+ * @desc    Add a video lesson to a course curriculum
+ * @route   POST /api/courses/:courseId/video-lessons
+ * @access  Private/Admin
+ */
+const addVideoLessonToCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const { weekId, sectionId, title, description, video_url, duration, video_thumbnail, order, isPreview = false } = req.body;
+
+    if (!weekId || !title || !video_url) {
+      return res.status(400).json({
+        success: false,
+        message: "Week ID, title, and video URL are required",
+      });
+    }
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
+    }
+
+    // Find the week
+    const week = course.curriculum.find(w => w.id === weekId);
+    if (!week) {
+      return res.status(404).json({
+        success: false,
+        message: "Week not found",
+      });
+    }
+
+    // Create the video lesson object
+    const videoLesson = {
+      lessonType: 'video',
+      title,
+      description: description || '',
+      video_url,
+      duration: duration || '',
+      video_thumbnail: video_thumbnail || '',
+      order: order || (sectionId ? 1 : (week.lessons?.length || 0) + 1),
+      isPreview,
+      resources: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    if (sectionId) {
+      // Add to specific section
+      const section = week.sections?.find(s => s.id === sectionId);
+      if (!section) {
+        return res.status(404).json({
+          success: false,
+          message: "Section not found",
+        });
+      }
+      
+      if (!section.lessons) section.lessons = [];
+      section.lessons.push(videoLesson);
+    } else {
+      // Add directly to week
+      if (!week.lessons) week.lessons = [];
+      week.lessons.push(videoLesson);
+    }
+
+    // Reassign IDs
+    assignCurriculumIds(course.curriculum);
+
+    await course.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Video lesson added successfully",
+      data: videoLesson,
+    });
+  } catch (error) {
+    console.error("Error adding video lesson:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to add video lesson",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * @desc    Update a video lesson
+ * @route   PUT /api/courses/:courseId/video-lessons/:lessonId
+ * @access  Private/Admin
+ */
+const updateVideoLesson = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const { title, description, video_url, duration, video_thumbnail, order, isPreview } = req.body;
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
+    }
+
+    let lessonFound = false;
+    let updatedLesson = null;
+
+    // Search for the lesson in the curriculum structure
+    for (const week of course.curriculum) {
+      // Check direct lessons
+      if (week.lessons) {
+        const lesson = week.lessons.find(l => l.id === lessonId);
+        if (lesson) {
+          if (title !== undefined) lesson.title = title;
+          if (description !== undefined) lesson.description = description;
+          if (video_url !== undefined) lesson.video_url = video_url;
+          if (duration !== undefined) lesson.duration = duration;
+          if (video_thumbnail !== undefined) lesson.video_thumbnail = video_thumbnail;
+          if (order !== undefined) lesson.order = order;
+          if (isPreview !== undefined) lesson.isPreview = isPreview;
+          lesson.lessonType = 'video';
+          lesson.updatedAt = new Date();
+          lessonFound = true;
+          updatedLesson = lesson;
+          break;
+        }
+      }
+
+      // Check lessons in sections
+      if (!lessonFound && week.sections) {
+        for (const section of week.sections) {
+          if (section.lessons) {
+            const lesson = section.lessons.find(l => l.id === lessonId);
+            if (lesson) {
+              if (title !== undefined) lesson.title = title;
+              if (description !== undefined) lesson.description = description;
+              if (video_url !== undefined) lesson.video_url = video_url;
+              if (duration !== undefined) lesson.duration = duration;
+              if (video_thumbnail !== undefined) lesson.video_thumbnail = video_thumbnail;
+              if (order !== undefined) lesson.order = order;
+              if (isPreview !== undefined) lesson.isPreview = isPreview;
+              lesson.lessonType = 'video';
+              lesson.updatedAt = new Date();
+              lessonFound = true;
+              updatedLesson = lesson;
+              break;
+            }
+          }
+        }
+        if (lessonFound) break;
+      }
+    }
+
+    if (!lessonFound) {
+      return res.status(404).json({
+        success: false,
+        message: "Lesson not found",
+      });
+    }
+
+    await course.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Video lesson updated successfully",
+      data: updatedLesson,
+    });
+  } catch (error) {
+    console.error("Error updating video lesson:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update video lesson",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * @desc    Delete a video lesson
+ * @route   DELETE /api/courses/:courseId/video-lessons/:lessonId
+ * @access  Private/Admin
+ */
+const deleteVideoLesson = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
+    }
+
+    let lessonFound = false;
+
+    // Search for the lesson in the curriculum structure and remove it
+    for (const week of course.curriculum) {
+      // Check direct lessons
+      if (week.lessons) {
+        const lessonIndex = week.lessons.findIndex(l => l.id === lessonId);
+        if (lessonIndex !== -1) {
+          week.lessons.splice(lessonIndex, 1);
+          lessonFound = true;
+          break;
+        }
+      }
+
+      // Check lessons in sections
+      if (!lessonFound && week.sections) {
+        for (const section of week.sections) {
+          if (section.lessons) {
+            const lessonIndex = section.lessons.findIndex(l => l.id === lessonId);
+            if (lessonIndex !== -1) {
+              section.lessons.splice(lessonIndex, 1);
+              lessonFound = true;
+              break;
+            }
+          }
+        }
+        if (lessonFound) break;
+      }
+    }
+
+    if (!lessonFound) {
+      return res.status(404).json({
+        success: false,
+        message: "Lesson not found",
+      });
+    }
+
+    // Reassign IDs after deletion
+    assignCurriculumIds(course.curriculum);
+
+    await course.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Video lesson deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting video lesson:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete video lesson",
+      error: error.message,
+    });
+  }
+};
+
 export {
   createCourse,
   getAllCourses,
@@ -4139,6 +4735,11 @@ export {
   cancelScheduledPublish,
   getAllScheduledPublishes,
   executeScheduledPublishes,
+  uploadCourseImage,
+  uploadCourseImageFile,
+  addVideoLessonToCourse,
+  updateVideoLesson,
+  deleteVideoLesson,
 };
 
 // List all courses with show_in_home tag for home page
