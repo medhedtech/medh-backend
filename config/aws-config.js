@@ -21,7 +21,7 @@ const awsConfig = {
     accessKeyId: ENV_VARS.AWS_ACCESS_KEY,
     secretAccessKey: ENV_VARS.AWS_SECRET_KEY,
   },
-  region: ENV_VARS.AWS_REGION || "us-east-1", // Set a default region if not specified
+  region: ENV_VARS.AWS_REGION, // Use the configured region directly
 };
 
 // Create client instances
