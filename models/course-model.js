@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { v4 as uuidv4 } from "uuid";
+import { SUPPORTED_CURRENCIES } from "../config/currencies.js";
 
 import {
   baseLessonSchema,
@@ -613,10 +614,8 @@ const bonusModuleSchema = new Schema({
 });
 
 /* ------------------------------ */
-/* Price Schema                   */
-/* ------------------------------ */
-import { SUPPORTED_CURRENCIES } from "../config/currencies.js";
-
+  /* Price Schema                   */
+  /* ------------------------------ */
 const priceSchema = new Schema({
   currency: {
     type: String,
