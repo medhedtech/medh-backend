@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import validator from "validator";
 import { v4 as uuidv4 } from "uuid";
+import { SUPPORTED_CURRENCIES } from "../../config/currencies.js";
 import { 
   baseLessonSchema,
   videoLessonSchema,
@@ -240,20 +241,7 @@ const priceSchema = new Schema({
     required: [true, "Currency is required"],
     trim: true,
     enum: {
-      values: [
-        // Major world currencies
-        "USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", 
-        // Asia-Pacific
-        "INR", "SGD", "HKD", "KRW", "THB", "MYR", "IDR", "PHP", "TWD", "VND", "NZD",
-        // Middle East & Africa
-        "AED", "SAR", "QAR", "KWD", "BHD", "OMR", "JOD", "ILS", "TRY", "EGP", "ZAR", "NGN", "KES", "MAD", "TND",
-        // Americas
-        "BRL", "MXN", "ARS", "CLP", "COP", "PEN", "UYU", "BOB", "PYG", "VES",
-        // Europe (additional)
-        "RUB", "UAH", "BYN", "ISK", "ALL", "MKD", "RSD", "BAM", "GEL", "AMD", "AZN",
-        // Others
-        "PKR", "BDT", "LKR", "NPR", "BTN", "MVR", "AFN", "IRR", "IQD", "LBP", "SYP", "YER"
-      ],
+      values: SUPPORTED_CURRENCIES,
       message: "{VALUE} is not a supported currency",
     },
     uppercase: true,

@@ -11,6 +11,7 @@ import {
 } from "../controllers/enhanced-payment-controller.js";
 import { authenticateToken, authorize } from "../middleware/auth.js";
 import { body, param, query, validationResult } from "express-validator";
+import { SUPPORTED_CURRENCIES } from "../config/currencies.js";
 
 const router = express.Router();
 
@@ -53,20 +54,7 @@ const validateCreateOrder = [
     .withMessage("Batch size must be between 1 and 50"),
   body("currency")
     .optional()
-    .isIn([
-      // Major world currencies
-      "USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", 
-      // Asia-Pacific
-      "INR", "SGD", "HKD", "KRW", "THB", "MYR", "IDR", "PHP", "TWD", "VND", "NZD",
-      // Middle East & Africa
-      "AED", "SAR", "QAR", "KWD", "BHD", "OMR", "JOD", "ILS", "TRY", "EGP", "ZAR", "NGN", "KES", "MAD", "TND",
-      // Americas
-      "BRL", "MXN", "ARS", "CLP", "COP", "PEN", "UYU", "BOB", "PYG", "VES",
-      // Europe (additional)
-      "RUB", "UAH", "BYN", "ISK", "ALL", "MKD", "RSD", "BAM", "GEL", "AMD", "AZN",
-      // Others
-      "PKR", "BDT", "LKR", "NPR", "BTN", "MVR", "AFN", "IRR", "IQD", "LBP", "SYP", "YER"
-    ])
+    .isIn(SUPPORTED_CURRENCIES)
     .withMessage("Invalid currency"),
   body("payment_plan")
     .optional()
@@ -135,20 +123,7 @@ const validatePricingQuery = [
     .withMessage("Batch size must be between 1 and 50"),
   query("currency")
     .optional()
-    .isIn([
-      // Major world currencies
-      "USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF", "SEK", "NOK", "DKK", "PLN", "CZK", "HUF", "RON", "BGN", "HRK", 
-      // Asia-Pacific
-      "INR", "SGD", "HKD", "KRW", "THB", "MYR", "IDR", "PHP", "TWD", "VND", "NZD",
-      // Middle East & Africa
-      "AED", "SAR", "QAR", "KWD", "BHD", "OMR", "JOD", "ILS", "TRY", "EGP", "ZAR", "NGN", "KES", "MAD", "TND",
-      // Americas
-      "BRL", "MXN", "ARS", "CLP", "COP", "PEN", "UYU", "BOB", "PYG", "VES",
-      // Europe (additional)
-      "RUB", "UAH", "BYN", "ISK", "ALL", "MKD", "RSD", "BAM", "GEL", "AMD", "AZN",
-      // Others
-      "PKR", "BDT", "LKR", "NPR", "BTN", "MVR", "AFN", "IRR", "IQD", "LBP", "SYP", "YER"
-    ])
+    .isIn(SUPPORTED_CURRENCIES)
     .withMessage("Invalid currency")
 ];
 
