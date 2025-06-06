@@ -178,10 +178,35 @@ export const uploadBase64FileOptimized = async (base64Data, mimeType, folder) =>
     };
   } catch (error) {
     console.error("Optimized base64 upload error:", error);
-    throw new UploadError(
-      error.message || "Failed to upload file",
-      error.code || "UPLOAD_ERROR"
-    );
+    
+    // Provide specific error messages for common AWS issues
+    let errorMessage = error.message || "Failed to upload file";
+    let errorCode = error.code || "UPLOAD_ERROR";
+    
+    if (error.name === 'UnrecognizedClientException') {
+      errorMessage = "Invalid AWS Access Key ID";
+      errorCode = "INVALID_AWS_CREDENTIALS";
+    } else if (error.name === 'SignatureDoesNotMatch') {
+      errorMessage = "Invalid AWS Secret Access Key";
+      errorCode = "INVALID_AWS_CREDENTIALS";
+    } else if (error.name === 'InvalidUserID.NotFound') {
+      errorMessage = "AWS Access Key ID does not exist";
+      errorCode = "INVALID_AWS_CREDENTIALS";
+    } else if (error.name === 'NoSuchBucket') {
+      errorMessage = `S3 bucket '${ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME}' does not exist`;
+      errorCode = "BUCKET_NOT_FOUND";
+    } else if (error.name === 'AccessDenied') {
+      errorMessage = "Access denied to S3 bucket - check permissions";
+      errorCode = "ACCESS_DENIED";
+    } else if (error.name === 'UnknownEndpoint') {
+      errorMessage = "Invalid AWS region specified";
+      errorCode = "INVALID_REGION";
+    } else if (error.message && error.message.includes("credential")) {
+      errorMessage = "Resolved credential object is not valid";
+      errorCode = "INVALID_AWS_CREDENTIALS";
+    }
+    
+    throw new UploadError(errorMessage, errorCode);
   }
 };
 
