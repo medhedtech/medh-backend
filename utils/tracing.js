@@ -1,66 +1,21 @@
-import { NodeSDK } from '@opentelemetry/sdk-node';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
-import { SemanticResourceAttributes } from '@opentelemetry/semantic-conventions';
-import { Resource } from '@opentelemetry/resources';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import logger from './logger.js';
 import { ENV_VARS } from '../config/envVars.js';
 
-// Configure service name to use in telemetry data
-const resource = new Resource({
-  [SemanticResourceAttributes.SERVICE_NAME]: 'medh-backend',
-  [SemanticResourceAttributes.SERVICE_VERSION]: '1.0.0',
-  [SemanticResourceAttributes.DEPLOYMENT_ENVIRONMENT]: ENV_VARS.NODE_ENV || 'development'
-});
+// Simple tracing utility without OpenTelemetry to avoid dependency conflicts
+// This maintains the same interface but provides minimal/no-op implementation
 
-// Configure trace exporter
-const traceExporter = new OTLPTraceExporter({
-  // Typically this would be a collector like Jaeger
-  // For development, we can use a simple endpoint
-  url: ENV_VARS.OTEL_EXPORTER_OTLP_ENDPOINT || 'http://localhost:4318/v1/traces'
-});
-
-// Create span processor for batching spans before export
-const spanProcessor = new BatchSpanProcessor(traceExporter);
-
-// Configure SDK with auto-instrumentation
-const sdk = new NodeSDK({
-  resource,
-  spanProcessor,
-  // Auto-instrument popular libraries and frameworks
-  instrumentations: [
-    getNodeAutoInstrumentations({
-      // Enable all auto-instrumentations with custom config
-      '@opentelemetry/instrumentation-fs': { enabled: false }, // Disable file system instrumentation (noisy)
-      '@opentelemetry/instrumentation-express': {
-        enabled: true,
-        ignoreLayers: ['/health', '/metrics'] // Don't trace health checks and metrics
-      },
-      '@opentelemetry/instrumentation-mongodb': { enabled: true },
-      '@opentelemetry/instrumentation-redis': { enabled: true },
-      '@opentelemetry/instrumentation-http': {
-        enabled: true,
-        ignoreIncomingPaths: ['/health', '/metrics']
-      },
-    })
-  ]
-});
-
-// Initialize OpenTelemetry
+// Initialize tracing (no-op version)
 const initTracing = () => {
   try {
-    // Start SDK
-    sdk.start();
-    logger.info('OpenTelemetry tracing initialized successfully');
+    // Log that tracing is disabled/simplified
+    if (ENV_VARS.NODE_ENV === 'development') {
+      logger.info('Simplified tracing initialized (OpenTelemetry disabled to resolve dependency conflicts)');
+    }
     
-    // Handle shutdown gracefully
+    // Handle shutdown gracefully (no-op)
     const shutdownTracing = async () => {
-      try {
-        await sdk.shutdown();
-        logger.info('OpenTelemetry tracing shut down successfully');
-      } catch (error) {
-        logger.error('Error shutting down OpenTelemetry', { error: error.message });
+      if (ENV_VARS.NODE_ENV === 'development') {
+        logger.info('Tracing shutdown completed');
       }
     };
 
@@ -70,7 +25,7 @@ const initTracing = () => {
     
     return true;
   } catch (error) {
-    logger.error('Failed to initialize OpenTelemetry tracing', { 
+    logger.error('Failed to initialize tracing', { 
       error: error.message,
       stack: error.stack 
     });
@@ -78,32 +33,42 @@ const initTracing = () => {
   }
 };
 
-// Manual span creation utility
+// Manual span creation utility (simplified version)
 const createCustomSpan = (tracer, name, fn, attributes = {}) => {
-  return tracer.startActiveSpan(name, async (span) => {
+  // No-op implementation that just runs the function
+  // In a real tracing setup, this would create spans and track timing
+  return Promise.resolve().then(async () => {
     try {
-      // Add attributes to span
-      Object.entries(attributes).forEach(([key, value]) => {
-        span.setAttribute(key, value);
-      });
-      
-      // Run the function inside the span
-      const result = await fn();
-      
-      // End the span
-      span.end();
-      
-      return result;
+      if (ENV_VARS.NODE_ENV === 'development') {
+        const startTime = Date.now();
+        const result = await fn();
+        const duration = Date.now() - startTime;
+        
+        // Simple logging instead of tracing
+        logger.debug('Span completed', {
+          name,
+          duration: `${duration}ms`,
+          attributes
+        });
+        
+        return result;
+      } else {
+        // In production, just run the function without extra logging
+        return await fn();
+      }
     } catch (error) {
-      // Record error and end span
-      span.recordException(error);
-      span.setStatus({ code: 2, message: error.message }); // Error status
-      span.end();
+      // Log error but don't interfere with normal error handling
+      logger.error('Span error', {
+        name,
+        error: error.message,
+        attributes
+      });
       throw error;
     }
   });
 };
 
+// Export compatibility functions
 export {
   initTracing,
   createCustomSpan
