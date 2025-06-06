@@ -14,29 +14,41 @@ const initializeRedis = async () => {
   if (ENV_VARS.REDIS_ENABLED) {
     try {
       const { createClient } = await import('redis');
-      redisClient = createClient({
-        url: `redis://${ENV_VARS.REDIS_PASSWORD ? `:${ENV_VARS.REDIS_PASSWORD}@` : ''}${ENV_VARS.REDIS_HOST}:${ENV_VARS.REDIS_PORT}`,
+      
+      // Configure Redis client with explicit socket and password options
+      const redisConfig = {
         socket: {
+          host: ENV_VARS.REDIS_HOST,
+          port: parseInt(ENV_VARS.REDIS_PORT, 10),
           connectTimeout: 5000,
           lazyConnect: true
-        },
-        retry_strategy: (options) => {
-          if (options.error && options.error.code === 'ECONNREFUSED') {
-            // End reconnecting on a specific error and flush all commands with a individual error
-            return new Error('The server refused the connection');
-          }
-          if (options.total_retry_time > 1000 * 60 * 60) {
-            // End reconnecting after a specific timeout and flush all commands with a individual error
-            return new Error('Retry time exhausted');
-          }
-          if (options.attempt > 10) {
-            // End reconnecting with built in error
-            return undefined;
-          }
-          // reconnect after
-          return Math.min(options.attempt * 100, 3000);
         }
-      });
+      };
+
+      // Add password separately if provided to avoid URL encoding issues
+      if (ENV_VARS.REDIS_PASSWORD) {
+        redisConfig.password = ENV_VARS.REDIS_PASSWORD;
+      }
+      
+      // Add retry strategy configuration
+      redisConfig.retry_strategy = (options) => {
+        if (options.error && options.error.code === 'ECONNREFUSED') {
+          // End reconnecting on a specific error and flush all commands with a individual error
+          return new Error('The server refused the connection');
+        }
+        if (options.total_retry_time > 1000 * 60 * 60) {
+          // End reconnecting after a specific timeout and flush all commands with a individual error
+          return new Error('Retry time exhausted');
+        }
+        if (options.attempt > 10) {
+          // End reconnecting with built in error
+          return undefined;
+        }
+        // reconnect after
+        return Math.min(options.attempt * 100, 3000);
+      };
+      
+      redisClient = createClient(redisConfig);
       
       redisClient.on('error', (err) => {
         logger.error('Redis Client Error', { error: err.message });

@@ -136,19 +136,31 @@ class EmailService {
       console.log('Email service forcing Redis enabled:', redisIsEnabled);
       
       if (redisIsEnabled) {
-        // Configure direct Redis client (bypassing cache module)
+        // Configure Redis client for Bull queue with proper authentication
         const redisOptions = {
           host: process.env.REDIS_HOST || "localhost",
-          port: process.env.REDIS_PORT || 6379,
-          password: process.env.REDIS_PASSWORD
+          port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+          password: process.env.REDIS_PASSWORD,
+          // Bull-specific Redis options
+          db: 0,
+          maxRetriesPerRequest: 3,
+          retryDelayOnFailover: 100,
+          maxRetriesPerRequest: null,
+          maxMemoryPolicy: 'noeviction'
         };
+
+        // Remove password if undefined to avoid auth issues
+        if (!redisOptions.password) {
+          delete redisOptions.password;
+        }
         
         logger.email.info("Initializing email queue with Redis", {
           host: redisOptions.host,
-          port: redisOptions.port
+          port: redisOptions.port,
+          hasPassword: !!redisOptions.password
         });
         
-        // Configure Bull queue with direct Redis options
+        // Configure Bull queue with proper Redis options
         this.queue = new Bull(EMAIL_QUEUE_NAME, {
           redis: redisOptions,
           defaultJobOptions: {
