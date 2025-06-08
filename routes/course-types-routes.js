@@ -66,6 +66,7 @@ router.put("/:type/:id/curriculum/weeks/:weekId", verifyToken, isAdmin, updateWe
 router.delete("/:type/:id/curriculum/weeks/:weekId", verifyToken, isAdmin, deleteWeekFromCurriculum);
 router.post("/:type/:id/curriculum/weeks/:weekId/lessons", verifyToken, isAdmin, addLessonToWeek);
 router.post("/:type/:id/curriculum/weeks/:weekId/video-lessons", verifyToken, isAdmin, addVideoLessonToWeek);
+router.post("/:type/:id/curriculum/weeks/:weekId/video-lessons/base64", verifyToken, isAdmin, addVideoLessonToWeek);
 router.post("/:type/:id/curriculum/weeks/:weekId/sections", verifyToken, isAdmin, addSectionToWeek);
 router.post("/:type/:id/curriculum/weeks/:weekId/live-classes", verifyToken, isAdmin, addLiveClassToWeek);
 router.put("/:type/:id/curriculum/reorder", verifyToken, isAdmin, reorderCurriculumWeeks);
