@@ -281,6 +281,29 @@ const userSchema = new Schema(
       type: String,
       trim: true,
     },
+    // Location and timezone fields
+    timezone: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: function (v) {
+          // Basic timezone validation - accepts formats like 'UTC', 'America/New_York', 'Asia/Kolkata', etc.
+          return !v || /^[A-Za-z]+\/[A-Za-z_]+$|^UTC$|^GMT[+-]\d{1,2}$/.test(v);
+        },
+        message: (props) => `${props.value} is not a valid timezone format!`,
+      },
+    },
+    country: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: function (v) {
+          // Basic country validation - accepts 2-3 letter country codes or full country names
+          return !v || /^[A-Za-z\s]{2,50}$/.test(v);
+        },
+        message: (props) => `${props.value} is not a valid country format!`,
+      },
+    },
   },
   {
     timestamps: true,

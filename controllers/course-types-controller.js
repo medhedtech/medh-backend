@@ -2154,14 +2154,25 @@ export const addLessonToWeek = asyncHandler(async (req, res) => {
 });
 
 /**
- * @desc    Add a video lesson to a week
+ * @desc    Add a video lesson to a week (supports both URL and base64 upload)
  * @route   POST /api/v1/courses/:type/:id/curriculum/weeks/:weekId/video-lessons
  * @access  Private/Admin
  */
 export const addVideoLessonToWeek = asyncHandler(async (req, res) => {
   try {
     const { type, id, weekId } = req.params;
-    const { sectionId, title, description, video_url, duration, video_thumbnail, order, isPreview = false } = req.body;
+    const { 
+      sectionId, 
+      title, 
+      description, 
+      video_url, 
+      video_base64,
+      fileType = 'video',
+      duration, 
+      video_thumbnail, 
+      order, 
+      isPreview = false 
+    } = req.body;
     
     if (!validateObjectId(id)) {
       res.status(400);
@@ -2169,9 +2180,76 @@ export const addVideoLessonToWeek = asyncHandler(async (req, res) => {
     }
     
     // Validate video lesson data
-    if (!title || !video_url) {
+    if (!title) {
       res.status(400);
-      throw new Error("Title and video URL are required for video lessons");
+      throw new Error("Title is required for video lessons");
+    }
+
+    // Check if we have either video_url or video_base64
+    if (!video_url && !video_base64) {
+      res.status(400);
+      throw new Error("Either video URL or base64 video data is required");
+    }
+
+    let finalVideoUrl = video_url;
+
+    // Handle base64 video upload if provided
+    if (video_base64) {
+      try {
+        // Import the upload utility
+        const { uploadBase64FileOptimized } = await import("../utils/uploadFile.js");
+        
+        // Validate base64 data
+        if (video_base64.length < 100) {
+          res.status(400);
+          throw new Error("Base64 video data is too short or incomplete");
+        }
+
+        let mimeType;
+        let base64Data;
+        
+        // Parse base64 data (handle both data URI and raw base64)
+        const dataUriMatch = video_base64.match(/^data:(.*?);base64,(.*)$/);
+        if (dataUriMatch) {
+          mimeType = dataUriMatch[1];
+          base64Data = dataUriMatch[2];
+        } else {
+          // Raw base64 string, assume MP4
+          mimeType = "video/mp4";
+          base64Data = video_base64;
+        }
+
+        // Validate MIME type for video
+        if (!mimeType.startsWith("video/")) {
+          res.status(400);
+          throw new Error("Invalid MIME type for video. Expected video/*");
+        }
+
+        // Quick size estimation (base64 is ~33% larger than binary)
+        const estimatedSize = (base64Data.length * 3) / 4;
+        const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB limit for videos
+        
+        if (estimatedSize > MAX_VIDEO_SIZE) {
+          res.status(400);
+          throw new Error(`Video file size exceeds maximum limit of ${MAX_VIDEO_SIZE / (1024 * 1024)}MB`);
+        }
+
+        // Upload the base64 video
+        const uploadResult = await uploadBase64FileOptimized(base64Data, mimeType, "videos");
+        
+        if (!uploadResult || !uploadResult.data || !uploadResult.data.url) {
+          res.status(500);
+          throw new Error("Failed to upload video file");
+        }
+
+        finalVideoUrl = uploadResult.data.url;
+        
+        console.log(`✅ Video uploaded successfully: ${finalVideoUrl}`);
+      } catch (uploadError) {
+        console.error("Video upload error:", uploadError);
+        res.status(500);
+        throw new Error(`Failed to upload video: ${uploadError.message}`);
+      }
     }
     
     // Create the video lesson object
@@ -2179,12 +2257,15 @@ export const addVideoLessonToWeek = asyncHandler(async (req, res) => {
       title,
       description: description || '',
       lessonType: 'video',
-      video_url,
+      video_url: finalVideoUrl,
       duration: duration || '',
       video_thumbnail: video_thumbnail || '',
       order: order || 0,
       isPreview,
-      meta: {},
+      meta: {
+        uploadedViaBase64: !!video_base64,
+        uploadTimestamp: video_base64 ? new Date().toISOString() : undefined
+      },
       resources: [],
     };
 
@@ -2250,7 +2331,10 @@ export const addVideoLessonToWeek = asyncHandler(async (req, res) => {
     res.status(201).json({
       success: true,
       message: `Video lesson added to ${sectionId ? 'section' : 'week'} successfully`,
-      data: addedLesson
+      data: {
+        ...addedLesson,
+        uploadMethod: video_base64 ? 'base64' : 'url'
+      }
     });
   } catch (error) {
     throw new Error(`Failed to add video lesson: ${error.message}`);

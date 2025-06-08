@@ -63,6 +63,20 @@ router.get(
   enrollerCourseController.getEnrolledCourseByStudentId,
 );
 
+// Get completed courses by student ID with detailed formatting
+router.get(
+  "/student/:student_id/completed",
+  validateObjectId("student_id"),
+  enrollerCourseController.getCompletedCoursesByStudentId,
+);
+
+// Get all resources from all enrolled courses for a student (excluding video lessons)
+router.get(
+  "/student/:student_id/resources",
+  validateObjectId("student_id"),
+  enrollerCourseController.getAllResourcesByStudentId,
+);
+
 // Get enrolled students by course ID
 router.get(
   "/course/:course_id",

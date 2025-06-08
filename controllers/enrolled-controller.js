@@ -1264,3 +1264,508 @@ export const getEmiAnalytics = async (req, res, next) => {
   }
 };
 
+// Get completed courses with detailed information for student dashboard
+export const getCompletedCoursesByStudentId = async (req, res, next) => {
+  try {
+    const { student_id } = req.params;
+    const { page = 1, limit = 10 } = req.query;
+
+    // Validate student_id
+    if (!student_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Student ID is required",
+      });
+    }
+
+    // Check if the student exists
+    const student = await User.findById(student_id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+
+    // Get completed enrollments with populated course and certificate information
+    const completedEnrollments = await EnrolledCourse.find({
+      student_id,
+      status: "completed",
+      is_completed: true
+    })
+    .populate({
+      path: "course_id",
+      select: "course_title course_description assigned_instructor curriculum meta course_duration course_tag",
+      populate: {
+        path: "assigned_instructor",
+        select: "full_name email",
+        match: { role: { $in: ['instructor'] } }
+      }
+    })
+    .populate("certificate_id")
+    .sort({ completed_on: -1 })
+    .skip((page - 1) * limit)
+    .limit(parseInt(limit))
+    .lean();
+
+    if (!completedEnrollments.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No completed courses found for this student",
+      });
+    }
+
+    // Transform the data to match the requested format
+    const formattedCourses = await Promise.all(
+      completedEnrollments.map(async (enrollment) => {
+        const course = enrollment.course_id;
+        
+        // Calculate course duration in weeks
+        let durationInWeeks = 0;
+        if (course.curriculum && course.curriculum.length) {
+          durationInWeeks = course.curriculum.length;
+        } else if (course.course_duration) {
+          // Try to extract weeks from duration string
+          const weekMatch = course.course_duration.match(/(\d+)\s*week/i);
+          if (weekMatch) {
+            durationInWeeks = parseInt(weekMatch[1]);
+          }
+        }
+
+        // Extract key topics/skills from course tags or curriculum
+        let keyTopics = [];
+        if (course.course_tag && Array.isArray(course.course_tag)) {
+          keyTopics = course.course_tag.slice(0, 3); // Take first 3 tags
+        } else if (course.curriculum && course.curriculum.length) {
+          // Extract topics from curriculum week titles
+          keyTopics = course.curriculum
+            .slice(0, 3)
+            .map(week => week.weekTitle || week.title)
+            .filter(title => title);
+        }
+
+        // Get instructor name
+        const instructorName = course.assigned_instructor?.full_name || "Instructor";
+
+        // Get rating from course meta
+        const rating = course.meta?.ratings?.average || 0;
+
+        // Check if certificate exists
+        const hasCertificate = !!enrollment.certificate_id;
+
+        return {
+          courseId: course._id,
+          title: course.course_title,
+          instructor: instructorName,
+          completedDate: enrollment.completed_on,
+          duration: `${durationInWeeks} weeks`,
+          keyTopics: keyTopics,
+          rating: parseFloat(rating.toFixed(1)),
+          status: "Completed",
+          actions: {
+            review: true,
+            certificate: hasCertificate
+          },
+          enrollmentId: enrollment._id,
+          progress: enrollment.progress || 100
+        };
+      })
+    );
+
+    // Get total count for pagination
+    const totalCompleted = await EnrolledCourse.countDocuments({
+      student_id,
+      status: "completed",
+      is_completed: true
+    });
+
+    const totalPages = Math.ceil(totalCompleted / limit);
+
+    res.status(200).json({
+      success: true,
+      message: "Completed courses retrieved successfully",
+      data: {
+        courses: formattedCourses,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages,
+          totalCourses: totalCompleted,
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        }
+      }
+    });
+  } catch (error) {
+    errorHandler(error, req, res, next);
+  }
+};
+
+// Get all resources from all enrolled courses for a student (excluding video lessons)
+export const getAllResourcesByStudentId = async (req, res, next) => {
+  try {
+    const { student_id } = req.params;
+    const { 
+      page = 1, 
+      limit = 20, 
+      resourceType, 
+      courseId, 
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Validate student_id
+    if (!student_id) {
+      return res.status(400).json({
+        success: false,
+        message: "Student ID is required",
+      });
+    }
+
+    // Check if the student exists
+    const student = await User.findById(student_id);
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: "Student not found",
+      });
+    }
+
+    // Build query for enrolled courses
+    const enrollmentQuery = {
+      student_id,
+      status: { $in: ["active", "completed"] }
+    };
+
+    // If specific course is requested
+    if (courseId) {
+      enrollmentQuery.course_id = courseId;
+    }
+
+    // Get all enrolled courses with populated course data
+    const enrolledCourses = await EnrolledCourse.find(enrollmentQuery)
+      .populate({
+        path: "course_id",
+        select: "course_title curriculum resource_pdfs bonus_modules course_image assigned_instructor",
+        populate: {
+          path: "assigned_instructor",
+          select: "full_name email",
+          match: { role: { $in: ['instructor'] } }
+        }
+      })
+      .lean();
+
+    if (!enrolledCourses.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No enrolled courses found for this student",
+      });
+    }
+
+    // Extract all resources from all courses
+    const allResources = [];
+
+    enrolledCourses.forEach(enrollment => {
+      const course = enrollment.course_id;
+      if (!course) return;
+
+      // 1. Extract resources from curriculum (lessons, sections, live classes)
+      if (course.curriculum && course.curriculum.length) {
+        course.curriculum.forEach((week, weekIndex) => {
+          // Resources from direct lessons under weeks (excluding video lessons)
+          if (week.lessons && week.lessons.length) {
+            week.lessons.forEach((lesson, lessonIndex) => {
+              // Skip video lessons
+              if (lesson.lessonType === 'video') return;
+              
+              if (lesson.resources && lesson.resources.length) {
+                lesson.resources.forEach((resource, resourceIndex) => {
+                  allResources.push({
+                    id: resource.id || `${lesson.id}_resource_${resourceIndex}`,
+                    title: resource.title,
+                    description: resource.description || '',
+                    url: resource.url,
+                    type: resource.type,
+                    source: {
+                      type: 'lesson',
+                      courseId: course._id,
+                      courseTitle: course.course_title,
+                      courseThumbnail: course.course_image,
+                      instructor: course.assigned_instructor?.full_name || 'Instructor',
+                      weekTitle: week.weekTitle,
+                      weekNumber: weekIndex + 1,
+                      lessonTitle: lesson.title,
+                      lessonType: lesson.lessonType,
+                      lessonId: lesson.id
+                    },
+                    enrollmentId: enrollment._id,
+                    addedDate: enrollment.enrollment_date
+                  });
+                });
+              }
+            });
+          }
+
+          // Resources from sections
+          if (week.sections && week.sections.length) {
+            week.sections.forEach((section, sectionIndex) => {
+              // Section-level resources
+              if (section.resources && section.resources.length) {
+                section.resources.forEach((resource, resourceIndex) => {
+                  allResources.push({
+                    id: resource.id || `${section.id}_resource_${resourceIndex}`,
+                    title: resource.title,
+                    description: resource.description || '',
+                    url: resource.fileUrl || resource.url,
+                    type: resource.type,
+                    source: {
+                      type: 'section',
+                      courseId: course._id,
+                      courseTitle: course.course_title,
+                      courseThumbnail: course.course_image,
+                      instructor: course.assigned_instructor?.full_name || 'Instructor',
+                      weekTitle: week.weekTitle,
+                      weekNumber: weekIndex + 1,
+                      sectionTitle: section.title,
+                      sectionId: section.id
+                    },
+                    enrollmentId: enrollment._id,
+                    addedDate: enrollment.enrollment_date
+                  });
+                });
+              }
+
+              // Resources from lessons within sections (excluding video lessons)
+              if (section.lessons && section.lessons.length) {
+                section.lessons.forEach((lesson, lessonIndex) => {
+                  // Skip video lessons
+                  if (lesson.lessonType === 'video') return;
+                  
+                  if (lesson.resources && lesson.resources.length) {
+                    lesson.resources.forEach((resource, resourceIndex) => {
+                      allResources.push({
+                        id: resource.id || `${lesson.id}_resource_${resourceIndex}`,
+                        title: resource.title,
+                        description: resource.description || '',
+                        url: resource.url,
+                        type: resource.type,
+                        source: {
+                          type: 'lesson',
+                          courseId: course._id,
+                          courseTitle: course.course_title,
+                          courseThumbnail: course.course_image,
+                          instructor: course.assigned_instructor?.full_name || 'Instructor',
+                          weekTitle: week.weekTitle,
+                          weekNumber: weekIndex + 1,
+                          sectionTitle: section.title,
+                          sectionId: section.id,
+                          lessonTitle: lesson.title,
+                          lessonType: lesson.lessonType,
+                          lessonId: lesson.id
+                        },
+                        enrollmentId: enrollment._id,
+                        addedDate: enrollment.enrollment_date
+                      });
+                    });
+                  }
+                });
+              }
+            });
+          }
+
+          // Resources from live classes
+          if (week.liveClasses && week.liveClasses.length) {
+            week.liveClasses.forEach((liveClass, classIndex) => {
+              if (liveClass.materials && liveClass.materials.length) {
+                liveClass.materials.forEach((material, materialIndex) => {
+                  allResources.push({
+                    id: `${liveClass.id || `live_${classIndex}`}_material_${materialIndex}`,
+                    title: material.title,
+                    description: material.description || '',
+                    url: material.url,
+                    type: material.type,
+                    source: {
+                      type: 'live_class',
+                      courseId: course._id,
+                      courseTitle: course.course_title,
+                      courseThumbnail: course.course_image,
+                      instructor: course.assigned_instructor?.full_name || 'Instructor',
+                      weekTitle: week.weekTitle,
+                      weekNumber: weekIndex + 1,
+                      liveClassTitle: liveClass.title,
+                      scheduledDate: liveClass.scheduledDate
+                    },
+                    enrollmentId: enrollment._id,
+                    addedDate: enrollment.enrollment_date
+                  });
+                });
+              }
+            });
+          }
+        });
+      }
+
+      // 2. Extract resources from course-level resource_pdfs
+      if (course.resource_pdfs && course.resource_pdfs.length) {
+        course.resource_pdfs.forEach((pdf, pdfIndex) => {
+          allResources.push({
+            id: `course_pdf_${pdfIndex}`,
+            title: pdf.title,
+            description: pdf.description || '',
+            url: pdf.url,
+            type: 'pdf',
+            size_mb: pdf.size_mb,
+            pages: pdf.pages,
+            source: {
+              type: 'course_resource',
+              courseId: course._id,
+              courseTitle: course.course_title,
+              courseThumbnail: course.course_image,
+              instructor: course.assigned_instructor?.full_name || 'Instructor'
+            },
+            enrollmentId: enrollment._id,
+            addedDate: pdf.upload_date || enrollment.enrollment_date
+          });
+        });
+      }
+
+      // 3. Extract resources from bonus modules
+      if (course.bonus_modules && course.bonus_modules.length) {
+        course.bonus_modules.forEach((module, moduleIndex) => {
+          if (module.resources && module.resources.length) {
+            module.resources.forEach((resource, resourceIndex) => {
+              // Skip video resources from bonus modules
+              if (resource.type === 'video') return;
+              
+              allResources.push({
+                id: `bonus_${moduleIndex}_resource_${resourceIndex}`,
+                title: resource.title,
+                description: resource.description || '',
+                url: resource.url,
+                type: resource.type,
+                size_mb: resource.size_mb,
+                source: {
+                  type: 'bonus_module',
+                  courseId: course._id,
+                  courseTitle: course.course_title,
+                  courseThumbnail: course.course_image,
+                  instructor: course.assigned_instructor?.full_name || 'Instructor',
+                  moduleTitle: module.title
+                },
+                enrollmentId: enrollment._id,
+                addedDate: enrollment.enrollment_date
+              });
+            });
+          }
+        });
+      }
+    });
+
+    // Apply filters
+    let filteredResources = allResources;
+
+    // Filter by resource type
+    if (resourceType) {
+      filteredResources = filteredResources.filter(resource => 
+        resource.type === resourceType
+      );
+    }
+
+    // Filter by search term
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredResources = filteredResources.filter(resource =>
+        resource.title.toLowerCase().includes(searchLower) ||
+        resource.description.toLowerCase().includes(searchLower) ||
+        resource.source.courseTitle.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Sort resources
+    filteredResources.sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortBy) {
+        case 'title':
+          aValue = a.title.toLowerCase();
+          bValue = b.title.toLowerCase();
+          break;
+        case 'type':
+          aValue = a.type;
+          bValue = b.type;
+          break;
+        case 'course':
+          aValue = a.source.courseTitle.toLowerCase();
+          bValue = b.source.courseTitle.toLowerCase();
+          break;
+        case 'createdAt':
+        default:
+          aValue = new Date(a.addedDate);
+          bValue = new Date(b.addedDate);
+          break;
+      }
+
+      if (sortOrder === 'desc') {
+        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
+      } else {
+        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
+      }
+    });
+
+    // Apply pagination
+    const totalResources = filteredResources.length;
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + parseInt(limit);
+    const paginatedResources = filteredResources.slice(startIndex, endIndex);
+
+    // Calculate statistics
+    const resourceStats = {
+      total: totalResources,
+      byType: {},
+      byCourse: {},
+      bySource: {}
+    };
+
+    filteredResources.forEach(resource => {
+      // Count by type
+      resourceStats.byType[resource.type] = (resourceStats.byType[resource.type] || 0) + 1;
+      
+      // Count by course
+      const courseTitle = resource.source.courseTitle;
+      resourceStats.byCourse[courseTitle] = (resourceStats.byCourse[courseTitle] || 0) + 1;
+      
+      // Count by source type
+      const sourceType = resource.source.type;
+      resourceStats.bySource[sourceType] = (resourceStats.bySource[sourceType] || 0) + 1;
+    });
+
+    const totalPages = Math.ceil(totalResources / limit);
+
+    res.status(200).json({
+      success: true,
+      message: "Resources retrieved successfully",
+      data: {
+        resources: paginatedResources,
+        statistics: resourceStats,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages,
+          totalResources,
+          resourcesPerPage: parseInt(limit),
+          hasNextPage: page < totalPages,
+          hasPrevPage: page > 1
+        },
+        filters: {
+          appliedResourceType: resourceType || null,
+          appliedCourseId: courseId || null,
+          appliedSearch: search || null,
+          sortBy,
+          sortOrder
+        }
+      }
+    });
+  } catch (error) {
+    errorHandler(error, req, res, next);
+  }
+};
+
