@@ -4685,6 +4685,191 @@ const deleteVideoLesson = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get all courses grouped by category (returns only basic fields, no pagination)
+ * @route   GET /api/courses/category
+ * @access  Public
+ * @returns {object} Response with courses grouped by course_category
+ * @param   {string} category - Course category to filter by (optional query parameter)
+ * @param   {string} sort_by - Field to sort by (course_title, course_category)
+ * @param   {string} sort_order - Sort order (asc, desc)
+ * @param   {string} status - Filter by course status (Published, Draft, Upcoming)
+ * @param   {string} class_type - Filter by class type
+ * @param   {string} category_type - Filter by category type (Free, Paid, Live, etc.)
+ */
+const getCoursesByCategory = async (req, res) => {
+  try {
+    let {
+      category,
+      sort_by = "course_title",
+      sort_order = "asc",
+      status,
+      class_type,
+      category_type,
+      search
+    } = req.query;
+
+    // Build filter object
+    const filter = {};
+    
+    // Add category filter only if category parameter is provided
+    if (category && category.trim() !== '') {
+      const decodedCategory = fullyDecodeURIComponent(category);
+      filter.course_category = { $regex: createSafeRegex(decodedCategory) };
+    }
+
+    // Add additional filters if provided
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+
+    if (class_type && class_type !== 'all') {
+      filter.class_type = { $regex: createSafeRegex(class_type) };
+    }
+
+    if (category_type && category_type !== 'all') {
+      filter.category_type = category_type;
+    }
+
+    // Add text search if provided
+    if (search && search.trim() !== '') {
+      const searchRegex = createSafeRegex(search.trim());
+      filter.$or = [
+        { course_title: { $regex: searchRegex } },
+        { course_tag: { $regex: searchRegex } },
+        { "course_description.program_overview": { $regex: searchRegex } },
+        { "course_description.benefits": { $regex: searchRegex } }
+      ];
+    }
+
+    // Build sort object
+    const sortOrder = sort_order === "asc" ? 1 : -1;
+    const sortObj = {};
+    
+    // Validate sort field - only allow sorting by returned fields
+    const validSortFields = ["course_title", "course_category"];
+    if (validSortFields.includes(sort_by)) {
+      sortObj[sort_by] = sortOrder;
+    } else {
+      sortObj.course_title = 1; // Default sort by title
+    }
+
+    // Define projection for optimized queries - only return specific fields
+    const projection = {
+      course_category: 1,
+      course_subcategory: 1,
+      course_title: 1,
+      course_tag: 1
+    };
+
+    // Execute queries in parallel for better performance - get ALL courses without pagination
+    const [legacyCourses, blendedCourses, liveCourses, freeCourses] = await Promise.all([
+      // Legacy Course model
+      Course.find(filter, projection).sort(sortObj).lean(),
+      
+      // New course-types models
+      BlendedCourse.find(filter, projection).sort(sortObj).lean(),
+      LiveCourse.find(filter, projection).sort(sortObj).lean(),
+      FreeCourse.find(filter, projection).sort(sortObj).lean()
+    ]);
+
+    // Combine all courses and mark course types
+    const newTypeCourses = [
+      ...blendedCourses.map(c => ({ ...c, course_type: "blended", _source: "new_model" })),
+      ...liveCourses.map(c => ({ ...c, course_type: "live", _source: "new_model" })),
+      ...freeCourses.map(c => ({ ...c, course_type: "free", _source: "new_model" }))
+    ];
+
+    const legacyCoursesMarked = legacyCourses.map(c => ({ ...c, _source: "legacy_model" }));
+    const allCourses = [...legacyCoursesMarked, ...newTypeCourses];
+    
+    // Group courses by category
+    const coursesByCategory = {};
+    
+    allCourses.forEach(course => {
+      const categoryName = course.course_category || 'Uncategorized';
+      
+      if (!coursesByCategory[categoryName]) {
+        coursesByCategory[categoryName] = [];
+      }
+      
+      coursesByCategory[categoryName].push({
+        _id: course._id,
+        course_category: course.course_category,
+        course_subcategory: course.course_subcategory,
+        course_title: course.course_title,
+        course_tag: course.course_tag
+      });
+    });
+
+    // Sort courses within each category by title
+    Object.keys(coursesByCategory).forEach(categoryName => {
+      coursesByCategory[categoryName].sort((a, b) => {
+        if (sort_order === 'desc') {
+          return b.course_title.localeCompare(a.course_title);
+        }
+        return a.course_title.localeCompare(b.course_title);
+      });
+    });
+
+    // Sort categories alphabetically
+    const sortedCategories = Object.keys(coursesByCategory).sort();
+    const sortedCoursesByCategory = {};
+    sortedCategories.forEach(categoryName => {
+      sortedCoursesByCategory[categoryName] = coursesByCategory[categoryName];
+    });
+
+    const totalCourses = allCourses.length;
+    const totalCategories = Object.keys(coursesByCategory).length;
+
+    // Response with courses grouped by category
+    const responseMessage = category && category.trim() !== '' 
+      ? `Courses retrieved successfully for category: ${category}`
+      : 'All courses retrieved successfully, grouped by category';
+    
+    res.status(200).json({
+      success: true,
+      message: responseMessage,
+      data: {
+        coursesByCategory: sortedCoursesByCategory,
+        summary: {
+          totalCourses,
+          totalCategories,
+          categoriesWithCounts: Object.keys(sortedCoursesByCategory).map(categoryName => ({
+            category: categoryName,
+            courseCount: sortedCoursesByCategory[categoryName].length
+          }))
+        },
+        filters: {
+          category: category && category.trim() !== '' ? category : 'all',
+          status: status || 'all',
+          class_type: class_type || 'all',
+          category_type: category_type || 'all',
+          search: search || null
+        },
+        sorting: {
+          sort_by,
+          sort_order
+        },
+        sources: {
+          legacy_model: legacyCoursesMarked.length,
+          new_model: newTypeCourses.length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching courses by category:", error);
+    logger.error("Error fetching courses by category:", error);
+    
+    res.status(500).json({
+      success: false,
+      message: "Error fetching courses by category",
+      error: error.message || "An unexpected error occurred",
+    });
+  }
+};
+
 export {
   createCourse,
   getAllCourses,
@@ -4694,6 +4879,7 @@ export {
   deleteCourse,
   getCourseTitles,
   getAllCoursesWithLimits,
+  getCoursesByCategory,
   toggleCourseStatus,
   updateRecordedVideos,
   getRecordedVideosForUser,

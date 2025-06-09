@@ -784,4 +784,355 @@ router.post("/test-email", async (req, res) => {
   }
 });
 
+/**
+ * @route   GET /api/v1/auth/login-analytics/:id
+ * @desc    Get comprehensive login analytics for a specific user
+ * @access  Private (Admin only)
+ */
+router.get(
+  "/login-analytics/:id",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      // Import User model
+      const User = (await import("../models/user-modal.js")).default;
+
+      // Find user by ID
+      const user = await User.findById(id).select('-password');
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Get comprehensive login analytics
+      const loginStats = user.getLoginStats();
+      const recentHistory = user.getRecentLoginHistory(20);
+      const loginPattern = user.getLoginPattern();
+      const devicePreference = user.getDevicePreference();
+      const browserPreference = user.getBrowserPreference();
+      const securityScore = user.getSecurityScore();
+
+      res.status(200).json({
+        success: true,
+        message: "Login analytics retrieved successfully",
+        data: {
+          user_info: {
+            id: user._id,
+            full_name: user.full_name,
+            email: user.email,
+            role: user.role,
+            status: user.status,
+          },
+          login_statistics: loginStats,
+          recent_login_history: recentHistory,
+          user_patterns: {
+            login_pattern: loginPattern,
+            device_preference: devicePreference,
+            browser_preference: browserPreference,
+            is_frequent_user: user.isFrequentUser(),
+            has_multiple_devices: user.hasMultipleDevices(),
+            has_multiple_locations: user.hasMultipleLocations(),
+          },
+          security_analysis: {
+            security_score: securityScore,
+            risk_level: securityScore >= 80 ? 'Low' : securityScore >= 60 ? 'Medium' : 'High',
+            recommendations: securityScore < 80 ? [
+              'Monitor for unusual login patterns',
+              'Consider enabling two-factor authentication',
+              'Review recent login locations'
+            ] : ['Account appears secure']
+          }
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching login analytics:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error",
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/auth/system-login-analytics
+ * @desc    Get system-wide login analytics and statistics
+ * @access  Private (Admin only)
+ */
+router.get(
+  "/system-login-analytics",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        timeframe = '30d', // 7d, 30d, 90d, 1y
+        role_filter,
+        status_filter = 'Active'
+      } = req.query;
+
+      // Import User model
+      const User = (await import("../models/user-modal.js")).default;
+
+      // Calculate date range based on timeframe
+      const now = new Date();
+      let startDate;
+      switch (timeframe) {
+        case '7d':
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '90d':
+          startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case '1y':
+          startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        default: // 30d
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      }
+
+      // Build query
+      const query = { status: status_filter };
+      if (role_filter) {
+        query.role = { $in: Array.isArray(role_filter) ? role_filter : [role_filter] };
+      }
+
+      // Get system-wide analytics
+      const systemStats = await User.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: null,
+            total_users: { $sum: 1 },
+            total_logins: { $sum: "$login_count" },
+            average_logins_per_user: { $avg: "$login_count" },
+            users_with_recent_activity: {
+              $sum: {
+                $cond: [
+                  { $gte: ["$last_login", startDate] },
+                  1,
+                  0
+                ]
+              }
+            },
+            total_sessions: { $sum: "$login_analytics.total_sessions" },
+            mobile_logins: { $sum: "$login_analytics.device_stats.mobile" },
+            tablet_logins: { $sum: "$login_analytics.device_stats.tablet" },
+            desktop_logins: { $sum: "$login_analytics.device_stats.desktop" },
+          }
+        }
+      ]);
+
+      // Get most active users
+      const mostActiveUsers = await User.find(query)
+        .select('full_name email role login_count last_login')
+        .sort({ login_count: -1 })
+        .limit(10);
+
+      // Get recent registrations with login activity
+      const recentActiveUsers = await User.find({
+        ...query,
+        last_login: { $gte: startDate }
+      })
+        .select('full_name email role login_count last_login createdAt')
+        .sort({ last_login: -1 })
+        .limit(20);
+
+      // Get device and browser statistics
+      const deviceStats = await User.aggregate([
+        { $match: query },
+        {
+          $group: {
+            _id: null,
+            total_mobile: { $sum: "$login_analytics.device_stats.mobile" },
+            total_tablet: { $sum: "$login_analytics.device_stats.tablet" },
+            total_desktop: { $sum: "$login_analytics.device_stats.desktop" },
+          }
+        }
+      ]);
+
+      // Calculate activity metrics
+      const stats = systemStats[0] || {};
+      const deviceData = deviceStats[0] || {};
+      const totalDeviceLogins = (deviceData.total_mobile || 0) + 
+                               (deviceData.total_tablet || 0) + 
+                               (deviceData.total_desktop || 0);
+
+      res.status(200).json({
+        success: true,
+        message: "System login analytics retrieved successfully",
+        timeframe,
+        data: {
+          overview: {
+            total_users: stats.total_users || 0,
+            total_logins: stats.total_logins || 0,
+            average_logins_per_user: Math.round((stats.average_logins_per_user || 0) * 100) / 100,
+            active_users_in_period: stats.users_with_recent_activity || 0,
+            activity_rate: stats.total_users > 0 ? 
+              Math.round((stats.users_with_recent_activity / stats.total_users) * 100) : 0,
+            total_sessions: stats.total_sessions || 0,
+          },
+          device_distribution: {
+            mobile: {
+              count: deviceData.total_mobile || 0,
+              percentage: totalDeviceLogins > 0 ? 
+                Math.round((deviceData.total_mobile / totalDeviceLogins) * 100) : 0
+            },
+            tablet: {
+              count: deviceData.total_tablet || 0,
+              percentage: totalDeviceLogins > 0 ? 
+                Math.round((deviceData.total_tablet / totalDeviceLogins) * 100) : 0
+            },
+            desktop: {
+              count: deviceData.total_desktop || 0,
+              percentage: totalDeviceLogins > 0 ? 
+                Math.round((deviceData.total_desktop / totalDeviceLogins) * 100) : 0
+            }
+          },
+          most_active_users: mostActiveUsers,
+          recent_activity: recentActiveUsers,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching system login analytics:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error",
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/auth/user-activity-summary
+ * @desc    Get user activity summary with login patterns and engagement metrics
+ * @access  Private (Admin only)
+ */
+router.get(
+  "/user-activity-summary",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        sort_by = 'last_login',
+        sort_order = 'desc',
+        role_filter,
+        activity_level // 'high', 'medium', 'low', 'inactive'
+      } = req.query;
+
+      // Import User model
+      const User = (await import("../models/user-modal.js")).default;
+
+      // Build query
+      const query = { status: 'Active' };
+      if (role_filter) {
+        query.role = { $in: Array.isArray(role_filter) ? role_filter : [role_filter] };
+      }
+
+      // Add activity level filter
+      if (activity_level) {
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        
+        switch (activity_level) {
+          case 'high':
+            query.last_login = { $gte: sevenDaysAgo };
+            query.login_count = { $gte: 10 };
+            break;
+          case 'medium':
+            query.last_login = { $gte: thirtyDaysAgo };
+            query.login_count = { $gte: 3, $lt: 10 };
+            break;
+          case 'low':
+            query.login_count = { $gte: 1, $lt: 3 };
+            break;
+          case 'inactive':
+            query.$or = [
+              { last_login: { $lt: thirtyDaysAgo } },
+              { last_login: { $exists: false } },
+              { login_count: { $lt: 1 } }
+            ];
+            break;
+        }
+      }
+
+      // Calculate pagination
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+
+      // Build sort object
+      const sort = {};
+      sort[sort_by] = sort_order === 'asc' ? 1 : -1;
+
+      // Get users with activity summary
+      const users = await User.find(query)
+        .select('full_name email role login_count last_login createdAt login_analytics')
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit));
+
+      // Get total count
+      const total = await User.countDocuments(query);
+
+      // Process users to add activity insights
+      const usersWithInsights = users.map(user => {
+        const loginPattern = user.getLoginPattern();
+        const devicePreference = user.getDevicePreference();
+        const isFrequent = user.isFrequentUser();
+        const securityScore = user.getSecurityScore();
+
+        return {
+          id: user._id,
+          full_name: user.full_name,
+          email: user.email,
+          role: user.role,
+          login_count: user.login_count || 0,
+          last_login: user.last_login,
+          member_since: user.createdAt,
+          activity_insights: {
+            login_pattern: loginPattern,
+            device_preference: devicePreference,
+            is_frequent_user: isFrequent,
+            security_score: securityScore,
+            total_sessions: user.login_analytics?.total_sessions || 0,
+            unique_devices: user.login_analytics?.unique_devices?.length || 0,
+            unique_locations: user.login_analytics?.unique_ips?.length || 0,
+          }
+        };
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "User activity summary retrieved successfully",
+        pagination: {
+          current_page: parseInt(page),
+          total_pages: Math.ceil(total / parseInt(limit)),
+          total_users: total,
+          users_per_page: parseInt(limit),
+        },
+        filters: {
+          role_filter,
+          activity_level,
+          sort_by,
+          sort_order,
+        },
+        data: usersWithInsights,
+      });
+    } catch (error) {
+      console.error("Error fetching user activity summary:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error",
+        error: error.message,
+      });
+    }
+  }
+);
+
 export default router;
