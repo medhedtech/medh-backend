@@ -101,7 +101,7 @@ router.get(
 
 /**
  * @route   GET /api/v1/auth/get-all-students
- * @desc    Get all users with the STUDENT role
+ * @desc    Get all active users with STUDENT or CORPORATE-STUDENT roles (no pagination)
  * @access  Private (Admin only - or adjust as needed)
  */
 router.get(
