@@ -464,15 +464,20 @@ All course API endpoints now include instructor assignment information in their 
 
 All student API endpoints now include instructor assignment information:
 
-#### GET `/api/v1/auth/get-all-students` - Get All Students
+#### GET `/api/v1/auth/get-all-students` - Get All Active Students (No Pagination)
+**Description:** Returns all active students with STUDENT or CORPORATE-STUDENT roles without pagination.
+
+**Query Parameters:**
+- `search` (string) - Search by student name or email
+- `sortBy` (string) - Sort field (default: "createdAt")
+- `sortOrder` (string) - Sort order: "asc" or "desc" (default: "desc")
+
 **Enhanced Response:**
 ```json
 {
   "success": true,
-  "count": 5,
-  "total": 50,
-  "totalPages": 5,
-  "currentPage": 1,
+  "count": 50,
+  "message": "All active students retrieved successfully",
   "data": [
     {
       "_id": "64a7b8c9d1e2f3g4h5i6j7k1",

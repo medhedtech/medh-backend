@@ -641,18 +641,16 @@ class AuthController {
   async getAllStudents(req, res) {
     try {
       const {
-        page = 1,
-        limit = 10,
-        status,
         search,
         sortBy = "createdAt",
         sortOrder = "desc",
       } = req.query;
 
-      // Build query
-      const query = { role: USER_ROLES.STUDENT };
-
-      if (status) query.status = status;
+      // Build query - only active students with student or corporate-student roles
+      const query = { 
+        role: { $in: [USER_ROLES.STUDENT, "coorporate-student"] },
+        status: "Active"
+      };
 
       // Search by name or email if search parameter is provided
       if (search) {
@@ -662,14 +660,11 @@ class AuthController {
         ];
       }
 
-      // Calculate pagination
-      const skip = (parseInt(page) - 1) * parseInt(limit);
-
       // Build sort object
       const sort = {};
       sort[sortBy] = sortOrder === "asc" ? 1 : -1;
 
-      // Execute query with pagination and sorting
+      // Execute query without pagination - get all active students
       const students = await User.find(query)
         .select("-password")
         .populate({
@@ -677,26 +672,19 @@ class AuthController {
           select: 'full_name email role domain phone_numbers',
           match: { role: { $in: ['instructor'] } }
         })
-        .sort(sort)
-        .skip(skip)
-        .limit(parseInt(limit));
-
-      // Get total count for pagination
-      const total = await User.countDocuments(query);
+        .sort(sort);
 
       if (!students || students.length === 0) {
         return res.status(404).json({
           success: false,
-          message: "No students found",
+          message: "No active students found",
         });
       }
 
       res.status(200).json({
         success: true,
         count: students.length,
-        total,
-        totalPages: Math.ceil(total / parseInt(limit)),
-        currentPage: parseInt(page),
+        message: "All active students retrieved successfully",
         data: students,
       });
     } catch (err) {
