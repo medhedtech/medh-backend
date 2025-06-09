@@ -353,14 +353,34 @@ class AuthController {
         });
       }
 
+      // Extract login metadata for analytics
+      const loginMetadata = {
+        ip_address: req.ip || req.connection.remoteAddress || req.socket.remoteAddress || 
+                   (req.connection.socket ? req.connection.socket.remoteAddress : null),
+        user_agent: req.headers['user-agent'] || 'Unknown',
+        timestamp: new Date(),
+        device_info: this.extractDeviceInfo(req.headers['user-agent']),
+        location: req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+        session_id: crypto.randomBytes(16).toString('hex'),
+      };
+
+      // Update login statistics and tracking
+      await this.updateLoginStatistics(user, loginMetadata);
+
       // Generate tokens
       const accessToken = jwtUtils.generateAccessToken(user);
       const refreshToken = await jwtUtils.generateRefreshToken(user);
       
+      // Log successful login with comprehensive details
       logger.auth.info("User logged in successfully", { 
         userId: user._id, 
         email: normalizedEmail, 
-        role: user.role 
+        role: user.role,
+        loginCount: user.login_count,
+        lastLogin: user.last_login,
+        ipAddress: loginMetadata.ip_address,
+        userAgent: loginMetadata.user_agent,
+        deviceInfo: loginMetadata.device_info
       });
 
       return res.status(200).json({
@@ -374,6 +394,11 @@ class AuthController {
           permissions: user.permissions,
           access_token: accessToken,
           refresh_token: refreshToken,
+          login_stats: {
+            login_count: user.login_count,
+            last_login: user.last_login,
+            session_id: loginMetadata.session_id,
+          },
         },
       });
     } catch (err) {
@@ -387,6 +412,196 @@ class AuthController {
         error: err.message,
       });
     }
+  }
+
+  /**
+   * Extract device information from user agent
+   * @param {string} userAgent - User agent string
+   * @returns {Object} Device information
+   */
+  extractDeviceInfo(userAgent) {
+    if (!userAgent) return { type: 'Unknown', browser: 'Unknown', os: 'Unknown' };
+
+    const deviceInfo = {
+      type: 'Desktop',
+      browser: 'Unknown',
+      os: 'Unknown',
+      is_mobile: false,
+      is_tablet: false,
+    };
+
+    // Detect device type
+    if (/Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)) {
+      deviceInfo.is_mobile = true;
+      deviceInfo.type = 'Mobile';
+    }
+    if (/iPad|Android(?!.*Mobile)/i.test(userAgent)) {
+      deviceInfo.is_tablet = true;
+      deviceInfo.type = 'Tablet';
+    }
+
+    // Detect browser
+    if (userAgent.includes('Chrome')) deviceInfo.browser = 'Chrome';
+    else if (userAgent.includes('Firefox')) deviceInfo.browser = 'Firefox';
+    else if (userAgent.includes('Safari')) deviceInfo.browser = 'Safari';
+    else if (userAgent.includes('Edge')) deviceInfo.browser = 'Edge';
+    else if (userAgent.includes('Opera')) deviceInfo.browser = 'Opera';
+
+    // Detect OS
+    if (userAgent.includes('Windows')) deviceInfo.os = 'Windows';
+    else if (userAgent.includes('Mac OS')) deviceInfo.os = 'macOS';
+    else if (userAgent.includes('Linux')) deviceInfo.os = 'Linux';
+    else if (userAgent.includes('Android')) deviceInfo.os = 'Android';
+    else if (userAgent.includes('iOS')) deviceInfo.os = 'iOS';
+
+    return deviceInfo;
+  }
+
+  /**
+   * Update user login statistics and tracking
+   * @param {Object} user - User document
+   * @param {Object} loginMetadata - Login metadata
+   */
+  async updateLoginStatistics(user, loginMetadata) {
+    try {
+      // Calculate time since last login
+      const now = new Date();
+      const timeSinceLastLogin = user.last_login ? 
+        Math.floor((now - user.last_login) / (1000 * 60 * 60 * 24)) : null; // days
+
+      // Initialize login history if it doesn't exist
+      if (!user.login_history) {
+        user.login_history = [];
+      }
+
+      // Add current login to history (keep last 50 logins)
+      const loginRecord = {
+        timestamp: now,
+        ip_address: loginMetadata.ip_address,
+        user_agent: loginMetadata.user_agent,
+        device_info: loginMetadata.device_info,
+        session_id: loginMetadata.session_id,
+        days_since_last_login: timeSinceLastLogin,
+      };
+
+      user.login_history.unshift(loginRecord);
+      if (user.login_history.length > 50) {
+        user.login_history = user.login_history.slice(0, 50);
+      }
+
+      // Update basic login statistics
+      user.login_count = (user.login_count || 0) + 1;
+      user.last_login = now;
+
+      // Update login analytics
+      if (!user.login_analytics) {
+        user.login_analytics = {
+          first_login: now,
+          total_sessions: 0,
+          unique_devices: [],
+          unique_ips: [],
+          login_frequency: {
+            daily: 0,
+            weekly: 0,
+            monthly: 0,
+          },
+          device_stats: {
+            mobile: 0,
+            tablet: 0,
+            desktop: 0,
+          },
+          browser_stats: {},
+          os_stats: {},
+        };
+      }
+
+      // Update analytics
+      user.login_analytics.total_sessions += 1;
+
+      // Track unique devices (by user agent hash)
+      const deviceHash = crypto.createHash('md5').update(loginMetadata.user_agent).digest('hex');
+      if (!user.login_analytics.unique_devices.includes(deviceHash)) {
+        user.login_analytics.unique_devices.push(deviceHash);
+        // Keep only last 20 unique devices
+        if (user.login_analytics.unique_devices.length > 20) {
+          user.login_analytics.unique_devices = user.login_analytics.unique_devices.slice(-20);
+        }
+      }
+
+      // Track unique IPs
+      if (loginMetadata.ip_address && !user.login_analytics.unique_ips.includes(loginMetadata.ip_address)) {
+        user.login_analytics.unique_ips.push(loginMetadata.ip_address);
+        // Keep only last 20 unique IPs
+        if (user.login_analytics.unique_ips.length > 20) {
+          user.login_analytics.unique_ips = user.login_analytics.unique_ips.slice(-20);
+        }
+      }
+
+      // Update device statistics
+      if (loginMetadata.device_info.is_mobile) {
+        user.login_analytics.device_stats.mobile += 1;
+      } else if (loginMetadata.device_info.is_tablet) {
+        user.login_analytics.device_stats.tablet += 1;
+      } else {
+        user.login_analytics.device_stats.desktop += 1;
+      }
+
+      // Update browser statistics
+      const browser = loginMetadata.device_info.browser;
+      user.login_analytics.browser_stats[browser] = (user.login_analytics.browser_stats[browser] || 0) + 1;
+
+      // Update OS statistics
+      const os = loginMetadata.device_info.os;
+      user.login_analytics.os_stats[os] = (user.login_analytics.os_stats[os] || 0) + 1;
+
+      // Update login frequency (calculate based on login history)
+      this.updateLoginFrequency(user);
+
+      // Save user with updated statistics
+      await user.save();
+
+      logger.auth.debug("Login statistics updated", {
+        userId: user._id,
+        loginCount: user.login_count,
+        totalSessions: user.login_analytics.total_sessions,
+        uniqueDevices: user.login_analytics.unique_devices.length,
+        uniqueIPs: user.login_analytics.unique_ips.length,
+      });
+
+    } catch (error) {
+      logger.auth.error("Error updating login statistics", {
+        userId: user._id,
+        error: error.message,
+        stack: error.stack,
+      });
+      // Don't throw error to prevent login failure due to analytics issues
+    }
+  }
+
+  /**
+   * Update login frequency analytics
+   * @param {Object} user - User document
+   */
+  updateLoginFrequency(user) {
+    if (!user.login_history || user.login_history.length === 0) return;
+
+    const now = new Date();
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Count logins in different time periods
+    user.login_analytics.login_frequency.daily = user.login_history.filter(
+      login => new Date(login.timestamp) >= oneDayAgo
+    ).length;
+
+    user.login_analytics.login_frequency.weekly = user.login_history.filter(
+      login => new Date(login.timestamp) >= oneWeekAgo
+    ).length;
+
+    user.login_analytics.login_frequency.monthly = user.login_history.filter(
+      login => new Date(login.timestamp) >= oneMonthAgo
+    ).length;
   }
 
   /**

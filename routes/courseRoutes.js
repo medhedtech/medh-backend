@@ -10,6 +10,7 @@ import {
   deleteCourse,
   getCourseTitles,
   getAllCoursesWithLimits,
+  getCoursesByCategory,
   toggleCourseStatus,
   updateRecordedVideos,
   getRecordedVideosForUser,
@@ -67,6 +68,7 @@ import { validateSchedulePublish } from "../validations/courseValidation.js";
 // Public Routes
 router.get("/get", getAllCourses);
 router.get("/search", getAllCoursesWithLimits);
+router.get("/category", getCoursesByCategory);
 router.get("/new", getNewCoursesWithLimits);
 router.get("/prices", getAllCoursesWithPrices);
 router.get("/fields", getCoursesWithFields);

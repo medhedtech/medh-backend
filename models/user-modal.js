@@ -246,6 +246,127 @@ const userSchema = new Schema(
       type: Number,
       default: 0,
     },
+    // Enhanced login tracking and analytics
+    login_history: [{
+      timestamp: {
+        type: Date,
+        required: true,
+      },
+      ip_address: {
+        type: String,
+        trim: true,
+      },
+      user_agent: {
+        type: String,
+        trim: true,
+      },
+      device_info: {
+        type: {
+          type: String,
+          enum: ['Desktop', 'Mobile', 'Tablet', 'Unknown'],
+          default: 'Unknown',
+        },
+        browser: {
+          type: String,
+          default: 'Unknown',
+        },
+        os: {
+          type: String,
+          default: 'Unknown',
+        },
+        is_mobile: {
+          type: Boolean,
+          default: false,
+        },
+        is_tablet: {
+          type: Boolean,
+          default: false,
+        },
+      },
+      session_id: {
+        type: String,
+        trim: true,
+      },
+      days_since_last_login: {
+        type: Number,
+        min: 0,
+      },
+    }],
+    login_analytics: {
+      first_login: {
+        type: Date,
+      },
+      total_sessions: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      unique_devices: [{
+        type: String, // Hashed device fingerprints
+      }],
+      unique_ips: [{
+        type: String,
+        validate: {
+          validator: function(v) {
+            // Basic IP validation (IPv4 and IPv6)
+            return !v || /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$|^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/.test(v);
+          },
+          message: props => `${props.value} is not a valid IP address!`
+        }
+      }],
+      login_frequency: {
+        daily: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
+        weekly: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
+        monthly: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
+      },
+      device_stats: {
+        mobile: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
+        tablet: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
+        desktop: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
+      },
+      browser_stats: {
+        type: Map,
+        of: Number,
+        default: new Map(),
+      },
+      os_stats: {
+        type: Map,
+        of: Number,
+        default: new Map(),
+      },
+      average_session_duration: {
+        type: Number, // in minutes
+        default: 0,
+        min: 0,
+      },
+      last_activity: {
+        type: Date,
+      },
+    },
     emailVerified: {
       type: Boolean,
       default: false,
@@ -385,6 +506,141 @@ userSchema.methods.updateLastLogin = async function () {
   return await this.save();
 };
 
+// Enhanced login analytics methods
+userSchema.methods.getLoginStats = function () {
+  return {
+    total_logins: this.login_count || 0,
+    last_login: this.last_login,
+    first_login: this.login_analytics?.first_login,
+    total_sessions: this.login_analytics?.total_sessions || 0,
+    unique_devices: this.login_analytics?.unique_devices?.length || 0,
+    unique_ips: this.login_analytics?.unique_ips?.length || 0,
+    login_frequency: this.login_analytics?.login_frequency || { daily: 0, weekly: 0, monthly: 0 },
+    device_stats: this.login_analytics?.device_stats || { mobile: 0, tablet: 0, desktop: 0 },
+    browser_stats: this.login_analytics?.browser_stats || {},
+    os_stats: this.login_analytics?.os_stats || {},
+    average_session_duration: this.login_analytics?.average_session_duration || 0,
+    last_activity: this.login_analytics?.last_activity,
+  };
+};
+
+userSchema.methods.getRecentLoginHistory = function (limit = 10) {
+  if (!this.login_history || this.login_history.length === 0) {
+    return [];
+  }
+  return this.login_history.slice(0, limit).map(login => ({
+    timestamp: login.timestamp,
+    ip_address: login.ip_address,
+    device_type: login.device_info?.type || 'Unknown',
+    browser: login.device_info?.browser || 'Unknown',
+    os: login.device_info?.os || 'Unknown',
+    days_since_last_login: login.days_since_last_login,
+    session_id: login.session_id,
+  }));
+};
+
+userSchema.methods.isFrequentUser = function () {
+  const analytics = this.login_analytics;
+  if (!analytics) return false;
+  
+  // Consider frequent if user logs in more than 3 times per week on average
+  const weeklyAverage = analytics.login_frequency?.weekly || 0;
+  return weeklyAverage >= 3;
+};
+
+userSchema.methods.getDevicePreference = function () {
+  const deviceStats = this.login_analytics?.device_stats;
+  if (!deviceStats) return 'Unknown';
+  
+  const { mobile, tablet, desktop } = deviceStats;
+  const total = mobile + tablet + desktop;
+  
+  if (total === 0) return 'Unknown';
+  
+  if (mobile > tablet && mobile > desktop) return 'Mobile';
+  if (tablet > mobile && tablet > desktop) return 'Tablet';
+  return 'Desktop';
+};
+
+userSchema.methods.getBrowserPreference = function () {
+  const browserStats = this.login_analytics?.browser_stats;
+  if (!browserStats || browserStats.size === 0) return 'Unknown';
+  
+  let maxBrowser = 'Unknown';
+  let maxCount = 0;
+  
+  for (const [browser, count] of browserStats) {
+    if (count > maxCount) {
+      maxCount = count;
+      maxBrowser = browser;
+    }
+  }
+  
+  return maxBrowser;
+};
+
+userSchema.methods.getLoginPattern = function () {
+  if (!this.login_history || this.login_history.length < 2) {
+    return { pattern: 'insufficient_data', description: 'Not enough login data' };
+  }
+  
+  const frequency = this.login_analytics?.login_frequency;
+  if (!frequency) return { pattern: 'unknown', description: 'No frequency data available' };
+  
+  const { daily, weekly, monthly } = frequency;
+  
+  if (daily >= 1) {
+    return { pattern: 'daily_user', description: 'Logs in daily' };
+  } else if (weekly >= 3) {
+    return { pattern: 'frequent_user', description: 'Logs in multiple times per week' };
+  } else if (weekly >= 1) {
+    return { pattern: 'weekly_user', description: 'Logs in weekly' };
+  } else if (monthly >= 1) {
+    return { pattern: 'occasional_user', description: 'Logs in occasionally' };
+  } else {
+    return { pattern: 'inactive_user', description: 'Rarely logs in' };
+  }
+};
+
+userSchema.methods.hasMultipleDevices = function () {
+  const uniqueDevices = this.login_analytics?.unique_devices?.length || 0;
+  return uniqueDevices > 1;
+};
+
+userSchema.methods.hasMultipleLocations = function () {
+  const uniqueIPs = this.login_analytics?.unique_ips?.length || 0;
+  return uniqueIPs > 1;
+};
+
+userSchema.methods.getSecurityScore = function () {
+  let score = 100; // Start with perfect score
+  
+  // Deduct points for security concerns
+  if (this.hasMultipleLocations()) {
+    const uniqueIPs = this.login_analytics?.unique_ips?.length || 0;
+    if (uniqueIPs > 5) score -= 20; // Many different IPs
+    else if (uniqueIPs > 3) score -= 10;
+  }
+  
+  if (this.hasMultipleDevices()) {
+    const uniqueDevices = this.login_analytics?.unique_devices?.length || 0;
+    if (uniqueDevices > 10) score -= 15; // Too many devices
+    else if (uniqueDevices > 5) score -= 5;
+  }
+  
+  // Check for suspicious login patterns
+  const recentLogins = this.getRecentLoginHistory(5);
+  const rapidLogins = recentLogins.filter((login, index) => {
+    if (index === 0) return false;
+    const timeDiff = new Date(recentLogins[index - 1].timestamp) - new Date(login.timestamp);
+    return timeDiff < 60000; // Less than 1 minute apart
+  });
+  
+  if (rapidLogins.length > 0) score -= 25; // Rapid successive logins
+  
+  return Math.max(0, Math.min(100, score));
+};
+
 // Add static methods for common queries
 userSchema.statics.findByRole = function (role) {
   return this.find({ role: role });
@@ -435,6 +691,13 @@ userSchema.index({ status: 1 });
 userSchema.index({ admin_role: 1 });
 userSchema.index({ "phone_numbers.number": 1 });
 userSchema.index({ assigned_instructor: 1 });
+userSchema.index({ last_login: -1 }); // For recent login queries
+userSchema.index({ login_count: -1 }); // For most active users
+userSchema.index({ "login_analytics.total_sessions": -1 }); // For session analytics
+userSchema.index({ "login_analytics.first_login": 1 }); // For user registration analytics
+userSchema.index({ "login_history.timestamp": -1 }); // For login history queries
+userSchema.index({ "login_history.ip_address": 1 }); // For security analysis
+userSchema.index({ email: 1, last_login: -1 }); // Compound index for user activity queries
 
 // Export model constants for use in other files
 export const USER_ROLES = ROLES;
