@@ -166,27 +166,54 @@ export const getAllBlogs = async (req, res) => {
     const {
       page = 1,
       limit = 10,
-      status, // Default to published only
+      status = "published", // Default to published for public routes
       sort_by = "createdAt",
       sort_order = "desc",
       with_content = "false", // Default to false for public routes
       count_only = "false",
+      featured,
+      category,
+      tag,
+      author,
+      search,
     } = req.query;
 
     const skip = (page - 1) * limit;
     const sort = {};
     sort[sort_by] = sort_order === "desc" ? -1 : 1;
 
-    // Build query
-    const query = { status }; // Always filter by status for public routes
+    // Build query dynamically
+    const query = {};
+    
+    // Always filter by status (default to published)
+    if (status) {
+      query.status = status;
+    }
+    
+    // Additional filters
+    if (featured !== undefined) {
+      query.featured = featured === "true";
+    }
+    
+    if (category) {
+      query.categories = category;
+    }
+    
+    if (tag) {
+      query.tags = tag;
+    }
+    
+    if (author) {
+      query.author = author;
+    }
+    
+    // Text search
+    if (search) {
+      query.$text = { $search: search };
+    }
 
     // Build projection based on with_content parameter
-    const projection =
-      with_content === "false"
-        ? {
-            content: 0,
-          }
-        : {};
+    const projection = with_content === "false" ? { content: 0 } : {};
 
     // If count_only is true, just return the count
     if (count_only === "true") {
@@ -202,23 +229,34 @@ export const getAllBlogs = async (req, res) => {
       });
     }
 
-    const blogs = await BlogsModel.find(query)
-      .select(projection)
-      .populate("author", "name email")
-      .populate("categories", "category_name category_image")
-      .sort(sort)
-      .skip(skip)
-      .limit(parseInt(limit));
+    // Execute the query with proper error handling
+    const [blogs, total] = await Promise.all([
+      BlogsModel.find(query)
+        .select(projection)
+        .populate("author", "name email")
+        .populate("categories", "category_name category_image")
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(), // Use lean() for better performance
+      BlogsModel.countDocuments(query)
+    ]);
 
-    const total = await BlogsModel.countDocuments(query);
+    // Add commentCount virtual to each blog
+    const blogsWithCommentCount = blogs.map(blog => ({
+      ...blog,
+      commentCount: blog.comments ? blog.comments.length : 0,
+      id: blog._id.toString() // Ensure id field is present
+    }));
 
     res.status(200).json({
       success: true,
-      data: blogs,
+      data: blogsWithCommentCount,
       pagination: {
         total,
         page: parseInt(page),
         pages: Math.ceil(total / limit),
+        limit: parseInt(limit),
       },
     });
   } catch (err) {
@@ -234,28 +272,69 @@ export const getAllBlogs = async (req, res) => {
 // Search blogs
 export const searchBlogs = async (req, res) => {
   try {
-    const { query } = req.query;
-    if (!query) {
+    const { 
+      query: searchQuery,
+      page = 1,
+      limit = 10,
+      status = "published",
+      sort_by = "score", // Default to relevance score
+      sort_order = "desc"
+    } = req.query;
+    
+    if (!searchQuery) {
       return res.status(400).json({
         success: false,
         message: "Search query is required",
       });
     }
 
-    const blogs = await BlogsModel.find(
-      {
-        $text: { $search: query },
-        status: "published", // Only search published blogs
-      },
-      { score: { $meta: "textScore" } },
-    )
-      .sort({ score: { $meta: "textScore" } })
-      .populate("author", "name email")
-      .populate("categories", "category_name category_image");
+    const skip = (page - 1) * limit;
+    const mongoQuery = {
+      $text: { $search: searchQuery },
+      status, // Filter by status
+    };
+
+    // Determine sort order
+    let sortOption;
+    if (sort_by === "score") {
+      sortOption = { score: { $meta: "textScore" } };
+    } else {
+      const sort = {};
+      sort[sort_by] = sort_order === "desc" ? -1 : 1;
+      sortOption = sort;
+    }
+
+    const [blogs, total] = await Promise.all([
+      BlogsModel.find(
+        mongoQuery,
+        { score: { $meta: "textScore" } }
+      )
+        .sort(sortOption)
+        .populate("author", "name email")
+        .populate("categories", "category_name category_image")
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      BlogsModel.countDocuments(mongoQuery)
+    ]);
+
+    // Add commentCount virtual to each blog
+    const blogsWithCommentCount = blogs.map(blog => ({
+      ...blog,
+      commentCount: blog.comments ? blog.comments.length : 0,
+      id: blog._id.toString()
+    }));
 
     res.status(200).json({
       success: true,
-      data: blogs,
+      data: blogsWithCommentCount,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit),
+        limit: parseInt(limit),
+      },
+      searchQuery,
     });
   } catch (err) {
     console.error("Error searching blogs:", err.message);
@@ -270,18 +349,50 @@ export const searchBlogs = async (req, res) => {
 // Get featured blogs
 export const getFeaturedBlogs = async (req, res) => {
   try {
-    const blogs = await BlogsModel.find({
+    const {
+      page = 1,
+      limit = 5,
+      status = "published",
+      sort_by = "createdAt",
+      sort_order = "desc"
+    } = req.query;
+
+    const skip = (page - 1) * limit;
+    const sort = {};
+    sort[sort_by] = sort_order === "desc" ? -1 : 1;
+
+    const query = {
       featured: true,
-      status: "published",
-    })
-      .populate("author", "name email")
-      .populate("categories", "category_name category_image")
-      .sort({ createdAt: -1 })
-      .limit(5);
+      status,
+    };
+
+    const [blogs, total] = await Promise.all([
+      BlogsModel.find(query)
+        .populate("author", "name email")
+        .populate("categories", "category_name category_image")
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      BlogsModel.countDocuments(query)
+    ]);
+
+    // Add commentCount virtual to each blog
+    const blogsWithCommentCount = blogs.map(blog => ({
+      ...blog,
+      commentCount: blog.comments ? blog.comments.length : 0,
+      id: blog._id.toString()
+    }));
 
     res.status(200).json({
       success: true,
-      data: blogs,
+      data: blogsWithCommentCount,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit),
+        limit: parseInt(limit),
+      },
     });
   } catch (err) {
     console.error("Error fetching featured blogs:", err.message);
@@ -392,17 +503,51 @@ export const getBlogById = async (req, res) => {
 // Get blogs by category
 export const getBlogsByCategory = async (req, res) => {
   try {
-    const blogs = await BlogsModel.find({
+    const {
+      page = 1,
+      limit = 10,
+      status = "published",
+      sort_by = "createdAt",
+      sort_order = "desc"
+    } = req.query;
+
+    const skip = (page - 1) * limit;
+    const sort = {};
+    sort[sort_by] = sort_order === "desc" ? -1 : 1;
+
+    const query = {
       categories: req.params.category,
-      status: "published",
-    })
-      .populate("author", "name email")
-      .populate("categories", "category_name category_image")
-      .sort({ createdAt: -1 });
+      status,
+    };
+
+    const [blogs, total] = await Promise.all([
+      BlogsModel.find(query)
+        .populate("author", "name email")
+        .populate("categories", "category_name category_image")
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      BlogsModel.countDocuments(query)
+    ]);
+
+    // Add commentCount virtual to each blog
+    const blogsWithCommentCount = blogs.map(blog => ({
+      ...blog,
+      commentCount: blog.comments ? blog.comments.length : 0,
+      id: blog._id.toString()
+    }));
 
     res.status(200).json({
       success: true,
-      data: blogs,
+      data: blogsWithCommentCount,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit),
+        limit: parseInt(limit),
+      },
+      category: req.params.category,
     });
   } catch (err) {
     console.error("Error fetching blogs by category:", err.message);
@@ -417,17 +562,51 @@ export const getBlogsByCategory = async (req, res) => {
 // Get blogs by tag
 export const getBlogsByTag = async (req, res) => {
   try {
-    const blogs = await BlogsModel.find({
+    const {
+      page = 1,
+      limit = 10,
+      status = "published",
+      sort_by = "createdAt",
+      sort_order = "desc"
+    } = req.query;
+
+    const skip = (page - 1) * limit;
+    const sort = {};
+    sort[sort_by] = sort_order === "desc" ? -1 : 1;
+
+    const query = {
       tags: req.params.tag,
-      status: "published",
-    })
-      .populate("author", "name email")
-      .populate("categories", "category_name category_image")
-      .sort({ createdAt: -1 });
+      status,
+    };
+
+    const [blogs, total] = await Promise.all([
+      BlogsModel.find(query)
+        .populate("author", "name email")
+        .populate("categories", "category_name category_image")
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      BlogsModel.countDocuments(query)
+    ]);
+
+    // Add commentCount virtual to each blog
+    const blogsWithCommentCount = blogs.map(blog => ({
+      ...blog,
+      commentCount: blog.comments ? blog.comments.length : 0,
+      id: blog._id.toString()
+    }));
 
     res.status(200).json({
       success: true,
-      data: blogs,
+      data: blogsWithCommentCount,
+      pagination: {
+        total,
+        page: parseInt(page),
+        pages: Math.ceil(total / limit),
+        limit: parseInt(limit),
+      },
+      tag: req.params.tag,
     });
   } catch (err) {
     console.error("Error fetching blogs by tag:", err.message);
