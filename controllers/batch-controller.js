@@ -1357,6 +1357,7 @@ const processUploadInBackground = async (batchId, sessionId, base64String, title
     }
 
     // Determine upload directory based on batch type
+    // Determine upload directory based on batch type
     let uploadFolder;
     if (batch.batch_type === 'individual') {
       // For individual batch, find the enrolled student
