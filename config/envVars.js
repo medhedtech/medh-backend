@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import path from "path";
 dotenv.config();
 
 export const ENV_VARS = {
@@ -54,7 +55,12 @@ export const ENV_VARS = {
       "video/webm": "webm",
     },
     MAX_FILE_SIZE: 10 * 1024 * 1024 * 1024, // 10 GB
-    BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME || "medhdocuments", // Using environment variable or fallback
+    BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME || "medh-filess", // Using environment variable or fallback
     MAX_FILES: 10, // Placeholder for maximum number of files in multi-upload
   },
+
+  // CloudFront Configuration
+  CLOUDFRONT_KEY_PAIR_ID: process.env.CLOUDFRONT_KEY_PAIR_ID,
+  CLOUDFRONT_PRIVATE_KEY_PATH: process.env.CLOUDFRONT_PRIVATE_KEY_PATH || path.join(process.cwd(), "private_key.pem"),
+  CLOUDFRONT_DEFAULT_EXPIRES_IN: parseInt(process.env.CLOUDFRONT_DEFAULT_EXPIRES_IN || "300", 10),
 };

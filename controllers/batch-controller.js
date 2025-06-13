@@ -4,6 +4,7 @@ import User from "../models/user-modal.js";
 import { validationResult } from "express-validator";
 import mongoose from "mongoose";
 import zoomService from "../services/zoomService.js";
+import { generateSignedUrl } from "../utils/cloudfrontSigner.js";
 
 /**
  * @typedef {('group'|'individual')} TBatchType
@@ -1193,6 +1194,255 @@ export const addRecordedLessonToBatch = async (req, res) => {
   }
 };
 
+/**
+ * Add recorded lesson to batch with automatic CloudFront URL signing
+ * @route POST /api/v1/batches/:batchId/sessions/:sessionId/recorded-lessons-with-signing
+ * @access Admin, Instructor
+ */
+export const addRecordedLessonToBatchWithUpload = async (req, res) => {
+  try {
+    const { batchId, sessionId } = req.params;
+    const { title, url, recorded_date } = req.body;
+
+    // Find the batch
+    const batch = await Batch.findById(batchId);
+    if (!batch) {
+      return res.status(404).json({ success: false, message: "Batch not found" });
+    }
+
+    // Find the scheduled session sub-document
+    const session = batch.schedule.id(sessionId);
+    if (!session) {
+      return res.status(404).json({ success: false, message: "Scheduled session not found" });
+    }
+
+    // Create the recorded lesson object
+    const recordedLessonData = {
+      title,
+      url,
+      recorded_date: recorded_date || new Date(),
+      created_by: req.user.id,
+    };
+
+    // Generate signed URL if it's a CloudFront/S3 URL
+    if (url) {
+      try {
+        let signedUrl;
+        
+        // Convert S3 URL to CloudFront URL and sign it (only for medh-filess bucket)
+        if (url.includes('medh-filess.s3.') && url.includes('.amazonaws.com')) {
+          const s3UrlParts = url.split('.amazonaws.com/');
+          if (s3UrlParts.length === 2) {
+            const objectKey = s3UrlParts[1];
+            const cloudFrontUrl = `https://cdn.medh.co/${objectKey}`;
+            signedUrl = generateSignedUrl(cloudFrontUrl);
+          }
+        }
+        // Sign existing CloudFront URLs
+        else if (url.includes('cdn.medh.co')) {
+          signedUrl = generateSignedUrl(url);
+        }
+        
+        // Add signed URL to the response data
+        if (signedUrl) {
+          recordedLessonData.signedUrl = signedUrl;
+        }
+      } catch (signError) {
+        console.error("Error generating signed URL for recorded lesson:", signError);
+        // Don't fail the operation, just log the error
+      }
+    }
+
+    // Add the recorded lesson to the session
+    session.recorded_lessons.push(recordedLessonData);
+    await batch.save();
+
+    // Get the newly added lesson
+    const newLesson = session.recorded_lessons[session.recorded_lessons.length - 1];
+
+    res.status(201).json({ 
+      success: true, 
+      message: "Recorded lesson added successfully",
+      data: {
+        lesson: newLesson,
+        batch: {
+          id: batch._id,
+          name: batch.batch_name,
+          type: batch.batch_type
+        },
+        session: {
+          id: session._id,
+          date: session.date,
+          day: session.day,
+          start_time: session.start_time,
+          end_time: session.end_time
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Error adding recorded lesson to batch:", error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: "Server error while adding recorded lesson", 
+      error: error.message 
+    });
+  }
+};
+
+/**
+ * Upload and add recorded lesson to batch in one operation
+ * @route POST /api/v1/batches/:batchId/sessions/:sessionId/upload-recorded-lesson
+ * @access Admin, Instructor
+ */
+export const uploadAndAddRecordedLesson = async (req, res) => {
+  try {
+    const { batchId, sessionId } = req.params;
+    const { base64String, title, recorded_date } = req.body;
+
+    if (!base64String) {
+      return res.status(400).json({
+        success: false,
+        message: "base64String is required"
+      });
+    }
+
+    // Send immediate response to prevent timeout
+    res.status(202).json({
+      success: true,
+      message: "Upload started successfully",
+      status: "uploading",
+      data: {
+        batchId,
+        sessionId,
+        title: title || 'Recorded Lesson',
+        uploadStatus: "in_progress"
+      }
+    });
+
+    // Continue with upload in background
+    processUploadInBackground(batchId, sessionId, base64String, title, recorded_date, req.user.id);
+    
+  } catch (error) {
+    console.error("Error starting upload:", error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: "Server error while starting upload",
+        error: error.message
+      });
+    }
+  }
+};
+
+// Background upload processing function
+const processUploadInBackground = async (batchId, sessionId, base64String, title, recorded_date, userId) => {
+  try {
+
+    // Import required modules
+    const { Batch } = await import("../models/course-model.js");
+    const Enrollment = (await import("../models/enrollment-model.js")).default;
+    const { uploadBase64FileOptimized, uploadBase64FileChunked } = await import("../utils/uploadFile.js");
+    const { ENV_VARS } = await import("../config/envVars.js");
+
+    console.log(`[Background Upload] Starting upload for batch ${batchId}, session ${sessionId}`);
+
+    // Find the batch and determine upload path
+    const batch = await Batch.findById(batchId)
+      .populate('course', 'course_title')
+      .lean();
+    
+    if (!batch) {
+      console.error(`[Background Upload] Batch ${batchId} not found`);
+      return;
+    }
+
+    // Determine upload directory based on batch type
+    let uploadFolder;
+    if (batch.batch_type === 'individual') {
+      // For individual batch, find the enrolled student
+      const enrollment = await Enrollment.findOne({ 
+        batch: batchId, 
+        status: 'active' 
+      }).select('student');
+      
+      if (!enrollment) {
+        console.error(`[Background Upload] No active student found for individual batch ${batchId}`);
+        return;
+      }
+      
+      uploadFolder = `videos/student/${enrollment.student}`;
+    } else {
+      // For group batch, use batch ID
+      uploadFolder = `videos/${batchId}`;
+    }
+
+    // Parse base64 data
+    let mimeType;
+    let base64Data;
+    
+    const dataUriMatch = base64String.match(/^data:(.*?);base64,(.*)$/);
+    if (dataUriMatch) {
+      mimeType = dataUriMatch[1];
+      base64Data = dataUriMatch[2];
+    } else {
+      // Raw base64 string, assume video/mp4
+      mimeType = "video/mp4";
+      base64Data = base64String;
+    }
+
+    // Validate that it's a video file
+    if (!mimeType.startsWith("video/")) {
+      console.error(`[Background Upload] Invalid file type: ${mimeType}`);
+      return;
+    }
+
+    // Quick size estimation
+    const estimatedSize = (base64Data.length * 3) / 4;
+    if (estimatedSize > ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE) {
+      console.error(`[Background Upload] File too large: ${estimatedSize} bytes`);
+      return;
+    }
+
+    console.log(`[Background Upload] Uploading ${(estimatedSize / 1024 / 1024).toFixed(2)}MB to ${uploadFolder}`);
+
+    // Choose processing method based on file size
+    const CHUNKED_THRESHOLD = 25 * 1024 * 1024; // 25MB threshold
+    
+    let uploadResult;
+    if (estimatedSize > CHUNKED_THRESHOLD) {
+      uploadResult = await uploadBase64FileChunked(base64Data, mimeType, uploadFolder);
+    } else {
+      uploadResult = await uploadBase64FileOptimized(base64Data, mimeType, uploadFolder);
+    }
+
+    console.log(`[Background Upload] Upload completed: ${uploadResult.data.url}`);
+
+    // Add the recorded lesson to the batch session
+    const batchDoc = await Batch.findById(batchId);
+    const session = batchDoc.schedule.id(sessionId);
+    
+    if (!session) {
+      console.error(`[Background Upload] Session ${sessionId} not found in batch ${batchId}`);
+      return;
+    }
+
+    // Add the recorded lesson
+    session.recorded_lessons.push({
+      title: title || 'Recorded Lesson',
+      url: uploadResult.data.url,
+      recorded_date: recorded_date || new Date(),
+      created_by: userId,
+    });
+    
+    await batchDoc.save();
+
+    console.log(`[Background Upload] Successfully added recorded lesson to batch ${batchId}, session ${sessionId}`);
+
+  } catch (error) {
+    console.error(`[Background Upload] Error processing upload for batch ${batchId}:`, error);
+  }
+};
+
 // Controller to get recorded lessons for a scheduled session
 export const getRecordedLessonsForSession = async (req, res) => {
   try {
@@ -1237,6 +1487,46 @@ export const getRecordedLessonsForStudent = async (req, res) => {
       if (!batch || !batch.schedule) continue;
       for (const session of batch.schedule) {
         if (session.recorded_lessons && session.recorded_lessons.length) {
+          // Generate signed URLs for video lessons stored on CloudFront or S3
+          const recordedLessonsWithSignedUrls = session.recorded_lessons.map(lesson => {
+            if (lesson.url) {
+              // Convert S3 URLs to CloudFront URLs and sign them (only for medh-filess bucket)
+              if (lesson.url.includes('medh-filess.s3.') && lesson.url.includes('.amazonaws.com')) {
+                try {
+                  // Extract the object key from S3 URL
+                  const s3UrlParts = lesson.url.split('.amazonaws.com/');
+                  if (s3UrlParts.length === 2) {
+                    const objectKey = s3UrlParts[1];
+                    const cloudFrontUrl = `https://cdn.medh.co/${objectKey}`;
+                    const signedUrl = generateSignedUrl(cloudFrontUrl);
+                    return {
+                      ...lesson,
+                      url: signedUrl  // Replace S3 URL with signed CloudFront URL
+                    };
+                  }
+                } catch (signError) {
+                  console.error("Error converting S3 URL to signed CloudFront URL:", signError);
+                  return lesson; // Return original lesson if signing fails
+                }
+              }
+              // Sign existing CloudFront URLs
+              else if (lesson.url.includes('cdn.medh.co')) {
+                try {
+                  const signedUrl = generateSignedUrl(lesson.url);
+                  return {
+                    ...lesson,
+                    url: signedUrl  // Replace original URL with signed URL
+                  };
+                } catch (signError) {
+                  console.error("Error signing CloudFront URL for recorded lesson:", signError);
+                  return lesson; // Return original lesson if signing fails
+                }
+              }
+            }
+            
+            return lesson; // Return original lesson for non-S3/non-CloudFront URLs (like YouTube)
+          });
+
           lessonsData.push({
             batch: {
               id: batch._id,
@@ -1248,7 +1538,7 @@ export const getRecordedLessonsForStudent = async (req, res) => {
               start_time: session.start_time,
               end_time: session.end_time
             },
-            recorded_lessons: session.recorded_lessons
+            recorded_lessons: recordedLessonsWithSignedUrls
           });
         }
       }

@@ -409,5 +409,181 @@ export const handleMultipleUpload = async (req, res) => {
   }
 };
 
+/**
+ * Handle recorded lesson upload via base64
+ * Uploads to appropriate directory based on batch type:
+ * - Individual batch: {bucket}/student/{student_id}/
+ * - Group batch: {bucket}/{batch_id}/
+ */
+export const handleRecordedLessonUpload = async (req, res) => {
+  try {
+    // Set CORS headers safely
+    const origin = req.headers?.origin;
+    if (origin) {
+      res.header("Access-Control-Allow-Origin", origin);
+      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, x-access-token");
+      res.header("Access-Control-Allow-Credentials", "true");
+    }
+
+    // Validate request body
+    if (!req.body || !req.body.base64String || !req.body.batchId) {
+      throw new UploadError(
+        "Missing required fields: base64String and batchId",
+        "INVALID_REQUEST"
+      );
+    }
+
+    const { 
+      base64String, 
+      batchId, 
+      title, 
+      sessionId, 
+      recorded_date 
+    } = req.body;
+
+    // Import batch models (dynamic import to avoid circular dependency)
+    const { Batch } = await import("../../models/course-model.js");
+    const Enrollment = (await import("../../models/enrollment-model.js")).default;
+    
+    // Find the batch and determine upload path
+    const batch = await Batch.findById(batchId)
+      .populate('course', 'course_title')
+      .lean();
+    
+    if (!batch) {
+      throw new UploadError("Batch not found", "BATCH_NOT_FOUND");
+    }
+
+    // Determine upload directory based on batch type
+    let uploadFolder;
+    if (batch.batch_type === 'individual') {
+      // For individual batch, find the enrolled student
+      const enrollment = await Enrollment.findOne({ 
+        batch: batchId, 
+        status: 'active' 
+      }).select('student');
+      
+      if (!enrollment) {
+        throw new UploadError("No active student found for individual batch", "NO_STUDENT_FOUND");
+      }
+      
+      uploadFolder = `videos/student/${enrollment.student}`;
+    } else {
+      // For group batch, use batch ID
+      uploadFolder = `videos/${batchId}`;
+    }
+
+    // Parse base64 data
+    let mimeType;
+    let base64Data;
+    
+    const dataUriMatch = base64String.match(/^data:(.*?);base64,(.*)$/);
+    if (dataUriMatch) {
+      mimeType = dataUriMatch[1];
+      base64Data = dataUriMatch[2];
+    } else {
+      // Raw base64 string, assume video/mp4
+      mimeType = "video/mp4";
+      base64Data = base64String;
+    }
+
+    // Validate that it's a video file
+    if (!mimeType.startsWith("video/")) {
+      throw new UploadError(
+        "Only video files are allowed for recorded lessons",
+        "INVALID_FILE_TYPE"
+      );
+    }
+
+    // Quick size estimation
+    const estimatedSize = (base64Data.length * 3) / 4;
+    if (estimatedSize > ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE) {
+      throw new UploadError(
+        `File size exceeds maximum limit of ${ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE / (1024 * 1024)}MB`,
+        "FILE_TOO_LARGE"
+      );
+    }
+
+    // Choose processing method based on file size
+    const CHUNKED_THRESHOLD = 25 * 1024 * 1024; // 25MB threshold
+    
+    let uploadResult;
+    if (estimatedSize > CHUNKED_THRESHOLD) {
+      uploadResult = await uploadBase64FileChunked(base64Data, mimeType, uploadFolder);
+    } else {
+      uploadResult = await uploadBase64FileOptimized(base64Data, mimeType, uploadFolder);
+    }
+
+    // If sessionId is provided, add the recorded lesson to the batch session
+    if (sessionId) {
+      const { addRecordedLessonToBatch } = await import("../batch-controller.js");
+      
+      // Create a fake request object for the batch controller
+      const fakeReq = {
+        params: { batchId, sessionId },
+        body: {
+          title: title || 'Recorded Lesson',
+          url: uploadResult.data.url,
+          recorded_date: recorded_date || new Date()
+        },
+        user: req.user
+      };
+      
+      const fakeRes = {
+        status: (code) => ({
+          json: (data) => {
+            if (code !== 201) {
+              console.error("Error adding recorded lesson to batch:", data);
+            }
+          }
+        })
+      };
+      
+      // Add the lesson to the batch
+      try {
+        await addRecordedLessonToBatch(fakeReq, fakeRes);
+      } catch (batchError) {
+        console.error("Error adding lesson to batch:", batchError);
+        // Don't fail the upload, just log the error
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Recorded lesson uploaded successfully",
+      data: {
+        ...uploadResult.data,
+        batch: {
+          id: batch._id,
+          name: batch.batch_name,
+          type: batch.batch_type,
+          course: batch.course?.course_title
+        },
+        uploadPath: uploadFolder,
+        lessonInfo: {
+          title: title || 'Recorded Lesson',
+          recorded_date: recorded_date || new Date(),
+          sessionId: sessionId || null
+        }
+      },
+    });
+  } catch (error) {
+    console.error("Recorded lesson upload error:", error);
+    
+    // Determine appropriate status code
+    let statusCode = 500;
+    if (["INVALID_REQUEST", "INVALID_FILE_TYPE", "FILE_TOO_LARGE", "BATCH_NOT_FOUND", "NO_STUDENT_FOUND"].includes(error.code)) {
+      statusCode = 400;
+    }
+    
+    res.status(statusCode).json({
+      success: false,
+      message: error.message,
+      error: error.code || "UPLOAD_ERROR",
+    });
+  }
+};
+
 // Export the multer instance to be used in routes
 export { upload };

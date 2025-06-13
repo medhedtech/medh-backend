@@ -56,6 +56,7 @@ import {
   addVideoLessonToCourse,
   updateVideoLesson,
   deleteVideoLesson,
+  getLessonSignedVideoUrl,
 } from "../controllers/course-controller.js";
 import { authenticateToken } from "../middleware/auth.js";
 import {
@@ -178,5 +179,6 @@ router.delete(
   deleteBookmark,
 );
 router.post("/broucher/download/:courseId", authenticateToken, downloadBrochure);
+router.get("/:courseId/lessons/:lessonId/video-signed-url", authenticateToken, getLessonSignedVideoUrl);
 
 export default router;

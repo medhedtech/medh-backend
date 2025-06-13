@@ -38,3 +38,6 @@ lib-cov
 # SSH keys
 eval "$(ssh-agent -s)"
 eval "$(ssh-agent -s)".pubtest-video-lesson-fix-2.js
+
+# PEM key ignore patterns
+*.pem
