@@ -15,6 +15,8 @@ import {
   updateStudentStatusInBatch,
   updateBatchStatus,
   addRecordedLessonToBatch,
+  addRecordedLessonToBatchWithUpload,
+  uploadAndAddRecordedLesson,
   getRecordedLessonsForSession,
   getRecordedLessonsForStudent,
   addScheduledSessionToBatch,
@@ -139,6 +141,27 @@ router.post(
   validateScheduleSessionId,
   validateRecordedLesson,
   addRecordedLessonToBatch
+);
+
+// Add route for recorded lesson with automatic CloudFront URL signing
+router.post(
+  "/:batchId/schedule/:sessionId/recorded-lessons-with-signing",
+  isAuthenticated,
+  authorize(["admin", "instructor", "super-admin"]),
+  validateBatchId,
+  validateScheduleSessionId,
+  validateRecordedLesson,
+  addRecordedLessonToBatchWithUpload
+);
+
+// Add route to upload recorded lesson via base64 and add to batch
+router.post(
+  "/:batchId/schedule/:sessionId/upload-recorded-lesson",
+  isAuthenticated,
+  authorize(["admin", "instructor", "super-admin"]),
+  validateBatchId,
+  validateScheduleSessionId,
+  uploadAndAddRecordedLesson
 );
 
 // Add route to fetch recorded lessons for a scheduled session

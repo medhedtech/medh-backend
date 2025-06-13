@@ -29,6 +29,7 @@ import {
   validateVideoLessonData,
   validateQuizLessonData,
 } from "../validations/courseValidation.js";
+import { generateSignedUrl } from "../utils/cloudfrontSigner.js";
 
 // Mark unused imports with underscore prefix to avoid linting errors
 const _AppError = AppError;
@@ -4506,10 +4507,21 @@ const addVideoLessonToCourse = async (req, res) => {
 
     await course.save();
 
+    // Generate a signed URL for the video lesson
+    let signedUrl;
+    try {
+      signedUrl = generateSignedUrl(video_url);
+    } catch (signError) {
+      console.error("Error signing video URL in addVideoLessonToCourse:", signError);
+    }
+
     res.status(201).json({
       success: true,
       message: "Video lesson added successfully",
-      data: videoLesson,
+      data: {
+        ...videoLesson,
+        signedUrl,
+      },
     });
   } catch (error) {
     console.error("Error adding video lesson:", error);
@@ -4926,6 +4938,7 @@ export {
   addVideoLessonToCourse,
   updateVideoLesson,
   deleteVideoLesson,
+  getLessonSignedVideoUrl,
 };
 
 // List all courses with show_in_home tag for home page
@@ -5295,3 +5308,79 @@ const executeScheduledPublishes = catchAsync(async (req, res) => {
     )
   );
 });
+
+// ------------------------------
+// Generate signed CloudFront URL for a video lesson
+// ------------------------------
+/**
+ * @desc    Generate a time-limited signed CloudFront URL for a video lesson
+ * @route   GET /api/courses/:courseId/lessons/:lessonId/video-signed-url
+ * @access  Private (Enrolled Students)
+ */
+const getLessonSignedVideoUrl = async (req, res) => {
+  try {
+    const { courseId, lessonId } = req.params;
+    const userId = req.user.id;
+
+    // Ensure student is enrolled in the course
+    const enrollment = await Enrollment.findOne({
+      course: courseId,
+      student: userId,
+      status: "active",
+    });
+    if (!enrollment) {
+      return res.status(403).json({
+        success: false,
+        message: "You must be enrolled in this course to access this video.",
+      });
+    }
+
+    // Fetch course and locate the lesson inside curriculum
+    const course = await Course.findById(courseId).lean();
+    if (!course) {
+      return res.status(404).json({ success: false, message: "Course not found" });
+    }
+
+    // Helper to find lesson in nested curriculum structure
+    let lesson = null;
+    for (const week of course.curriculum || []) {
+      // Direct lessons
+      if (week.lessons && week.lessons.length) {
+        lesson = week.lessons.find((l) => l.id === lessonId);
+        if (lesson) break;
+      }
+      // Section lessons
+      if (!lesson && week.sections && week.sections.length) {
+        for (const section of week.sections) {
+          lesson = section.lessons?.find((l) => l.id === lessonId);
+          if (lesson) break;
+        }
+      }
+      if (lesson) break;
+    }
+
+    if (!lesson) {
+      return res.status(404).json({ success: false, message: "Lesson not found" });
+    }
+
+    // Validate lesson is a video lesson and has a video_url
+    if (lesson.lessonType !== "video" || !lesson.video_url) {
+      return res.status(400).json({
+        success: false,
+        message: "Requested lesson does not have an associated video.",
+      });
+    }
+
+    // Generate signed URL (5-minute default or env variable)
+    const signedUrl = generateSignedUrl(lesson.video_url);
+
+    return res.status(200).json({ success: true, data: { signedUrl } });
+  } catch (error) {
+    console.error("Error generating signed CloudFront URL:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate signed URL",
+      error: error.message,
+    });
+  }
+};
