@@ -3,6 +3,7 @@ import slugify from "slugify";
 import BlogsModel from "../models/blog-model.js";
 import {
   validateBlog,
+  validateBlogUpdate,
   validateComment,
   validateBlogStatus,
 } from "../utils/validators.js";
@@ -170,6 +171,7 @@ export const getAllBlogs = async (req, res) => {
       sort_by = "createdAt",
       sort_order = "desc",
       with_content = "false", // Default to false for public routes
+      full_content = "false", // New parameter for full content
       count_only = "false",
       featured,
       category,
@@ -212,8 +214,13 @@ export const getAllBlogs = async (req, res) => {
       query.$text = { $search: search };
     }
 
-    // Build projection based on with_content parameter
-    const projection = with_content === "false" ? { content: 0 } : {};
+    // Build projection based on with_content and full_content parameters
+    let projection = {};
+    if (with_content === "false" && full_content === "false") {
+      // Exclude content for listing views
+      projection = { content: 0 };
+    }
+    // If with_content=true or full_content=true, include all content
 
     // If count_only is true, just return the count
     if (count_only === "true") {
@@ -242,11 +249,14 @@ export const getAllBlogs = async (req, res) => {
       BlogsModel.countDocuments(query)
     ]);
 
-    // Add commentCount virtual to each blog
+    // Add commentCount virtual to each blog and ensure content availability
     const blogsWithCommentCount = blogs.map(blog => ({
       ...blog,
       commentCount: blog.comments ? blog.comments.length : 0,
-      id: blog._id.toString() // Ensure id field is present
+      id: blog._id ? blog._id.toString() : null, // Safely ensure id field is present
+      // Ensure content fields are available when requested
+      content: (with_content === "true" || full_content === "true") ? blog.content : undefined,
+      description: blog.description || blog.meta_description || blog.excerpt || '',
     }));
 
     res.status(200).json({
@@ -278,7 +288,9 @@ export const searchBlogs = async (req, res) => {
       limit = 10,
       status = "published",
       sort_by = "score", // Default to relevance score
-      sort_order = "desc"
+      sort_order = "desc",
+      with_content = "false",
+      full_content = "false"
     } = req.query;
     
     if (!searchQuery) {
@@ -304,11 +316,14 @@ export const searchBlogs = async (req, res) => {
       sortOption = sort;
     }
 
+    // Build projection based on content parameters
+    let projection = { score: { $meta: "textScore" } };
+    if (with_content === "false" && full_content === "false") {
+      projection.content = 0;
+    }
+
     const [blogs, total] = await Promise.all([
-      BlogsModel.find(
-        mongoQuery,
-        { score: { $meta: "textScore" } }
-      )
+      BlogsModel.find(mongoQuery, projection)
         .sort(sortOption)
         .populate("author", "name email")
         .populate("categories", "category_name category_image")
@@ -322,7 +337,8 @@ export const searchBlogs = async (req, res) => {
     const blogsWithCommentCount = blogs.map(blog => ({
       ...blog,
       commentCount: blog.comments ? blog.comments.length : 0,
-      id: blog._id.toString()
+      id: blog._id ? blog._id.toString() : null,
+      description: blog.description || blog.meta_description || blog.excerpt || '',
     }));
 
     res.status(200).json({
@@ -354,7 +370,9 @@ export const getFeaturedBlogs = async (req, res) => {
       limit = 5,
       status = "published",
       sort_by = "createdAt",
-      sort_order = "desc"
+      sort_order = "desc",
+      with_content = "false",
+      full_content = "false"
     } = req.query;
 
     const skip = (page - 1) * limit;
@@ -366,8 +384,15 @@ export const getFeaturedBlogs = async (req, res) => {
       status,
     };
 
+    // Build projection based on content parameters
+    let projection = {};
+    if (with_content === "false" && full_content === "false") {
+      projection = { content: 0 };
+    }
+
     const [blogs, total] = await Promise.all([
       BlogsModel.find(query)
+        .select(projection)
         .populate("author", "name email")
         .populate("categories", "category_name category_image")
         .sort(sort)
@@ -381,7 +406,8 @@ export const getFeaturedBlogs = async (req, res) => {
     const blogsWithCommentCount = blogs.map(blog => ({
       ...blog,
       commentCount: blog.comments ? blog.comments.length : 0,
-      id: blog._id.toString()
+      id: blog._id ? blog._id.toString() : null,
+      description: blog.description || blog.meta_description || blog.excerpt || '',
     }));
 
     res.status(200).json({
@@ -404,11 +430,20 @@ export const getFeaturedBlogs = async (req, res) => {
   }
 };
 
-// Get blog by slug
+// Get blog by slug - Enhanced with full content support
 export const getBlogBySlug = async (req, res) => {
   try {
+    const { with_content = "true", full_content = "true" } = req.query;
+    
+    // Build projection - for individual blog posts, we usually want full content
+    let projection = {};
+    if (with_content === "false" && full_content === "false") {
+      projection = { content: 0 };
+    }
+
     // First find the blog without updating it
     const blog = await BlogsModel.findOne({ slug: req.params.slug })
+      .select(projection)
       .populate("author", "name email")
       .populate("categories", "category_name category_image")
       .populate("comments.user", "name email");
@@ -420,10 +455,18 @@ export const getBlogBySlug = async (req, res) => {
       });
     }
 
+    // Ensure we have content fields available
+    const blogWithContent = {
+      ...blog.toObject(),
+      description: blog.description || blog.meta_description || blog.excerpt || '',
+      commentCount: blog.comments ? blog.comments.length : 0,
+      id: blog._id ? blog._id.toString() : null,
+    };
+
     // Return the blog without incrementing views to avoid validation issues
     res.status(200).json({
       success: true,
-      data: blog,
+      data: blogWithContent,
     });
 
     // Increment views in a separate operation that doesn't affect the response
@@ -452,11 +495,20 @@ export const getBlogBySlug = async (req, res) => {
   }
 };
 
-// Get blog by ID
+// Get blog by ID - Enhanced with full content support
 export const getBlogById = async (req, res) => {
   try {
+    const { with_content = "true", full_content = "true" } = req.query;
+    
+    // Build projection - for individual blog posts, we usually want full content
+    let projection = {};
+    if (with_content === "false" && full_content === "false") {
+      projection = { content: 0 };
+    }
+
     // First find the blog without updating it
     const blog = await BlogsModel.findById(req.params.id)
+      .select(projection)
       .populate("author", "name email")
       .populate("categories", "category_name category_image")
       .populate("comments.user", "name email");
@@ -468,10 +520,18 @@ export const getBlogById = async (req, res) => {
       });
     }
 
+    // Ensure we have content fields available
+    const blogWithContent = {
+      ...blog.toObject(),
+      description: blog.description || blog.meta_description || blog.excerpt || '',
+      commentCount: blog.comments ? blog.comments.length : 0,
+      id: blog._id ? blog._id.toString() : null,
+    };
+
     // Return the blog without incrementing views to avoid validation issues
     res.status(200).json({
       success: true,
-      data: blog,
+      data: blogWithContent,
     });
 
     // Increment views in a separate operation that doesn't affect the response
@@ -508,7 +568,9 @@ export const getBlogsByCategory = async (req, res) => {
       limit = 10,
       status = "published",
       sort_by = "createdAt",
-      sort_order = "desc"
+      sort_order = "desc",
+      with_content = "false",
+      full_content = "false"
     } = req.query;
 
     const skip = (page - 1) * limit;
@@ -520,8 +582,15 @@ export const getBlogsByCategory = async (req, res) => {
       status,
     };
 
+    // Build projection based on content parameters
+    let projection = {};
+    if (with_content === "false" && full_content === "false") {
+      projection = { content: 0 };
+    }
+
     const [blogs, total] = await Promise.all([
       BlogsModel.find(query)
+        .select(projection)
         .populate("author", "name email")
         .populate("categories", "category_name category_image")
         .sort(sort)
@@ -535,7 +604,8 @@ export const getBlogsByCategory = async (req, res) => {
     const blogsWithCommentCount = blogs.map(blog => ({
       ...blog,
       commentCount: blog.comments ? blog.comments.length : 0,
-      id: blog._id.toString()
+      id: blog._id ? blog._id.toString() : null,
+      description: blog.description || blog.meta_description || blog.excerpt || '',
     }));
 
     res.status(200).json({
@@ -567,7 +637,9 @@ export const getBlogsByTag = async (req, res) => {
       limit = 10,
       status = "published",
       sort_by = "createdAt",
-      sort_order = "desc"
+      sort_order = "desc",
+      with_content = "false",
+      full_content = "false"
     } = req.query;
 
     const skip = (page - 1) * limit;
@@ -579,8 +651,15 @@ export const getBlogsByTag = async (req, res) => {
       status,
     };
 
+    // Build projection based on content parameters
+    let projection = {};
+    if (with_content === "false" && full_content === "false") {
+      projection = { content: 0 };
+    }
+
     const [blogs, total] = await Promise.all([
       BlogsModel.find(query)
+        .select(projection)
         .populate("author", "name email")
         .populate("categories", "category_name category_image")
         .sort(sort)
@@ -594,7 +673,8 @@ export const getBlogsByTag = async (req, res) => {
     const blogsWithCommentCount = blogs.map(blog => ({
       ...blog,
       commentCount: blog.comments ? blog.comments.length : 0,
-      id: blog._id.toString()
+      id: blog._id ? blog._id.toString() : null,
+      description: blog.description || blog.meta_description || blog.excerpt || '',
     }));
 
     res.status(200).json({
@@ -639,8 +719,11 @@ export const updateBlogStatus = async (req, res) => {
       });
     }
 
-    // Check if user is the author
-    if (blog.author.toString() !== req.user._id.toString()) {
+    // Check if user is the author with safe null checks
+    const blogAuthorId = blog.author ? blog.author.toString() : null;
+    const userId = req.user && req.user._id ? req.user._id.toString() : null;
+    
+    if (!blogAuthorId || !userId || blogAuthorId !== userId) {
       return res.status(403).json({
         success: false,
         message: "Not authorized to update this blog",
@@ -788,10 +871,14 @@ export const deleteComment = async (req, res) => {
       });
     }
 
-    // Check if user is the comment author or blog author
+    // Check if user is the comment author or blog author with safe null checks
+    const commentUserId = comment.user ? comment.user.toString() : null;
+    const blogAuthorId = blog.author ? blog.author.toString() : null;
+    const userId = req.user && req.user._id ? req.user._id.toString() : null;
+    
     if (
-      comment.user.toString() !== req.user._id.toString() &&
-      blog.author.toString() !== req.user._id.toString()
+      (!commentUserId || !userId || commentUserId !== userId) &&
+      (!blogAuthorId || !userId || blogAuthorId !== userId)
     ) {
       return res.status(403).json({
         success: false,
@@ -820,48 +907,133 @@ export const deleteComment = async (req, res) => {
 // Update blog post
 export const updateBlog = async (req, res) => {
   try {
-    const { error } = validateBlog(req.body);
+    console.log("=== UPDATE BLOG DEBUG START ===");
+    console.log("Request params:", req.params);
+    console.log("Request body:", JSON.stringify(req.body, null, 2));
+    console.log("Request user:", JSON.stringify(req.user, null, 2));
+    
+    const { error } = validateBlogUpdate(req.body);
     if (error) {
+      console.log("Validation error:", error.details[0].message);
       return res.status(400).json({
         success: false,
         message: error.details[0].message,
       });
     }
 
+    console.log("Looking for blog with ID:", req.params.id);
     const blog = await BlogsModel.findById(req.params.id);
-
+    console.log("Found blog:", blog ? "YES" : "NO");
+    
     if (!blog) {
+      console.log("Blog not found");
       return res.status(404).json({
         success: false,
         message: "Blog post not found",
       });
     }
 
-    // Check if user is the author
-    if (blog.author.toString() !== req.user._id.toString()) {
+    console.log("Blog object:", JSON.stringify({
+      _id: blog._id,
+      title: blog.title,
+      author: blog.author,
+      authorType: typeof blog.author
+    }, null, 2));
+
+    // Safely check if user is the author with proper null/undefined checks
+    let blogAuthorId = null;
+    let userId = null;
+    
+    try {
+      blogAuthorId = blog.author ? blog.author.toString() : null;
+      console.log("Blog author ID extracted:", blogAuthorId);
+    } catch (authorError) {
+      console.error("Error extracting blog author ID:", authorError);
+      blogAuthorId = null;
+    }
+    
+    try {
+      // Try multiple possible user ID locations
+      if (req.user && req.user._id) {
+        userId = req.user._id.toString();
+      } else if (req.user && req.user.id) {
+        userId = req.user.id.toString();
+      } else {
+        userId = null;
+      }
+      console.log("User ID extracted:", userId);
+    } catch (userError) {
+      console.error("Error extracting user ID:", userError);
+      userId = null;
+    }
+    
+    // Check if user is the author OR an admin
+    const isAuthor = blogAuthorId && userId && blogAuthorId === userId;
+    const isAdmin = req.user && req.user.role && req.user.role.includes('admin');
+    
+    if (!isAuthor && !isAdmin) {
+      console.log("Authorization failed:", { blogAuthorId, userId, isAuthor, isAdmin, userRole: req.user?.role });
       return res.status(403).json({
         success: false,
         message: "Not authorized to update this blog",
+        debug: {
+          blogAuthorId,
+          userId,
+          isAuthor,
+          isAdmin,
+          userRole: req.user?.role,
+          blogAuthor: blog.author,
+          reqUser: req.user
+        }
       });
     }
 
-    // Update fields
+    console.log("Authorization successful, updating fields...");
+
+    // Update fields with safe handling
     Object.keys(req.body).forEach((key) => {
-      if (key === "title") {
-        blog.slug = slugify(req.body[key], { lower: true, strict: true });
+      console.log(`Processing field: ${key} = ${req.body[key]}`);
+      
+      if (key === "title" && req.body[key]) {
+        // Only update slug if title is provided and not empty
+        const titleValue = req.body[key];
+        if (titleValue && typeof titleValue === 'string' && titleValue.trim()) {
+          try {
+            blog.slug = slugify(titleValue.trim(), { lower: true, strict: true });
+            console.log("Updated slug:", blog.slug);
+          } catch (slugError) {
+            console.error("Error creating slug:", slugError);
+          }
+        }
       }
-      blog[key] = req.body[key];
+      
+      // Only update if the value is not undefined
+      if (req.body[key] !== undefined) {
+        blog[key] = req.body[key];
+        console.log(`Updated ${key}:`, req.body[key]);
+      }
     });
 
+    console.log("Saving blog...");
     await blog.save();
+    console.log("Blog saved successfully");
 
     res.status(200).json({
       success: true,
       message: "Blog post updated successfully",
       data: blog,
     });
+    
+    console.log("=== UPDATE BLOG DEBUG END ===");
   } catch (err) {
-    console.error("Error updating blog:", err.message);
+    console.error("=== UPDATE BLOG ERROR ===");
+    console.error("Error message:", err.message);
+    console.error("Error stack:", err.stack);
+    console.error("Request params:", req.params);
+    console.error("Request body:", req.body);
+    console.error("Request user:", req.user);
+    console.error("=== UPDATE BLOG ERROR END ===");
+    
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -882,8 +1054,11 @@ export const deleteBlog = async (req, res) => {
       });
     }
 
-    // Check if user is the author
-    if (blog.author.toString() !== req.user._id.toString()) {
+    // Check if user is the author with safe null checks
+    const blogAuthorId = blog.author ? blog.author.toString() : null;
+    const userId = req.user && req.user._id ? req.user._id.toString() : null;
+    
+    if (!blogAuthorId || !userId || blogAuthorId !== userId) {
       return res.status(403).json({
         success: false,
         message: "Not authorized to delete this blog",
@@ -904,4 +1079,4 @@ export const deleteBlog = async (req, res) => {
       error: err.message,
     });
   }
-};
+}; 

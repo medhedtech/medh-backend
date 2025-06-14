@@ -20,6 +20,26 @@ export const validateBlog = (data) => {
   return schema.validate(data, { stripUnknown: true });
 };
 
+export const validateBlogUpdate = (data) => {
+  const schema = Joi.object({
+    title: Joi.string().max(200),
+    description: Joi.string().allow("", null),
+    content: Joi.string(),
+    excerpt: Joi.string().max(500),
+    blog_link: Joi.string().allow("", null),
+    upload_image: Joi.string(),
+    categories: Joi.array().items(Joi.string()),
+    tags: Joi.array().items(Joi.string()),
+    meta_title: Joi.string().max(60).allow("", null),
+    meta_description: Joi.string().max(160).allow("", null),
+    status: Joi.string().valid("draft", "published", "archived"),
+    featured: Joi.boolean(),
+    author: Joi.string(),
+  });
+
+  return schema.validate(data, { stripUnknown: true });
+};
+
 export const validateComment = (data) => {
   const schema = Joi.object({
     content: Joi.string().required().min(1).max(1000),
