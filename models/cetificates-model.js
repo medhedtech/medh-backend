@@ -35,6 +35,7 @@ const certificateSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-const Certificate = mongoose.model("Certificate", certificateSchema);
+// Prevent model overwrite error and use different model name to avoid conflict
+const LegacyCertificate = mongoose.models.LegacyCertificate || mongoose.model("LegacyCertificate", certificateSchema);
 
-export default Certificate;
+export default LegacyCertificate;

@@ -75,6 +75,7 @@
     "express-rate-limit": "^7.5.0",
     "express-session": "^1.18.1",
     "express-validator": "^7.2.1",
+    "fast-xml-parser": "^5.2.5",
     "file-stream-rotator": "^1.0.0",
     "geoip-lite": "^1.4.10",
     "googleapis": "^148.0.0",
