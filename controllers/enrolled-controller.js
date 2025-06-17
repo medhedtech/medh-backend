@@ -351,12 +351,7 @@ export const getEnrolledCourseByStudentId = async (req, res, next) => {
     const enrollments = await EnrolledCourse.find(query)
       .populate({
         path: "student_id", 
-        select: "full_name email role profile_image assigned_instructor instructor_assignment_date instructor_assignment_type instructor_assignment_notes",
-        populate: {
-          path: 'assigned_instructor',
-          select: 'full_name email role domain phone_numbers',
-          match: { role: { $in: ['instructor'] } }
-        }
+        select: "full_name email role profile_image"
       })
       .populate({
         path: "course_id",
@@ -823,12 +818,7 @@ export const getAllStudentsWithEnrolledCourses = async (req, res, next) => {
           match: { role: "student" },
           model: "User",
           select:
-            "full_name email phone_numbers role role_description status facebook_link instagram_link linkedin_link user_image meta age_group assigned_instructor instructor_assignment_date instructor_assignment_type instructor_assignment_notes",
-          populate: {
-            path: 'assigned_instructor',
-            select: 'full_name email role domain phone_numbers',
-            match: { role: { $in: ['instructor'] } }
-          }
+            "full_name email phone_numbers role role_description status facebook_link instagram_link linkedin_link user_image meta age_group"
         },
         {
           path: "course_id",

@@ -6,6 +6,8 @@ import express from "express";
 import helmet from "helmet";
 import mongoose from "mongoose";
 import morgan from "morgan";
+import session from "express-session";
+import passport from "passport";
 
 import { corsOptions } from "./config/cors.js";
 import handlePreflight from "./config/cors.js";
@@ -24,6 +26,9 @@ sentryUtils.initSentry();
 
 // Initialize express app
 const app = express();
+
+// Trust proxy - Enable to get real IP addresses through load balancers/proxies
+app.set('trust proxy', true);
 
 // Add Sentry request handler middleware
 sentryUtils.setupSentryRequestHandler(app);
@@ -62,6 +67,22 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(morgan("dev"));
+
+// Session configuration for OAuth
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-session-secret-here',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
 
 // Static files
 app.use("/uploads", express.static(join(__dirname, "uploads")));

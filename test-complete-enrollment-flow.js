@@ -206,7 +206,7 @@ class EnrollmentSystemE2ETester {
         end_date: new Date('2025-04-15').toISOString(),
         capacity: 10,
         assigned_instructor: instructorId,
-        status: "Active",
+        is_active: true,
         batch_notes: "Morning batch for working professionals",
         schedule: [
           {
@@ -233,7 +233,7 @@ class EnrollmentSystemE2ETester {
         end_date: new Date('2025-04-20').toISOString(),
         capacity: 15,
         assigned_instructor: instructorId,
-        status: "Active",
+        is_active: true,
         batch_notes: "Evening batch for students",
         schedule: [
           {

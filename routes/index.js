@@ -48,6 +48,9 @@ import trackSessionRoute from "./track-sessionsRoutes.js";
 import uploadRoutes from "./uploadRoutes.js";
 import zoomRoutes from "./zoom.js";
 import enhancedPaymentRoutes from "./enhanced-payment-routes.js";
+import aiRoutes from "./aiRoutes.js";
+import announcementRoutes from "./announcementRoutes.js";
+import profileRoutes from "./profileRoutes.js";
 
 const router = express.Router();
 
@@ -223,6 +226,18 @@ const moduleRoutes = [
   {
     path: "/enhanced-payments",
     route: enhancedPaymentRoutes,
+  },
+  {
+    path: "/ai",
+    route: aiRoutes,
+  },
+  {
+    path: "/announcements",
+    route: announcementRoutes,
+  },
+  {
+    path: "/profile",
+    route: profileRoutes,
   }
 ];
 

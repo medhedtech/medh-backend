@@ -287,6 +287,14 @@ export const verifyAccessToken = (token) => {
         mappedRole: user.role,
         hasName: !!decoded.name
       });
+    } else if (decoded.userId && decoded.type === 'access') {
+      // Legacy token format with userId field
+      logger.warn('Legacy token format detected - missing user details, will need to fetch from database');
+      user = {
+        id: decoded.userId,
+        role: 'student', // Default role, should be fetched from database
+        _id: decoded.userId
+      };
     } else if (decoded.type === 'refresh') {
       // This is a refresh token being used as access token
       logger.warn('Refresh token used where access token expected');

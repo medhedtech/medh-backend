@@ -27,7 +27,7 @@ export const createStudent = async (req, res) => {
 export const getAllStudents = async (req, res) => {
   try {
     const students = await User.find({ role: USER_ROLES.STUDENT });
-    const totalStudents = await User.countDocuments({ role: USER_ROLES.STUDENT, status: "Active" });
+    const totalStudents = await User.countDocuments({ role: USER_ROLES.STUDENT, is_active: true });
     res.status(200).json({ message: "Students fetched successfully", students, totalStudents });
   } catch (error) {
     res.status(500).json({ message: "Error fetching students", error });

@@ -120,11 +120,11 @@ export const getBatchAnalyticsDashboard = async (req, res) => {
       }),
       
       // Active batches count
-      Batch.countDocuments({ status: 'Active' }),
+      Batch.countDocuments({ is_active: true }),
       
       // Previous period active batches
       Batch.countDocuments({
-        status: 'Active',
+        is_active: true,
         created_at: { $gte: prevStartDate, $lt: prevEndDate }
       })
     ]);

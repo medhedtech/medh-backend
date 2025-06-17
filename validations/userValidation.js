@@ -123,7 +123,7 @@ const userValidation = joi.object({
     .string()
     .valid("Under 18", "18-24", "25-34", "35-44", "45-54", "55-64", "65+")
     .optional(),
-  status: joi.string().valid("Active", "Inactive").default("Active"),
+  is_active: joi.boolean().default(true),
   facebook_link: joi.string().uri().optional().allow("").messages({
     "string.uri": "Facebook link must be a valid URL",
   }),
@@ -157,7 +157,7 @@ const userValidation = joi.object({
         .valid("Under 18", "18-24", "25-34", "35-44", "45-54", "55-64", "65+")
         .optional(),
       category: joi.string().optional(),
-      gender: joi.string().valid("Male", "Female", "Others").default("Male"),
+      gender: joi.string().valid("male", "female", "non-binary", "prefer-not-to-say", "other").default("male"),
       upload_resume: joi
         .array()
         .items(joi.string().uri())
@@ -167,7 +167,7 @@ const userValidation = joi.object({
         }),
     })
     .default(() => ({
-      gender: "Male",
+      gender: "male",
       upload_resume: [],
     })),
   admin_role: joi

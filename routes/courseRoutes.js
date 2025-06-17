@@ -96,6 +96,7 @@ router.put(
   updateCourse,
 );
 router.delete("/:id", authenticateToken, deleteCourse);
+router.post("/delete/:id", authenticateToken, deleteCourse); // Alternative POST endpoint for deletion
 router.patch("/:id/toggle-status", authenticateToken, toggleCourseStatus);
 router.post("/:id/recorded-videos", authenticateToken, updateRecordedVideos);
 router.get("/recorded-videos/:studentId", authenticateToken, getRecordedVideosForUser);

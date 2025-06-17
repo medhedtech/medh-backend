@@ -1460,13 +1460,64 @@ const updateCourse = async (req, res) => {
 const deleteCourse = async (req, res) => {
   try {
     const { id } = req.params;
-    const deletedCourse = await Course.findByIdAndDelete(id);
-    if (!deletedCourse) {
-      return res.status(404).json({ message: "Course not found" });
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid course ID format",
+      });
     }
-    res.status(200).json({ message: "Course deleted successfully" });
+
+    let deletedCourse = null;
+    let source = "legacy_model";
+
+    // First, try to delete from legacy Course model
+    deletedCourse = await Course.findByIdAndDelete(id);
+
+    // If not found in legacy, search and delete in new course-types models
+    if (!deletedCourse) {
+      const [blendedResult, liveResult, freeResult] = await Promise.all([
+        BlendedCourse.findByIdAndDelete(id),
+        LiveCourse.findByIdAndDelete(id),
+        FreeCourse.findByIdAndDelete(id)
+      ]);
+
+      // Check which model contained the course
+      if (blendedResult) {
+        deletedCourse = blendedResult;
+        source = "new_model";
+      } else if (liveResult) {
+        deletedCourse = liveResult;
+        source = "new_model";
+      } else if (freeResult) {
+        deletedCourse = freeResult;
+        source = "new_model";
+      }
+    }
+
+    if (!deletedCourse) {
+      return res.status(404).json({ 
+        success: false,
+        message: "Course not found" 
+      });
+    }
+
+    res.status(200).json({ 
+      success: true,
+      message: "Course deleted successfully",
+      deletedCourse: {
+        id: deletedCourse._id,
+        title: deletedCourse.course_title,
+        source: source
+      }
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error deleting course", error });
+    console.error("Error deleting course:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Error deleting course", 
+      error: error.message 
+    });
   }
 };
 
