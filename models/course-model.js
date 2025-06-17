@@ -1284,7 +1284,7 @@ courseSchema.statics.assignInstructorToBatch = async function(batchId, instructo
   const instructor = await mongoose.model('User').findOne({
     _id: instructorId,
     role: { $in: ['instructor'] },
-    status: 'Active'
+    is_active: true
   });
   if (!instructor) {
     throw new Error('Instructor not found');

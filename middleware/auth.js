@@ -7,6 +7,18 @@ import logger from "../utils/logger.js";
 import { verifyAccessToken } from '../utils/jwt.js';
 
 /**
+ * Helper function to check if user has a specific role
+ * @param {string|string[]} userRole - User's role(s)
+ * @param {string|string[]} requiredRoles - Required role(s)
+ * @returns {boolean} - Whether user has the required role
+ */
+const hasRole = (userRole, requiredRoles) => {
+  const userRoles = Array.isArray(userRole) ? userRole : [userRole];
+  const required = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
+  return userRoles.some(role => required.includes(role));
+};
+
+/**
  * Authentication middleware using access tokens
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -14,15 +26,35 @@ import { verifyAccessToken } from '../utils/jwt.js';
  */
 export const authenticateToken = async (req, res, next) => {
   try {
+    // Check if JWT_SECRET_KEY is available
+    if (!ENV_VARS.JWT_SECRET_KEY) {
+      logger.error('JWT_SECRET_KEY is not configured', {
+        path: req.originalUrl,
+        envVarsKeys: Object.keys(ENV_VARS)
+      });
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Server configuration error',
+        error_code: 'MISSING_JWT_SECRET'
+      });
+    }
+
     // Extract token from Authorization header
     const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
+    let token = authHeader && authHeader.split(' ')[1];
+    
+    // Fallback to x-access-token header if no Authorization header
+    if (!token) {
+      token = req.headers['x-access-token'];
+    }
 
     if (!token) {
       logger.warn('Authentication failed: No token provided', { 
         ip: req.ip, 
         path: req.originalUrl,
-        userAgent: req.headers['user-agent']
+        userAgent: req.headers['user-agent'],
+        hasAuthHeader: !!authHeader,
+        hasXAccessToken: !!req.headers['x-access-token']
       });
       return res.status(401).json({ 
         success: false, 
@@ -32,52 +64,26 @@ export const authenticateToken = async (req, res, next) => {
       });
     }
 
-    // Try to verify token with new JWT utility first
-    let user = verifyAccessToken(token);
+    // Use direct JWT verification
+    let decoded = null;
+    let user = null;
     
-    // If new verification fails, try old verification method as fallback
-    if (!user) {
-      try {
-        const decoded = jwt.verify(token, ENV_VARS.JWT_SECRET_KEY);
-        
-        // Handle legacy token formats
-        if (decoded.user) {
-          // Old auth service format
-          user = {
-            id: decoded.user.id,
-            role: decoded.user.role,
-            _id: decoded.user.id
-          };
-        } else if (decoded.id) {
-          // Direct format
-          user = {
-            id: decoded.id,
-            role: decoded.role,
-            email: decoded.email,
-            _id: decoded.id
-          };
-        }
-        
-        if (user) {
-          logger.debug('Token verified using fallback method', { 
-            userId: user.id, 
-            format: decoded.user ? 'legacy' : 'direct'
-          });
-        }
-      } catch (fallbackError) {
-        logger.warn('Both primary and fallback token verification failed', {
-          primaryError: 'verifyAccessToken returned null',
-          fallbackError: fallbackError.message
-        });
-      }
-    }
-    
-    if (!user) {
-      logger.warn('Token verification failed', { 
-        ip: req.ip, 
-        path: req.originalUrl,
+    try {
+      decoded = jwt.verify(token, ENV_VARS.JWT_SECRET_KEY);
+      logger.debug('JWT token verified successfully', { 
+        tokenType: decoded.type,
+        userId: decoded.id || decoded.userId,
+        email: decoded.email,
+        role: decoded.role,
+        hasUserId: !!decoded.userId,
+        hasId: !!decoded.id,
+        hasUser: !!decoded.user
+      });
+    } catch (jwtError) {
+      logger.warn('JWT token verification failed', {
+        error: jwtError.message,
         tokenPrefix: token.substr(0, 20) + '...',
-        userAgent: req.headers['user-agent']
+        path: req.originalUrl
       });
       return res.status(401).json({ 
         success: false, 
@@ -87,11 +93,121 @@ export const authenticateToken = async (req, res, next) => {
       });
     }
 
+    // Handle different token formats
+    if (decoded.user) {
+      // Old auth service format
+      user = {
+        id: decoded.user.id,
+        role: decoded.user.role,
+        email: decoded.user.email,
+        _id: decoded.user.id
+      };
+    } else if (decoded.id) {
+      // Direct format (current format)
+      user = {
+        id: decoded.id,
+        role: decoded.role,
+        email: decoded.email,
+        _id: decoded.id
+      };
+    } else if (decoded.userId) {
+      // Legacy format with userId
+      user = {
+        id: decoded.userId,
+        role: decoded.role || 'student',
+        email: decoded.email,
+        _id: decoded.userId
+      };
+    }
+    
+    if (!user) {
+      logger.warn('Could not extract user from token', { 
+        decodedKeys: Object.keys(decoded),
+        tokenType: decoded.type,
+        path: req.originalUrl
+      });
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid token format',
+        error_code: 'INVALID_TOKEN_FORMAT'
+      });
+    }
+
+    // If we have a legacy token with minimal user data, fetch full user details
+    if (user.id && (!user.email || !user.role || user.role === 'student' || (!decoded.role && decoded.userId))) {
+      try {
+        logger.debug('Fetching user details from database', { userId: user.id });
+        const fullUser = await User.findById(user.id).select('-password');
+        if (fullUser) {
+          // Use admin_role if present, otherwise use role
+          // Handle both array and string formats for role
+          let userRole = fullUser.admin_role || fullUser.role || 'student';
+          if (Array.isArray(userRole)) {
+            userRole = userRole[0] || 'student';
+          }
+          // If admin_role exists, use it over regular role
+          if (fullUser.admin_role) {
+            userRole = fullUser.admin_role;
+          }
+          
+          user = {
+            id: fullUser._id.toString(),
+            email: fullUser.email,
+            role: userRole,
+            _id: fullUser._id
+          };
+          logger.debug('Enhanced token with full user data', { 
+            userId: user.id, 
+            role: user.role,
+            originalRole: fullUser.role,
+            adminRole: fullUser.admin_role 
+          });
+        } else {
+          logger.warn('User not found in database', { userId: user.id });
+          return res.status(401).json({ 
+            success: false, 
+            message: 'User not found',
+            error_code: 'USER_NOT_FOUND'
+          });
+        }
+      } catch (dbError) {
+        logger.error('Error fetching user details from database', { 
+          error: dbError.message,
+          stack: dbError.stack,
+          userId: user.id 
+        });
+        // Don't fail here - continue with minimal user data if possible
+        if (!user.email || !user.role) {
+          return res.status(500).json({ 
+            success: false, 
+            message: 'Database error during authentication',
+            error_code: 'DB_ERROR'
+          });
+        }
+      }
+    }
+
+    // Final validation
+    if (!user.id || !user.email || !user.role) {
+      logger.warn('Incomplete user data after authentication', { 
+        hasId: !!user.id,
+        hasEmail: !!user.email,
+        hasRole: !!user.role,
+        user: user
+      });
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Incomplete user data',
+        error_code: 'INCOMPLETE_USER_DATA'
+      });
+    }
+
     // Attach user to request
     req.user = user;
     logger.debug('Authentication successful', { 
       userId: user.id, 
       role: user.role, 
+      email: user.email,
       path: req.originalUrl 
     });
     next();
@@ -100,7 +216,8 @@ export const authenticateToken = async (req, res, next) => {
       error: error.message,
       stack: error.stack,
       ip: req.ip,
-      path: req.originalUrl
+      path: req.originalUrl,
+      hasJwtSecret: !!ENV_VARS.JWT_SECRET_KEY
     });
     return res.status(500).json({ 
       success: false, 
@@ -164,7 +281,7 @@ const verifyStudentOwnership = async (req, res, next) => {
     const userId = req.user._id;
 
     // Allow access if user is admin or instructor
-    if (req.user.role === "admin" || req.user.role === "instructor") {
+    if (hasRole(req.user.role, ["admin", "instructor"])) {
       return next();
     }
 
@@ -217,22 +334,15 @@ export const verifyToken = async (req, res, next) => {
 
 // Check if user is admin
 export const isAdmin = (req, res, next) => {
-  if (req.user) {
-    // Handle both array and string roles
-    const userRoles = Array.isArray(req.user.role) ? req.user.role : [req.user.role];
-    if (userRoles.includes("admin")) {
-      return next();
-    }
+  if (req.user && hasRole(req.user.role, "admin")) {
+    return next();
   }
   next(new AppError("Access denied. Admin only.", 403));
 };
 
 // Check if user is instructor
 export const isInstructor = (req, res, next) => {
-  if (
-    req.user &&
-    (req.user.role === "instructor" || req.user.role === "admin")
-  ) {
+  if (req.user && hasRole(req.user.role, ["instructor", "admin"])) {
     next();
   } else {
     next(new AppError("Access denied. Instructor only.", 403));
@@ -241,7 +351,7 @@ export const isInstructor = (req, res, next) => {
 
 // Check if user is student
 export const isStudent = (req, res, next) => {
-  if (req.user && (req.user.role === "student" || req.user.role === "admin")) {
+  if (req.user && hasRole(req.user.role, ["student", "admin"])) {
     next();
   } else {
     next(new AppError("Access denied. Student only.", 403));

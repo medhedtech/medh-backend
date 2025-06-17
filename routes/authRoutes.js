@@ -1,4 +1,5 @@
 import express from "express";
+import { body } from "express-validator";
 
 import authController from "../controllers/authController.js";
 import * as corporateStudentController from "../controllers/coorporate-student-controller.js";
@@ -7,8 +8,23 @@ import * as instructorController from "../controllers/instructor-controller.js";
 import * as assignInstructorController from "../controllers/assignInstructorController.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { loginLimiter, registerLimiter, passwordResetLimiter } from "../middleware/rateLimit.js";
+import oauthRoutes from "./oauthRoutes.js";
 
 const router = express.Router();
+
+// ============================================================================
+// OAUTH ROUTES
+// ============================================================================
+
+// Mount OAuth routes
+router.use("/oauth", oauthRoutes);
+
+/**
+ * @route   GET /api/v1/auth/check-availability
+ * @desc    Check if email or username is available
+ * @access  Public
+ */
+router.get("/check-availability", authController.checkAvailability.bind(authController));
 
 /**
  * @route   POST /api/v1/auth/register
@@ -30,6 +46,13 @@ router.post("/verify-email", authController.verifyEmailOTP.bind(authController))
  * @access  Public
  */
 router.post("/resend-verification", authController.resendVerificationOTP.bind(authController));
+
+/**
+ * @route   POST /api/v1/auth/check-user-status
+ * @desc    Check user existence and verification status
+ * @access  Public
+ */
+router.post("/check-user-status", authController.checkUserStatus.bind(authController));
 
 /**
  * @route   POST /api/v1/auth/login
@@ -1031,7 +1054,7 @@ router.get(
       const User = (await import("../models/user-modal.js")).default;
 
       // Build query
-      const query = { status: 'Active' };
+      const query = { is_active: true };
       if (role_filter) {
         query.role = { $in: Array.isArray(role_filter) ? role_filter : [role_filter] };
       }
@@ -1130,6 +1153,1553 @@ router.get(
         success: false,
         message: "Server error",
         error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   PUT /api/v1/auth/profile
+ * @desc    Edit user's own profile
+ * @access  Private (Authenticated users)
+ */
+router.put(
+  "/profile",
+  [
+    authenticateToken,
+    // Validation middleware
+    body("full_name")
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 100 })
+      .withMessage("Full name must be between 2 and 100 characters"),
+    body("phone_numbers")
+      .optional()
+      .isArray()
+      .withMessage("Phone numbers must be an array"),
+    body("phone_numbers.*.country")
+      .optional()
+      .trim()
+      .isLength({ min: 1, max: 50 })
+      .withMessage("Country code is required"),
+    body("phone_numbers.*.number")
+      .optional()
+      .matches(/^\+?\d{10,15}$/)
+      .withMessage("Phone number must be 10-15 digits"),
+    body("age")
+      .optional()
+      .trim()
+      .isLength({ max: 10 })
+      .withMessage("Age must be valid"),
+    body("age_group")
+      .optional()
+      .isIn(["Under 18", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"])
+      .withMessage("Invalid age group"),
+    body("facebook_link")
+      .optional()
+      .custom((value) => {
+        if (value && !/^https?:\/\/(?:www\.)?facebook\.com\/.+/i.test(value)) {
+          throw new Error("Invalid Facebook URL");
+        }
+        return true;
+      }),
+    body("instagram_link")
+      .optional()
+      .custom((value) => {
+        if (value && !/^https?:\/\/(?:www\.)?instagram\.com\/.+/i.test(value)) {
+          throw new Error("Invalid Instagram URL");
+        }
+        return true;
+      }),
+    body("linkedin_link")
+      .optional()
+      .custom((value) => {
+        if (value && !/^https?:\/\/(?:www\.)?linkedin\.com\/.+/i.test(value)) {
+          throw new Error("Invalid LinkedIn URL");
+        }
+        return true;
+      }),
+    body("twitter_link")
+      .optional()
+      .custom((value) => {
+        if (value && !/^https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/.+/i.test(value)) {
+          throw new Error("Invalid Twitter/X URL");
+        }
+        return true;
+      }),
+    body("youtube_link")
+      .optional()
+      .custom((value) => {
+        if (value && !/^https?:\/\/(?:www\.)?youtube\.com\/.+/i.test(value)) {
+          throw new Error("Invalid YouTube URL");
+        }
+        return true;
+      }),
+    body("github_link")
+      .optional()
+      .custom((value) => {
+        if (value && !/^https?:\/\/(?:www\.)?github\.com\/.+/i.test(value)) {
+          throw new Error("Invalid GitHub URL");
+        }
+        return true;
+      }),
+    body("portfolio_link")
+      .optional()
+      .isURL()
+      .withMessage("Portfolio link must be a valid URL"),
+    body("user_image")
+      .optional()
+      .isURL()
+      .withMessage("User image must be a valid URL"),
+    body("meta.course_name")
+      .optional()
+      .trim()
+      .isLength({ max: 200 })
+      .withMessage("Course name must be less than 200 characters"),
+    body("meta.date_of_birth")
+      .optional()
+      .isISO8601()
+      .withMessage("Date of birth must be a valid date"),
+    body("meta.education_level")
+      .optional()
+      .isIn([
+        "High School",
+        "Diploma",
+        "Associate Degree",
+        "Bachelor's Degree",
+        "Master's Degree",
+        "Doctorate/PhD",
+        "Professional Certificate",
+        "Other"
+      ])
+      .withMessage("Invalid education level"),
+    body("meta.institution_name")
+      .optional()
+      .trim()
+      .isLength({ max: 200 })
+      .withMessage("Institution name must be less than 200 characters"),
+    body("meta.field_of_study")
+      .optional()
+      .trim()
+      .isLength({ max: 150 })
+      .withMessage("Field of study must be less than 150 characters"),
+    body("meta.graduation_year")
+      .optional()
+      .isInt({ min: 1950, max: new Date().getFullYear() + 10 })
+      .withMessage("Graduation year must be between 1950 and 10 years from now"),
+    body("meta.skills")
+      .optional()
+      .isArray()
+      .withMessage("Skills must be an array"),
+    body("meta.skills.*")
+      .optional()
+      .trim()
+      .isLength({ min: 1, max: 50 })
+      .withMessage("Each skill must be between 1 and 50 characters"),
+    body("meta.certifications")
+      .optional()
+      .isArray()
+      .withMessage("Certifications must be an array"),
+    body("meta.certifications.*.name")
+      .optional()
+      .trim()
+      .isLength({ min: 1, max: 200 })
+      .withMessage("Certification name must be between 1 and 200 characters"),
+    body("meta.certifications.*.issuer")
+      .optional()
+      .trim()
+      .isLength({ min: 1, max: 150 })
+      .withMessage("Certification issuer must be between 1 and 150 characters"),
+    body("meta.certifications.*.year")
+      .optional()
+      .isInt({ min: 1950, max: new Date().getFullYear() + 1 })
+      .withMessage("Certification year must be between 1950 and current year"),
+    body("meta.language")
+      .optional()
+      .trim()
+      .isLength({ max: 50 })
+      .withMessage("Language must be less than 50 characters"),
+    body("meta.age_group")
+      .optional()
+      .isIn(["Under 18", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"])
+      .withMessage("Invalid age group"),
+    body("meta.category")
+      .optional()
+      .trim()
+      .isLength({ max: 100 })
+      .withMessage("Category must be less than 100 characters"),
+    body("meta.gender")
+      .optional()
+      .isIn(["male", "female", "non-binary", "prefer-not-to-say", "other"])
+      .withMessage("Invalid gender"),
+    body("meta.upload_resume")
+      .optional()
+      .isArray()
+      .withMessage("Resume uploads must be an array"),
+    body("meta.upload_resume.*")
+      .optional()
+      .isURL()
+      .withMessage("Resume URLs must be valid"),
+    body("timezone")
+      .optional()
+      .custom((value) => {
+        if (value && !/^[A-Za-z]+\/[A-Za-z_]+$|^UTC$|^GMT[+-]\d{1,2}$/.test(value)) {
+          throw new Error("Invalid timezone format");
+        }
+        return true;
+      }),
+    body("country")
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 50 })
+      .withMessage("Country must be between 2 and 50 characters"),
+    body("address")
+      .optional()
+      .trim()
+      .isLength({ max: 500 })
+      .withMessage("Address must be less than 500 characters"),
+    body("organization")
+      .optional()
+      .trim()
+      .isLength({ max: 200 })
+      .withMessage("Organization name must be less than 200 characters"),
+    body("bio")
+      .optional()
+      .trim()
+      .isLength({ max: 1000 })
+      .withMessage("Bio must be less than 1000 characters"),
+  ],
+  async (req, res) => {
+    try {
+      // Import required modules
+      const { validationResult } = await import("express-validator");
+      const User = (await import("../models/user-modal.js")).default;
+
+      // Check for validation errors
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation errors",
+          errors: errors.array(),
+        });
+      }
+
+      const userId = req.user.id;
+      const allowedFields = [
+        'full_name',
+        'phone_numbers',
+        'age',
+        'age_group',
+        'facebook_link',
+        'instagram_link',
+        'linkedin_link',
+        'twitter_link',
+        'youtube_link',
+        'github_link',
+        'portfolio_link',
+        'user_image',
+        'meta',
+        'timezone',
+        'country',
+        'address',
+        'organization',
+        'bio'
+      ];
+
+      // Filter only allowed fields from request body
+      const updateData = {};
+      Object.keys(req.body).forEach(key => {
+        if (allowedFields.includes(key)) {
+          updateData[key] = req.body[key];
+        }
+      });
+
+      // Handle meta object update properly
+      if (req.body.meta) {
+        // Get current user to preserve existing meta fields
+        const currentUser = await User.findById(userId);
+        if (currentUser && currentUser.meta) {
+          updateData.meta = { ...currentUser.meta.toObject(), ...req.body.meta };
+        }
+      }
+
+      // Validate phone numbers if provided
+      if (updateData.phone_numbers) {
+        for (const phone of updateData.phone_numbers) {
+          if (!phone.country || !phone.number) {
+            return res.status(400).json({
+              success: false,
+              message: "Each phone number must have country and number fields",
+            });
+          }
+        }
+      }
+
+      // Update user profile
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $set: updateData },
+        { 
+          new: true, 
+          runValidators: true,
+          select: '-password -resetPasswordToken -resetPasswordExpires -emailVerificationOTP -emailVerificationOTPExpires'
+        }
+      );
+
+      if (!updatedUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Profile updated successfully",
+        data: {
+          user: updatedUser,
+          updated_fields: Object.keys(updateData),
+        },
+      });
+
+    } catch (error) {
+      console.error("Error updating user profile:", error);
+      
+      // Handle specific MongoDB validation errors
+      if (error.name === 'ValidationError') {
+        const validationErrors = Object.values(error.errors).map(err => ({
+          field: err.path,
+          message: err.message
+        }));
+        
+        return res.status(400).json({
+          success: false,
+          message: "Profile validation failed",
+          errors: validationErrors,
+        });
+      }
+
+      // Handle duplicate key errors (like email)
+      if (error.code === 11000) {
+        const field = Object.keys(error.keyPattern)[0];
+        return res.status(400).json({
+          success: false,
+          message: `${field} already exists`,
+          error_code: "DUPLICATE_FIELD",
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: "Error updating profile",
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/auth/profile
+ * @desc    Get user's own profile
+ * @access  Private (Authenticated users)
+ */
+router.get(
+  "/profile",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const User = (await import("../models/user-modal.js")).default;
+      
+      const user = await User.findById(req.user.id)
+        .select('-password -resetPasswordToken -resetPasswordExpires -emailVerificationOTP -emailVerificationOTPExpires')
+        .populate('assigned_instructor', 'full_name email role');
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Add computed fields for better frontend experience
+      const userProfile = {
+        ...user.toObject(),
+        profile_completion: calculateProfileCompletion(user),
+        account_insights: {
+          member_since: user.createdAt,
+          login_stats: user.getLoginStats(),
+          is_frequent_user: user.isFrequentUser(),
+          device_preference: user.getDevicePreference(),
+          login_pattern: user.getLoginPattern(),
+        }
+      };
+
+      res.status(200).json({
+        success: true,
+        message: "Profile retrieved successfully",
+        data: userProfile,
+      });
+
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching profile",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// Helper function to calculate profile completion percentage
+function calculateProfileCompletion(user) {
+  const requiredFields = [
+    'full_name',
+    'email',
+    'phone_numbers',
+    'user_image',
+    'address',
+    'organization',
+    'bio',
+    'meta.date_of_birth',
+    'meta.education_level',
+    'meta.institution_name',
+    'meta.field_of_study',
+    'meta.gender',
+    'meta.skills',
+    'country',
+    'timezone'
+  ];
+  
+  // Social profile fields (bonus points)
+  const socialFields = [
+    'facebook_link',
+    'instagram_link', 
+    'linkedin_link',
+    'twitter_link',
+    'youtube_link',
+    'github_link',
+    'portfolio_link'
+  ];
+  
+  const totalFields = requiredFields.length + socialFields.length;
+
+  let completedFields = 0;
+  
+  // Check required fields
+  requiredFields.forEach(field => {
+    const fieldParts = field.split('.');
+    let value = user;
+    
+    for (const part of fieldParts) {
+      value = value?.[part];
+    }
+    
+    if (value !== null && value !== undefined && value !== '' && 
+        (!Array.isArray(value) || value.length > 0)) {
+      completedFields++;
+    }
+  });
+  
+  // Check social profile fields (bonus points)
+  socialFields.forEach(field => {
+    if (user[field] && user[field].trim() !== '') {
+      completedFields++;
+    }
+  });
+
+  return Math.round((completedFields / totalFields) * 100);
+}
+
+/**
+ * @route   PUT /api/v1/auth/profile/personal
+ * @desc    Update user's personal information (basic profile data)
+ * @access  Private (Authenticated users)
+ */
+router.put(
+  "/profile/personal",
+  [
+    authenticateToken,
+    body("full_name")
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 100 })
+      .withMessage("Full name must be between 2 and 100 characters"),
+    body("phone_numbers")
+      .optional()
+      .isArray()
+      .withMessage("Phone numbers must be an array"),
+    body("phone_numbers.*.country")
+      .optional()
+      .trim()
+      .isLength({ min: 1, max: 50 })
+      .withMessage("Country code is required"),
+    body("phone_numbers.*.number")
+      .optional()
+      .matches(/^\+?\d{10,15}$/)
+      .withMessage("Phone number must be 10-15 digits"),
+    body("address")
+      .optional()
+      .trim()
+      .isLength({ max: 500 })
+      .withMessage("Address must be less than 500 characters"),
+    body("organization")
+      .optional()
+      .trim()
+      .isLength({ max: 200 })
+      .withMessage("Organization name must be less than 200 characters"),
+    body("bio")
+      .optional()
+      .trim()
+      .isLength({ max: 1000 })
+      .withMessage("Bio must be less than 1000 characters"),
+    body("user_image")
+      .optional()
+      .isURL()
+      .withMessage("Profile picture must be a valid URL"),
+    body("country")
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 50 })
+      .withMessage("Country must be between 2 and 50 characters"),
+    body("timezone")
+      .optional()
+      .custom((value) => {
+        if (value && !/^[A-Za-z]+\/[A-Za-z_]+$|^UTC$|^GMT[+-]\d{1,2}$/.test(value)) {
+          throw new Error("Invalid timezone format");
+        }
+        return true;
+      }),
+  ],
+  async (req, res) => {
+    try {
+      const { validationResult } = await import("express-validator");
+      const User = (await import("../models/user-modal.js")).default;
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation errors",
+          errors: errors.array(),
+        });
+      }
+
+      const userId = req.user.id;
+      const personalFields = [
+        'full_name',
+        'phone_numbers',
+        'address',
+        'organization',
+        'bio',
+        'user_image',
+        'country',
+        'timezone'
+      ];
+
+      const updateData = {};
+      personalFields.forEach(field => {
+        if (req.body.hasOwnProperty(field)) {
+          updateData[field] = req.body[field];
+        }
+      });
+
+      // Validate phone numbers if provided
+      if (updateData.phone_numbers) {
+        for (const phone of updateData.phone_numbers) {
+          if (!phone.country || !phone.number) {
+            return res.status(400).json({
+              success: false,
+              message: "Each phone number must have country and number fields",
+            });
+          }
+        }
+      }
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $set: updateData },
+        { 
+          new: true, 
+          runValidators: true,
+          select: 'full_name email phone_numbers address organization bio user_image country timezone'
+        }
+      );
+
+      if (!updatedUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Personal information updated successfully",
+        data: {
+          personal_info: {
+            full_name: updatedUser.full_name,
+            email: updatedUser.email,
+            phone_numbers: updatedUser.phone_numbers,
+            address: updatedUser.address,
+            organization: updatedUser.organization,
+            bio: updatedUser.bio,
+            user_image: updatedUser.user_image,
+            country: updatedUser.country,
+            timezone: updatedUser.timezone,
+          },
+          updated_fields: Object.keys(updateData),
+        },
+      });
+
+    } catch (error) {
+      console.error("Error updating personal information:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error updating personal information",
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/auth/profile/personal
+ * @desc    Get user's personal information
+ * @access  Private (Authenticated users)
+ */
+router.get("/profile/personal", authenticateToken, async (req, res) => {
+  try {
+    const User = (await import("../models/user-modal.js")).default;
+    
+    const user = await User.findById(req.user.id).select(
+      'full_name email phone_numbers address organization bio user_image country timezone createdAt'
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Calculate completion for personal info
+    const personalFields = ['full_name', 'phone_numbers', 'address', 'organization', 'bio', 'user_image'];
+    const completedFields = personalFields.filter(field => {
+      const value = user[field];
+      return value !== null && value !== undefined && value !== '' && 
+             (!Array.isArray(value) || value.length > 0);
+    }).length;
+
+    res.status(200).json({
+      success: true,
+      message: "Personal information retrieved successfully",
+      data: {
+        personal_info: {
+          full_name: user.full_name,
+          email: user.email,
+          phone_numbers: user.phone_numbers || [],
+          address: user.address,
+          organization: user.organization,
+          bio: user.bio,
+          user_image: user.user_image,
+          country: user.country,
+          timezone: user.timezone,
+          member_since: user.createdAt,
+        },
+        completion_stats: {
+          completed_fields: completedFields,
+          total_fields: personalFields.length,
+          completion_percentage: Math.round((completedFields / personalFields.length) * 100),
+        },
+      },
+    });
+
+  } catch (error) {
+    console.error("Error fetching personal information:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching personal information",
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * @route   PUT /api/v1/auth/profile/social
+ * @desc    Update user's social profiles
+ * @access  Private (Authenticated users)
+ */
+router.put(
+  "/profile/social",
+  [
+    authenticateToken,
+    body("facebook_link").optional().custom((value) => {
+      if (value && !/^https?:\/\/(?:www\.)?facebook\.com\/.+/i.test(value)) {
+        throw new Error("Invalid Facebook URL");
+      }
+      return true;
+    }),
+    body("instagram_link").optional().custom((value) => {
+      if (value && !/^https?:\/\/(?:www\.)?instagram\.com\/.+/i.test(value)) {
+        throw new Error("Invalid Instagram URL");
+      }
+      return true;
+    }),
+    body("linkedin_link").optional().custom((value) => {
+      if (value && !/^https?:\/\/(?:www\.)?linkedin\.com\/.+/i.test(value)) {
+        throw new Error("Invalid LinkedIn URL");
+      }
+      return true;
+    }),
+    body("twitter_link").optional().custom((value) => {
+      if (value && !/^https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/.+/i.test(value)) {
+        throw new Error("Invalid Twitter/X URL");
+      }
+      return true;
+    }),
+    body("youtube_link").optional().custom((value) => {
+      if (value && !/^https?:\/\/(?:www\.)?youtube\.com\/.+/i.test(value)) {
+        throw new Error("Invalid YouTube URL");
+      }
+      return true;
+    }),
+    body("github_link").optional().custom((value) => {
+      if (value && !/^https?:\/\/(?:www\.)?github\.com\/.+/i.test(value)) {
+        throw new Error("Invalid GitHub URL");
+      }
+      return true;
+    }),
+    body("portfolio_link").optional().isURL().withMessage("Portfolio link must be a valid URL"),
+  ],
+  async (req, res) => {
+    try {
+      const { validationResult } = await import("express-validator");
+      const User = (await import("../models/user-modal.js")).default;
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation errors",
+          errors: errors.array(),
+        });
+      }
+
+      const userId = req.user.id;
+      const socialFields = [
+        'facebook_link',
+        'instagram_link',
+        'linkedin_link', 
+        'twitter_link',
+        'youtube_link',
+        'github_link',
+        'portfolio_link'
+      ];
+
+      const updateData = {};
+      socialFields.forEach(field => {
+        if (req.body.hasOwnProperty(field)) {
+          updateData[field] = req.body[field] || null;
+        }
+      });
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      ).select('facebook_link instagram_link linkedin_link twitter_link youtube_link github_link portfolio_link');
+
+      if (!updatedUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Social profiles updated successfully",
+        data: {
+          social_profiles: {
+            facebook: updatedUser.facebook_link,
+            instagram: updatedUser.instagram_link,
+            linkedin: updatedUser.linkedin_link,
+            twitter: updatedUser.twitter_link,
+            youtube: updatedUser.youtube_link,
+            github: updatedUser.github_link,
+            portfolio: updatedUser.portfolio_link,
+          },
+          updated_fields: Object.keys(updateData),
+        },
+      });
+
+    } catch (error) {
+      console.error("Error updating social profiles:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error updating social profiles",
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   PUT /api/v1/auth/profile/education
+ * @desc    Update user's education information
+ * @access  Private (Authenticated users)
+ */
+router.put(
+  "/profile/education",
+  [
+    authenticateToken,
+    body("education_level").optional().isIn([
+      "High School",
+      "Diploma",
+      "Associate Degree", 
+      "Bachelor's Degree",
+      "Master's Degree",
+      "Doctorate/PhD",
+      "Professional Certificate",
+      "Other"
+    ]).withMessage("Invalid education level"),
+    body("institution_name").optional().trim().isLength({ max: 200 }).withMessage("Institution name must be less than 200 characters"),
+    body("field_of_study").optional().trim().isLength({ max: 150 }).withMessage("Field of study must be less than 150 characters"),
+    body("graduation_year").optional().isInt({ min: 1950, max: new Date().getFullYear() + 10 }).withMessage("Invalid graduation year"),
+    body("skills").optional().isArray().withMessage("Skills must be an array"),
+    body("skills.*").optional().trim().isLength({ min: 1, max: 50 }).withMessage("Each skill must be between 1 and 50 characters"),
+    body("certifications").optional().isArray().withMessage("Certifications must be an array"),
+    body("certifications.*.name").optional().trim().isLength({ min: 1, max: 200 }).withMessage("Certification name required"),
+    body("certifications.*.issuer").optional().trim().isLength({ min: 1, max: 150 }).withMessage("Certification issuer required"),
+    body("certifications.*.year").optional().isInt({ min: 1950, max: new Date().getFullYear() + 1 }).withMessage("Invalid certification year"),
+    body("certifications.*.url").optional().isURL().withMessage("Certification URL must be valid"),
+  ],
+  async (req, res) => {
+    try {
+      const { validationResult } = await import("express-validator");
+      const User = (await import("../models/user-modal.js")).default;
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation errors",
+          errors: errors.array(),
+        });
+      }
+
+      const userId = req.user.id;
+      const educationFields = [
+        'education_level',
+        'institution_name',
+        'field_of_study', 
+        'graduation_year',
+        'skills',
+        'certifications'
+      ];
+
+      // Get current user to preserve other meta fields
+      const currentUser = await User.findById(userId);
+      if (!currentUser) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const updateData = { 
+        meta: currentUser.meta ? currentUser.meta.toObject() : {} 
+      };
+
+      educationFields.forEach(field => {
+        if (req.body.hasOwnProperty(field)) {
+          updateData.meta[field] = req.body[field];
+        }
+      });
+
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $set: updateData },
+        { new: true, runValidators: true }
+      ).select('meta');
+
+      res.status(200).json({
+        success: true,
+        message: "Education information updated successfully",
+        data: {
+          education: {
+            education_level: updatedUser.meta?.education_level,
+            institution_name: updatedUser.meta?.institution_name,
+            field_of_study: updatedUser.meta?.field_of_study,
+            graduation_year: updatedUser.meta?.graduation_year,
+            skills: updatedUser.meta?.skills || [],
+            certifications: updatedUser.meta?.certifications || [],
+          },
+          updated_fields: Object.keys(req.body),
+        },
+      });
+
+    } catch (error) {
+      console.error("Error updating education information:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error updating education information",
+        error: error.message,
+      });
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/auth/profile/social
+ * @desc    Get user's social profiles
+ * @access  Private (Authenticated users)
+ */
+router.get("/profile/social", authenticateToken, async (req, res) => {
+  try {
+    const User = (await import("../models/user-modal.js")).default;
+    
+    const user = await User.findById(req.user.id).select(
+      'facebook_link instagram_link linkedin_link twitter_link youtube_link github_link portfolio_link'
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const socialProfiles = {
+      facebook: user.facebook_link,
+      instagram: user.instagram_link,
+      linkedin: user.linkedin_link,
+      twitter: user.twitter_link,
+      youtube: user.youtube_link,
+      github: user.github_link,
+      portfolio: user.portfolio_link,
+    };
+
+    const completedProfiles = Object.values(socialProfiles).filter(profile => profile && profile.trim()).length;
+
+    res.status(200).json({
+      success: true,
+      message: "Social profiles retrieved successfully",
+      data: {
+        social_profiles: socialProfiles,
+        completed_profiles: completedProfiles,
+        total_available: 7,
+        completion_percentage: Math.round((completedProfiles / 7) * 100),
+      },
+    });
+
+  } catch (error) {
+    console.error("Error fetching social profiles:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching social profiles",
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/v1/auth/profile/education
+ * @desc    Get user's education information
+ * @access  Private (Authenticated users)
+ */
+router.get("/profile/education", authenticateToken, async (req, res) => {
+  try {
+    const User = (await import("../models/user-modal.js")).default;
+    
+    const user = await User.findById(req.user.id).select('meta');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    const education = {
+      education_level: user.meta?.education_level,
+      institution_name: user.meta?.institution_name,
+      field_of_study: user.meta?.field_of_study,
+      graduation_year: user.meta?.graduation_year,
+      skills: user.meta?.skills || [],
+      certifications: user.meta?.certifications || [],
+    };
+
+    // Calculate education completion
+    const requiredFields = ['education_level', 'institution_name', 'field_of_study'];
+    const completedFields = requiredFields.filter(field => education[field] && education[field].toString().trim()).length;
+    const hasSkills = education.skills.length > 0;
+    const hasCertifications = education.certifications.length > 0;
+
+    res.status(200).json({
+      success: true,
+      message: "Education information retrieved successfully",
+      data: {
+        education,
+        completion_stats: {
+          basic_info_completed: completedFields,
+          basic_info_total: requiredFields.length,
+          has_skills: hasSkills,
+          skills_count: education.skills.length,
+          has_certifications: hasCertifications,
+          certifications_count: education.certifications.length,
+          completion_percentage: Math.round(((completedFields + (hasSkills ? 1 : 0) + (hasCertifications ? 1 : 0)) / 5) * 100),
+        },
+      },
+    });
+
+  } catch (error) {
+    console.error("Error fetching education information:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching education information", 
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * @route   GET /api/v1/auth/analytics
+ * @desc    Get user analytics dashboard
+ * @access  Private (Authenticated users)
+ */
+router.get("/analytics", authenticateToken, authController.getUserAnalytics);
+
+/**
+ * @route   GET /api/v1/auth/active-users
+ * @desc    Get real-time active users
+ * @access  Private (Authenticated users)
+ */
+router.get("/active-users", authenticateToken, authController.getActiveUsers);
+
+/**
+ * @route   GET /api/v1/auth/system-analytics
+ * @desc    Get system-wide analytics (Admin only)
+ * @access  Private (Admin only)
+ */
+router.get("/system-analytics", authenticateToken, authController.getSystemAnalytics);
+
+/**
+ * @route   POST /api/v1/auth/request-password-reset
+ * @desc    Request password reset
+ * @access  Public
+ */
+router.post(
+  "/request-password-reset",
+  [
+    body("email")
+      .isEmail()
+      .normalizeEmail()
+      .withMessage("Please provide a valid email address"),
+  ],
+  authController.requestPasswordReset
+);
+
+/**
+ * @route   POST /api/v1/auth/reset-password
+ * @desc    Reset password with token
+ * @access  Public
+ */
+router.post(
+  "/reset-password",
+  [
+    body("token")
+      .notEmpty()
+      .withMessage("Reset token is required"),
+    body("password")
+      .isLength({ min: 8 })
+      .withMessage("Password must be at least 8 characters")
+      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+      .withMessage("Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { token, password } = req.body;
+
+      // Find user with valid reset token
+      const user = await User.findOne({
+        password_reset_token: token,
+        password_reset_expires: { $gt: Date.now() },
+      });
+
+      if (!user) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired reset token",
+        });
+      }
+
+      // Update password
+      user.password = password;
+      user.password_reset_token = undefined;
+      user.password_reset_expires = undefined;
+      user.failed_login_attempts = 0;
+      user.account_locked_until = undefined;
+      await user.save();
+
+      // Log password reset activity
+      await user.logActivity("password_reset", null, {
+        reset_time: new Date(),
+        reset_method: "email_token",
+      });
+
+      // End all active sessions for security
+      await user.endAllSessions();
+
+      res.status(200).json({
+        success: true,
+        message: "Password reset successfully. Please login with your new password.",
+      });
+    } catch (error) {
+      console.error("Password reset error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during password reset",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+/**
+ * @route   POST /api/v1/auth/verify-email
+ * @desc    Verify email with token
+ * @access  Public
+ */
+router.post(
+  "/verify-email",
+  [
+    body("token")
+      .notEmpty()
+      .withMessage("Verification token is required"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { token } = req.body;
+
+      // Find user with valid verification token
+      const user = await User.findOne({
+        email_verification_token: token,
+        email_verification_expires: { $gt: Date.now() },
+      });
+
+      if (!user) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired verification token",
+        });
+      }
+
+      // Verify email
+      user.email_verified = true;
+      user.email_verification_token = undefined;
+      user.email_verification_expires = undefined;
+      await user.save();
+
+      // Log email verification activity
+      await user.logActivity("email_verified", null, {
+        verification_time: new Date(),
+        verification_method: "email_token",
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Email verified successfully",
+        data: {
+          user: {
+            id: user._id,
+            email: user.email,
+            email_verified: user.email_verified,
+            profile_completion: user.profile_completion,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Email verification error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during email verification",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+/**
+ * @route   POST /api/v1/auth/resend-verification
+ * @desc    Resend email verification
+ * @access  Private (Authenticated users)
+ */
+router.post(
+  "/resend-verification",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const user = req.user;
+
+      if (user.email_verified) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is already verified",
+        });
+      }
+
+      // Generate new verification token
+      const verificationToken = crypto.randomBytes(32).toString("hex");
+      user.email_verification_token = verificationToken;
+      user.email_verification_expires = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+      await user.save();
+
+      // Send verification email
+      await authController.sendVerificationEmail(user.email, verificationToken);
+
+      // Log resend verification activity
+      await user.logActivity("verification_resent", null, {
+        resend_time: new Date(),
+        token_expires: user.email_verification_expires,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Verification email sent successfully",
+      });
+    } catch (error) {
+      console.error("Resend verification error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error resending verification",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/auth/profile/sessions
+ * @desc    Get user's active sessions
+ * @access  Private (Authenticated users)
+ */
+router.get(
+  "/profile/sessions",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const user = req.user;
+      
+      const sessions = user.sessions.filter(session => session.is_active).map(session => ({
+        session_id: session.session_id,
+        device_id: session.device_id,
+        ip_address: session.ip_address,
+        user_agent: session.user_agent,
+        geolocation: session.geolocation,
+        created_at: session.created_at,
+        last_activity: session.last_activity,
+        is_current: session.session_id === req.headers['x-session-id'],
+      }));
+
+      res.status(200).json({
+        success: true,
+        message: "Active sessions retrieved successfully",
+        data: {
+          total_sessions: sessions.length,
+          sessions,
+          current_session: req.headers['x-session-id'],
+        },
+      });
+    } catch (error) {
+      console.error("Get sessions error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error retrieving sessions",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+/**
+ * @route   DELETE /api/v1/auth/profile/sessions/:sessionId
+ * @desc    End a specific session
+ * @access  Private (Authenticated users)
+ */
+router.delete(
+  "/profile/sessions/:sessionId",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const { sessionId } = req.params;
+      
+      const session = user.sessions.find(s => s.session_id === sessionId && s.is_active);
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          message: "Session not found or already inactive",
+        });
+      }
+
+      await user.endSession(sessionId);
+
+      // Log session termination
+      await user.logActivity("session_terminated", null, {
+        terminated_session_id: sessionId,
+        termination_time: new Date(),
+        terminated_by_user: true,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Session ended successfully",
+      });
+    } catch (error) {
+      console.error("End session error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error ending session",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+/**
+ * @route   DELETE /api/v1/auth/profile/sessions
+ * @desc    End all sessions except current
+ * @access  Private (Authenticated users)
+ */
+router.delete(
+  "/profile/sessions",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const currentSessionId = req.headers['x-session-id'];
+      
+      const activeSessions = user.sessions.filter(s => s.is_active);
+      let terminatedCount = 0;
+
+      for (const session of activeSessions) {
+        if (session.session_id !== currentSessionId) {
+          await user.endSession(session.session_id);
+          terminatedCount++;
+        }
+      }
+
+      // Log bulk session termination
+      await user.logActivity("bulk_session_termination", null, {
+        terminated_sessions_count: terminatedCount,
+        termination_time: new Date(),
+        kept_current_session: currentSessionId,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `${terminatedCount} sessions ended successfully`,
+        data: {
+          terminated_sessions: terminatedCount,
+          current_session_kept: currentSessionId,
+        },
+      });
+    } catch (error) {
+      console.error("End all sessions error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error ending sessions",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+/**
+ * @route   GET /api/v1/auth/profile/activity
+ * @desc    Get user's activity log
+ * @access  Private (Authenticated users)
+ */
+router.get(
+  "/profile/activity",
+  authenticateToken,
+  async (req, res) => {
+    try {
+      const user = req.user;
+      const { page = 1, limit = 20, type, date_from, date_to } = req.query;
+      
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const skip = (pageNum - 1) * limitNum;
+
+      let activityFilter = {};
+      
+      // Filter by activity type
+      if (type) {
+        activityFilter.action = type;
+      }
+
+      // Filter by date range
+      if (date_from || date_to) {
+        activityFilter.timestamp = {};
+        if (date_from) {
+          activityFilter.timestamp.$gte = new Date(date_from);
+        }
+        if (date_to) {
+          activityFilter.timestamp.$lte = new Date(date_to);
+        }
+      }
+
+      // Get filtered activity log
+      let filteredActivity = user.activity_log;
+      if (Object.keys(activityFilter).length > 0) {
+        filteredActivity = user.activity_log.filter(activity => {
+          if (activityFilter.action && activity.action !== activityFilter.action) {
+            return false;
+          }
+          if (activityFilter.timestamp) {
+            const activityDate = new Date(activity.timestamp);
+            if (activityFilter.timestamp.$gte && activityDate < activityFilter.timestamp.$gte) {
+              return false;
+            }
+            if (activityFilter.timestamp.$lte && activityDate > activityFilter.timestamp.$lte) {
+              return false;
+            }
+          }
+          return true;
+        });
+      }
+
+      // Apply pagination
+      const totalActivities = filteredActivity.length;
+      const paginatedActivity = filteredActivity
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .slice(skip, skip + limitNum);
+
+      res.status(200).json({
+        success: true,
+        message: "Activity log retrieved successfully",
+        data: {
+          activities: paginatedActivity,
+          pagination: {
+            current_page: pageNum,
+            total_pages: Math.ceil(totalActivities / limitNum),
+            total_activities: totalActivities,
+            activities_per_page: limitNum,
+          },
+          filters: {
+            type,
+            date_from,
+            date_to,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Get activity error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error retrieving activity",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+);
+
+/**
+ * @route   PUT /api/v1/auth/profile/preferences
+ * @desc    Update user preferences
+ * @access  Private (Authenticated users)
+ */
+router.put(
+  "/profile/preferences",
+  [
+    authenticateToken,
+    body("theme")
+      .optional()
+      .isIn(["light", "dark", "auto"])
+      .withMessage("Theme must be light, dark, or auto"),
+    body("language")
+      .optional()
+      .isLength({ min: 2, max: 5 })
+      .withMessage("Language code must be between 2 and 5 characters"),
+    body("timezone")
+      .optional()
+      .custom((value) => {
+        try {
+          Intl.DateTimeFormat(undefined, { timeZone: value });
+          return true;
+        } catch (error) {
+          throw new Error("Invalid timezone");
+        }
+      }),
+    body("notifications")
+      .optional()
+      .isObject()
+      .withMessage("Notifications must be an object"),
+    body("privacy")
+      .optional()
+      .isObject()
+      .withMessage("Privacy settings must be an object"),
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const user = req.user;
+      const preferenceUpdates = req.body;
+
+      // Update preferences
+      user.preferences = { ...user.preferences, ...preferenceUpdates };
+      await user.save();
+
+      // Log preference update
+      await user.logActivity("preferences_updated", null, {
+        updated_preferences: Object.keys(preferenceUpdates),
+        new_preferences: user.preferences,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Preferences updated successfully",
+        data: {
+          preferences: user.preferences,
+          updated_fields: Object.keys(preferenceUpdates),
+        },
+      });
+    } catch (error) {
+      console.error("Update preferences error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error updating preferences",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }

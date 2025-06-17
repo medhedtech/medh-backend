@@ -36,23 +36,23 @@ export const getDashboardCounts = async (req, res) => {
 
     const enrolledCourses = await EnrolledCourse.countDocuments();
     const activeStudents = await User.countDocuments({
-      status: "Active",
+      is_active: true,
       role: ["student"],
     });
     const totalInstructors = await User.countDocuments({
       role: "instructor",
-      status: "Active",
+      is_active: true,
     });
     const totalCourses = await Course.countDocuments();
     const corporateEmployees = await User.countDocuments({
       role: {
         $in: ["coorporate-student"],
       },
-      status: "Active",
+      is_active: true,
     });
     const schools = await User.countDocuments({
       company_type: { $in: ["Institute", "University"] },
-      status: "Active",
+      is_active: true,
     });
 
     console.log("Counts", {

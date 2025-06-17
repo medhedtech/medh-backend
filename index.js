@@ -3,11 +3,13 @@
 import bodyParser from "body-parser";
 import compression from "compression";
 import express from "express";
+import session from "express-session";
 import fileUpload from "express-fileupload";
 import mongoSanitize from "express-mongo-sanitize";
 // import helmet from 'helmet';
 import mongoose from "mongoose";
 import morgan from "morgan";
+import passport from "passport";
 // import cron from 'node-cron';
 import http from "http";
 import https from "https";
@@ -76,6 +78,25 @@ app.use(
     tempFileDir: "/tmp/",
   }),
 );
+
+// Session configuration for OAuth
+app.use(session({
+  secret: ENV_VARS.SESSION_SECRET || 'your-session-secret-here',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: ENV_VARS.NODE_ENV === 'production', // Use secure cookies in production
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
+}));
+
+// Initialize Passport and restore authentication state from session
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Initialize Passport strategies
+import "./config/passport-config.js";
 
 // Add middleware to handle upload/base64 requests specially
 app.use("/api/v1/upload/base64", (req, res, next) => {

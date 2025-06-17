@@ -52,14 +52,20 @@ class EmailService {
         },
         // Set connection pool settings for better performance
         pool: true,
-        maxConnections: 5,
-        maxMessages: 100,
-        // Set timeouts
-        connectionTimeout: 10000, // 10 seconds
-        socketTimeout: 30000, // 30 seconds
-        // Enable debug for troubleshooting
-        debug: true, // Always enable debug during troubleshooting
-        logger: true, // Enable logger for more detailed info
+        maxConnections: 3, // Reduced from 5 to avoid overwhelming SES
+        maxMessages: 50, // Reduced from 100 to be more conservative
+        // Improved timeout settings to prevent connection issues
+        connectionTimeout: 20000, // 20 seconds
+        greetingTimeout: 30000, // 30 seconds
+        socketTimeout: 45000, // 45 seconds
+        // Additional settings for stability
+        requireTLS: true,
+        tls: {
+          rejectUnauthorized: false
+        },
+        // Enable debug only in development
+        debug: process.env.NODE_ENV === 'development',
+        logger: process.env.NODE_ENV === 'development',
       });
     } catch (error) {
       logger.email.error("Failed to initialize email transporter", {

@@ -221,12 +221,11 @@ export const toggleCorporateStudentStatus = async (req, res) => {
       return res.status(404).json({ message: "Corporate user not found" });
     }
 
-    corporateUser.status =
-      corporateUser.status === "Active" ? "Inactive" : "Active";
+    corporateUser.is_active = !corporateUser.is_active;
     await corporateUser.save();
 
     res.status(200).json({
-      message: `Corporate user status updated to ${corporateUser.status}`,
+      message: `Corporate user status updated to ${corporateUser.is_active ? 'active' : 'inactive'}`,
       data: corporateUser,
     });
   } catch (error) {

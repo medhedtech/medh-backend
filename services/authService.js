@@ -35,7 +35,7 @@ class AuthService {
       password,
       agree_terms,
       status = "Active",
-      meta = { gender: "Male", upload_resume: [] },
+      meta = { gender: "male", upload_resume: [] },
     } = userData;
 
     // Check if user already exists
@@ -52,9 +52,9 @@ class AuthService {
       password,
       agree_terms,
       role: [USER_ROLES.STUDENT],
-      status: "Active",
+      is_active: true,
       meta: meta || {
-        gender: "Male",
+        gender: "male",
         upload_resume: [],
         age: "",
         age_group: "",
@@ -241,8 +241,8 @@ class AuthService {
       throw new Error("User not found");
     }
 
-    // Toggle the status
-    user.status = user.status === "Active" ? "Inactive" : "Active";
+    // Toggle the active status
+    user.is_active = !user.is_active;
     await user.save();
 
     return user;

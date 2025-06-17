@@ -50,7 +50,7 @@ export const createOnlineMeeting = async (req, res) => {
     // Fetch all corporate students (users with role "coorporate-student" and status "Active")
     const corporateStudents = await User.find({
       role: "coorporate-student",
-      status: "Active",
+      is_active: true,
     });
 
     // Extract MongoDB _id for corporate students
@@ -323,7 +323,7 @@ export const getAllMeetingsForCorporateStudents = async (req, res) => {
     const { show_all_upcoming } = req.query;
     const corporateStudents = await User.find({
       role: "coorporate-student",
-      // status: "Active",
+      // is_active: true,
     });
 
     // Step 2: If no corporate students found, return a 404

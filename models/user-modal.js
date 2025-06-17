@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 const { Schema } = mongoose;
 
 // Define constants for roles and permissions for better maintainability
@@ -55,7 +56,7 @@ const AGE_GROUPS = [
   "65+",
 ];
 
-const GENDERS = ["Male", "Female", "Others"];
+const GENDERS = ["male", "female", "non-binary", "prefer-not-to-say", "other"];
 
 const COMPANY_TYPES = ["Institute", "University"];
 
@@ -80,362 +81,1128 @@ const phoneNumberSchema = new Schema(
   { _id: false },
 );
 
-// Define user meta schema
-const userMetaSchema = new Schema(
-  {
-    course_name: {
-      type: String,
-    },
-    date_of_birth: {
-      type: Date,
-    },
-    education_level: {
-      type: String,
-    },
-    language: {
-      type: String,
-    },
-    age_group: {
-      type: String,
-      enum: AGE_GROUPS,
-    },
-    category: {
-      type: String,
-    },
-    gender: {
-      type: String,
-      enum: GENDERS,
-      default: "Male",
-    },
-    upload_resume: {
-      type: [String],
-      default: [],
-    },
+// User Activity Tracking Schema
+const userActivitySchema = new Schema({
+  action: {
+    type: String,
+    required: true,
+    enum: [
+      "register", "login", "logout", "profile_update", "profile_view", "course_view", "course_purchase",
+      "content_view", "content_complete", "search", "review_submit",
+      "social_share", "message_send", "notification_read", "setting_change",
+      "feature_use", "error_encounter", "page_view", "api_call"
+    ]
   },
-  { _id: false },
-);
-
-// Define the main user schema with improved validation
-const userSchema = new Schema(
-  {
-    full_name: {
+  resource: {
+    type: String, // e.g., course_id, content_id, page_url
+  },
+  details: {
+    type: Schema.Types.Mixed, // Flexible object for action-specific data
+    default: {}
+  },
+  metadata: {
+    ip_address: String,
+    user_agent: String,
+    device_type: {
       type: String,
-      trim: true,
-      required: [true, "Full name is required"],
+      enum: ["desktop", "mobile", "tablet", "unknown"]
     },
-    email: {
-      type: String,
-      trim: true,
-      lowercase: true,
-      required: [true, "Email is required"],
-      unique: true,
-      validate: {
-        validator: function (v) {
-          return /^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/.test(v);
-        },
-        message: (props) => `${props.value} is not a valid email address!`,
-      },
-    },
-    phone_numbers: [phoneNumberSchema],
-    password: {
-      type: String,
-      required: [true, "Password is required"],
-      minlength: [6, "Password must be at least 6 characters long"],
-    },
-    agree_terms: {
-      type: Boolean,
-      default: false,
-    },
-    resetPasswordToken: {
-      type: String,
-    },
-    resetPasswordExpires: {
-      type: Date,
-    },
-    role: {
-      type: [String],
-      enum: Object.values(ROLES),
-      default: [ROLES.STUDENT],
-    },
-    role_description: {
-      type: String,
-    },
-    assign_department: {
-      type: [String],
-    },
-    permissions: {
-      type: [String],
-      enum: Object.values(PERMISSIONS),
-    },
-    age: {
-      type: String,
-    },
-    age_group: {
-      type: String,
-      enum: AGE_GROUPS,
-    },
-    status: {
-      type: String,
-      enum: ["Active", "Inactive"],
-      default: "Active",
-    },
-    facebook_link: {
-      type: String,
-      validate: {
-        validator: function (v) {
-          return !v || /^https?:\/\/(?:www\.)?facebook\.com\/.+/i.test(v);
-        },
-        message: (props) => `${props.value} is not a valid Facebook URL!`,
-      },
-    },
-    instagram_link: {
-      type: String,
-      validate: {
-        validator: function (v) {
-          return !v || /^https?:\/\/(?:www\.)?instagram\.com\/.+/i.test(v);
-        },
-        message: (props) => `${props.value} is not a valid Instagram URL!`,
-      },
-    },
-    linkedin_link: {
-      type: String,
-      validate: {
-        validator: function (v) {
-          return !v || /^https?:\/\/(?:www\.)?linkedin\.com\/.+/i.test(v);
-        },
-        message: (props) => `${props.value} is not a valid LinkedIn URL!`,
-      },
-    },
-    user_image: {
-      type: String,
-    },
-    meta: {
-      type: userMetaSchema,
-      default: () => ({
-        gender: "Male",
-        upload_resume: [],
-      }),
-    },
-    admin_role: {
-      type: String,
-      enum: Object.values(ADMIN_ROLES),
-      default: ADMIN_ROLES.ADMIN,
-    },
-    company_type: {
-      type: String,
-      enum: COMPANY_TYPES,
-    },
-    company_website: {
-      type: String,
-      validate: {
-        validator: function (v) {
-          return (
-            !v || /^https?:\/\/[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(\/.*)?$/.test(v)
-          );
-        },
-        message: (props) => `${props.value} is not a valid website URL!`,
-      },
-    },
-    corporate_id: {
-      type: String,
-    },
-    last_login: {
-      type: Date,
-    },
-    login_count: {
-      type: Number,
-      default: 0,
-    },
-    // Enhanced login tracking and analytics
-    login_history: [{
-      timestamp: {
-        type: Date,
-        required: true,
-      },
-      ip_address: {
-        type: String,
-        trim: true,
-      },
-      user_agent: {
-        type: String,
-        trim: true,
-      },
-      device_info: {
-        type: {
-          type: String,
-          enum: ['Desktop', 'Mobile', 'Tablet', 'Unknown'],
-          default: 'Unknown',
-        },
-        browser: {
-          type: String,
-          default: 'Unknown',
-        },
-        os: {
-          type: String,
-          default: 'Unknown',
-        },
-        is_mobile: {
-          type: Boolean,
-          default: false,
-        },
-        is_tablet: {
-          type: Boolean,
-          default: false,
-        },
-      },
-      session_id: {
-        type: String,
-        trim: true,
-      },
-      days_since_last_login: {
-        type: Number,
-        min: 0,
-      },
-    }],
-    login_analytics: {
-      first_login: {
-        type: Date,
-      },
-      total_sessions: {
-        type: Number,
-        default: 0,
-        min: 0,
-      },
-      unique_devices: [{
-        type: String, // Hashed device fingerprints
-      }],
-      unique_ips: [{
-        type: String,
-        validate: {
-          validator: function(v) {
-            // Basic IP validation (IPv4 and IPv6)
-            return !v || /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$|^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/.test(v);
-          },
-          message: props => `${props.value} is not a valid IP address!`
-        }
-      }],
-      login_frequency: {
-        daily: {
-          type: Number,
-          default: 0,
-          min: 0,
-        },
-        weekly: {
-          type: Number,
-          default: 0,
-          min: 0,
-        },
-        monthly: {
-          type: Number,
-          default: 0,
-          min: 0,
-        },
-      },
-      device_stats: {
-        mobile: {
-          type: Number,
-          default: 0,
-          min: 0,
-        },
-        tablet: {
-          type: Number,
-          default: 0,
-          min: 0,
-        },
-        desktop: {
-          type: Number,
-          default: 0,
-          min: 0,
-        },
-      },
-      browser_stats: {
-        type: Map,
-        of: Number,
-        default: new Map(),
-      },
-      os_stats: {
-        type: Map,
-        of: Number,
-        default: new Map(),
-      },
-      average_session_duration: {
-        type: Number, // in minutes
-        default: 0,
-        min: 0,
-      },
-      last_activity: {
-        type: Date,
-      },
-    },
-    emailVerified: {
-      type: Boolean,
-      default: false,
-    },
-    emailVerificationOTP: {
-      type: String,
-    },
-    emailVerificationOTPExpires: {
-      type: Date,
-    },
-    // Instructor assignment fields for students
-    assigned_instructor: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      validate: {
-        validator: async function(v) {
-          if (!v) return true; // Allow null/undefined
-          const instructor = await mongoose.model('User').findById(v);
-          return instructor && instructor.role.includes('instructor');
-        },
-        message: 'Assigned instructor must have instructor role'
+    browser: String,
+    operating_system: String,
+    screen_resolution: String,
+    geolocation: {
+      country: String,
+      region: String,
+      city: String,
+      timezone: String,
+      coordinates: {
+        latitude: Number,
+        longitude: Number
       }
     },
-    instructor_assignment_date: {
+    referrer: String,
+    session_id: String
+  },
+  duration: {
+    type: Number, // Time spent on action in milliseconds
+    default: 0
+  },
+  timestamp: {
+    type: Date,
+    default: Date.now,
+    index: true
+  }
+}, {
+  _id: true,
+  timestamps: false
+});
+
+// User Preferences Schema
+const userPreferencesSchema = new Schema({
+  theme: {
+    type: String,
+    enum: ["light", "dark", "auto", "high_contrast"],
+    default: "auto"
+  },
+  language: {
+    type: String,
+    default: "en",
+    validate: {
+      validator: function(v) {
+        return /^[a-z]{2}(-[A-Z]{2})?$/.test(v);
+      },
+      message: "Invalid language code format"
+    }
+  },
+  currency: {
+    type: String,
+    default: "USD",
+    validate: {
+      validator: function(v) {
+        return /^[A-Z]{3}$/.test(v);
+      },
+      message: "Invalid currency code format"
+    }
+  },
+  timezone: {
+    type: String,
+    default: "UTC"
+  },
+  notifications: {
+    email: {
+      marketing: { type: Boolean, default: true },
+      course_updates: { type: Boolean, default: true },
+      system_alerts: { type: Boolean, default: true },
+      weekly_summary: { type: Boolean, default: true },
+      achievement_unlocked: { type: Boolean, default: true }
+    },
+    push: {
+      enabled: { type: Boolean, default: false },
+      marketing: { type: Boolean, default: false },
+      course_reminders: { type: Boolean, default: true },
+      live_sessions: { type: Boolean, default: true },
+      community_activity: { type: Boolean, default: false }
+    },
+    sms: {
+      enabled: { type: Boolean, default: false },
+      security_alerts: { type: Boolean, default: false },
+      urgent_only: { type: Boolean, default: false }
+    }
+  },
+  privacy: {
+    profile_visibility: {
+      type: String,
+      enum: ["public", "friends", "private"],
+      default: "public"
+    },
+    activity_tracking: { type: Boolean, default: true },
+    data_analytics: { type: Boolean, default: true },
+    third_party_sharing: { type: Boolean, default: false },
+    marketing_emails: { type: Boolean, default: true }
+  },
+  accessibility: {
+    screen_reader: { type: Boolean, default: false },
+    high_contrast: { type: Boolean, default: false },
+    large_text: { type: Boolean, default: false },
+    keyboard_navigation: { type: Boolean, default: false },
+    reduced_motion: { type: Boolean, default: false }
+  },
+  content: {
+    autoplay_videos: { type: Boolean, default: true },
+    subtitles_default: { type: Boolean, default: false },
+    preferred_video_quality: {
+      type: String,
+      enum: ["auto", "480p", "720p", "1080p"],
+      default: "auto"
+    },
+    content_maturity: {
+      type: String,
+      enum: ["all", "teen", "mature"],
+      default: "all"
+    }
+  }
+});
+
+// User Statistics Schema
+const userStatsSchema = new Schema({
+  learning: {
+    total_courses_enrolled: { type: Number, default: 0 },
+    total_courses_completed: { type: Number, default: 0 },
+    total_learning_time: { type: Number, default: 0 }, // in minutes
+    current_streak: { type: Number, default: 0 },
+    longest_streak: { type: Number, default: 0 },
+    certificates_earned: { type: Number, default: 0 },
+    skill_points: { type: Number, default: 0 },
+    achievements_unlocked: { type: Number, default: 0 }
+  },
+  engagement: {
+    total_logins: { type: Number, default: 0 },
+    total_session_time: { type: Number, default: 0 },
+    avg_session_duration: { type: Number, default: 0 },
+    last_active_date: Date,
+    consecutive_active_days: { type: Number, default: 0 },
+    total_page_views: { type: Number, default: 0 },
+    feature_usage_count: {
+      type: Map,
+      of: Number,
+      default: new Map()
+    }
+  },
+  social: {
+    reviews_written: { type: Number, default: 0 },
+    discussions_participated: { type: Number, default: 0 },
+    content_shared: { type: Number, default: 0 },
+    followers_count: { type: Number, default: 0 },
+    following_count: { type: Number, default: 0 },
+    community_reputation: { type: Number, default: 0 }
+  },
+  financial: {
+    total_spent: { type: Number, default: 0 },
+    total_courses_purchased: { type: Number, default: 0 },
+    subscription_months: { type: Number, default: 0 },
+    refunds_requested: { type: Number, default: 0 },
+    lifetime_value: { type: Number, default: 0 }
+  }
+});
+
+// Device Information Schema
+const deviceInfoSchema = new Schema({
+  device_id: {
+    type: String,
+    required: true,
+    index: true
+  },
+  device_name: String,
+  device_type: {
+    type: String,
+    enum: ["desktop", "mobile", "tablet"],
+    required: true
+  },
+  operating_system: String,
+  browser: String,
+  browser_version: String,
+  screen_resolution: String,
+  is_primary: {
+    type: Boolean,
+    default: false
+  },
+  push_token: String, // For push notifications
+  last_seen: {
+    type: Date,
+    default: Date.now
+  },
+  ip_addresses: [{
+    ip: String,
+    country: String,
+    region: String,
+    city: String,
+    timestamp: { type: Date, default: Date.now }
+  }],
+  is_trusted: {
+    type: Boolean,
+    default: false
+  }
+}, {
+  timestamps: true
+});
+
+// Session Information Schema
+const sessionSchema = new Schema({
+  session_id: {
+    type: String,
+    required: true,
+    index: true
+  },
+  device_id: {
+    type: String,
+    required: true
+  },
+  start_time: {
+    type: Date,
+    default: Date.now
+  },
+  last_activity: {
+    type: Date,
+    default: Date.now
+  },
+  end_time: Date,
+  duration: Number, // in milliseconds
+  ip_address: String,
+  user_agent: String,
+  geolocation: {
+    country: String,
+    region: String,
+    city: String,
+    timezone: String
+  },
+  is_active: {
+    type: Boolean,
+    default: true
+  },
+  pages_visited: [{
+    path: String,
+    timestamp: Date,
+    duration: Number
+  }],
+  actions_performed: [{
+    action: String,
+    timestamp: Date,
+    details: Schema.Types.Mixed
+  }]
+});
+
+// Enhanced User Metadata Schema
+const userMetaSchema = new Schema({
+  // Personal Information
+  date_of_birth: Date,
+  gender: {
+    type: String
+  },
+  nationality: String,
+  languages_spoken: [{
+    language: String,
+    proficiency: {
+      type: String,
+      enum: ["beginner", "intermediate", "advanced", "native"]
+    }
+  }],
+  
+  // Professional Information
+  occupation: String,
+  industry: String,
+  company: String,
+  experience_level: {
+    type: String,
+    enum: ["entry", "mid", "senior", "executive", "student", "other"]
+  },
+  annual_income_range: {
+    type: String,
+    enum: ["under-25k", "25k-50k", "50k-75k", "75k-100k", "100k-150k", "150k-plus", "prefer-not-to-say"]
+  },
+  
+  // Education Information
+  education_level: {
+    type: String,
+    enum: [
+      "High School",
+      "Diploma", 
+      "Associate Degree",
+      "Bachelor's Degree",
+      "Master's Degree",
+      "Doctorate/PhD",
+      "Professional Certificate",
+      "Other"
+    ]
+  },
+  institution_name: {
+    type: String,
+    trim: true
+  },
+  field_of_study: {
+    type: String,
+    trim: true
+  },
+  graduation_year: {
+    type: Number,
+    min: 1950,
+    max: new Date().getFullYear() + 10
+  },
+  skills: {
+    type: [String],
+    default: []
+  },
+  certifications: [{
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    issuer: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    year: {
+      type: Number,
+      min: 1950,
+      max: new Date().getFullYear() + 1
+    },
+    expiry_date: Date,
+    credential_id: String,
+    credential_url: String,
+    is_verified: {
+      type: Boolean,
+      default: false
+    }
+  }],
+  
+  // Learning Preferences
+  learning_goals: [{
+    goal: String,
+    priority: {
+      type: String,
+      enum: ["high", "medium", "low"]
+    },
+    target_date: Date,
+    progress: {
+      type: Number,
+      min: 0,
+      max: 100,
+      default: 0
+    }
+  }],
+  preferred_learning_style: {
+    type: String,
+    enum: ["visual", "auditory", "kinesthetic", "reading-writing", "mixed"]
+  },
+  available_time_per_week: {
+    type: Number,
+    min: 0,
+    max: 168 // hours per week
+  },
+  preferred_study_times: [{
+    day: {
+      type: String,
+      enum: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+    },
+    start_time: String, // Format: HH:MM
+    end_time: String
+  }],
+  
+  // Marketing & Personalization
+  referral_source: {
+    type: String,
+    enum: ["search", "social", "email", "referral", "direct", "advertisement", "other"]
+  },
+  interests: [String],
+  personality_type: String, // e.g., "INTJ", "Explorer", etc.
+  risk_tolerance: {
+    type: String,
+    enum: ["conservative", "moderate", "aggressive"]
+  }
+});
+
+// Main User Schema
+const userSchema = new Schema({
+  // Basic Information
+  full_name: {
+    type: String,
+    required: [true, "Full name is required"],
+    trim: true,
+    maxlength: [100, "Full name cannot exceed 100 characters"],
+    index: true
+  },
+  email: {
+    type: String,
+    required: [true, "Email is required"],
+    unique: true,
+    lowercase: true,
+    trim: true,
+    validate: {
+      validator: function(v) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+      },
+      message: "Please enter a valid email address"
+    }
+  },
+  username: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true,
+    minlength: [3, "Username must be at least 3 characters"],
+    maxlength: [30, "Username cannot exceed 30 characters"],
+    validate: {
+      validator: function(v) {
+        return !v || /^[a-zA-Z0-9_]+$/.test(v);
+      },
+      message: "Username can only contain letters, numbers, and underscores"
+    }
+  },
+  student_id: {
+    type: String,
+    unique: true,
+    sparse: true, // Only students will have this field
+    trim: true,
+    uppercase: true,
+    validate: {
+      validator: function(v) {
+        // Pattern: MED-YYYY-NNNNNN (e.g., MED-2025-000001)
+        return !v || /^MED-\d{4}-\d{6}$/.test(v);
+      },
+      message: "Student ID must follow the pattern MED-YYYY-NNNNNN"
+    },
+    index: true
+  },
+  password: {
+    type: String,
+    required: [true, "Password is required"],
+    minlength: [8, "Password must be at least 8 characters"]
+  },
+  
+  // Contact Information
+  phone_numbers: [phoneNumberSchema],
+  
+  // Profile Information
+  age: {
+    type: Number,
+    min: [13, "Minimum age requirement is 13"],
+    max: [120, "Invalid age"]
+  },
+  age_group: {
+    type: String,
+    enum: ["teen", "young-adult", "adult", "senior"]
+  },
+  address: {
+    type: String,
+    trim: true,
+    maxlength: [500, "Address must be less than 500 characters"]
+  },
+  organization: {
+    type: String,
+    trim: true,
+    maxlength: [200, "Organization name must be less than 200 characters"]
+  },
+  bio: {
+    type: String,
+    trim: true,
+    maxlength: [1000, "Bio must be less than 1000 characters"]
+  },
+  
+  // Profile Media
+  user_image: {
+    url: String,
+    public_id: String, // For Cloudinary
+    alt_text: String,
+    upload_date: {
       type: Date,
-    },
-    instructor_assignment_type: {
-      type: String,
-      enum: ["mentor", "tutor", "advisor", "supervisor"],
-      default: "mentor",
-    },
-    instructor_assignment_notes: {
-      type: String,
-      trim: true,
-    },
-    // Location and timezone fields
-    timezone: {
-      type: String,
-      trim: true,
-      validate: {
-        validator: function (v) {
-          // Basic timezone validation - accepts formats like 'UTC', 'America/New_York', 'Asia/Kolkata', etc.
-          return !v || /^[A-Za-z]+\/[A-Za-z_]+$|^UTC$|^GMT[+-]\d{1,2}$/.test(v);
-        },
-        message: (props) => `${props.value} is not a valid timezone format!`,
-      },
-    },
-    country: {
-      type: String,
-      trim: true,
-      validate: {
-        validator: function (v) {
-          // Basic country validation - accepts 2-3 letter country codes or full country names
-          return !v || /^[A-Za-z\s]{2,50}$/.test(v);
-        },
-        message: (props) => `${props.value} is not a valid country format!`,
-      },
-    },
+      default: Date.now
+    }
   },
-  {
-    timestamps: true,
-    toJSON: {
-      transform: (doc, ret) => {
-        delete ret.password;
-        return ret;
-      },
-    },
+  cover_image: {
+    url: String,
+    public_id: String,
+    alt_text: String,
+    upload_date: {
+      type: Date,
+      default: Date.now
+    }
   },
-);
+  
+  // Social Profiles
+  facebook_link: {
+    type: String,
+    validate: {
+      validator: function(v) {
+        return !v || /^https?:\/\/(?:www\.)?facebook\.com\/.+/i.test(v);
+      },
+      message: "Invalid Facebook URL"
+    }
+  },
+  instagram_link: {
+    type: String,
+    validate: {
+      validator: function(v) {
+        return !v || /^https?:\/\/(?:www\.)?instagram\.com\/.+/i.test(v);
+      },
+      message: "Invalid Instagram URL"
+    }
+  },
+  linkedin_link: {
+    type: String,
+    validate: {
+      validator: function(v) {
+        return !v || /^https?:\/\/(?:www\.)?linkedin\.com\/.+/i.test(v);
+      },
+      message: "Invalid LinkedIn URL"
+    }
+  },
+  twitter_link: {
+    type: String,
+    validate: {
+      validator: function(v) {
+        return !v || /^https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/.+/i.test(v);
+      },
+      message: "Invalid Twitter/X URL"
+    }
+  },
+  youtube_link: {
+    type: String,
+    validate: {
+      validator: function(v) {
+        return !v || /^https?:\/\/(?:www\.)?youtube\.com\/.+/i.test(v);
+      },
+      message: "Invalid YouTube URL"
+    }
+  },
+  github_link: {
+    type: String,
+    validate: {
+      validator: function(v) {
+        return !v || /^https?:\/\/(?:www\.)?github\.com\/.+/i.test(v);
+      },
+      message: "Invalid GitHub URL"
+    }
+  },
+  portfolio_link: {
+    type: String,
+    validate: {
+      validator: function(v) {
+        return !v || /^https?:\/\/.+/i.test(v);
+      },
+      message: "Invalid URL format"
+    }
+  },
+  
+  // Location & System
+  country: {
+    type: String,
+    trim: true,
+    validate: {
+      validator: function(v) {
+        return !v || /^[A-Za-z\s]{2,50}$/.test(v);
+      },
+      message: "Invalid country format"
+    }
+  },
+  timezone: {
+    type: String,
+    default: "UTC"
+  },
+  
+  // Status & Verification
+  email_verified: {
+    type: Boolean,
+    default: false
+  },
+  phone_verified: {
+    type: Boolean,
+    default: false
+  },
+  identity_verified: {
+    type: Boolean,
+    default: false
+  },
+  is_active: {
+    type: Boolean,
+    default: true
+  },
+  is_banned: {
+    type: Boolean,
+    default: false
+  },
+  ban_reason: String,
+  ban_expires: Date,
+  
+  // Account Management
+  account_type: {
+    type: String,
+    enum: ["free", "premium", "enterprise", "instructor", "admin"],
+    default: "free"
+  },
+  role: {
+    type: Schema.Types.Mixed, // Supports both String and Array
+    validate: {
+      validator: function(value) {
+        // Allow both string and array of strings
+        if (typeof value === 'string') {
+          return Object.values(ROLES).includes(value);
+        }
+        if (Array.isArray(value)) {
+          return value.every(role => Object.values(ROLES).includes(role));
+        }
+        return false;
+      },
+      message: 'Role must be a valid role string or array of valid roles'
+    },
+    default: ROLES.STUDENT,
+    // Convert array to string for backward compatibility
+    set: function(value) {
+      if (Array.isArray(value)) {
+        // If array has one element, convert to string
+        if (value.length === 1) {
+          return value[0];
+        }
+        // If multiple roles, keep as array
+        return value;
+      }
+      return value;
+    }
+  },
+  admin_role: {
+    type: String,
+    enum: Object.values(ADMIN_ROLES),
+    sparse: true // Only admins will have this field
+  },
+  subscription_status: {
+    type: String,
+    enum: ["active", "inactive", "cancelled", "suspended", "trial"],
+    default: "inactive"
+  },
+  subscription_plan: String,
+  subscription_start: Date,
+  subscription_end: Date,
+  trial_used: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Security & Privacy
+  two_factor_enabled: {
+    type: Boolean,
+    default: false
+  },
+  two_factor_secret: String,
+  backup_codes: [String],
+  password_reset_token: String,
+  password_reset_expires: Date,
+  email_verification_token: String,
+  email_verification_expires: Date,
+  failed_login_attempts: {
+    type: Number,
+    default: 0
+  },
+  account_locked_until: Date,
+  
+  // OAuth Integration
+  oauth: {
+    google: {
+      id: String,
+      access_token: String,
+      refresh_token: String,
+      profile: Schema.Types.Mixed,
+      connected_at: Date,
+      last_login: Date,
+      last_refresh: Date
+    },
+    facebook: {
+      id: String,
+      access_token: String,
+      refresh_token: String,
+      profile: Schema.Types.Mixed,
+      connected_at: Date,
+      last_login: Date,
+      last_refresh: Date
+    },
+    github: {
+      id: String,
+      access_token: String,
+      refresh_token: String,
+      profile: Schema.Types.Mixed,
+      connected_at: Date,
+      last_login: Date,
+      last_refresh: Date
+    },
+    linkedin: {
+      id: String,
+      access_token: String,
+      refresh_token: String,
+      profile: Schema.Types.Mixed,
+      connected_at: Date,
+      last_login: Date,
+      last_refresh: Date
+    },
+    microsoft: {
+      id: String,
+      access_token: String,
+      refresh_token: String,
+      profile: Schema.Types.Mixed,
+      connected_at: Date,
+      last_login: Date,
+      last_refresh: Date
+    },
+    apple: {
+      id: String,
+      access_token: String,
+      refresh_token: String,
+      profile: Schema.Types.Mixed,
+      connected_at: Date,
+      last_login: Date,
+      last_refresh: Date
+    }
+  },
+  
+  // Real-time Features
+  is_online: {
+    type: Boolean,
+    default: false
+  },
+  last_seen: {
+    type: Date,
+    default: Date.now
+  },
+  status_message: {
+    type: String,
+    maxlength: [100, "Status message cannot exceed 100 characters"]
+  },
+  activity_status: {
+    type: String,
+    enum: ["online", "away", "busy", "invisible"],
+    default: "online"
+  },
+  
+  // Advanced Features
+  api_key: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
+  api_rate_limit: {
+    type: Number,
+    default: 1000 // requests per hour
+  },
+  webhooks: [{
+    url: String,
+    events: [String],
+    secret: String,
+    is_active: {
+      type: Boolean,
+      default: true
+    }
+  }],
+  
+  // Related Schemas
+  meta: userMetaSchema,
+  preferences: userPreferencesSchema,
+  statistics: userStatsSchema,
+  devices: [deviceInfoSchema],
+  sessions: [sessionSchema],
+  activity_log: [userActivitySchema],
+  
+  // Timestamps
+  created_at: {
+    type: Date,
+    default: Date.now,
+    index: true
+  },
+  updated_at: {
+    type: Date,
+    default: Date.now
+  },
+  last_login: Date,
+  last_profile_update: Date
+}, {
+  timestamps: {
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
+  },
+  toJSON: { 
+    virtuals: true,
+    transform: function(doc, ret) {
+      delete ret.password;
+      delete ret.two_factor_secret;
+      delete ret.backup_codes;
+      delete ret.password_reset_token;
+      delete ret.email_verification_token;
+      delete ret.api_key;
+      return ret;
+    }
+  },
+  toObject: { virtuals: true }
+});
+
+// Indexes for optimal performance (email and username already indexed via unique: true)
+userSchema.index({ 'phone_numbers.number': 1 });
+userSchema.index({ is_active: 1, account_type: 1 });
+userSchema.index({ created_at: -1 });
+userSchema.index({ last_seen: -1 });
+userSchema.index({ 'statistics.engagement.last_active_date': -1 });
+userSchema.index({ 'activity_log.timestamp': -1 });
+userSchema.index({ 'sessions.is_active': 1 });
+
+// Virtual for profile completion percentage
+userSchema.virtual('profile_completion').get(function() {
+  const requiredFields = [
+    'full_name', 'email', 'phone_numbers', 'user_image', 
+    'address', 'organization', 'bio', 'meta.date_of_birth',
+    'meta.education_level', 'meta.institution_name', 'meta.field_of_study',
+    'meta.gender', 'meta.skills', 'country', 'timezone'
+  ];
+  
+  const socialFields = [
+    'facebook_link', 'instagram_link', 'linkedin_link', 
+    'twitter_link', 'youtube_link', 'github_link', 'portfolio_link'
+  ];
+  
+  let completedFields = 0;
+  const totalFields = requiredFields.length + (socialFields.length * 0.5); // Social fields worth half points
+  
+  requiredFields.forEach(field => {
+    const fieldParts = field.split('.');
+    let value = this;
+    
+    for (const part of fieldParts) {
+      value = value?.[part];
+    }
+    
+    if (value !== null && value !== undefined && value !== '' && 
+        (!Array.isArray(value) || value.length > 0)) {
+      completedFields++;
+    }
+  });
+  
+  socialFields.forEach(field => {
+    if (this[field] && this[field].trim() !== '') {
+      completedFields += 0.5;
+    }
+  });
+  
+  return Math.round((completedFields / totalFields) * 100);
+});
+
+// Virtual for full profile data
+userSchema.virtual('profile_summary').get(function() {
+  return {
+    id: this._id,
+    full_name: this.full_name,
+    email: this.email,
+    username: this.username,
+    user_image: this.user_image,
+    bio: this.bio,
+    account_type: this.account_type,
+    is_online: this.is_online,
+    last_seen: this.last_seen,
+    profile_completion: this.profile_completion,
+    statistics: this.statistics,
+    created_at: this.created_at
+  };
+});
+
+// Pre-save middleware
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+  
+  try {
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+userSchema.pre("save", function (next) {
+  this.updated_at = new Date();
+  
+  // Update last profile update if profile fields changed
+  const profileFields = ['full_name', 'bio', 'user_image', 'address', 'organization'];
+  const isProfileUpdated = profileFields.some(field => this.isModified(field));
+  
+  if (isProfileUpdated) {
+    this.last_profile_update = new Date();
+  }
+  
+  next();
+});
+
+// Instance methods
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
+
+userSchema.methods.updateLastSeen = function() {
+  this.last_seen = new Date();
+  this.is_online = true;
+  return this.save();
+};
+
+userSchema.methods.setOffline = function() {
+  this.is_online = false;
+  return this.save();
+};
+
+userSchema.methods.logActivity = function(action, resource = null, details = {}, metadata = {}) {
+  this.activity_log.push({
+    action,
+    resource,
+    details,
+    metadata,
+    timestamp: new Date()
+  });
+  
+  // Keep only last 1000 activities to prevent document size issues
+  if (this.activity_log.length > 1000) {
+    this.activity_log = this.activity_log.slice(-1000);
+  }
+  
+  return this.save();
+};
+
+userSchema.methods.createSession = function(sessionData) {
+  const session = {
+    session_id: sessionData.session_id,
+    device_id: sessionData.device_id,
+    ip_address: sessionData.ip_address,
+    user_agent: sessionData.user_agent,
+    geolocation: sessionData.geolocation,
+    start_time: new Date()
+  };
+  
+  // Initialize sessions array if it doesn't exist
+  if (!this.sessions) {
+    this.sessions = [];
+  }
+  
+  this.sessions.push(session);
+  this.is_online = true;
+  this.last_seen = new Date();
+  
+  // Initialize statistics if they don't exist
+  if (!this.statistics) {
+    this.statistics = {
+      learning: {
+        total_courses_enrolled: 0,
+        total_courses_completed: 0,
+        total_learning_time: 0,
+        current_streak: 0,
+        longest_streak: 0,
+        certificates_earned: 0,
+        skill_points: 0,
+        achievements_unlocked: 0
+      },
+      engagement: {
+        total_logins: 0,
+        total_session_time: 0,
+        avg_session_duration: 0,
+        last_active_date: new Date(),
+        consecutive_active_days: 0,
+        total_page_views: 0,
+        feature_usage_count: new Map()
+      },
+      social: {
+        reviews_written: 0,
+        discussions_participated: 0,
+        content_shared: 0,
+        followers_count: 0,
+        following_count: 0,
+        community_reputation: 0
+      },
+      financial: {
+        total_spent: 0,
+        total_courses_purchased: 0,
+        subscription_months: 0,
+        refunds_requested: 0,
+        lifetime_value: 0
+      }
+    };
+  }
+  
+  // Initialize engagement if it doesn't exist
+  if (!this.statistics.engagement) {
+    this.statistics.engagement = {
+      total_logins: 0,
+      total_session_time: 0,
+      avg_session_duration: 0,
+      last_active_date: new Date(),
+      consecutive_active_days: 0,
+      total_page_views: 0,
+      feature_usage_count: new Map()
+    };
+  }
+  
+  this.statistics.engagement.total_logins += 1;
+  this.statistics.engagement.last_active_date = new Date();
+  
+  return this.save();
+};
+
+userSchema.methods.endSession = function(sessionId) {
+  if (!this.sessions) {
+    return this.save();
+  }
+  
+  const session = this.sessions.id(sessionId);
+  if (session) {
+    session.end_time = new Date();
+    session.duration = session.end_time - session.start_time;
+    session.is_active = false;
+    
+    // Initialize statistics.engagement if it doesn't exist
+    if (!this.statistics) {
+      this.statistics = {
+        engagement: {
+          total_logins: 0,
+          total_session_time: 0,
+          avg_session_duration: 0,
+          last_active_date: new Date(),
+          consecutive_active_days: 0,
+          total_page_views: 0,
+          feature_usage_count: new Map()
+        }
+      };
+    }
+    
+    if (!this.statistics.engagement) {
+      this.statistics.engagement = {
+        total_logins: 0,
+        total_session_time: 0,
+        avg_session_duration: 0,
+        last_active_date: new Date(),
+        consecutive_active_days: 0,
+        total_page_views: 0,
+        feature_usage_count: new Map()
+      };
+    }
+    
+    // Update engagement statistics
+    this.statistics.engagement.total_session_time = (this.statistics.engagement.total_session_time || 0) + session.duration;
+    const totalLogins = this.statistics.engagement.total_logins || 1;
+    this.statistics.engagement.avg_session_duration = 
+      this.statistics.engagement.total_session_time / totalLogins;
+  }
+  
+  // Check if any other sessions are active
+  const activeSessions = this.sessions.filter(s => s.is_active);
+  if (activeSessions.length === 0) {
+    this.is_online = false;
+  }
+  
+  return this.save();
+};
+
+// Static methods
+userSchema.statics.findByEmail = function(email) {
+  return this.findOne({ email: email.toLowerCase() });
+};
+
+userSchema.statics.findOnlineUsers = function() {
+  return this.find({ is_online: true }).select('full_name username user_image last_seen');
+};
+
+userSchema.statics.getUserAnalytics = function(timeframe = '30d') {
+  const daysAgo = parseInt(timeframe);
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - daysAgo);
+  
+  return this.aggregate([
+    {
+      $match: {
+        created_at: { $gte: startDate }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        total_users: { $sum: 1 },
+        active_users: { 
+          $sum: { 
+            $cond: [{ $gte: ['$last_seen', startDate] }, 1, 0] 
+          } 
+        },
+        verified_users: { 
+          $sum: { 
+            $cond: ['$email_verified', 1, 0] 
+          } 
+        },
+        premium_users: { 
+          $sum: { 
+            $cond: [{ $eq: ['$account_type', 'premium'] }, 1, 0] 
+          } 
+        }
+      }
+    }
+  ]);
+};
 
 // Add a method to verify user has a specific permission
 userSchema.methods.hasPermission = function (permission) {
@@ -647,11 +1414,11 @@ userSchema.statics.findByRole = function (role) {
 };
 
 userSchema.statics.findActiveUsers = function () {
-  return this.find({ status: "Active" });
+  return this.find({ is_active: true });
 };
 
 userSchema.statics.findInactiveUsers = function () {
-  return this.find({ status: "Inactive" });
+  return this.find({ is_active: false });
 };
 
 userSchema.statics.findAdmins = function () {
@@ -685,25 +1452,50 @@ userSchema.statics.findParents = function () {
   return this.find({ role: ROLES.PARENT });
 };
 
-// Add indexes for better query performance
-userSchema.index({ role: 1 });
-userSchema.index({ status: 1 });
-userSchema.index({ admin_role: 1 });
-userSchema.index({ "phone_numbers.number": 1 });
-userSchema.index({ assigned_instructor: 1 });
-userSchema.index({ last_login: -1 }); // For recent login queries
-userSchema.index({ login_count: -1 }); // For most active users
-userSchema.index({ "login_analytics.total_sessions": -1 }); // For session analytics
-userSchema.index({ "login_analytics.first_login": 1 }); // For user registration analytics
-userSchema.index({ "login_history.timestamp": -1 }); // For login history queries
-userSchema.index({ "login_history.ip_address": 1 }); // For security analysis
-userSchema.index({ email: 1, last_login: -1 }); // Compound index for user activity queries
+// Add static method to generate unique student ID
+userSchema.statics.generateStudentId = async function() {
+  const currentYear = new Date().getFullYear();
+  const prefix = `MED-${currentYear}-`;
+  
+  try {
+    // Find the latest student ID for the current year
+    const latestStudent = await this.findOne({
+      student_id: { $regex: `^${prefix}` }
+    }).sort({ student_id: -1 });
+    
+    let nextNumber = 1;
+    
+    if (latestStudent && latestStudent.student_id) {
+      // Extract the number part from the student ID
+      const numberPart = latestStudent.student_id.split('-')[2];
+      nextNumber = parseInt(numberPart) + 1;
+    }
+    
+    // Format with leading zeros (6 digits)
+    const formattedNumber = nextNumber.toString().padStart(6, '0');
+    return `${prefix}${formattedNumber}`;
+    
+  } catch (error) {
+    console.error('Error generating student ID:', error);
+    // Fallback to timestamp-based ID
+    const timestamp = Date.now().toString().slice(-6);
+    return `${prefix}${timestamp}`;
+  }
+};
 
-// Export model constants for use in other files
-export const USER_ROLES = ROLES;
-export const USER_PERMISSIONS = PERMISSIONS;
-export const USER_ADMIN_ROLES = ADMIN_ROLES;
+// Add static method to find user by student ID
+userSchema.statics.findByStudentId = function(studentId) {
+  return this.findOne({ student_id: studentId.toUpperCase() });
+};
+
+// Add static method to validate student ID format
+userSchema.statics.isValidStudentIdFormat = function(studentId) {
+  return /^MED-\d{4}-\d{6}$/.test(studentId);
+};
 
 // Create and export the model
 const User = mongoose.model("User", userSchema);
 export default User;
+
+// Export constants for roles and permissions
+export { ROLES as USER_ROLES, PERMISSIONS as USER_PERMISSIONS, ADMIN_ROLES as USER_ADMIN_ROLES };
