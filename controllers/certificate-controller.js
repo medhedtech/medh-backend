@@ -1,6 +1,6 @@
 import PDF from "html-pdf-chrome";
 
-import Certificate from "../models/cetificates-model.js";
+import LegacyCertificate from "../models/cetificates-model.js";
 import Course from "../models/course-model.js";
 import EnrolledCourse from "../models/enrolled-courses-model.js";
 import { chromeService } from "../utils/chromeService.js";
@@ -104,7 +104,7 @@ export const createCertificate = async (req, res) => {
         uploadParams,
         async (url) => {
           try {
-            const certificate = new Certificate({
+            const certificate = new LegacyCertificate({
               student_id: student_id,
               student_name: student_name,
               course_id: course_id,
@@ -170,7 +170,7 @@ export const getCertificatesByStudentId = async (req, res) => {
   const { student_id } = req.params;
 
   try {
-    const certificates = await Certificate.find({ student_id })
+    const certificates = await LegacyCertificate.find({ student_id })
       .populate("student_id", "full_name")
       .populate(
         "course_id",

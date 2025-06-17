@@ -5,13 +5,16 @@ import {
   deleteProfile,
   restoreProfile,
   getProfileStats,
-  updatePreferences
+  updatePreferences,
+  getComprehensiveProfile,
+  updateComprehensiveProfile
 } from "../controllers/profileController.js";
 import {
   validateUserId,
   validateProfileUpdate,
   validatePreferencesUpdate,
-  validateDeleteProfile
+  validateDeleteProfile,
+  validateComprehensiveProfileUpdate
 } from "../validations/profileValidation.js";
 import { authenticateToken, authorize } from "../middleware/auth.js";
 import rateLimit from "express-rate-limit";
@@ -19,6 +22,31 @@ import rateLimit from "express-rate-limit";
 const router = express.Router();
 
 // Convenience routes (must be defined before parameterized routes)
+
+/**
+ * @route   GET /api/v1/profile/me/comprehensive
+ * @desc    Get current user's comprehensive profile with all data (enrollment, analytics, etc.)
+ * @access  Private
+ */
+router.get(
+  "/me/comprehensive",
+  authenticateToken,
+  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  getComprehensiveProfile
+);
+
+/**
+ * @route   PUT /api/v1/profile/me/comprehensive
+ * @desc    Update current user's comprehensive profile (all fields except email)
+ * @access  Private
+ */
+router.put(
+  "/me/comprehensive",
+  authenticateToken,
+  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  validateComprehensiveProfileUpdate,
+  updateComprehensiveProfile
+);
 
 /**
  * @route   GET /api/v1/profile/me
