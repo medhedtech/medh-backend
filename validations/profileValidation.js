@@ -1,4 +1,5 @@
 import { body, param, query } from "express-validator";
+import User from "../models/user-modal.js";
 
 // Validation for user ID parameter
 export const validateUserId = [
@@ -969,10 +970,331 @@ export const validateComprehensiveProfileUpdate = [
     })
 ];
 
+// New validation for comprehensive profile update with conditional requirements
+export const validateComprehensiveProfileUpdateConditional = [
+
+  // Basic Information - simplified validation (controller handles preservation)
+  body('full_name')
+    .optional()
+    .custom((value) => {
+      // Only validate if value is provided and not empty
+      if (value && value.trim() !== '') {
+        if (value.trim().length < 2 || value.trim().length > 100) {
+          throw new Error('Full name must be between 2 and 100 characters');
+        }
+        if (!/^[a-zA-Z\s'-]+$/.test(value.trim())) {
+          throw new Error('Full name can only contain letters, spaces, hyphens, and apostrophes');
+        }
+      }
+      return true;
+    }),
+
+  body('username')
+    .optional()
+    .custom((value) => {
+      // Only validate if value is provided and not empty
+      if (value && value.trim() !== '') {
+        if (value.trim().length < 3 || value.trim().length > 30) {
+          throw new Error('Username must be between 3 and 30 characters');
+        }
+        if (!/^[a-zA-Z0-9_]+$/.test(value.trim())) {
+          throw new Error('Username can only contain letters, numbers, and underscores');
+        }
+      }
+      return true;
+    }),
+
+  body('password')
+    .optional()
+    .custom((value) => {
+      if (value && value.length > 0) {
+        if (value.length < 8) {
+          throw new Error('Password must be at least 8 characters long');
+        }
+        if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/.test(value)) {
+          throw new Error('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character');
+        }
+      }
+      return true;
+    }),
+
+  // Contact Information
+  body('phone_numbers')
+    .optional()
+    .custom((value) => {
+      if (value && Array.isArray(value) && value.length > 0) {
+        for (const phone of value) {
+          if (!phone.country || !phone.number) {
+            throw new Error('Each phone number must have both country and number fields');
+          }
+          if (phone.country.length < 2 || phone.country.length > 3) {
+            throw new Error('Country code must be 2-3 characters');
+          }
+          if (!/^\+?\d{10,15}$/.test(phone.number)) {
+            throw new Error('Phone number must be 10-15 digits');
+          }
+        }
+      }
+      return true;
+    }),
+
+  // Profile Information
+  body('age')
+    .custom((value, { req }) => {
+      const existing = req.existingUserData?.age;
+      if (existing && (value === null || value === undefined || value === '')) {
+        throw new Error('Age cannot be empty once set');
+      }
+      if (value !== null && value !== undefined && value !== '') {
+        const ageNum = parseInt(value);
+        if (isNaN(ageNum) || ageNum < 13 || ageNum > 120) {
+          throw new Error('Age must be between 13 and 120');
+        }
+      }
+      return true;
+    }),
+
+  body('age_group')
+    .custom((value, { req }) => {
+      const existing = req.existingUserData?.age_group;
+      if (existing && (!value || value.trim() === '')) {
+        throw new Error('Age group cannot be empty once set');
+      }
+      if (value && value.trim() !== '') {
+        if (!['teen', 'young-adult', 'adult', 'senior'].includes(value)) {
+          throw new Error('Invalid age group');
+        }
+      }
+      return true;
+    }),
+
+  body('address')
+    .custom((value, { req }) => {
+      const existing = req.existingUserData?.address;
+      if (existing && (!value || value.trim() === '')) {
+        throw new Error('Address cannot be empty once set');
+      }
+      if (value && value.trim() !== '' && value.trim().length > 500) {
+        throw new Error('Address must be less than 500 characters');
+      }
+      return true;
+    }),
+
+  body('organization')
+    .custom((value, { req }) => {
+      const existing = req.existingUserData?.organization;
+      if (existing && (!value || value.trim() === '')) {
+        throw new Error('Organization cannot be empty once set');
+      }
+      if (value && value.trim() !== '' && value.trim().length > 200) {
+        throw new Error('Organization name must be less than 200 characters');
+      }
+      return true;
+    }),
+
+  body('bio')
+    .custom((value, { req }) => {
+      const existing = req.existingUserData?.bio;
+      if (existing && (!value || value.trim() === '')) {
+        throw new Error('Bio cannot be empty once set');
+      }
+      if (value && value.trim() !== '' && value.trim().length > 1000) {
+        throw new Error('Bio must be less than 1000 characters');
+      }
+      return true;
+    }),
+
+  body('country')
+    .custom((value, { req }) => {
+      const existing = req.existingUserData?.country;
+      if (existing && (!value || value.trim() === '')) {
+        throw new Error('Country cannot be empty once set');
+      }
+      if (value && value.trim() !== '') {
+        if (!/^[A-Za-z\s]{2,50}$/.test(value.trim())) {
+          throw new Error('Invalid country format');
+        }
+      }
+      return true;
+    }),
+
+  body('timezone')
+    .custom((value, { req }) => {
+      const existing = req.existingUserData?.timezone;
+      if (existing && (!value || value.trim() === '')) {
+        throw new Error('Timezone cannot be empty once set');
+      }
+      if (value && value.trim() !== '') {
+        if (value.trim().length < 3 || value.trim().length > 50) {
+          throw new Error('Invalid timezone format');
+        }
+      }
+      return true;
+    }),
+
+  // Social Profiles - allow emptying these
+  body('facebook_link')
+    .optional()
+    .custom((value) => {
+      if (value && value.trim() !== '' && !/^https?:\/\/(?:www\.)?facebook\.com\/.+/i.test(value)) {
+        throw new Error('Invalid Facebook URL');
+      }
+      return true;
+    }),
+
+  body('instagram_link')
+    .optional()
+    .custom((value) => {
+      if (value && value.trim() !== '' && !/^https?:\/\/(?:www\.)?instagram\.com\/.+/i.test(value)) {
+        throw new Error('Invalid Instagram URL');
+      }
+      return true;
+    }),
+
+  body('linkedin_link')
+    .optional()
+    .custom((value) => {
+      if (value && value.trim() !== '' && !/^https?:\/\/(?:www\.)?linkedin\.com\/.+/i.test(value)) {
+        throw new Error('Invalid LinkedIn URL');
+      }
+      return true;
+    }),
+
+  body('twitter_link')
+    .optional()
+    .custom((value) => {
+      if (value && value.trim() !== '' && !/^https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/.+/i.test(value)) {
+        throw new Error('Invalid Twitter/X URL');
+      }
+      return true;
+    }),
+
+  body('youtube_link')
+    .optional()
+    .custom((value) => {
+      if (value && value.trim() !== '' && !/^https?:\/\/(?:www\.)?youtube\.com\/.+/i.test(value)) {
+        throw new Error('Invalid YouTube URL');
+      }
+      return true;
+    }),
+
+  body('github_link')
+    .optional()
+    .custom((value) => {
+      if (value && value.trim() !== '' && !/^https?:\/\/(?:www\.)?github\.com\/.+/i.test(value)) {
+        throw new Error('Invalid GitHub URL');
+      }
+      return true;
+    }),
+
+  body('portfolio_link')
+    .optional()
+    .custom((value) => {
+      if (value && value.trim() !== '' && !/^https?:\/\/.+/i.test(value)) {
+        throw new Error('Invalid portfolio URL');
+      }
+      return true;
+    }),
+
+  // Profile Media - optional validation
+  body('user_image.url')
+    .optional()
+    .custom((value) => {
+      if (value && value.trim() !== '' && !/^https?:\/\/.+/i.test(value)) {
+        throw new Error('User image URL must be valid');
+      }
+      return true;
+    }),
+
+  body('cover_image.url')
+    .optional()
+    .custom((value) => {
+      if (value && value.trim() !== '' && !/^https?:\/\/.+/i.test(value)) {
+        throw new Error('Cover image URL must be valid');
+      }
+      return true;
+    }),
+
+  // Meta data - conditional validation for important fields
+  body('meta.date_of_birth')
+    .custom((value, { req }) => {
+      const existing = req.existingUserData?.meta?.date_of_birth;
+      if (existing && (!value || value === '')) {
+        throw new Error('Date of birth cannot be empty once set');
+      }
+      if (value && value !== '' && !Date.parse(value)) {
+        throw new Error('Date of birth must be a valid date');
+      }
+      return true;
+    }),
+
+  body('meta.gender')
+    .optional()
+    .custom((value) => {
+      // Allow empty/null/undefined values - controller will handle preservation
+      if (value === undefined || value === null || value === '' || (typeof value === 'string' && value.trim() === '')) {
+        return true;
+      }
+      
+      // Only validate if value is provided
+      const validGenders = ['male', 'female', 'non-binary', 'prefer-not-to-say', 'other'];
+      if (!validGenders.includes(value.toLowerCase())) {
+        throw new Error(`Invalid gender option. Valid options: ${validGenders.join(', ')}`);
+      }
+      return true;
+    }),
+
+  // Meta fields with specific validation
+  body('meta.experience_level')
+    .optional()
+    .custom((value) => {
+      // Allow empty values (will keep previous data in controller)
+      if (value === undefined || value === null || value === '' || (typeof value === 'string' && value.trim() === '')) {
+        return true;
+      }
+      // Validate if value is provided
+      const validLevels = ['beginner', 'intermediate', 'advanced', 'expert', 'entry-level', 'mid-level', 'senior-level'];
+      if (!validLevels.includes(value.toLowerCase())) {
+        throw new Error(`Invalid experience level. Valid options: ${validLevels.join(', ')}`);
+      }
+      return true;
+    }),
+
+  body('meta.annual_income_range')
+    .optional()
+    .custom((value) => {
+      // Allow empty values (will keep previous data in controller)
+      if (value === undefined || value === null || value === '' || (typeof value === 'string' && value.trim() === '')) {
+        return true;
+      }
+      // Validate if value is provided
+      const validRanges = [
+        'under-25k', '25k-50k', '50k-75k', '75k-100k', '100k-150k', 
+        '150k-200k', '200k-300k', '300k-500k', 'over-500k', 'prefer-not-to-say'
+      ];
+      if (!validRanges.includes(value.toLowerCase())) {
+        throw new Error(`Invalid income range. Valid options: ${validRanges.join(', ')}`);
+      }
+      return true;
+    }),
+
+  // Other optional fields that can be emptied
+  body('meta.nationality').optional().trim().isLength({ max: 100 }).withMessage('Nationality must be less than 100 characters'),
+  body('meta.occupation').optional().trim().isLength({ max: 100 }).withMessage('Occupation must be less than 100 characters'),
+  body('meta.industry').optional().trim().isLength({ max: 100 }).withMessage('Industry must be less than 100 characters'),
+  body('meta.company').optional().trim().isLength({ max: 200 }).withMessage('Company name must be less than 200 characters'),
+  
+  // Skills and certifications arrays
+  body('meta.skills').optional().isArray().withMessage('Skills must be an array'),
+  body('meta.certifications').optional().isArray().withMessage('Certifications must be an array'),
+  body('meta.languages_spoken').optional().isArray().withMessage('Languages spoken must be an array'),
+];
+
 export default {
   validateUserId,
   validateProfileUpdate,
   validatePreferencesUpdate,
   validateDeleteProfile,
-  validateComprehensiveProfileUpdate
+  validateComprehensiveProfileUpdate,
+  validateComprehensiveProfileUpdateConditional
 }; 

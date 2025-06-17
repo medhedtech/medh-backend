@@ -1,5 +1,5 @@
 import User from "../models/user-modal.js";
-import Enrollment from "../models/enrollment-model.js";
+import EnrolledCourse from "../models/enrolled-courses-model.js";
 import Course from "../models/course-model.js";
 import Quiz from "../models/quiz-model.js";
 import Order from "../models/Order.js";
@@ -609,17 +609,21 @@ export const getComprehensiveProfile = async (req, res) => {
       });
     }
 
-    // Get enrollments with comprehensive course details
-    const enrollments = await Enrollment.find({ 
-      student: userId
+    // Get enrollments with comprehensive course details using EnrolledCourse model
+    const enrollments = await EnrolledCourse.find({ 
+      student_id: userId
     })
     .populate({
-      path: 'course',
-      select: 'course_title course_subtitle course_category course_image course_level language no_of_Sessions course_duration prices tools_technologies curriculum status category_type class_type'
+      path: 'student_id', 
+      select: "full_name email role profile_image"
     })
     .populate({
-      path: 'batch',
-      select: 'batch_name start_date end_date status capacity enrolled_students assigned_instructor schedule'
+      path: 'course_id',
+      populate: {
+        path: "assigned_instructor",
+        select: 'full_name email role domain phone_numbers',
+        match: { role: { $in: ['instructor'] } }
+      },
     })
     .sort({ enrollment_date: -1 });
 
@@ -628,38 +632,37 @@ export const getComprehensiveProfile = async (req, res) => {
       total_enrolled: enrollments.length,
       active_courses: enrollments.filter(e => e.status === 'active').length,
       completed_courses: enrollments.filter(e => e.status === 'completed').length,
-      on_hold_courses: enrollments.filter(e => e.status === 'on_hold').length,
+      pending_courses: enrollments.filter(e => e.status === 'pending').length,
       cancelled_courses: enrollments.filter(e => e.status === 'cancelled').length,
+      suspended_courses: enrollments.filter(e => e.status === 'suspended').length,
       expired_courses: enrollments.filter(e => e.status === 'expired').length,
       average_progress: enrollments.length > 0 
-        ? enrollments.reduce((sum, e) => sum + (e.progress?.overall_percentage || 0), 0) / enrollments.length 
+        ? enrollments.reduce((sum, e) => sum + (e.progress || 0), 0) / enrollments.length 
         : 0,
-      total_certificates: enrollments.filter(e => e.certificate_issued).length,
-      total_payments: enrollments.reduce((sum, e) => sum + e.total_amount_paid, 0),
-      emi_enrollments: enrollments.filter(e => e.payment_plan === 'installment').length,
-      subscription_enrollments: enrollments.filter(e => e.payment_plan === 'subscription').length
+      total_certificates: enrollments.filter(e => e.is_certified).length,
+      total_payments: enrollments.reduce((sum, e) => sum + (e.payment_details?.amount || 0), 0),
+      individual_enrollments: enrollments.filter(e => e.enrollment_type === 'individual').length,
+      batch_enrollments: enrollments.filter(e => e.enrollment_type === 'batch').length
     };
 
-    // Get detailed payment history from both enrollments and orders
+    // Get detailed payment history from enrollments
     const paymentHistory = [];
     
     // From enrollments
     enrollments.forEach(enrollment => {
-      if (enrollment.payments && enrollment.payments.length > 0) {
-        enrollment.payments.forEach(payment => {
-          paymentHistory.push({
-            source: 'enrollment',
-            enrollment_id: enrollment._id,
-            course_title: enrollment.course?.course_title,
-            amount: payment.amount,
-            currency: payment.currency,
-            payment_date: payment.payment_date,
-            payment_method: payment.payment_method,
-            transaction_id: payment.transaction_id,
-            payment_status: payment.payment_status,
-            receipt_url: payment.receipt_url,
-            payment_type: 'course_enrollment'
-          });
+      if (enrollment.payment_details) {
+        paymentHistory.push({
+          source: 'enrollment',
+          enrollment_id: enrollment._id,
+          course_title: enrollment.course_id?.course_title,
+          amount: enrollment.payment_details.amount,
+          currency: enrollment.payment_details.currency,
+          payment_date: enrollment.payment_details.payment_date,
+          payment_method: enrollment.payment_details.payment_method,
+          transaction_id: enrollment.payment_details.payment_id,
+          payment_status: enrollment.payment_status,
+          receipt_url: enrollment.payment_details.receipt_url,
+          payment_type: 'course_enrollment'
         });
       }
     });
@@ -695,20 +698,6 @@ export const getComprehensiveProfile = async (req, res) => {
         error: orderError.message 
       });
     }
-
-    // Get EMI details for active EMI enrollments
-    const emiDetails = enrollments
-      .filter(e => e.payment_plan === 'installment')
-      .map(e => ({
-        enrollment_id: e._id,
-        course_title: e.course?.course_title,
-        total_amount: e.pricing_snapshot.final_price,
-        paid_amount: e.total_amount_paid,
-        remaining_amount: e.pricing_snapshot.final_price - e.total_amount_paid,
-        installments_count: e.installments_count,
-        next_payment_date: e.next_payment_date,
-        payment_status: e.total_amount_paid >= e.pricing_snapshot.final_price ? 'completed' : 'active'
-      }));
 
     // Get quiz/assessment results with detailed info
     const quizResults = await Quiz.find({ 
@@ -807,8 +796,7 @@ export const getComprehensiveProfile = async (req, res) => {
       lifetime_value: Math.max(courseStats.total_payments, totalSpentFromPayments),
       average_course_cost: courseStats.total_enrolled > 0 ? totalSpentFromPayments / courseStats.total_enrolled : 0,
       payment_methods_used: [...new Set(paymentHistory.map(p => p.payment_method).filter(Boolean))],
-      pending_payments: emiDetails.filter(e => e.payment_status === 'active').length,
-      total_emi_amount: emiDetails.reduce((sum, e) => sum + e.remaining_amount, 0),
+      pending_payments: enrollments.filter(e => e.payment_status === 'pending').length,
       successful_transactions: paymentHistory.filter(p => ['completed', 'success', 'paid'].includes(p.payment_status?.toLowerCase())).length,
       failed_transactions: paymentHistory.filter(p => ['failed', 'cancelled', 'rejected'].includes(p.payment_status?.toLowerCase())).length,
       pending_transactions: paymentHistory.filter(p => ['pending', 'processing'].includes(p.payment_status?.toLowerCase())).length,
@@ -877,39 +865,24 @@ export const getComprehensiveProfile = async (req, res) => {
     // Calculate account age
     const accountAge = Math.floor((new Date() - user.created_at) / (1000 * 60 * 60 * 24));
 
-    // Next upcoming courses or batches
-    const upcomingCourses = enrollments
-      .filter(e => e.status === 'active' && e.batch?.start_date > new Date())
-      .sort((a, b) => new Date(a.batch.start_date) - new Date(b.batch.start_date))
-      .slice(0, 5)
-      .map(e => ({
-        enrollment_id: e._id,
-        course_title: e.course.course_title,
-        course_image: e.course.course_image,
-        start_date: e.batch?.start_date,
-        batch_name: e.batch?.batch_name,
-        instructor: e.batch?.assigned_instructor,
-        schedule: e.batch?.schedule
-      }));
-
-    // Current active learning with curriculum progress
+    // Current active learning
     const activeLearning = enrollments
-      .filter(e => e.status === 'active' && (e.progress?.overall_percentage > 0 && e.progress?.overall_percentage < 100))
-      .sort((a, b) => new Date(b.progress?.last_activity_date || 0) - new Date(a.progress?.last_activity_date || 0))
+      .filter(e => e.status === 'active' && (e.progress > 0 && e.progress < 100))
+      .sort((a, b) => new Date(b.last_accessed || 0) - new Date(a.last_accessed || 0))
       .slice(0, 10)
       .map(e => ({
         enrollment_id: e._id,
-        course_title: e.course.course_title,
-        course_image: e.course.course_image,
-        progress: e.progress?.overall_percentage || 0,
-        lessons_completed: e.progress?.lessons_completed || 0,
-        last_accessed: e.progress?.last_activity_date,
-        curriculum_progress: e.progress?.detailed_progress || []
+        course_title: e.course_id?.course_title,
+        course_image: e.course_id?.course_image,
+        progress: e.progress || 0,
+        lessons_completed: e.completed_lessons?.length || 0,
+        last_accessed: e.last_accessed,
+        instructor: e.course_id?.assigned_instructor
       }));
 
     // Course categories and learning paths
     const learningPaths = enrollments.reduce((paths, enrollment) => {
-      const category = enrollment.course?.course_category;
+      const category = enrollment.course_id?.course_category;
       if (category) {
         if (!paths[category]) {
           paths[category] = {
@@ -921,7 +894,7 @@ export const getComprehensiveProfile = async (req, res) => {
         }
         paths[category].courses_count++;
         if (enrollment.status === 'completed') paths[category].completed_count++;
-        paths[category].total_progress += enrollment.progress?.overall_percentage || 0;
+        paths[category].total_progress += enrollment.progress || 0;
       }
       return paths;
     }, {});
@@ -937,6 +910,13 @@ export const getComprehensiveProfile = async (req, res) => {
       view_type: 'comprehensive_view',
       timestamp: new Date(),
       sections_accessed: ['basic_info', 'learning_analytics', 'payment_history', 'device_info']
+    });
+
+    // Transform enrollments to match the enrolled student endpoint format
+    const enrollmentsWithPaymentInfo = enrollments.map((enrollment) => {
+      const enrollmentObj = enrollment.toObject();
+      enrollmentObj.payment_type = "course";
+      return enrollmentObj;
     });
 
     // Comprehensive response structure for profile page
@@ -1012,57 +992,12 @@ export const getComprehensiveProfile = async (req, res) => {
         // Comprehensive learning analytics
         learning_analytics: learningAnalytics,
 
-        // Detailed course and enrollment data
+        // Detailed course and enrollment data - matching enrolled student endpoint format
         education: {
           course_stats: courseStats,
           learning_paths: learningPathsArray,
-          enrollments: enrollments.map(e => ({
-            id: e._id,
-            course: {
-              id: e.course._id,
-              title: e.course.course_title,
-              subtitle: e.course.course_subtitle,
-              description: e.course.course_description,
-              image: e.course.course_image,
-              level: e.course.course_level,
-              category: e.course.course_category,
-              language: e.course.language,
-              duration: e.course.course_duration,
-              sessions: e.course.no_of_Sessions,
-              class_type: e.course.class_type,
-              status: e.course.status,
-              tools_technologies: e.course.tools_technologies
-            },
-            enrollment_date: e.enrollment_date,
-            status: e.status,
-            enrollment_type: e.enrollment_type,
-            enrollment_source: e.enrollment_source,
-            access_expiry_date: e.access_expiry_date,
-            progress: {
-              overall_percentage: e.progress?.overall_percentage || 0,
-              lessons_completed: e.progress?.lessons_completed || 0,
-              last_activity_date: e.progress?.last_activity_date,
-              detailed_progress: e.progress?.detailed_progress || []
-            },
-            batch_info: e.batch ? {
-              id: e.batch._id,
-              name: e.batch.batch_name,
-              start_date: e.batch.start_date,
-              end_date: e.batch.end_date,
-              status: e.batch.status,
-              capacity: e.batch.capacity,
-              enrolled_students: e.batch.enrolled_students,
-              instructor: e.batch.assigned_instructor,
-              schedule: e.batch.schedule
-            } : null,
-            pricing: e.pricing_snapshot,
-            payment_plan: e.payment_plan,
-            total_amount_paid: e.total_amount_paid,
-            certificate_issued: e.certificate_issued,
-            certificate_id: e.certificate_id
-          })),
+          enrollments: enrollmentsWithPaymentInfo,
           active_learning: activeLearning,
-          upcoming_courses: upcomingCourses,
           quiz_results: quizResults.map(quiz => ({
             quiz_id: quiz._id,
             title: quiz.title,
@@ -1113,7 +1048,6 @@ export const getComprehensiveProfile = async (req, res) => {
         // Comprehensive financial information
         financial_metrics: financialMetrics,
         payment_history: paymentHistory.sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date)),
-        emi_details: emiDetails,
 
         // Device and security information
         device_info: deviceInfo,
@@ -1164,8 +1098,8 @@ export const getComprehensiveProfile = async (req, res) => {
                            engagementMetrics.avg_session_duration > 900 ? 'medium' : 'low',
           progress_rate: courseStats.average_progress,
           community_involvement: socialMetrics.community_reputation,
-          payment_health: emiDetails.length > 0 ? 
-                         (emiDetails.filter(e => e.payment_status === 'completed').length / emiDetails.length * 100) : 100
+          payment_health: enrollments.length > 0 ? 
+                         (enrollments.filter(e => e.payment_status === 'completed').length / enrollments.length * 100) : 100
         }
       }
     };
@@ -1175,8 +1109,7 @@ export const getComprehensiveProfile = async (req, res) => {
       profileCompletion,
       coursesEnrolled: courseStats.total_enrolled,
       engagementLevel: response.data.performance_indicators.engagement_level,
-      paymentHistory: paymentHistory.length,
-      emiAccounts: emiDetails.length
+      paymentHistory: paymentHistory.length
     });
 
     res.status(200).json(response);
@@ -1273,17 +1206,62 @@ export const updateComprehensiveProfile = async (req, res) => {
       }
     }
 
-    // Handle nested object updates for meta data
+        // Handle nested object updates for meta data
     if (updateData.meta) {
-      updateData.meta = { 
-        ...user.meta?.toObject(), 
-        ...updateData.meta,
-        // Validate specific fields
-        date_of_birth: updateData.meta.date_of_birth ? new Date(updateData.meta.date_of_birth) : user.meta?.date_of_birth,
-        graduation_year: updateData.meta.graduation_year ? 
-          Math.min(Math.max(updateData.meta.graduation_year, 1950), new Date().getFullYear() + 10) : 
-          user.meta?.graduation_year
-      };
+      const existingMeta = user.meta?.toObject() || {};
+      const newMeta = { ...existingMeta };
+      
+      // Clean up empty string values from the request before processing
+      const cleanedMeta = {};
+      Object.keys(updateData.meta).forEach(key => {
+        const value = updateData.meta[key];
+        
+        // Only include non-empty values in the cleaned meta
+        if (value !== undefined && value !== null) {
+          if (typeof value === 'string') {
+            // Only include non-empty strings
+            if (value.trim() !== '') {
+              cleanedMeta[key] = value.trim();
+            }
+            // If empty string, don't include it (preserves existing data)
+          } else if (Array.isArray(value)) {
+            // Always include arrays (even empty ones)
+            cleanedMeta[key] = value;
+          } else {
+            // Include other types (numbers, booleans, etc.)
+            cleanedMeta[key] = value;
+          }
+        }
+      });
+      
+      // Process each cleaned meta field
+      Object.keys(cleanedMeta).forEach(key => {
+        const value = cleanedMeta[key];
+        
+        // Handle special cases for normalization
+        if (key === 'gender' && typeof value === 'string') {
+          // Normalize gender to lowercase for consistency
+          newMeta[key] = value.toLowerCase();
+        } else if (key === 'experience_level' && typeof value === 'string') {
+          // Normalize experience level to lowercase
+          newMeta[key] = value.toLowerCase();
+        } else if (key === 'annual_income_range' && typeof value === 'string') {
+          // Normalize income range to lowercase
+          newMeta[key] = value.toLowerCase();
+        } else if (key === 'date_of_birth' && typeof value === 'string') {
+          // Handle date of birth
+          newMeta[key] = new Date(value);
+        } else if (key === 'graduation_year' && (typeof value === 'string' || typeof value === 'number')) {
+          // Handle graduation year with validation
+          const year = parseInt(value);
+          newMeta[key] = Math.min(Math.max(year, 1950), new Date().getFullYear() + 10);
+        } else {
+          // Update with new value
+          newMeta[key] = value;
+        }
+      });
+      
+      updateData.meta = newMeta;
     }
 
     // Handle user preferences updates

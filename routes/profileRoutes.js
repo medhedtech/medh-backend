@@ -14,7 +14,8 @@ import {
   validateProfileUpdate,
   validatePreferencesUpdate,
   validateDeleteProfile,
-  validateComprehensiveProfileUpdate
+  validateComprehensiveProfileUpdate,
+  validateComprehensiveProfileUpdateConditional
 } from "../validations/profileValidation.js";
 import { authenticateToken, authorize } from "../middleware/auth.js";
 import rateLimit from "express-rate-limit";
@@ -44,7 +45,20 @@ router.put(
   "/me/comprehensive",
   authenticateToken,
   authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
-  validateComprehensiveProfileUpdate,
+  validateComprehensiveProfileUpdateConditional,
+  updateComprehensiveProfile
+);
+
+/**
+ * @route   PATCH /api/v1/profile/me/comprehensive
+ * @desc    Partially update current user's comprehensive profile (preserves existing data for empty fields)
+ * @access  Private
+ */
+router.patch(
+  "/me/comprehensive",
+  authenticateToken,
+  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  validateComprehensiveProfileUpdateConditional,
   updateComprehensiveProfile
 );
 
