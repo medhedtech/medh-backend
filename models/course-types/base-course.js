@@ -707,6 +707,7 @@ const baseCourseSchema = new Schema(
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
     discriminatorKey: "course_type", // This allows us to create different course types
+    collection: "courses", // Use the same collection as legacy courses
   }
 );
 
