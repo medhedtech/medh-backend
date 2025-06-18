@@ -51,6 +51,7 @@ import enhancedPaymentRoutes from "./enhanced-payment-routes.js";
 import aiRoutes from "./aiRoutes.js";
 import announcementRoutes from "./announcementRoutes.js";
 import profileRoutes from "./profileRoutes.js";
+import universalFormRoutes from "./universalFormRoutes.js";
 
 const router = express.Router();
 
@@ -238,6 +239,10 @@ const moduleRoutes = [
   {
     path: "/profile",
     route: profileRoutes,
+  },
+  {
+    path: "/forms",
+    route: universalFormRoutes,
   }
 ];
 

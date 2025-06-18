@@ -13,7 +13,7 @@ router.use(authenticateToken);
 // Create enrollment
 router.post(
   "/create",
-  authorize(["student"]),
+  authorize(["student", "admin", "super-admin"]),
   validateEnrollment,
   enrollerCourseController.createEnrolledCourse,
 );
@@ -21,7 +21,7 @@ router.post(
 // Get all enrollments with pagination and filters
 router.get(
   "/get",
-  authorize(["admin", "instructor"]),
+  authorize(["admin", "instructor", "super-admin"]),
   enrollerCourseController.getAllEnrolledCourses,
 );
 
@@ -42,7 +42,7 @@ router.get(
 // Update enrollment
 router.post(
   "/update/:id",
-  authorize(["admin", "instructor"]),
+  authorize(["admin", "instructor", "super-admin"]),
   validateObjectId("id"),
   validateEnrollment,
   enrollerCourseController.updateEnrolledCourse,
@@ -51,7 +51,7 @@ router.post(
 // Delete enrollment
 router.delete(
   "/delete/:id",
-  authorize(["admin"]),
+  authorize(["admin", "super-admin"]),
   validateObjectId("id"),
   enrollerCourseController.deleteEnrolledCourse,
 );
@@ -94,14 +94,14 @@ router.get(
 // Mark course as completed
 router.post(
   "/mark-completed",
-  authorize(["admin", "instructor"]),
+  authorize(["admin", "instructor", "super-admin"]),
   enrollerCourseController.markCourseAsCompleted,
 );
 
 // Get all students with enrolled courses
 router.get(
   "/get-enrolled-students",
-  authorize(["admin", "instructor"]),
+  authorize(["admin", "instructor", "super-admin"]),
   enrollerCourseController.getAllStudentsWithEnrolledCourses,
 );
 
@@ -117,14 +117,14 @@ router.get(
 // Save a course
 router.post(
   "/save-course",
-  authorize(["student"]),
+  authorize(["student", "admin", "super-admin"]),
   enrollerCourseController.saveCourse,
 );
 
 // Remove a saved course
 router.delete(
   "/save-course/:course_id",
-  authorize(["student"]),
+  authorize(["student", "admin", "super-admin"]),
   validateObjectId("course_id"),
   enrollerCourseController.removeSavedCourse,
 );
@@ -132,14 +132,14 @@ router.delete(
 // Get all saved courses for a student
 router.get(
   "/saved-courses",
-  authorize(["student"]),
+  authorize(["student", "admin", "super-admin"]),
   enrollerCourseController.getSavedCourses,
 );
 
 // Convert a saved course to an enrollment
 router.post(
   "/convert-saved/:course_id",
-  authorize(["student"]),
+  authorize(["student", "admin", "super-admin"]),
   validateObjectId("course_id"),
   enrollerCourseController.convertSavedCourseToEnrollment,
 );
