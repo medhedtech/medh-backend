@@ -5,9 +5,53 @@ const contactInfoSchema = new mongoose.Schema({
   full_name: { type: String, required: true, trim: true },
   first_name: { type: String, trim: true },
   last_name: { type: String, trim: true },
-  email: { type: String, required: true, trim: true, lowercase: true },
-  phone_number: { type: String, trim: true },
-  country: { type: String, trim: true },
+  email: { 
+    type: String, 
+    required: true, 
+    trim: true, 
+    lowercase: true,
+    validate: {
+      validator: function(email) {
+        return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
+      },
+      message: 'Please enter a valid email address'
+    }
+  },
+  phone_number: { 
+    type: String, 
+    trim: true,
+    validate: {
+      validator: function(phone) {
+        if (!phone) return true; // Allow empty for optional forms
+        
+        // Remove any non-digit characters for validation
+        const cleanPhone = phone.replace(/\D/g, '');
+        
+        // Check if it already includes country code (starts with +)
+        if (phone.startsWith('+')) {
+          return /^\+[1-9]\d{1,14}$/.test(phone);
+        }
+        
+        // For corporate training forms, ensure minimum 10 digits
+        return cleanPhone.length >= 10;
+      },
+      message: 'Please enter a valid phone number'
+    }
+  },
+  country: { 
+    type: String, 
+    trim: true,
+    validate: {
+      validator: function(country) {
+        // For corporate training forms, country is required
+        if (this.parent().form_type === 'corporate_training_inquiry') {
+          return country && country.length > 0;
+        }
+        return true;
+      },
+      message: 'Country is required for corporate training inquiries'
+    }
+  },
   country_code: { type: String, trim: true, default: "+91" },
   address: { type: String, trim: true },
   city: { type: String, trim: true },
@@ -17,9 +61,54 @@ const contactInfoSchema = new mongoose.Schema({
 
 // Professional information schema
 const professionalInfoSchema = new mongoose.Schema({
-  designation: { type: String, trim: true },
-  company_name: { type: String, trim: true },
-  company_website: { type: String, trim: true },
+  designation: { 
+    type: String, 
+    trim: true,
+    validate: {
+      validator: function(designation) {
+        // For corporate training forms, designation is required
+        if (this.parent().form_type === 'corporate_training_inquiry') {
+          return designation && designation.length > 0;
+        }
+        return true;
+      },
+      message: 'Designation is required for corporate training inquiries'
+    }
+  },
+  company_name: { 
+    type: String, 
+    trim: true,
+    validate: {
+      validator: function(company_name) {
+        // For corporate training forms, company name is required
+        if (this.parent().form_type === 'corporate_training_inquiry') {
+          return company_name && company_name.length > 0;
+        }
+        return true;
+      },
+      message: 'Company name is required for corporate training inquiries'
+    }
+  },
+  company_website: { 
+    type: String, 
+    trim: true,
+    validate: {
+      validator: function(website) {
+        if (!website) {
+          // For corporate training forms, website is required
+          if (this.parent().form_type === 'corporate_training_inquiry') {
+            return false;
+          }
+          return true;
+        }
+        
+        // Validate website URL format
+        const websiteRegex = /^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,6}(\/[a-zA-Z0-9-]*)*$/;
+        return websiteRegex.test(website);
+      },
+      message: 'Please enter a valid website URL'
+    }
+  },
   organization: { type: String, trim: true },
   industry: { type: String, trim: true },
   experience_level: { 
@@ -156,6 +245,44 @@ const trainingRequirementsSchema = new mongoose.Schema({
   },
 }, { _id: false });
 
+// Hire requirements schema for "Hire from Medh" forms
+const hireRequirementsSchema = new mongoose.Schema({
+  requirement_type: { 
+    type: String, 
+    enum: ['Hire Medh-trained Candidates', 'Corporate Upskilling/Training', 'Both'],
+    trim: true,
+    required: function() {
+      return this.parent().form_type === 'hire_from_medh_inquiry';
+    }
+  },
+  training_domain: { 
+    type: String, 
+    trim: true,
+    required: function() {
+      return this.parent().form_type === 'hire_from_medh_inquiry';
+    }
+  },
+  start_date: { type: Date },
+  budget_range: { type: String, trim: true },
+  detailed_requirements: { 
+    type: String, 
+    trim: true,
+    minlength: [20, 'Please provide detailed requirements (minimum 20 characters)'],
+    required: function() {
+      return this.parent().form_type === 'hire_from_medh_inquiry';
+    }
+  },
+  team_size: { 
+    type: String, 
+    enum: ['1–5', '6–20', '21–50', '50+'],
+    trim: true,
+    required: function() {
+      return this.parent().form_type === 'hire_from_medh_inquiry';
+    }
+  },
+  document_upload: { type: String, trim: true }, // For uploaded JD or documents
+}, { _id: false });
+
 // Files and documents schema
 const fileSchema = new mongoose.Schema({
   resume_url: { type: String, trim: true },
@@ -244,6 +371,7 @@ const universalFormSchema = new mongoose.Schema(
         'contact_form',
         'blog_contact_form',
         'corporate_training_inquiry',
+        'hire_from_medh_inquiry',
         
         // Registration Forms
         'general_registration',
@@ -295,7 +423,20 @@ const universalFormSchema = new mongoose.Schema(
       type: String, 
       required: true,
       trim: true,
-      maxlength: 2000
+      maxlength: 2000,
+      validate: {
+        validator: function(message) {
+          if (!message || message.trim().length === 0) {
+            return false;
+          }
+          // For corporate training forms, require more detailed message
+          if (this.form_type === 'corporate_training_inquiry') {
+            return message.trim().length >= 20;
+          }
+          return true;
+        },
+        message: 'Please provide detailed information about your training requirements (minimum 20 characters)'
+      }
     },
     subject: { 
       type: String, 
@@ -314,6 +455,7 @@ const universalFormSchema = new mongoose.Schema(
     certifications: [certificationSchema],
     references: [referenceSchema],
     training_requirements: trainingRequirementsSchema,
+    hire_requirements: hireRequirementsSchema,
     files: fileSchema,
     job_preferences: jobPreferencesSchema,
     course_preferences: coursePreferencesSchema,
@@ -379,8 +521,18 @@ const universalFormSchema = new mongoose.Schema(
         return this.terms_accepted;
       }
     },
-    accept: { // Alternative field name for some forms
+    accept: { // Alternative field name for corporate training and other forms
       type: Boolean,
+      validate: {
+        validator: function(v) {
+          // For corporate training forms, accept field is required and must be true
+          if (this.form_type === 'corporate_training_inquiry') {
+            return v === true;
+          }
+          return true;
+        },
+        message: 'You must accept the terms and privacy policy to proceed'
+      },
       default: function() {
         return this.terms_accepted;
       }
@@ -554,7 +706,22 @@ universalFormSchema.pre('save', function(next) {
   // Sync alternative consent fields
   if (this.isModified('terms_accepted')) {
     this.agree_terms = this.terms_accepted;
-    this.accept = this.terms_accepted;
+    // Only sync accept if it's not already explicitly set (for corporate training forms)
+    if (!this.isModified('accept')) {
+      this.accept = this.terms_accepted;
+    }
+  }
+  
+  // Sync terms_accepted from accept field (for corporate training forms)
+  if (this.isModified('accept') && this.form_type === 'corporate_training_inquiry') {
+    this.terms_accepted = this.accept;
+    this.privacy_policy_accepted = this.accept;
+    this.agree_terms = this.accept;
+  }
+  
+  // For corporate training forms, ensure professional_info is populated
+  if (this.form_type === 'corporate_training_inquiry' && !this.professional_info) {
+    this.professional_info = {};
   }
   
   next();
@@ -575,8 +742,15 @@ universalFormSchema.methods.calculateCompletionPercentage = function() {
   // Form-type specific required fields
   const requiredFieldsByType = {
     corporate_training_inquiry: [
-      'contact_info.phone_number', 'professional_info.designation', 
-      'professional_info.company_name', 'professional_info.company_website'
+      'contact_info.phone_number', 'contact_info.country',
+      'professional_info.designation', 'professional_info.company_name', 
+      'professional_info.company_website', 'accept'
+    ],
+    hire_from_medh_inquiry: [
+      'contact_info.phone_number', 'contact_info.country',
+      'professional_info.company_name', 'professional_info.department',
+      'hire_requirements.requirement_type', 'hire_requirements.training_domain',
+      'hire_requirements.detailed_requirements', 'hire_requirements.team_size', 'accept'
     ],
     placement_form: [
       'contact_info.first_name', 'contact_info.last_name', 'files.resume_url',
@@ -713,6 +887,76 @@ universalFormSchema.methods.updateStatus = function(newStatus, userId = null) {
     this.handled_by = userId;
   }
   return this.save();
+};
+
+// Method to create corporate training inquiry from API data
+universalFormSchema.statics.createCorporateTraining = function(data) {
+  const formData = {
+    form_type: 'corporate_training_inquiry',
+    contact_info: {
+      full_name: data.full_name,
+      email: data.email,
+      phone_number: data.phone_number, // Should already include country code
+      country: data.country
+    },
+    professional_info: {
+      designation: data.designation,
+      company_name: data.company_name,
+      company_website: data.company_website
+    },
+    message: data.message,
+    accept: data.accept,
+    terms_accepted: data.accept,
+    privacy_policy_accepted: data.accept,
+    marketing_consent: false,
+    status: 'submitted',
+    priority: 'high', // Corporate training inquiries are high priority
+    source: 'website'
+  };
+  
+  return this.create(formData);
+};
+
+// Method to create hire from medh inquiry from API data
+universalFormSchema.statics.createHireFromMedh = function(data) {
+  const formData = {
+    form_type: 'hire_from_medh_inquiry',
+    contact_info: {
+      full_name: data.full_name,
+      email: data.email,
+      phone_number: data.phone, // Using 'phone' as per form schema
+      country: data.country
+    },
+    professional_info: {
+      company_name: data.company_name,
+      company_website: data.company_website,
+      department: data.department
+    },
+    hire_requirements: {
+      requirement_type: data.requirement_type,
+      training_domain: data.training_domain,
+      start_date: data.start_date ? new Date(data.start_date) : null,
+      budget_range: data.budget_range,
+      detailed_requirements: data.detailed_requirements,
+      team_size: data.team_size,
+      document_upload: data.document_upload
+    },
+    message: data.detailed_requirements, // Use detailed requirements as message
+    accept: data.terms_accepted,
+    terms_accepted: data.terms_accepted,
+    privacy_policy_accepted: data.terms_accepted,
+    marketing_consent: false,
+    status: 'submitted',
+    priority: 'high', // Hire from Medh inquiries are high priority
+    source: 'website',
+    total_steps: 4,
+    current_step: 4,
+    completed_steps: [1, 2, 3, 4],
+    is_complete: true,
+    completion_percentage: 100
+  };
+  
+  return this.create(formData);
 };
 
 universalFormSchema.methods.markComplete = function() {

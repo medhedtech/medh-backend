@@ -52,8 +52,10 @@ import aiRoutes from "./aiRoutes.js";
 import announcementRoutes from "./announcementRoutes.js";
 import profileRoutes from "./profileRoutes.js";
 import universalFormRoutes from "./universalFormRoutes.js";
+import formSchemaRoutes from "./form-schema-routes.js";
 import demoBookingRoutes from "./demo-bookingRoutes.js";
 import demoFeedbackRoutes from "./demo-feedbackRoutes.js";
+import hireFromMedhRoutes from "./hire-from-medh-routes.js";
 
 const router = express.Router();
 
@@ -203,6 +205,10 @@ const moduleRoutes = [
     route: corporateRoute,
   },
   {
+    path: "/hire-from-medh",
+    route: hireFromMedhRoutes,
+  },
+  {
     path: "/payments",
     route: paymentRoutes,
   },
@@ -245,6 +251,10 @@ const moduleRoutes = [
   {
     path: "/forms",
     route: universalFormRoutes,
+  },
+  {
+    path: "/forms/schema",
+    route: formSchemaRoutes,
   },
   {
     path: "/demo-booking",
