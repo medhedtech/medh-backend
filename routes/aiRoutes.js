@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
+import rateLimit from 'express-rate-limit';
 
 // Import all AI controllers
 import {
@@ -17,10 +18,45 @@ import {
 import {
   enhanceContent,
   generateContentSuggestions,
-  generateMetaDescription as generateMetaDescriptionLegacy
+  enhanceBlogContent,
+  rewriteBlogContent,
+  expandBlogContent,
+  generateFreshBlogContent,
+  generateBlogSEO,
+  analyzeBlogContent,
+  generateBlogTags,
+  generateSlug,
+  healthCheck,
+  getCapabilities
 } from '../controllers/aiContentController.js';
 
 const router = express.Router();
+
+// Rate limiting for AI endpoints
+const aiRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30, // limit each IP to 30 requests per windowMs
+  message: {
+    success: false,
+    message: 'Too many AI requests from this IP, please try again later.',
+    retryAfter: '15 minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Premium AI features rate limiting (more restrictive)
+const premiumAIRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // limit each IP to 10 requests per windowMs for expensive operations
+  message: {
+    success: false,
+    message: 'Too many premium AI requests from this IP, please try again later.',
+    retryAfter: '15 minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // ============================================================================
 // BLOG AI ROUTES - Complete blog generation and management
@@ -152,7 +188,7 @@ router.post('/content/suggestions', authenticateToken, generateContentSuggestion
  * @access Private
  * @deprecated Use /blog/meta-description instead
  */
-router.post('/content/meta-description', authenticateToken, generateMetaDescriptionLegacy);
+router.post('/content/meta-description', authenticateToken, generateMetaDescription);
 
 // ============================================================================
 // FUTURE AI FEATURES - Planned endpoints for expansion
@@ -205,122 +241,14 @@ router.post('/content/meta-description', authenticateToken, generateMetaDescript
  * @desc Check overall AI system health
  * @access Private
  */
-router.get('/health', authenticateToken, async (req, res) => {
-  try {
-    // Aggregate health status from all AI services
-    const blogHealth = await getAIHealthStatus(req, { 
-      ...res, 
-      status: () => ({ json: (data) => data }),
-      json: (data) => data 
-    });
-    
-    const systemHealth = {
-      status: 'healthy',
-      services: {
-        blog: blogHealth.success ? 'healthy' : 'unhealthy',
-        // TODO: Add other AI services
-        // image: 'not-implemented',
-        // seo: 'not-implemented',
-        // social: 'not-implemented'
-      },
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV
-    };
-    
-    const overallHealthy = Object.values(systemHealth.services).every(
-      status => status === 'healthy' || status === 'not-implemented'
-    );
-    
-    res.status(overallHealthy ? 200 : 503).json({
-      success: overallHealthy,
-      data: systemHealth,
-      message: overallHealthy ? 'AI system is healthy' : 'Some AI services are experiencing issues'
-    });
-    
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'AI system health check failed',
-      error: error.message
-    });
-  }
-});
+router.get('/health', healthCheck);
 
 /**
  * @route GET /api/ai/capabilities
  * @desc Get available AI capabilities and features
  * @access Private
  */
-router.get('/capabilities', authenticateToken, (req, res) => {
-  const capabilities = {
-    blog: {
-      available: true,
-      features: [
-        'generate-from-prompt',
-        'generate-content', 
-        'suggestions',
-        'enhance',
-        'meta-description',
-        'tags',
-        'stats'
-      ],
-      approaches: ['comprehensive', 'creative', 'professional', 'technical'],
-      enhancementTypes: ['improve', 'rewrite', 'expand', 'summarize']
-    },
-    content: {
-      available: true,
-      features: ['enhance', 'suggestions', 'meta-description'],
-      status: 'legacy - use blog endpoints instead'
-    },
-    image: {
-      available: false,
-      features: ['generate', 'edit', 'optimize'],
-      status: 'planned'
-    },
-    seo: {
-      available: false,
-      features: ['analyze', 'keywords', 'optimize'],
-      status: 'planned'
-    },
-    social: {
-      available: false,
-      features: ['posts', 'hashtags', 'captions'],
-      status: 'planned'
-    },
-    course: {
-      available: false,
-      features: ['outline', 'content', 'quiz'],
-      status: 'planned'
-    },
-    marketing: {
-      available: false,
-      features: ['emails', 'ads', 'landing-page'],
-      status: 'planned'
-    },
-    analytics: {
-      available: false,
-      features: ['insights', 'reports', 'predictions'],
-      status: 'planned'
-    },
-    translation: {
-      available: false,
-      features: ['content', 'batch'],
-      status: 'planned'
-    },
-    audio: {
-      available: false,
-      features: ['transcribe', 'generate'],
-      status: 'planned'
-    }
-  };
-  
-  res.status(200).json({
-    success: true,
-    data: capabilities,
-    message: 'AI capabilities retrieved successfully',
-    lastUpdated: new Date().toISOString()
-  });
-});
+router.get('/capabilities', getCapabilities);
 
 /**
  * @route GET /api/ai/usage
@@ -371,5 +299,23 @@ router.get('/usage', authenticateToken, async (req, res) => {
     });
   }
 });
+
+// Authentication required for all AI content generation endpoints
+router.use(authenticateToken);
+
+// Blog Content Enhancement Endpoints
+router.post('/enhance-blog-content', aiRateLimit, enhanceBlogContent);
+router.post('/rewrite-blog-content', premiumAIRateLimit, rewriteBlogContent);
+router.post('/expand-blog-content', premiumAIRateLimit, expandBlogContent);
+router.post('/generate-blog-content', premiumAIRateLimit, generateFreshBlogContent);
+
+// SEO and Optimization Endpoints
+router.post('/generate-blog-seo', aiRateLimit, generateBlogSEO);
+router.post('/generate-blog-tags', aiRateLimit, generateBlogTags);
+router.post('/generate-meta-description', aiRateLimit, generateMetaDescription);
+router.post('/generate-slug', aiRateLimit, generateSlug);
+
+// Analysis Endpoints
+router.post('/analyze-blog-content', aiRateLimit, analyzeBlogContent);
 
 export default router; 

@@ -13,6 +13,7 @@ import emailService from "../services/emailService.js";
 import logger from "../utils/logger.js";
 import userValidation from "../validations/userValidation.js";
 import jwtUtils from "../utils/jwt.js";
+import dbUtils from "../utils/dbUtils.js";
 import { validationResult } from "express-validator";
 import nodemailer from "nodemailer";
 import geoip from "geoip-lite";
@@ -217,32 +218,76 @@ class AuthController {
 
   /**
    * Change password for authenticated user
+   * Enhanced with better security, validation, and notifications
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
   async changePassword(req, res) {
     try {
-      const { currentPassword, newPassword } = req.body;
-      const userId = req.user.id; // Assuming middleware sets req.user
+      const { currentPassword, newPassword, confirmPassword, invalidateAllSessions = false } = req.body;
+      const userId = req.user.id;
 
-      // Validate input
-      if (!currentPassword || !newPassword) {
+      // Input validation
+      if (!currentPassword || !newPassword || !confirmPassword) {
         return res.status(400).json({
           success: false,
-          message: "Current password and new password are required.",
+          message: "Current password, new password, and password confirmation are required.",
+          errors: {
+            currentPassword: !currentPassword ? "Current password is required" : null,
+            newPassword: !newPassword ? "New password is required" : null,
+            confirmPassword: !confirmPassword ? "Password confirmation is required" : null,
+          }
         });
       }
 
-      // Basic password validation
-      if (newPassword.length < 6) {
+      // Password confirmation validation
+      if (newPassword !== confirmPassword) {
         return res.status(400).json({
           success: false,
-          message: "New password must be at least 6 characters long.",
+          message: "New password and confirmation do not match.",
+          errors: {
+            confirmPassword: "Password confirmation does not match"
+          }
         });
       }
 
-      // Find user
-      const user = await User.findById(userId);
+      // Enhanced password validation
+      const passwordValidation = this.validatePasswordStrength(newPassword);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          message: "Password does not meet security requirements.",
+          errors: {
+            newPassword: passwordValidation.errors
+          },
+          requirements: passwordValidation.requirements
+        });
+      }
+
+      // Find user with retry logic for database issues
+      // Use the same method as login to ensure consistency
+      let user;
+      try {
+        user = await User.findById(userId);
+        if (!user) {
+          // Fallback: try finding by email from token
+          const tokenUser = await User.findById(req.user.id);
+          user = tokenUser;
+        }
+      } catch (dbError) {
+        logger.error("Database error during password change - user lookup", {
+          error: dbError.message,
+          userId,
+          stack: dbError.stack
+        });
+        
+        return res.status(500).json({
+          success: false,
+          message: "Database connection issue. Please try again in a moment.",
+          error: "Database temporarily unavailable"
+        });
+      }
+
       if (!user) {
         return res.status(404).json({
           success: false,
@@ -250,35 +295,336 @@ class AuthController {
         });
       }
 
-      // Verify current password
-      const isMatch = await bcrypt.compare(currentPassword, user.password);
-      if (!isMatch) {
-        return res.status(400).json({
+      // Check if account is locked
+      if (user.account_locked_until && user.account_locked_until > Date.now()) {
+        return res.status(423).json({
           success: false,
-          message: "Current password is incorrect",
+          message: "Account is temporarily locked. Please try again later.",
+          locked_until: user.account_locked_until,
         });
       }
 
-      // Hash the new password
-      const salt = await bcrypt.genSalt(10);
+      // Verify current password
+      const isMatch = await user.comparePassword(currentPassword);
+      
+      if (!isMatch) {
+        // Increment failed attempts for password changes
+        user.password_change_attempts = (user.password_change_attempts || 0) + 1;
+        
+        // Lock account after 3 failed password change attempts
+        if (user.password_change_attempts >= 3) {
+          user.account_locked_until = Date.now() + 15 * 60 * 1000; // 15 minutes
+          logger.warn("Account locked due to multiple failed password change attempts", {
+            userId: user._id,
+            email: user.email,
+            attempts: user.password_change_attempts
+          });
+        }
+        
+        try {
+          await dbUtils.save(user);
+        } catch (dbError) {
+          logger.error("Database error saving failed password change attempt", {
+            error: dbError.message,
+            userId
+          });
+        }
+        
+        return res.status(400).json({
+          success: false,
+          message: "Current password is incorrect",
+          attempts_remaining: Math.max(0, 3 - user.password_change_attempts),
+        });
+      }
+
+      // Check if new password is the same as current
+      const isSamePassword = await user.comparePassword(newPassword);
+      if (isSamePassword) {
+        return res.status(400).json({
+          success: false,
+          message: "New password cannot be the same as your current password.",
+          errors: {
+            newPassword: "Password must be different from current password"
+          }
+        });
+      }
+
+      // Store old password hash for audit purposes (optional security measure)
+      const oldPasswordHash = user.password;
+
+      // Hash the new password with stronger salt rounds
+      const salt = await bcrypt.genSalt(12);
       user.password = await bcrypt.hash(newPassword, salt);
 
-      // Save the updated user
-      await user.save();
+      // Reset password change attempts and account lock
+      user.password_change_attempts = 0;
+      user.account_locked_until = undefined;
+      
+      // Update password change metadata
+      user.last_password_change = new Date();
+      user.password_change_count = (user.password_change_count || 0) + 1;
 
-      logger.info(`Password successfully changed for user: ${user.email}`);
+      // Save user changes
+      try {
+        await dbUtils.save(user);
+      } catch (dbError) {
+        logger.error("Database error during password change - user save", {
+          error: dbError.message,
+          userId,
+          stack: dbError.stack
+        });
+        
+        return res.status(500).json({
+          success: false,
+          message: "Failed to save password changes. Please try again.",
+          error: "Database save error"
+        });
+      }
+
+      // Log password change activity with enhanced details
+      await user.logActivity("password_change", null, {
+        password_changed_at: new Date(),
+        password_strength: passwordValidation.score,
+        invalidate_sessions: invalidateAllSessions,
+        change_count: user.password_change_count,
+        ip_address: req.ip,
+        user_agent: req.headers["user-agent"]
+      }, {
+        ip_address: req.ip,
+        user_agent: req.headers["user-agent"],
+        device_type: this.extractDeviceInfo(req).device_type,
+        geolocation: this.extractLocationInfo(req),
+        security_event: true
+      });
+
+      // Invalidate all sessions if requested (security measure)
+      if (invalidateAllSessions) {
+        await user.invalidateAllSessions();
+        this.activeUsers.delete(user._id.toString());
+        
+        // Clear all sessions from our session store for this user
+        for (const [sessionId, sessionData] of this.sessionStore.entries()) {
+          if (sessionData.user_id.toString() === userId) {
+            this.sessionStore.delete(sessionId);
+          }
+        }
+        
+        logger.info("All sessions invalidated after password change", {
+          userId: user._id,
+          email: user.email
+        });
+      }
+
+      // Send security notification email
+      try {
+        const deviceInfo = this.extractDeviceInfo(req);
+        const locationInfo = this.extractLocationInfo(req);
+        
+        await this.sendPasswordChangeNotification(user, deviceInfo, locationInfo, invalidateAllSessions);
+      } catch (emailError) {
+        logger.warn("Failed to send password change notification email", {
+          error: emailError.message,
+          userId: user._id,
+          email: user.email
+        });
+        // Don't fail the password change if email fails
+      }
+
+      // Generate new JWT if sessions are not invalidated
+      let newToken = null;
+      if (!invalidateAllSessions) {
+        newToken = this.generateJWT(user);
+      }
+
+      logger.info("Password successfully changed", {
+        userId: user._id,
+        email: user.email,
+        sessions_invalidated: invalidateAllSessions,
+        password_strength: passwordValidation.score
+      });
 
       return res.status(200).json({
         success: true,
         message: "Password has been changed successfully.",
+        data: {
+          password_changed_at: user.last_password_change,
+          sessions_invalidated: invalidateAllSessions,
+          new_token: newToken,
+          security_recommendations: [
+            "Use a unique password for each account",
+            "Enable two-factor authentication for added security",
+            "Regularly review your account activity",
+            "Keep your recovery information up to date"
+          ]
+        }
       });
     } catch (err) {
-      logger.error("Error in change password process:", err);
+      logger.error("Error in change password process:", {
+        error: err.message,
+        stack: err.stack,
+        userId: req.user?.id
+      });
+      
       return res.status(500).json({
         success: false,
         message: "Server error during password change.",
-        error: err.message,
+        error: process.env.NODE_ENV === "development" ? err.message : "Internal server error"
       });
+    }
+  }
+
+  /**
+   * Validate password strength
+   * @param {string} password - Password to validate
+   * @returns {Object} - Validation result with score and requirements
+   */
+  validatePasswordStrength(password) {
+    const requirements = {
+      minLength: 8,
+      maxLength: 128,
+      requireUppercase: true,
+      requireLowercase: true,
+      requireNumbers: true,
+      requireSpecialChars: true,
+      noCommonPatterns: true
+    };
+
+    const errors = [];
+    let score = 0;
+
+    // Length check
+    if (password.length < requirements.minLength) {
+      errors.push(`Password must be at least ${requirements.minLength} characters long`);
+    } else if (password.length >= requirements.minLength) {
+      score += 20;
+    }
+
+    if (password.length > requirements.maxLength) {
+      errors.push(`Password must not exceed ${requirements.maxLength} characters`);
+    }
+
+    // Character requirements
+    if (requirements.requireUppercase && !/[A-Z]/.test(password)) {
+      errors.push("Password must contain at least one uppercase letter");
+    } else if (/[A-Z]/.test(password)) {
+      score += 15;
+    }
+
+    if (requirements.requireLowercase && !/[a-z]/.test(password)) {
+      errors.push("Password must contain at least one lowercase letter");
+    } else if (/[a-z]/.test(password)) {
+      score += 15;
+    }
+
+    if (requirements.requireNumbers && !/\d/.test(password)) {
+      errors.push("Password must contain at least one number");
+    } else if (/\d/.test(password)) {
+      score += 15;
+    }
+
+    if (requirements.requireSpecialChars && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+      errors.push("Password must contain at least one special character");
+    } else if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+      score += 15;
+    }
+
+    // Common pattern checks
+    const commonPatterns = [
+      /^123456/i,
+      /^password/i,
+      /^qwerty/i,
+      /^abc123/i,
+      /^admin/i,
+      /^letmein/i,
+      /(.)\1{3,}/, // Repeated characters
+    ];
+
+    const hasCommonPattern = commonPatterns.some(pattern => pattern.test(password));
+    if (hasCommonPattern) {
+      errors.push("Password contains common patterns and is not secure");
+      score -= 20;
+    } else {
+      score += 20;
+    }
+
+    // Bonus points for length and complexity
+    if (password.length >= 12) score += 10;
+    if (password.length >= 16) score += 10;
+    if (/[A-Z].*[A-Z]/.test(password)) score += 5; // Multiple uppercase
+    if (/\d.*\d/.test(password)) score += 5; // Multiple numbers
+    if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?].*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) score += 5; // Multiple special chars
+
+    score = Math.max(0, Math.min(100, score));
+
+    return {
+      isValid: errors.length === 0,
+      errors: errors,
+      score: score,
+      strength: score >= 80 ? 'Very Strong' : score >= 60 ? 'Strong' : score >= 40 ? 'Medium' : score >= 20 ? 'Weak' : 'Very Weak',
+      requirements: requirements
+    };
+  }
+
+  /**
+   * Send password change notification email
+   * @param {Object} user - User object
+   * @param {Object} deviceInfo - Device information
+   * @param {Object} locationInfo - Location information  
+   * @param {boolean} sessionsInvalidated - Whether all sessions were invalidated
+   */
+  async sendPasswordChangeNotification(user, deviceInfo, locationInfo, sessionsInvalidated = false) {
+    try {
+      const emailService = (await import('../services/emailService.js')).default;
+      
+      const changeDetails = {
+        'Changed On': new Date().toLocaleString('en-US', { 
+          timeZone: user.preferences?.timezone || 'UTC',
+          dateStyle: 'full',
+          timeStyle: 'medium'
+        }),
+        'Device': deviceInfo.device_name || 'Unknown Device',
+        'Browser': deviceInfo.browser || 'Unknown Browser', 
+        'Operating System': deviceInfo.operating_system || 'Unknown OS',
+        'Location': `${locationInfo.city || 'Unknown'}, ${locationInfo.country || 'Unknown'}`,
+        'IP Address': deviceInfo.ip_address || 'Unknown',
+        'Sessions Invalidated': sessionsInvalidated ? 'Yes - All devices logged out' : 'No - Current session maintained'
+      };
+
+      const subject = sessionsInvalidated 
+        ? '🔐 Password Changed & All Sessions Terminated - Medh Learning Platform'
+        : '🔐 Password Changed Successfully - Medh Learning Platform';
+
+      const message = sessionsInvalidated
+        ? `Your password has been changed successfully and all active sessions have been terminated for security. You will need to log in again on all devices. If you did not make this change, please contact support immediately.`
+        : `Your password has been changed successfully. If you did not make this change, please secure your account immediately and contact support.`;
+
+      await emailService.sendNotificationEmail(
+        user.email,
+        subject,
+        message,
+        {
+          user_name: user.full_name,
+          email: user.email,
+          details: changeDetails,
+          actionUrl: `${process.env.FRONTEND_URL || 'https://app.medh.co'}/security`,
+          actionText: 'Review Account Security',
+          currentYear: new Date().getFullYear(),
+          urgent: true
+        }
+      );
+      
+      logger.info('Password change notification sent successfully', {
+        userId: user._id,
+        email: user.email,
+        sessionsInvalidated
+      });
+    } catch (error) {
+      logger.error('Failed to send password change notification', {
+        error: error.message,
+        userId: user._id,
+        email: user.email
+      });
+      throw error;
     }
   }
 
@@ -456,8 +802,24 @@ class AuthController {
 
       const { email, password, remember_me = false } = req.body;
 
-      // Find user by email
-      const user = await User.findOne({ email: email.toLowerCase() });
+      // Find user by email with retry logic
+      let user;
+      try {
+        user = await dbUtils.findOne(User, { email: email.toLowerCase() });
+      } catch (dbError) {
+        logger.error("Database error during login - user lookup", {
+          error: dbError.message,
+          email: email.toLowerCase(),
+          stack: dbError.stack
+        });
+        
+        return res.status(500).json({
+          success: false,
+          message: "Internal server error during login",
+          error: "Database connection issue. Please try again in a moment."
+        });
+      }
+
       if (!user) {
         return res.status(401).json({
           success: false,
@@ -484,7 +846,15 @@ class AuthController {
           user.account_locked_until = Date.now() + 30 * 60 * 1000;
         }
         
-        await user.save();
+        try {
+          await dbUtils.save(user);
+        } catch (dbError) {
+          logger.error("Database error during login - failed attempt save", {
+            error: dbError.message,
+            userId: user._id
+          });
+          // Continue with login failure response even if save fails
+        }
         
         return res.status(401).json({
           success: false,
@@ -533,7 +903,15 @@ class AuthController {
         user.statistics.learning.current_streak = 1;
       }
 
-      await user.save();
+      try {
+        await dbUtils.save(user);
+      } catch (dbError) {
+        logger.error("Database error during login - user statistics save", {
+          error: dbError.message,
+          userId: user._id
+        });
+        // Continue with login process even if statistics save fails
+      }
 
       // Log login activity
       await user.logActivity("login", null, {

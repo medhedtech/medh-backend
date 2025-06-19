@@ -996,10 +996,13 @@ logger.redis = {
       chalk.red("❌ REDIS CONNECTION ERROR") +
       " ".repeat(24) +
       chalk.red(" ┃");
+    
+    // Safely handle error messages that might be undefined
+    const errorMessage = err && err.message ? err.message : 'Unknown error';
     const errorMsg =
       chalk.red("┃ ") +
-      chalk.yellow(err.message) +
-      " ".repeat(Math.max(0, 47 - err.message.length)) +
+      chalk.yellow(errorMessage) +
+      " ".repeat(Math.max(0, 47 - errorMessage.length)) +
       chalk.red(" ┃");
     const footer = chalk.red("┗" + "━".repeat(50) + "┛");
 
@@ -1011,7 +1014,7 @@ logger.redis = {
     logger.logWithComponent(
       "error",
       "REDIS",
-      `Redis connection error: ${err.message}`,
+      `Redis connection error: ${errorMessage}`,
       {
         error: err,
         timestamp: new Date().toISOString(),
@@ -1100,12 +1103,13 @@ logger.connection = {
       " ".repeat(Math.max(1, 35 - serviceName.length)) +
       chalk.red("┃");
 
-    // Extract error message
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    // Extract error message safely
+    const errorMessage = error instanceof Error ? (error.message || 'Unknown error') : String(error || 'Unknown error');
+    const truncatedMessage = errorMessage.substring(0, 55);
     const errorMsgLine =
       chalk.red("┃ ") +
-      chalk.yellow(errorMessage.substring(0, 55)) +
-      " ".repeat(Math.max(1, 55 - errorMessage.length)) +
+      chalk.yellow(truncatedMessage) +
+      " ".repeat(Math.max(1, 55 - truncatedMessage.length)) +
       chalk.red("┃");
 
     const footer = chalk.red("┗" + "━".repeat(58) + "┛");

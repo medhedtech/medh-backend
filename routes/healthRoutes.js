@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import os from 'os';
 import logger from '../utils/logger.js';
 import { activeConnections } from '../utils/metrics.js';
+import dbUtils from '../utils/dbUtils.js';
 
 import { ENV_VARS } from '../config/envVars.js';
 
@@ -103,86 +104,108 @@ router.get('/live', (req, res) => {
 });
 
 /**
- * Detailed health check with system status
- * @route GET /api/v1/health/detailed
- * @access Private
+ * @route   GET /api/v1/health
+ * @desc    Basic health check
+ * @access  Public
  */
-router.get('/detailed', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    // Check MongoDB connection
-    const dbStatus = {
-      connected: mongoose.connection.readyState === 1,
-      state: getMongoConnectionState(mongoose.connection.readyState)
-    };
-
-    // Check Redis if enabled
-    let redisStatus = { enabled: false };
-    if (ENV_VARS.REDIS_ENABLED) {
-      try {
-        // Import Redis dynamically
-        const { createClient } = await import('redis');
-        const redisClient = createClient({
-          url: `redis://${ENV_VARS.REDIS_PASSWORD ? `:${ENV_VARS.REDIS_PASSWORD}@` : ''}${ENV_VARS.REDIS_HOST}:${ENV_VARS.REDIS_PORT}`
-        });
-        
-        // Connect with timeout
-        const connectPromise = redisClient.connect();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Redis connection timeout')), 3000)
-        );
-        
-        await Promise.race([connectPromise, timeoutPromise]);
-        
-        // Test Redis with a ping
-        await redisClient.ping();
-        redisStatus = { 
-          enabled: true, 
-          connected: true,
-          ping: 'ok'
-        };
-        
-        // Close connection
-        await redisClient.disconnect();
-      } catch (error) {
-        redisStatus = { 
-          enabled: true, 
-          connected: false, 
-          error: error.message 
-        };
-      }
-    }
-
-    // System health metrics
-    const systemHealth = {
-      uptime: process.uptime(),
-      memoryUsage: {
-        total: os.totalmem(),
-        free: os.freemem(),
-        usedByProcess: process.memoryUsage(),
-      },
-      cpuLoad: os.loadavg(),
-      processId: process.pid
-    };
-
-    // Return all health info
-    res.status(200).json({
-      status: dbStatus.connected && (!redisStatus.enabled || redisStatus.connected) ? 'ok' : 'degraded',
-      service: 'medh-backend',
-      version: process.env.npm_package_version || '1.0.0',
-      environment: ENV_VARS.NODE_ENV,
+    const health = {
+      status: 'ok',
       timestamp: new Date().toISOString(),
-      components: {
-        database: dbStatus,
-        redis: redisStatus
-      },
-      system: systemHealth
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || 'development',
+      version: process.env.npm_package_version || '1.0.0'
+    };
+
+    res.status(200).json({
+      success: true,
+      data: health
     });
   } catch (error) {
     logger.error('Health check failed', { error: error.message });
     res.status(500).json({
-      status: 'error',
+      success: false,
       message: 'Health check failed',
-      error: ENV_VARS.NODE_ENV === 'production' ? undefined : error.message
+      error: error.message
+    });
+  }
+});
+
+/**
+ * @route   GET /api/v1/health/database
+ * @desc    Database connectivity health check
+ * @access  Public
+ */
+router.get('/database', async (req, res) => {
+  try {
+    const dbHealth = await dbUtils.checkConnectionHealth();
+    
+    const statusCode = dbHealth.healthy ? 200 : 503;
+    
+    res.status(statusCode).json({
+      success: dbHealth.healthy,
+      data: {
+        database: dbHealth,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    logger.error('Database health check failed', { error: error.message });
+    res.status(503).json({
+      success: false,
+      message: 'Database health check failed',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+/**
+ * @route   GET /api/v1/health/detailed
+ * @desc    Detailed system health check
+ * @access  Public
+ */
+router.get('/detailed', async (req, res) => {
+  try {
+    const [dbHealth] = await Promise.allSettled([
+      dbUtils.checkConnectionHealth()
+    ]);
+
+    const health = {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      environment: process.env.NODE_ENV || 'development',
+      version: process.env.npm_package_version || '1.0.0',
+      memory: {
+        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + ' MB',
+        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + ' MB',
+        external: Math.round(process.memoryUsage().external / 1024 / 1024) + ' MB'
+      },
+      database: dbHealth.status === 'fulfilled' ? dbHealth.value : {
+        healthy: false,
+        error: dbHealth.reason?.message || 'Unknown error'
+      }
+    };
+
+    // Determine overall health status
+    const overallHealthy = health.database.healthy;
+    health.status = overallHealthy ? 'ok' : 'degraded';
+
+    const statusCode = overallHealthy ? 200 : 503;
+
+    res.status(statusCode).json({
+      success: overallHealthy,
+      data: health
+    });
+  } catch (error) {
+    logger.error('Detailed health check failed', { error: error.message });
+    res.status(500).json({
+      success: false,
+      message: 'Detailed health check failed',
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 });

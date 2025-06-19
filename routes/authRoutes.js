@@ -8,6 +8,7 @@ import * as instructorController from "../controllers/instructor-controller.js";
 import * as assignInstructorController from "../controllers/assignInstructorController.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { loginLimiter, registerLimiter, passwordResetLimiter } from "../middleware/rateLimit.js";
+import { validateChangePassword } from "../validations/passwordValidation.js";
 import oauthRoutes from "./oauthRoutes.js";
 
 const router = express.Router();
@@ -109,6 +110,19 @@ router.post(
   "/reset-password",
   passwordResetLimiter,
   authController.resetPassword.bind(authController),
+);
+
+/**
+ * @route   PUT /api/v1/auth/change-password
+ * @desc    Change password for authenticated users with enhanced security
+ * @access  Private (Authenticated users only)
+ */
+router.put(
+  "/change-password",
+  authenticateToken,
+  validateChangePassword,
+  passwordResetLimiter, // Apply rate limiting to prevent brute force
+  authController.changePassword.bind(authController)
 );
 
 /**

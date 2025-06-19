@@ -1,4 +1,7 @@
 import OpenAI from 'openai';
+import aiService from '../services/aiService.js';
+import logger from '../utils/logger.js';
+import catchAsync from '../utils/catchAsync.js';
 
 // Initialize OpenAI client safely
 let openai = null;
@@ -568,76 +571,645 @@ Focus on current trends, practical value, and engaging content that readers will
   }
 };
 
-// Generate SEO-optimized meta descriptions
-export const generateMetaDescription = async (req, res) => {
+/**
+ * Enhance existing blog content with improved structure and formatting
+ * POST /api/v1/ai/enhance-blog-content
+ */
+export const enhanceBlogContent = catchAsync(async (req, res) => {
+  const {
+    title,
+    content,
+    description = '',
+    targetWordCount = 1500,
+    includeCodeExamples = false,
+    addStatistics = true,
+    improveStructure = true
+  } = req.body;
+
+  // Validation
+  if (!title || !content) {
+    return res.status(400).json({
+      success: false,
+      message: 'Title and content are required for enhancement'
+    });
+  }
+
+  if (content.length < 100) {
+    return res.status(400).json({
+      success: false,
+      message: 'Content must be at least 100 characters long'
+    });
+  }
+
   try {
-    const { title, content, targetLength = 160 } = req.body;
-    
-    if (!title) {
-      return res.status(400).json({
-        success: false,
-        message: 'Title is required for meta description generation'
-      });
-    }
-
-    const systemPrompt = `You are an SEO expert. Generate compelling meta descriptions that:
-- Are exactly ${targetLength} characters or less
-- Include the main keyword from the title
-- Are engaging and encourage clicks
-- Accurately describe the content
-- Follow SEO best practices
-
-Return only the meta description text, nothing else.`;
-
-    const userPrompt = `Generate an SEO-optimized meta description for:
-Title: ${title}
-${content ? `Content preview: ${content.substring(0, 500)}...` : ''}
-
-Requirements:
-- Maximum ${targetLength} characters
-- Include main keywords
-- Be compelling and click-worthy`;
-
-    const client = checkOpenAIAvailable();
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt
-        },
-        {
-          role: "user",
-          content: userPrompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 100
+    const enhancedData = await aiService.enhanceBlogContent({
+      title,
+      content,
+      description,
+      targetWordCount: Math.min(Math.max(targetWordCount, 500), 5000), // Limit range
+      includeCodeExamples,
+      addStatistics,
+      improveStructure
     });
 
-    const metaDescription = completion.choices[0]?.message?.content?.trim();
-    
-    if (!metaDescription) {
-      throw new Error('No meta description generated');
-    }
+    logger.info('Blog content enhanced successfully', {
+      originalWordCount: aiService.getWordCount(content),
+      enhancedWordCount: enhancedData.wordCount,
+      title: title.substring(0, 50)
+    });
 
     res.status(200).json({
       success: true,
-      data: {
-        metaDescription,
-        length: metaDescription.length,
-        isOptimal: metaDescription.length <= targetLength
-      },
-      message: 'Meta description generated successfully'
+      message: 'Blog content enhanced successfully',
+      data: enhancedData
     });
 
   } catch (error) {
-    console.error('❌ Error generating meta description:', error);
-    
+    logger.error('Blog enhancement failed', {
+      error: error.message,
+      title: title.substring(0, 50),
+      contentLength: content.length
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to enhance blog content',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Completely rewrite blog content with professional structure
+ * POST /api/v1/ai/rewrite-blog-content
+ */
+export const rewriteBlogContent = catchAsync(async (req, res) => {
+  const {
+    title,
+    content,
+    description = '',
+    targetWordCount = 1500,
+    tone = 'professional',
+    includeExamples = true,
+    addStepByStep = false
+  } = req.body;
+
+  // Validation
+  if (!title || !content) {
+    return res.status(400).json({
+      success: false,
+      message: 'Title and content are required for rewriting'
+    });
+  }
+
+  const validTones = ['professional', 'casual', 'technical', 'academic', 'conversational'];
+  if (!validTones.includes(tone)) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid tone. Must be one of: ${validTones.join(', ')}`
+    });
+  }
+
+  try {
+    const rewrittenData = await aiService.rewriteBlogContent({
+      title,
+      content,
+      description,
+      targetWordCount: Math.min(Math.max(targetWordCount, 500), 5000),
+      tone,
+      includeExamples,
+      addStepByStep
+    });
+
+    logger.info('Blog content rewritten successfully', {
+      originalWordCount: aiService.getWordCount(content),
+      rewrittenWordCount: rewrittenData.wordCount,
+      tone,
+      title: title.substring(0, 50)
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Blog content rewritten successfully',
+      data: rewrittenData
+    });
+
+  } catch (error) {
+    logger.error('Blog rewrite failed', {
+      error: error.message,
+      title: title.substring(0, 50),
+      tone,
+      contentLength: content.length
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to rewrite blog content',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Expand existing content with detailed explanations and examples
+ * POST /api/v1/ai/expand-blog-content
+ */
+export const expandBlogContent = catchAsync(async (req, res) => {
+  const {
+    title,
+    content,
+    description = '',
+    targetWordCount = 2000,
+    addCodeExamples = false,
+    addTutorials = false,
+    addLatestData = true,
+    focusAreas = []
+  } = req.body;
+
+  // Validation
+  if (!title || !content) {
+    return res.status(400).json({
+      success: false,
+      message: 'Title and content are required for expansion'
+    });
+  }
+
+  if (!Array.isArray(focusAreas)) {
+    return res.status(400).json({
+      success: false,
+      message: 'focusAreas must be an array of strings'
+    });
+  }
+
+  try {
+    const expandedData = await aiService.expandBlogContent({
+      title,
+      content,
+      description,
+      targetWordCount: Math.min(Math.max(targetWordCount, 1000), 8000),
+      addCodeExamples,
+      addTutorials,
+      addLatestData,
+      focusAreas: focusAreas.slice(0, 5) // Limit to 5 focus areas
+    });
+
+    logger.info('Blog content expanded successfully', {
+      originalWordCount: aiService.getWordCount(content),
+      expandedWordCount: expandedData.wordCount,
+      focusAreas: focusAreas.length,
+      title: title.substring(0, 50)
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Blog content expanded successfully',
+      data: expandedData
+    });
+
+  } catch (error) {
+    logger.error('Blog expansion failed', {
+      error: error.message,
+      title: title.substring(0, 50),
+      focusAreas,
+      contentLength: content.length
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to expand blog content',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Generate fresh blog content from a prompt or topic
+ * POST /api/v1/ai/generate-blog-content
+ */
+export const generateFreshBlogContent = catchAsync(async (req, res) => {
+  const {
+    prompt,
+    title = '',
+    targetWordCount = 1500,
+    tone = 'professional',
+    includeCodeExamples = false,
+    includeStatistics = true,
+    targetAudience = 'general'
+  } = req.body;
+
+  // Validation
+  if (!prompt || prompt.trim().length < 10) {
+    return res.status(400).json({
+      success: false,
+      message: 'Prompt must be at least 10 characters long'
+    });
+  }
+
+  const validTones = ['professional', 'casual', 'technical', 'academic', 'conversational'];
+  if (!validTones.includes(tone)) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid tone. Must be one of: ${validTones.join(', ')}`
+    });
+  }
+
+  const validAudiences = ['general', 'beginners', 'professionals', 'experts', 'students'];
+  if (!validAudiences.includes(targetAudience)) {
+    return res.status(400).json({
+      success: false,
+      message: `Invalid target audience. Must be one of: ${validAudiences.join(', ')}`
+    });
+  }
+
+  try {
+    const generatedData = await aiService.generateFreshBlogContent({
+      prompt: prompt.trim(),
+      title: title.trim(),
+      targetWordCount: Math.min(Math.max(targetWordCount, 500), 5000),
+      tone,
+      includeCodeExamples,
+      includeStatistics,
+      targetAudience
+    });
+
+    logger.info('Fresh blog content generated successfully', {
+      promptLength: prompt.length,
+      generatedWordCount: generatedData.wordCount,
+      tone,
+      targetAudience,
+      title: generatedData.title.substring(0, 50)
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Fresh blog content generated successfully',
+      data: generatedData
+    });
+
+  } catch (error) {
+    logger.error('Fresh blog generation failed', {
+      error: error.message,
+      prompt: prompt.substring(0, 100),
+      tone,
+      targetAudience
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate fresh blog content',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Generate comprehensive SEO elements for blog content
+ * POST /api/v1/ai/generate-blog-seo
+ */
+export const generateBlogSEO = catchAsync(async (req, res) => {
+  const { title, content, description = '' } = req.body;
+
+  // Validation
+  if (!title || !content) {
+    return res.status(400).json({
+      success: false,
+      message: 'Title and content are required for SEO generation'
+    });
+  }
+
+  if (title.length > 200) {
+    return res.status(400).json({
+      success: false,
+      message: 'Title must be 200 characters or less'
+    });
+  }
+
+  try {
+    const seoData = await aiService.generateBlogSEO({
+      title,
+      content,
+      description
+    });
+
+    logger.info('Blog SEO generated successfully', {
+      title: title.substring(0, 50),
+      metaTitleLength: seoData.meta_title.length,
+      metaDescriptionLength: seoData.meta_description.length,
+      tagsCount: seoData.tags.length
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Blog SEO elements generated successfully',
+      data: seoData
+    });
+
+  } catch (error) {
+    logger.error('Blog SEO generation failed', {
+      error: error.message,
+      title: title.substring(0, 50),
+      contentLength: content.length
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate SEO elements',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Analyze blog content quality and provide recommendations
+ * POST /api/v1/ai/analyze-blog-content
+ */
+export const analyzeBlogContent = catchAsync(async (req, res) => {
+  const { title, content, description, meta_title, meta_description } = req.body;
+
+  // Validation
+  if (!title || !content) {
+    return res.status(400).json({
+      success: false,
+      message: 'Title and content are required for analysis'
+    });
+  }
+
+  try {
+    const analysis = await aiService.analyzeBlogContent({
+      title,
+      content,
+      description,
+      meta_title,
+      meta_description
+    });
+
+    logger.info('Blog content analyzed successfully', {
+      title: title.substring(0, 50),
+      wordCount: analysis.wordCount,
+      readabilityScore: analysis.content?.readabilityScore,
+      recommendationsCount: analysis.recommendations?.length || 0
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Blog content analyzed successfully',
+      data: analysis
+    });
+
+  } catch (error) {
+    logger.error('Blog content analysis failed', {
+      error: error.message,
+      title: title.substring(0, 50),
+      contentLength: content.length
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to analyze blog content',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Generate tags for blog content
+ * POST /api/v1/ai/generate-blog-tags
+ */
+export const generateBlogTags = catchAsync(async (req, res) => {
+  const { title, content, maxTags = 8 } = req.body;
+
+  // Validation
+  if (!title || !content) {
+    return res.status(400).json({
+      success: false,
+      message: 'Title and content are required for tag generation'
+    });
+  }
+
+  if (maxTags < 1 || maxTags > 20) {
+    return res.status(400).json({
+      success: false,
+      message: 'maxTags must be between 1 and 20'
+    });
+  }
+
+  try {
+    const tags = await aiService.generateTags(title, content, maxTags);
+
+    logger.info('Blog tags generated successfully', {
+      title: title.substring(0, 50),
+      tagsCount: tags.length,
+      maxTags
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Blog tags generated successfully',
+      data: {
+        tags,
+        count: tags.length
+      }
+    });
+
+  } catch (error) {
+    logger.error('Blog tag generation failed', {
+      error: error.message,
+      title: title.substring(0, 50),
+      maxTags
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate blog tags',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * Generate meta description for blog content
+ * POST /api/v1/ai/generate-meta-description
+ */
+export const generateMetaDescription = catchAsync(async (req, res) => {
+  const { title, content, maxLength = 160 } = req.body;
+
+  // Validation
+  if (!title || !content) {
+    return res.status(400).json({
+      success: false,
+      message: 'Title and content are required for meta description generation'
+    });
+  }
+
+  if (maxLength < 50 || maxLength > 300) {
+    return res.status(400).json({
+      success: false,
+      message: 'maxLength must be between 50 and 300 characters'
+    });
+  }
+
+  try {
+    const metaDescription = await aiService.generateMetaDescription(title, content, maxLength);
+
+    logger.info('Meta description generated successfully', {
+      title: title.substring(0, 50),
+      metaDescriptionLength: metaDescription.length,
+      maxLength
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Meta description generated successfully',
+      data: {
+        meta_description: metaDescription,
+        length: metaDescription.length,
+        maxLength
+      }
+    });
+
+  } catch (error) {
+    logger.error('Meta description generation failed', {
+      error: error.message,
+      title: title.substring(0, 50),
+      maxLength
+    });
+
     res.status(500).json({
       success: false,
       message: 'Failed to generate meta description',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
-}; 
+});
+
+/**
+ * Generate URL slug from title
+ * POST /api/v1/ai/generate-slug
+ */
+export const generateSlug = catchAsync(async (req, res) => {
+  const { title } = req.body;
+
+  // Validation
+  if (!title || title.trim().length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Title is required for slug generation'
+    });
+  }
+
+  if (title.length > 200) {
+    return res.status(400).json({
+      success: false,
+      message: 'Title must be 200 characters or less'
+    });
+  }
+
+  try {
+    const slug = aiService.generateSlug(title.trim());
+
+    logger.info('Slug generated successfully', {
+      title: title.substring(0, 50),
+      slug,
+      slugLength: slug.length
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Slug generated successfully',
+      data: {
+        slug,
+        original_title: title.trim(),
+        length: slug.length
+      }
+    });
+
+  } catch (error) {
+    logger.error('Slug generation failed', {
+      error: error.message,
+      title: title.substring(0, 50)
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate slug',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * AI service health check
+ * GET /api/v1/ai/health
+ */
+export const healthCheck = catchAsync(async (req, res) => {
+  try {
+    const healthStatus = await aiService.healthCheck();
+
+    res.status(healthStatus.status === 'healthy' ? 200 : 503).json({
+      success: healthStatus.status === 'healthy',
+      message: `AI service is ${healthStatus.status}`,
+      data: healthStatus
+    });
+
+  } catch (error) {
+    logger.error('AI health check failed', { error: error.message });
+
+    res.status(503).json({
+      success: false,
+      message: 'AI service health check failed',
+      data: {
+        status: 'unhealthy',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+});
+
+/**
+ * Get AI service capabilities and configuration
+ * GET /api/v1/ai/capabilities
+ */
+export const getCapabilities = catchAsync(async (req, res) => {
+  try {
+    const capabilities = {
+      available: aiService.isConfigured,
+      models: aiService.models,
+      temperatures: aiService.temperatures,
+      blogPresets: aiService.blogPresets,
+      features: [
+        'Blog content enhancement',
+        'Professional content rewriting',
+        'Content expansion with examples',
+        'Fresh content generation',
+        'SEO optimization',
+        'Content quality analysis',
+        'Tag generation',
+        'Meta description generation',
+        'URL slug generation',
+        'Readability analysis'
+      ],
+      limits: {
+        maxWordCount: 8000,
+        maxTags: 20,
+        maxMetaDescriptionLength: 300,
+        maxSlugLength: 100
+      }
+    };
+
+    res.status(200).json({
+      success: true,
+      message: 'AI service capabilities retrieved successfully',
+      data: capabilities
+    });
+
+  } catch (error) {
+    logger.error('Failed to get AI capabilities', { error: error.message });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve AI capabilities',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+}); 
