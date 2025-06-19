@@ -90,7 +90,9 @@ const userActivitySchema = new Schema({
       "register", "login", "logout", "profile_update", "profile_view", "course_view", "course_purchase",
       "content_view", "content_complete", "search", "review_submit",
       "social_share", "message_send", "notification_read", "setting_change",
-      "feature_use", "error_encounter", "page_view", "api_call"
+      "feature_use", "error_encounter", "page_view", "api_call",
+      "password_reset", "password_reset_request", "password_change", "temp_password_verified",
+      "admin_action", "profile_restore"
     ]
   },
   resource: {
@@ -758,11 +760,28 @@ const userSchema = new Schema({
   password_reset_expires: Date,
   email_verification_token: String,
   email_verification_expires: Date,
+  // Temporary password verification fields
+  temp_password_verified: {
+    type: Boolean,
+    default: false
+  },
+  temp_password_verification_token: String,
+  temp_password_verification_expires: Date,
   failed_login_attempts: {
     type: Number,
     default: 0
   },
+  password_change_attempts: {
+    type: Number,
+    default: 0
+  },
   account_locked_until: Date,
+  lockout_reason: {
+    type: String,
+    enum: ['login_attempts', 'password_change_attempts', 'temp_password_attempts', 'admin_lock'],
+    sparse: true
+  },
+  last_failed_attempt: Date,
   
   // OAuth Integration
   oauth: {
@@ -894,6 +913,7 @@ const userSchema = new Schema({
       delete ret.backup_codes;
       delete ret.password_reset_token;
       delete ret.email_verification_token;
+      delete ret.temp_password_verification_token;
       delete ret.api_key;
       return ret;
     }

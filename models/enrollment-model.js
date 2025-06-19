@@ -355,6 +355,13 @@ enrollmentSchema.methods.updateProgress = async function(lessonId, progressData)
   
   this.progress.last_activity_date = new Date();
   
+  // Sync with enhanced progress tracking
+  try {
+    await this.syncToEnhancedProgress(lessonId, progressData);
+  } catch (syncError) {
+    console.warn('Failed to sync to enhanced progress:', syncError.message);
+  }
+  
   return this.save();
 };
 
@@ -379,6 +386,13 @@ enrollmentSchema.methods.updateAssessmentScore = async function(assessmentId, sc
     });
   } else {
     Object.assign(assessment, scoreData);
+  }
+  
+  // Sync with enhanced progress tracking
+  try {
+    await this.syncAssessmentToEnhancedProgress(assessmentId, scoreData);
+  } catch (syncError) {
+    console.warn('Failed to sync assessment to enhanced progress:', syncError.message);
   }
   
   return this.save();
@@ -421,6 +435,130 @@ enrollmentSchema.methods.removeBatchMember = async function(studentId) {
   this.batch_info.batch_size = this.batch_info.batch_members.length + 1;
   
   return this.save();
+};
+
+// Method to sync enrollment progress to enhanced progress tracking
+enrollmentSchema.methods.syncToEnhancedProgress = async function(lessonId = null, progressData = null) {
+  try {
+    // Dynamic import to avoid circular dependency
+    const { default: EnhancedProgress } = await import('./enhanced-progress.model.js');
+    
+    // Sync overall course progress
+    const courseProgressEntry = {
+      userId: this.student,
+      courseId: this.course,
+      contentType: 'course',
+      contentId: this.course,
+      progressPercentage: this.progress.overall_percentage || 0,
+      status: this.status === 'completed' ? 'completed' : 
+              this.progress.overall_percentage > 0 ? 'in_progress' : 'not_started',
+      timeSpent: this.progress.detailed_progress.reduce((sum, lesson) => 
+        sum + (lesson.time_spent_seconds || 0), 0),
+      lastAccessed: this.progress.last_activity_date || new Date(),
+      metadata: {
+        enrollment_id: this._id,
+        enrollment_type: this.enrollment_type,
+        batch_id: this.batch,
+        enrollment_date: this.enrollment_date,
+        access_expiry_date: this.access_expiry_date,
+        synced_from: 'enrollment_course'
+      }
+    };
+
+    // Upsert course-level progress
+    await EnhancedProgress.findOneAndUpdate(
+      {
+        userId: this.student,
+        courseId: this.course,
+        contentType: 'course',
+        contentId: this.course
+      },
+      courseProgressEntry,
+      { upsert: true, new: true }
+    );
+
+    // Sync individual lesson progress if lessonId is provided
+    if (lessonId && progressData) {
+      const lessonProgressEntry = {
+        userId: this.student,
+        courseId: this.course,
+        contentType: 'lesson',
+        contentId: lessonId,
+        progressPercentage: progressData.progress_percentage || 0,
+        status: progressData.status || 'not_started',
+        timeSpent: progressData.time_spent_seconds || 0,
+        lastAccessed: new Date(),
+        metadata: {
+          enrollment_id: this._id,
+          lesson_id: lessonId,
+          enrollment_type: this.enrollment_type,
+          batch_id: this.batch,
+          synced_from: 'enrollment_lesson'
+        }
+      };
+
+      // Upsert lesson-level progress
+      await EnhancedProgress.findOneAndUpdate(
+        {
+          userId: this.student,
+          courseId: this.course,
+          contentType: 'lesson',
+          contentId: lessonId
+        },
+        lessonProgressEntry,
+        { upsert: true, new: true }
+      );
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error syncing to enhanced progress:', error);
+    return false;
+  }
+};
+
+// Method to sync assessment scores to enhanced progress
+enrollmentSchema.methods.syncAssessmentToEnhancedProgress = async function(assessmentId, scoreData) {
+  try {
+    const { default: EnhancedProgress } = await import('./enhanced-progress.model.js');
+    
+    const assessmentProgressEntry = {
+      userId: this.student,
+      courseId: this.course,
+      contentType: 'quiz',
+      contentId: assessmentId,
+      progressPercentage: scoreData.passed ? 100 : 0,
+      status: scoreData.passed ? 'completed' : 'failed',
+      score: scoreData.score || 0,
+      attempts: scoreData.attempts || 1,
+      lastAccessed: scoreData.last_attempt_date || new Date(),
+      metadata: {
+        enrollment_id: this._id,
+        assessment_id: assessmentId,
+        max_possible_score: scoreData.max_possible_score,
+        passed: scoreData.passed,
+        enrollment_type: this.enrollment_type,
+        batch_id: this.batch,
+        synced_from: 'enrollment_assessment'
+      }
+    };
+
+    await EnhancedProgress.findOneAndUpdate(
+      {
+        userId: this.student,
+        courseId: this.course,
+        contentType: 'quiz',
+        contentId: assessmentId
+      },
+      assessmentProgressEntry,
+      { upsert: true, new: true }
+    );
+
+    return true;
+  } catch (error) {
+    console.error('Error syncing assessment to enhanced progress:', error);
+    return false;
+  }
 };
 
 // Static methods
