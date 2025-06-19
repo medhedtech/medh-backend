@@ -1,19 +1,19 @@
-# Enhanced Progress Tracking System - Integration Guide
+# Enhanced Progress Tracking & Financial Analytics - Integration Guide
 
 ## Overview
 
-The Enhanced Progress Tracking System provides comprehensive learning analytics, progress monitoring, and performance insights for educational platforms. This system tracks student progress across various content types and provides detailed analytics for both students and instructors.
+The Enhanced Progress Tracking System provides comprehensive learning analytics, progress monitoring, and performance insights for educational platforms. This system tracks student progress across various content types and provides detailed analytics for both students and instructors, along with comprehensive financial tracking including EMI payments.
 
 ## Table of Contents
 
 1. [Quick Setup](#quick-setup)
 2. [API Endpoints](#api-endpoints)
-3. [Authentication & Authorization](#authentication--authorization)
-4. [Request/Response Examples](#requestresponse-examples)
-5. [Integration Steps](#integration-steps)
-6. [Frontend Integration](#frontend-integration)
-7. [Error Handling](#error-handling)
-8. [Rate Limiting](#rate-limiting)
+3. [Enhanced Progress Model Integration](#enhanced-progress-model-integration)
+4. [Financial Analytics Integration](#financial-analytics-integration)
+5. [Request/Response Examples](#requestresponse-examples)
+6. [Integration Steps](#integration-steps)
+7. [Frontend Integration](#frontend-integration)
+8. [Error Handling](#error-handling)
 9. [Best Practices](#best-practices)
 
 ## Quick Setup
@@ -23,543 +23,588 @@ The Enhanced Progress Tracking System provides comprehensive learning analytics,
 ```javascript
 // app.js or index.js
 import enhancedProgressRoutes from './routes/enhanced-progress.routes.js';
+import paymentRoutes from './routes/payment.routes.js';
 
 app.use('/api/enhanced-progress', enhancedProgressRoutes);
+app.use('/api/v1/payments', paymentRoutes);
 ```
 
-### 2. Ensure Required Middleware
+### 2. Ensure Required Models
 
-Make sure you have these middleware files:
-- `middleware/auth.js` - Authentication and authorization
-- `middleware/validation.js` - Request validation
-- `middleware/rateLimit.js` - Rate limiting
+Make sure you have these models imported:
+- `models/enhanced-progress.model.js` - Comprehensive progress tracking
+- `models/enrolled-courses-model.js` - Course enrollments with EMI support
+- `models/user-modal.js` - User model with analytics
 
 ### 3. Database Connection
 
-Ensure MongoDB connection is established and the enhanced progress model is imported.
+Ensure MongoDB connection is established and all models are properly indexed.
+
+## Enhanced Progress Model Integration
+
+### Core Features
+
+The enhanced progress model (`models/enhanced-progress.model.js`) provides:
+
+1. **Detailed Lesson Tracking**:
+   - Individual lesson progress with video analytics
+   - Time spent per lesson
+   - Notes and bookmarks
+   - Prerequisite validation
+
+2. **Assessment Progress**:
+   - Quiz and assignment tracking
+   - Multiple attempts support
+   - Score analytics
+   - Pass/fail status
+
+3. **Learning Analytics**:
+   - Study streaks
+   - Learning velocity
+   - Performance trends
+   - Preferred study times
+
+4. **Course Structure Awareness**:
+   - Week-by-week progress
+   - Section-based organization
+   - Sequential learning paths
+
+### Key Methods
+
+```javascript
+// Update lesson progress
+await progressRecord.updateLessonProgress(lessonId, {
+  status: 'completed',
+  progressPercentage: 100,
+  timeSpent: 1800, // 30 minutes
+  videoProgress: {
+    totalDuration: 1500,
+    watchedDuration: 1500,
+    watchedPercentage: 100
+  }
+});
+
+// Get comprehensive progress report
+const report = progressRecord.getProgressReport();
+
+// Get recommended actions for student
+const actions = progressRecord.getRecommendedActions();
+```
+
+## Financial Analytics Integration
+
+### Enhanced Payment Tracking
+
+The system now includes comprehensive financial analytics:
+
+1. **Regular Payments**: One-time course purchases
+2. **EMI Payments**: Installment-based enrollments
+3. **Subscription Payments**: Recurring plan payments
+4. **Transaction Analytics**: Success rates, payment methods, trends
+
+### EMI Payment Features
+
+- **Installment Scheduling**: Automatic due date calculations
+- **Grace Periods**: Configurable payment delays
+- **Late Fees**: Automatic application for overdue payments
+- **Payment Reminders**: System-generated notifications
+- **Default Risk Assessment**: AI-powered risk scoring
+
+### Payment Controller Enhancements
+
+```javascript
+// Get comprehensive payment history
+GET /api/v1/payments/user/:userId/comprehensive-history
+
+// Process EMI installment
+POST /api/v1/payments/process-emi
+
+// Get EMI details
+GET /api/v1/payments/emi/:enrollmentId
+```
 
 ## API Endpoints
 
-### Student Progress Management
+### Enhanced Progress Endpoints
 
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
-| `POST` | `/api/enhanced-progress` | Create new progress entry | Private |
-| `GET` | `/api/enhanced-progress/user/:userId` | Get user's progress | Private |
-| `GET` | `/api/enhanced-progress/my-progress` | Get current user's progress | Private |
-| `GET` | `/api/enhanced-progress/:progressId` | Get specific progress entry | Private |
-| `PUT` | `/api/enhanced-progress/:progressId` | Update progress entry | Private |
-| `DELETE` | `/api/enhanced-progress/:progressId` | Delete progress entry | Private |
+| `GET` | `/api/v1/profile/me/comprehensive` | Get complete profile with enhanced progress | Private |
+| `PUT` | `/api/v1/profile/me/comprehensive` | Update comprehensive profile | Private |
+| `GET` | `/api/v1/profile/:userId/enhanced-progress` | Get enhanced progress analytics | Private |
+| `POST` | `/api/v1/profile/:userId/sync-progress` | Sync enrollment with enhanced progress | Private |
 
-### Analytics & Reporting
+### Financial Analytics Endpoints
 
 | Method | Endpoint | Description | Access |
 |--------|----------|-------------|--------|
-| `GET` | `/api/enhanced-progress/analytics/user/:userId` | Get user analytics | Private |
-| `GET` | `/api/enhanced-progress/summary/:userId` | Get progress summary | Private |
-| `GET` | `/api/enhanced-progress/history/:userId` | Get progress history | Private |
-| `GET` | `/api/enhanced-progress/insights/:userId` | Get AI insights | Private |
-| `GET` | `/api/enhanced-progress/leaderboard` | Get leaderboard | Private |
-| `GET` | `/api/enhanced-progress/recommendations/:userId` | Get recommendations | Private |
-
-### Utility Operations
-
-| Method | Endpoint | Description | Access |
-|--------|----------|-------------|--------|
-| `POST` | `/api/enhanced-progress/reset/:userId` | Reset user progress | Private |
-| `POST` | `/api/enhanced-progress/sync` | Sync progress data | Private |
-| `POST` | `/api/enhanced-progress/export/:userId` | Export progress data | Private |
-
-### Admin Operations
-
-| Method | Endpoint | Description | Access |
-|--------|----------|-------------|--------|
-| `GET` | `/api/enhanced-progress/admin/stats` | Get system statistics | Admin |
-| `POST` | `/api/enhanced-progress/admin/validate` | Validate data integrity | Admin |
-| `POST` | `/api/enhanced-progress/bulk/*` | Bulk operations | Admin/Instructor |
-
-## Authentication & Authorization
-
-### Required Headers
-
-```javascript
-{
-  "Authorization": "Bearer <jwt_token>",
-  "Content-Type": "application/json"
-}
-```
-
-### User Roles
-
-- **Student**: Can access own progress data
-- **Instructor**: Can access student data for their courses
-- **Admin**: Full access to all data and operations
+| `GET` | `/api/v1/payments/user/:userId/comprehensive-history` | Get complete payment history | Private |
+| `POST` | `/api/v1/payments/process-emi` | Process EMI installment | Private |
+| `GET` | `/api/v1/payments/emi/:enrollmentId` | Get EMI details | Private |
 
 ## Request/Response Examples
 
-### 1. Create Progress Entry
+### 1. Get Comprehensive Profile with Enhanced Progress
 
 **Request:**
 ```javascript
-POST /api/enhanced-progress
-{
-  "userId": "64f8a123b456789012345678",
-  "courseId": "64f8a123b456789012345679",
-  "contentType": "lesson",
-  "contentId": "64f8a123b456789012345680",
-  "progressPercentage": 75,
-  "status": "in_progress",
-  "timeSpent": 3600,
-  "score": 85,
-  "notes": "Completed all exercises",
-  "metadata": {
-    "attempts": 2,
-    "difficulty": "intermediate"
-  }
-}
+GET /api/v1/profile/me/comprehensive
+Authorization: Bearer <jwt_token>
 ```
 
 **Response:**
 ```javascript
 {
   "success": true,
-  "message": "Progress created successfully",
+  "message": "Comprehensive profile retrieved successfully",
   "data": {
-    "progress": {
-      "id": "64f8a123b456789012345681",
-      "userId": "64f8a123b456789012345678",
-      "courseId": "64f8a123b456789012345679",
-      "contentType": "lesson",
-      "contentId": "64f8a123b456789012345680",
-      "progressPercentage": 75,
-      "status": "in_progress",
-      "timeSpent": 3600,
-      "score": 85,
-      "createdAt": "2024-01-15T10:30:00Z",
-      "updatedAt": "2024-01-15T10:30:00Z"
-    }
-  }
-}
-```
-
-### 2. Get User Progress with Filters
-
-**Request:**
-```javascript
-GET /api/enhanced-progress/user/64f8a123b456789012345678?courseId=64f8a123b456789012345679&status=completed&page=1&limit=10
-```
-
-**Response:**
-```javascript
-{
-  "success": true,
-  "message": "Progress retrieved successfully",
-  "data": {
-    "progress": [...],
-    "pagination": {
-      "currentPage": 1,
-      "totalPages": 3,
-      "totalItems": 25,
-      "itemsPerPage": 10
+    "basic_info": { /* User basic information */ },
+    "learning_analytics": {
+      "total_learning_time": 45600,
+      "current_streak": 12,
+      "longest_streak": 28,
+      "course_completion_rate": 78.5,
+      "enhanced_progress": {
+        "total_courses_tracked": 5,
+        "completed_courses_tracked": 2,
+        "in_progress_courses_tracked": 3,
+        "average_completion_percentage": 68.4,
+        "course_type_breakdown": {
+          "live": { "count": 2, "completed": 1, "total_progress": 150 },
+          "self_paced": { "count": 3, "completed": 1, "total_progress": 192 }
+        },
+        "learning_patterns": {
+          "strong_areas": ["javascript", "react", "nodejs"],
+          "improvement_areas": ["css", "design"],
+          "most_active_time": "evening"
+        },
+        "detailed_course_reports": [
+          {
+            "course_id": "64f8a123b456789012345678",
+            "course_title": "Advanced React Development",
+            "completion_status": "in_progress",
+            "detailed_report": {
+              "summary": {
+                "overallCompletion": 75,
+                "lessonsCompleted": 18,
+                "totalLessons": 24,
+                "timeSpent": 10800,
+                "currentStreak": 5
+              },
+              "lessons": {
+                "completed": 18,
+                "inProgress": 2,
+                "notStarted": 4,
+                "completionPercentage": 75
+              },
+              "assessments": {
+                "completed": 3,
+                "total": 4,
+                "averageQuizScore": 88.5
+              }
+            },
+            "recommended_actions": [
+              {
+                "type": "complete_lesson",
+                "priority": "high",
+                "message": "You have 2 lesson(s) in progress. Complete them to maintain momentum!"
+              }
+            ]
+          }
+        ]
+      }
     },
-    "summary": {
-      "totalProgress": 25,
-      "completedItems": 18,
-      "averageScore": 82.5,
-      "totalTimeSpent": 45600
-    }
-  }
-}
-```
-
-### 3. Get Progress Analytics
-
-**Request:**
-```javascript
-GET /api/enhanced-progress/analytics/user/64f8a123b456789012345678?timeframe=month&includeComparison=true
-```
-
-**Response:**
-```javascript
-{
-  "success": true,
-  "message": "Analytics retrieved successfully",
-  "data": {
-    "analytics": {
-      "overview": {
-        "totalProgress": 45,
-        "completionRate": 78.5,
-        "averageScore": 85.2,
-        "totalTimeSpent": 125400,
-        "streakDays": 12
+    "education": {
+      "enhanced_progress": [
+        {
+          "progress_id": "64f8a123b456789012345679",
+          "course_id": "64f8a123b456789012345678",
+          "course_title": "Advanced React Development",
+          "course_structure": {
+            "totalWeeks": 8,
+            "totalLessons": 24,
+            "totalAssessments": 4,
+            "totalVideoDuration": 14400
+          },
+          "overall_progress": {
+            "overallCompletionPercentage": 75,
+            "lessonsCompleted": 18,
+            "assessmentsCompleted": 3,
+            "totalTimeSpent": 10800
+          },
+          "lesson_progress": {
+            "total_lessons": 24,
+            "completed_lessons": 18,
+            "in_progress_lessons": 2,
+            "not_started_lessons": 4,
+            "lesson_type_breakdown": {
+              "video": 18,
+              "quiz": 4,
+              "assignment": 2
+            },
+            "video_analytics": {
+              "total_video_duration": 12600,
+              "total_watched_duration": 11340,
+              "average_watch_percentage": 90
+            },
+            "recent_lessons": [
+              {
+                "lesson_id": "lesson_18",
+                "week_id": "week_6",
+                "lesson_type": "video",
+                "status": "completed",
+                "progress_percentage": 100,
+                "time_spent": 1800,
+                "last_accessed": "2024-01-15T14:30:00Z"
+              }
+            ]
+          },
+          "assessment_progress": {
+            "total_assessments": 4,
+            "completed_assessments": 3,
+            "passed_assessments": 3,
+            "average_score": 88.5,
+            "recent_assessments": [
+              {
+                "assessment_id": "quiz_3",
+                "assessment_type": "quiz",
+                "status": "completed",
+                "best_score": 92,
+                "is_passed": true,
+                "total_attempts": 1
+              }
+            ]
+          },
+          "learning_analytics": {
+            "studyStreak": {
+              "current": 5,
+              "longest": 12,
+              "lastStudyDate": "2024-01-15T00:00:00Z"
+            },
+            "preferredStudyTime": "evening"
+          }
+        }
+      ]
+    },
+    "financial_metrics": {
+      "total_spent": 15750,
+      "regular_payments_total": 12000,
+      "emi_payments_total": 3750,
+      "emi_metrics": {
+        "total_emi_enrollments": 2,
+        "total_installments_paid": 6,
+        "pending_emi_enrollments": 1,
+        "upcoming_installments": 4,
+        "overdue_installments": 0,
+        "emi_completion_rate": 50
       },
-      "trends": {
-        "progressTrend": "increasing",
-        "scoreTrend": "stable",
-        "timeSpentTrend": "increasing"
-      },
-      "breakdown": {
-        "byContentType": {...},
-        "byDifficulty": {...},
-        "byWeek": [...]
-      },
-      "comparison": {
-        "previousPeriod": {...},
-        "cohortAverage": {...}
+      "financial_health": {
+        "payment_consistency": "excellent",
+        "emi_default_risk": "low",
+        "total_outstanding_amount": 5000
       }
     }
   }
 }
 ```
 
-### 4. Export Progress Data
+### 2. Get Comprehensive Payment History
 
 **Request:**
 ```javascript
-POST /api/enhanced-progress/export/64f8a123b456789012345678
-{
-  "format": "xlsx",
-  "courseId": "64f8a123b456789012345679",
-  "includeMetadata": true,
-  "dateRange": {
-    "startDate": "2024-01-01",
-    "endDate": "2024-01-31"
-  }
-}
+GET /api/v1/payments/user/64f8a123b456789012345678/comprehensive-history
+Authorization: Bearer <jwt_token>
 ```
 
 **Response:**
 ```javascript
 {
   "success": true,
-  "message": "Export completed successfully",
+  "message": "Comprehensive payment history retrieved successfully",
   "data": {
-    "exportId": "export_64f8a123b456789012345682",
-    "downloadUrl": "https://your-cdn.com/exports/progress_export_123.xlsx",
-    "expiresAt": "2024-01-16T10:30:00Z",
-    "fileSize": "2.5MB",
-    "recordsCount": 150
+    "payment_history": [
+      {
+        "source": "enrollment",
+        "enrollment_id": "64f8a123b456789012345680",
+        "course_title": "Advanced React Development",
+        "amount": 5000,
+        "currency": "USD",
+        "payment_date": "2024-01-10T10:00:00Z",
+        "payment_method": "razorpay",
+        "payment_status": "completed",
+        "payment_type": "emi_enrollment",
+        "emi_details": {
+          "total_installments": 5,
+          "installment_amount": 1000,
+          "paid_installments": 2,
+          "pending_installments": 3,
+          "next_payment_date": "2024-02-10T00:00:00Z"
+        }
+      },
+      {
+        "source": "emi_installment",
+        "enrollment_id": "64f8a123b456789012345680",
+        "course_title": "Advanced React Development",
+        "amount": 1000,
+        "currency": "USD",
+        "payment_date": "2024-01-10T10:00:00Z",
+        "payment_method": "razorpay",
+        "payment_status": "completed",
+        "payment_type": "emi_installment",
+        "installment_details": {
+          "installment_number": 1,
+          "due_date": "2024-01-10T00:00:00Z",
+          "late_fee": 0
+        }
+      }
+    ],
+    "analytics": {
+      "financial_overview": {
+        "total_spent": 15750,
+        "regular_payments_total": 12000,
+        "emi_payments_total": 3750,
+        "average_transaction_amount": 1575,
+        "largest_transaction": 5000
+      },
+      "transaction_analytics": {
+        "total_transactions": 10,
+        "successful_transactions": 9,
+        "failed_transactions": 1,
+        "success_rate": 90
+      },
+      "emi_analytics": {
+        "total_emi_enrollments": 2,
+        "active_emi_enrollments": 1,
+        "total_pending_amount": 5000,
+        "overdue_amount": 0
+      },
+      "spending_patterns": {
+        "monthly_breakdown": {
+          "2024-01": {
+            "total": 6000,
+            "count": 3,
+            "regular": 2000,
+            "emi": 4000,
+            "installment": 0
+          }
+        },
+        "payment_frequency": {
+          "average_days_between_payments": 15,
+          "frequency_category": "frequent"
+        }
+      },
+      "financial_health": {
+        "payment_consistency": "excellent",
+        "emi_default_risk": "low",
+        "outstanding_obligations": 5000,
+        "next_payment_due": {
+          "date": "2024-02-10T00:00:00Z",
+          "amount": 1000
+        }
+      }
+    }
   }
 }
 ```
 
 ## Integration Steps
 
-### Step 1: Database Setup
-
-Ensure the enhanced progress model is properly imported and MongoDB indexes are created:
+### Step 1: Enhanced Progress Model Setup
 
 ```javascript
-// In your database setup file
+// Import and use the enhanced progress model
 import EnhancedProgress from './models/enhanced-progress.model.js';
 
-// Create indexes for better performance
-await EnhancedProgress.createIndexes();
-```
-
-### Step 2: Middleware Setup
-
-Ensure authentication middleware is properly configured:
-
-```javascript
-// middleware/auth.js example
-export const authenticate = async (req, res, next) => {
-  try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (!token) {
-      return res.status(401).json({ success: false, message: 'Access denied' });
+// Create progress tracking for a new enrollment
+const createProgressTracking = async (enrollmentData) => {
+  const progressRecord = new EnhancedProgress({
+    student: enrollmentData.student_id,
+    course: enrollmentData.course_id,
+    enrollment: enrollmentData._id,
+    courseStructure: {
+      totalWeeks: enrollmentData.course_id.duration_weeks,
+      totalLessons: enrollmentData.course_id.total_lessons,
+      totalAssessments: enrollmentData.course_id.total_assessments
     }
-    
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
-    req.user = user;
-    next();
-  } catch (error) {
-    res.status(401).json({ success: false, message: 'Invalid token' });
-  }
+  });
+  
+  return await progressRecord.save();
 };
 ```
 
-### Step 3: Route Integration
-
-Add the routes to your main application:
+### Step 2: Financial Analytics Setup
 
 ```javascript
-// app.js
-import express from 'express';
-import enhancedProgressRoutes from './routes/enhanced-progress.routes.js';
+// Import payment controller functions
+import { getComprehensivePaymentHistory } from './controllers/paymentController.js';
 
-const app = express();
-
-// Middleware
-app.use(express.json());
-
-// Routes
-app.use('/api/enhanced-progress', enhancedProgressRoutes);
+// Use in profile controller
+const paymentData = await getComprehensivePaymentHistory(req, res);
 ```
 
-### Step 4: Frontend Integration Examples
-
-#### React Integration
+### Step 3: Frontend Integration
 
 ```jsx
-// hooks/useProgress.js
-import { useState, useEffect } from 'react';
-import api from '../services/api';
-
-export const useUserProgress = (userId, filters = {}) => {
-  const [progress, setProgress] = useState([]);
+// React hook for comprehensive profile data
+export const useComprehensiveProfile = () => {
+  const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchProgress = async () => {
+    const fetchProfile = async () => {
       try {
-        const queryParams = new URLSearchParams(filters).toString();
-        const response = await api.get(`/enhanced-progress/user/${userId}?${queryParams}`);
-        setProgress(response.data.data.progress);
-      } catch (err) {
-        setError(err.message);
+        const response = await api.get('/api/v1/profile/me/comprehensive');
+        setProfileData(response.data.data);
+      } catch (error) {
+        console.error('Error fetching comprehensive profile:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchProgress();
-  }, [userId, filters]);
+    fetchProfile();
+  }, []);
 
-  return { progress, loading, error };
+  return { profileData, loading };
 };
-```
 
-```jsx
-// components/ProgressDashboard.jsx
-import React from 'react';
-import { useUserProgress } from '../hooks/useProgress';
+// Component using the enhanced data
+const ProgressDashboard = () => {
+  const { profileData, loading } = useComprehensiveProfile();
 
-const ProgressDashboard = ({ userId }) => {
-  const { progress, loading, error } = useUserProgress(userId);
+  if (loading) return <LoadingSpinner />;
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
+  const enhancedProgress = profileData.learning_analytics.enhanced_progress;
 
   return (
     <div className="progress-dashboard">
-      <h2>Learning Progress</h2>
-      {progress.map(item => (
-        <div key={item.id} className="progress-item">
-          <h3>{item.contentTitle}</h3>
-          <div className="progress-bar">
-            <div 
-              className="progress-fill" 
-              style={{ width: `${item.progressPercentage}%` }}
-            />
-          </div>
-          <p>Score: {item.score}% | Time: {item.timeSpent}s</p>
-        </div>
-      ))}
+      <div className="overview-stats">
+        <StatCard 
+          title="Courses Tracked" 
+          value={enhancedProgress.total_courses_tracked} 
+        />
+        <StatCard 
+          title="Completion Rate" 
+          value={`${enhancedProgress.average_completion_percentage.toFixed(1)}%`} 
+        />
+        <StatCard 
+          title="Study Streak" 
+          value={profileData.learning_analytics.current_streak} 
+        />
+      </div>
+
+      <div className="detailed-progress">
+        {enhancedProgress.detailed_course_reports.map(course => (
+          <CourseProgressCard 
+            key={course.course_id}
+            course={course}
+          />
+        ))}
+      </div>
+
+      <div className="financial-overview">
+        <FinancialMetrics 
+          metrics={profileData.financial_metrics}
+        />
+      </div>
     </div>
   );
 };
 ```
 
-#### Progress Tracking Service
-
-```javascript
-// services/progressService.js
-class ProgressService {
-  constructor(baseURL) {
-    this.baseURL = baseURL;
-    this.token = localStorage.getItem('authToken');
-  }
-
-  async createProgress(progressData) {
-    const response = await fetch(`${this.baseURL}/enhanced-progress`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.token}`
-      },
-      body: JSON.stringify(progressData)
-    });
-    return response.json();
-  }
-
-  async updateProgress(progressId, updateData) {
-    const response = await fetch(`${this.baseURL}/enhanced-progress/${progressId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.token}`
-      },
-      body: JSON.stringify(updateData)
-    });
-    return response.json();
-  }
-
-  async getAnalytics(userId, options = {}) {
-    const queryParams = new URLSearchParams(options).toString();
-    const response = await fetch(
-      `${this.baseURL}/enhanced-progress/analytics/user/${userId}?${queryParams}`,
-      {
-        headers: { 'Authorization': `Bearer ${this.token}` }
-      }
-    );
-    return response.json();
-  }
-}
-
-export default new ProgressService(process.env.REACT_APP_API_URL);
-```
-
-## Error Handling
-
-### Common Error Responses
-
-```javascript
-// Validation Error
-{
-  "success": false,
-  "message": "Validation failed",
-  "errors": [
-    {
-      "field": "progressPercentage",
-      "message": "Progress percentage must be between 0 and 100"
-    }
-  ]
-}
-
-// Authorization Error
-{
-  "success": false,
-  "message": "Insufficient permissions",
-  "error_code": "INSUFFICIENT_PERMISSIONS"
-}
-
-// Not Found Error
-{
-  "success": false,
-  "message": "Progress entry not found",
-  "error_code": "PROGRESS_NOT_FOUND"
-}
-```
-
-### Frontend Error Handling
-
-```javascript
-const handleApiCall = async (apiFunction) => {
-  try {
-    const response = await apiFunction();
-    return response.data;
-  } catch (error) {
-    if (error.response?.status === 401) {
-      // Handle authentication error
-      redirectToLogin();
-    } else if (error.response?.status === 403) {
-      // Handle authorization error
-      showErrorMessage('You do not have permission to perform this action');
-    } else if (error.response?.status === 429) {
-      // Handle rate limiting
-      showErrorMessage('Too many requests. Please try again later.');
-    } else {
-      // Handle other errors
-      showErrorMessage(error.response?.data?.message || 'An error occurred');
-    }
-    throw error;
-  }
-};
-```
-
-## Rate Limiting
-
-The API implements rate limiting to prevent abuse:
-
-- **Progress endpoints**: 100 requests per 15 minutes
-- **Analytics endpoints**: 50 requests per 15 minutes
-- **Export endpoints**: 10 requests per hour
-
-Handle rate limit responses:
-
-```javascript
-if (response.status === 429) {
-  const retryAfter = response.headers['retry-after'];
-  console.log(`Rate limited. Retry after ${retryAfter} seconds`);
-}
-```
-
 ## Best Practices
 
-### 1. Efficient Progress Tracking
+### 1. Progress Tracking Optimization
 
 ```javascript
-// Batch progress updates for better performance
-const batchUpdateProgress = async (updates) => {
-  return await api.post('/enhanced-progress/bulk/update', { updates });
+// Batch progress updates
+const batchUpdateLessonProgress = async (progressUpdates) => {
+  const bulkOps = progressUpdates.map(update => ({
+    updateOne: {
+      filter: { 
+        student: update.studentId, 
+        course: update.courseId 
+      },
+      update: { 
+        $push: { 
+          lessonProgress: update.lessonData 
+        }
+      }
+    }
+  }));
+  
+  return await EnhancedProgress.bulkWrite(bulkOps);
 };
-
-// Use debouncing for real-time progress tracking
-const debouncedProgressUpdate = debounce(updateProgress, 2000);
 ```
 
-### 2. Caching Strategies
+### 2. Financial Analytics Caching
 
 ```javascript
-// Cache analytics data for better performance
-const cacheKey = `analytics_${userId}_${timeframe}`;
-const cachedData = sessionStorage.getItem(cacheKey);
-
-if (cachedData && Date.now() - JSON.parse(cachedData).timestamp < 300000) {
-  return JSON.parse(cachedData).data;
-}
-```
-
-### 3. Real-time Updates
-
-```javascript
-// WebSocket integration for real-time progress updates
-const socket = io();
-
-socket.on('progress_updated', (data) => {
-  if (data.userId === currentUserId) {
-    updateProgressInUI(data.progress);
+// Cache payment analytics for better performance
+const getCachedPaymentAnalytics = async (userId) => {
+  const cacheKey = `payment_analytics_${userId}`;
+  let analytics = await redis.get(cacheKey);
+  
+  if (!analytics) {
+    analytics = await calculatePaymentAnalytics(userId);
+    await redis.setex(cacheKey, 3600, JSON.stringify(analytics)); // 1 hour cache
   }
-});
+  
+  return JSON.parse(analytics);
+};
 ```
 
-### 4. Offline Support
+### 3. Real-time Progress Updates
 
 ```javascript
-// Store progress updates offline and sync when online
-const queueProgressUpdate = (progressData) => {
-  const queue = JSON.parse(localStorage.getItem('progressQueue') || '[]');
-  queue.push({ ...progressData, timestamp: Date.now() });
-  localStorage.setItem('progressQueue', JSON.stringify(queue));
+// WebSocket integration for real-time progress
+const updateProgressRealtime = (studentId, progressData) => {
+  io.to(`student_${studentId}`).emit('progress_updated', {
+    type: 'lesson_progress',
+    data: progressData,
+    timestamp: new Date()
+  });
 };
+```
 
-const syncOfflineProgress = async () => {
-  const queue = JSON.parse(localStorage.getItem('progressQueue') || '[]');
-  if (queue.length > 0) {
-    await api.post('/enhanced-progress/sync', { progressData: queue });
-    localStorage.removeItem('progressQueue');
+### 4. EMI Payment Automation
+
+```javascript
+// Automated EMI payment processing
+const processScheduledEmiPayments = async () => {
+  const dueInstallments = await EnrolledCourse.aggregate([
+    { $match: { payment_type: 'emi' } },
+    { $unwind: '$emiDetails.schedule' },
+    { 
+      $match: { 
+        'emiDetails.schedule.status': 'pending',
+        'emiDetails.schedule.dueDate': { 
+          $lte: new Date() 
+        }
+      }
+    }
+  ]);
+
+  for (const installment of dueInstallments) {
+    await processEmiInstallment(installment);
   }
 };
 ```
-
-## Security Considerations
-
-1. **Input Validation**: All inputs are validated on both client and server
-2. **Rate Limiting**: Prevents API abuse
-3. **Authentication**: JWT-based authentication required
-4. **Authorization**: Role-based access control
-5. **Data Sanitization**: All user inputs are sanitized
-6. **Audit Logging**: All operations are logged for security monitoring
 
 ## Performance Optimization
 
 1. **Database Indexing**: Proper indexes on frequently queried fields
-2. **Pagination**: Large datasets are paginated
-3. **Caching**: Analytics data is cached for better performance
-4. **Bulk Operations**: Support for bulk updates to reduce API calls
-5. **Background Processing**: Heavy analytics calculations run in background
+2. **Aggregation Pipelines**: Use MongoDB aggregation for complex analytics
+3. **Caching Strategy**: Redis caching for analytics data
+4. **Background Processing**: Queue heavy analytics calculations
+5. **Data Pagination**: Paginate large datasets
 
-This enhanced progress tracking system provides a robust foundation for educational platforms with comprehensive analytics, security, and performance optimization built-in. 
+## Security Considerations
+
+1. **Data Privacy**: Mask sensitive financial information
+2. **Access Control**: Role-based access to analytics
+3. **Audit Logging**: Track all financial transactions
+4. **Input Validation**: Validate all progress and payment data
+5. **Rate Limiting**: Prevent API abuse
+
+This enhanced progress tracking and financial analytics system provides a robust foundation for educational platforms with comprehensive analytics, security, and performance optimization built-in. 
