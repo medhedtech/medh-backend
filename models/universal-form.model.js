@@ -498,7 +498,7 @@ universalFormSchema.index({ form_type: 1, status: 1 });
 universalFormSchema.index({ 'contact_info.email': 1 });
 universalFormSchema.index({ submitted_at: -1 });
 universalFormSchema.index({ assigned_to: 1, status: 1 });
-universalFormSchema.index({ form_id: 1 }, { unique: true });
+// Note: form_id index is already created via unique: true in schema
 universalFormSchema.index({ user_id: 1, form_type: 1 });
 universalFormSchema.index({ is_complete: 1, form_type: 1 });
 

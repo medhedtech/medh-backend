@@ -7,6 +7,9 @@ import { ENV_VARS } from "./envVars.js";
 // Set mongoose options
 mongoose.set("strictQuery", false);
 
+// Disable mongoose buffering globally to handle connection issues better
+mongoose.set('bufferCommands', false);
+
 // MongoDB connection with retries
 const connectDB = async (retryCount = 0, maxRetries = 5) => {
   try {
@@ -18,18 +21,23 @@ const connectDB = async (retryCount = 0, maxRetries = 5) => {
 
     // Connection options with increased timeouts and better resilience
     const options = {
-      serverSelectionTimeoutMS: 60000, // Increase to 60 seconds
-      socketTimeoutMS: 60000, // Increase socket timeout
-      connectTimeoutMS: 60000, // Increase connect timeout
-      maxPoolSize: 10, // Connection pool size
-      minPoolSize: 2, // Reduce minimum pool size
-      maxIdleTimeMS: 300000, // Increase max idle time to 5 minutes
-      heartbeatFrequencyMS: 10000, // Heartbeat frequency
+      serverSelectionTimeoutMS: 120000, // Increase to 2 minutes
+      socketTimeoutMS: 120000, // Increase socket timeout to 2 minutes
+      connectTimeoutMS: 120000, // Increase connect timeout to 2 minutes
+      maxPoolSize: 15, // Increase connection pool size
+      minPoolSize: 5, // Increase minimum pool size
+      maxIdleTimeMS: 600000, // Increase max idle time to 10 minutes
+      heartbeatFrequencyMS: 5000, // Reduce heartbeat frequency for faster detection
       retryWrites: true, // Enable retry for write operations
       retryReads: true, // Enable retry for read operations
       w: "majority", // Write concern for better consistency
       readPreference: "primaryPreferred", // Prefer primary but fallback to secondary
       readConcern: { level: "majority" }, // Read concern for consistency
+      // Additional timeout settings
+      waitQueueTimeoutMS: 60000, // Wait queue timeout
+      family: 4 // Use IPv4, skip trying IPv6
+      // Note: keepAlive and keepAliveInitialDelay options have been removed in newer Mongoose versions
+      // as they are now handled automatically by the MongoDB driver
     };
 
     // Connect to MongoDB
@@ -60,11 +68,20 @@ const connectDB = async (retryCount = 0, maxRetries = 5) => {
       logger.connection.success("MongoDB", {
         host: conn.connection.host,
         database: conn.connection.name,
+        message: "Connection established"
       });
     });
 
     conn.connection.on("error", (err) => {
       logger.connection.error("MongoDB", err);
+      
+      // Handle specific timeout errors
+      if (err.name === 'MongoTimeoutError' || err.message.includes('timeout')) {
+        logger.error("MongoDB timeout detected, connection may be unstable", {
+          error: err.message,
+          timestamp: new Date().toISOString()
+        });
+      }
     });
 
     conn.connection.on("disconnected", () => {
@@ -77,6 +94,16 @@ const connectDB = async (retryCount = 0, maxRetries = 5) => {
         database: conn.connection.name,
         message: "Reconnected successfully",
       });
+    });
+
+    // Handle timeout errors specifically
+    conn.connection.on('timeout', () => {
+      logger.error('MongoDB connection timeout');
+    });
+
+    // Handle buffer overflow
+    conn.connection.on('fullsetup', () => {
+      logger.info('MongoDB replica set fully connected');
     });
 
     return conn;
@@ -131,5 +158,20 @@ process.on("SIGINT", async () => {
   }
   process.exit(0);
 });
+
+// Add connection monitoring
+setInterval(() => {
+  const state = mongoose.connection.readyState;
+  const states = {
+    0: 'disconnected',
+    1: 'connected',
+    2: 'connecting',
+    3: 'disconnecting'
+  };
+  
+  if (state !== 1) {
+    logger.warn(`MongoDB connection state: ${states[state] || 'unknown'}`);
+  }
+}, 30000); // Check every 30 seconds
 
 export default connectDB;

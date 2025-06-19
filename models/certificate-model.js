@@ -108,7 +108,7 @@ const certificateSchema = new mongoose.Schema(
 
 // Indexes for better query performance
 certificateSchema.index({ course: 1, student: 1 });
-certificateSchema.index({ certificateNumber: 1 });
+// Note: certificateNumber index is already created via unique: true in schema
 certificateSchema.index({ status: 1 });
 certificateSchema.index({ issueDate: 1 });
 

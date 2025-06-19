@@ -4,6 +4,7 @@ import { ENV_VARS } from "../config/envVars.js";
 import User from "../models/user-modal.js";
 import { AppError } from "../utils/errorHandler.js";
 import logger from "../utils/logger.js";
+import dbUtils from "../utils/dbUtils.js";
 import { verifyAccessToken } from '../utils/jwt.js';
 
 /**
@@ -137,7 +138,7 @@ export const authenticateToken = async (req, res, next) => {
     if (user.id && (!user.email || !user.role || user.role === 'student' || (!decoded.role && decoded.userId))) {
       try {
         logger.debug('Fetching user details from database', { userId: user.id });
-        const fullUser = await User.findById(user.id).select('-password');
+        const fullUser = await dbUtils.findById(User, user.id, { select: '-password' });
         if (fullUser) {
           // Use admin_role if present, otherwise use role
           // Handle both array and string formats for role
@@ -174,8 +175,19 @@ export const authenticateToken = async (req, res, next) => {
         logger.error('Error fetching user details from database', { 
           error: dbError.message,
           stack: dbError.stack,
-          userId: user.id 
+          userId: user.id,
+          isTimeout: dbError.message.includes('timeout') || dbError.message.includes('timed out')
         });
+        
+        // If it's a timeout error, return a specific error message
+        if (dbError.message.includes('timeout') || dbError.message.includes('timed out')) {
+          return res.status(500).json({ 
+            success: false, 
+            message: 'Database connection timeout during authentication. Please try again.',
+            error_code: 'DB_TIMEOUT'
+          });
+        }
+        
         // Don't fail here - continue with minimal user data if possible
         if (!user.email || !user.role) {
           return res.status(500).json({ 
@@ -316,7 +328,7 @@ export const verifyToken = async (req, res, next) => {
     const decoded = jwt.verify(token, ENV_VARS.JWT_SECRET_KEY);
 
     // Get user from database
-    const user = await User.findById(decoded.id).select("-password");
+    const user = await dbUtils.findById(User, decoded.id, { select: "-password" });
 
     if (!user) {
       return next(new AppError("User not found", 401));

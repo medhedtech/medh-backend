@@ -92,7 +92,13 @@ app.use(trackingMiddleware.requestTracker);
 app.use(trackingMiddleware.sessionTracker);
 app.use(trackingMiddleware.uiActivityTracker);
 
-// Health check endpoint
+// Import health routes
+import healthRoutes from "./routes/healthRoutes.js";
+
+// Health check routes
+app.use('/api/v1/health', healthRoutes);
+
+// Keep the basic health endpoint for backward compatibility
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'ok',

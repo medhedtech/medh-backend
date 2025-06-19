@@ -50,43 +50,42 @@ class Cache {
         `Attempting to connect to Redis at ${redisHost}:${redisPort}`,
       );
 
-      // Create Redis client with proper authentication - using the same approach that works in redis-test.js
+      // Create Redis client with proper authentication and timeout configuration
       this.client = createClient({
         socket: {
           host: redisHost,
           port: redisPort,
+          connectTimeout: 30000, // 30 seconds connection timeout
+          lazyConnect: true,
+          keepAlive: true,
+          noDelay: true,
         },
         password: process.env.REDIS_PASSWORD || undefined, // Only set if defined
-        // Add a longer connection timeout for reliability
-        socket_keepalive: true,
-        retry_strategy: (options) => {
-          if (options.error && options.error.code === "ECONNREFUSED") {
-            // End reconnecting on a specific error
-            logger.redis.error("Connection refused. Redis server may not be running.");
-            return new Error("Redis server refused connection");
-          }
-          if (options.total_retry_time > 1000 * 60 * 5) {
-            // End reconnecting after 5 minutes
-            logger.redis.error("Retry time exhausted");
-            return new Error("Retry time exhausted");
-          }
-          if (options.attempt > 10) {
-            // End reconnecting with built in error
-            logger.redis.error("Maximum retry attempts reached");
-            return undefined;
-          }
-          // Reconnect after increasing delay
-          return Math.min(options.attempt * 100, 3000);
-        }
+        // Configure retry strategy for better reliability
+        retry: {
+          retries: 3,
+          factor: 2,
+          minTimeout: 1000,
+          maxTimeout: 30000,
+          randomize: true,
+        },
       });
 
       // Set event handlers for diagnostic logging
       this.client.on("error", (err) => {
-        logger.connection.error("Redis", err, {
-          host: redisHost,
-          port: redisPort,
-        });
-        logger.redis.error(`Redis error: ${err.message}`, { stack: err.stack });
+        // Safely handle error logging to prevent crashes
+        try {
+          logger.connection.error("Redis", err, {
+            host: redisHost,
+            port: redisPort,
+          });
+          const errorMessage = err && err.message ? err.message : 'Unknown Redis error';
+          logger.redis.error(`Redis error: ${errorMessage}`, { 
+            stack: err && err.stack ? err.stack : 'No stack trace available' 
+          });
+        } catch (logError) {
+          console.error('Error logging Redis error:', logError);
+        }
         this.connected = false;
       });
 
@@ -120,11 +119,16 @@ class Cache {
         await this.client.connect();
         logger.redis.info("Redis connection established successfully");
       } catch (connError) {
-        logger.redis.error(`Redis connection error: ${connError.message}`, { 
-          stack: connError.stack,
-          code: connError.code 
+        const errorMessage = connError && connError.message ? connError.message : 'Unknown connection error';
+        logger.redis.error(`Redis connection error: ${errorMessage}`, { 
+          stack: connError && connError.stack ? connError.stack : 'No stack trace',
+          code: connError && connError.code ? connError.code : 'Unknown code'
         });
-        throw connError;
+        
+        // Don't throw the error - allow the application to continue without Redis
+        logger.redis.warn("Continuing without Redis - caching will be disabled");
+        this.connected = false;
+        return;
       }
 
       // Setup periodic health check if Redis is enabled and connected
@@ -137,15 +141,19 @@ class Cache {
         port: process.env.REDIS_PORT || 6379,
       });
 
+      const errorMessage = error && error.message ? error.message : '';
       if (
-        error.message.includes("WRONGPASS") ||
-        error.message.includes("AUTH")
+        errorMessage.includes("WRONGPASS") ||
+        errorMessage.includes("AUTH")
       ) {
         logger.redis.error(
           "Authentication Failed - Please check credentials in .env file",
         );
       }
       this.connected = false;
+      
+      // Log that we're continuing without Redis
+      logger.redis.warn("Redis initialization failed - application will continue without caching");
     }
   }
 

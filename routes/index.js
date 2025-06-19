@@ -52,6 +52,8 @@ import aiRoutes from "./aiRoutes.js";
 import announcementRoutes from "./announcementRoutes.js";
 import profileRoutes from "./profileRoutes.js";
 import universalFormRoutes from "./universalFormRoutes.js";
+import demoBookingRoutes from "./demo-bookingRoutes.js";
+import demoFeedbackRoutes from "./demo-feedbackRoutes.js";
 
 const router = express.Router();
 
@@ -243,6 +245,14 @@ const moduleRoutes = [
   {
     path: "/forms",
     route: universalFormRoutes,
+  },
+  {
+    path: "/demo-booking",
+    route: demoBookingRoutes,
+  },
+  {
+    path: "/demo-feedback",
+    route: demoFeedbackRoutes,
   }
 ];
 
