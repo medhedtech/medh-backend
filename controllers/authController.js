@@ -93,8 +93,8 @@ class AuthController {
       const resetPasswordExpires = Date.now() + 3600000; // 1 hour
 
       // Update user with reset token info
-      user.resetPasswordToken = resetPasswordToken;
-      user.resetPasswordExpires = resetPasswordExpires;
+      user.password_reset_token = resetPasswordToken;
+      user.password_reset_expires = resetPasswordExpires;
       await user.save();
 
       // Generate temporary password
@@ -170,17 +170,25 @@ class AuthController {
         });
       }
 
-      // Hash the token received from the request to compare with the stored hash
-      const hashedToken = crypto
-        .createHash("sha256")
-        .update(token)
-        .digest("hex");
-
-      // Find user by hashed token and check expiry
-      const user = await User.findOne({
-        resetPasswordToken: hashedToken,
-        resetPasswordExpires: { $gt: Date.now() },
+      // First, try to find user by temporary password verification token
+      let user = await User.findOne({
+        temp_password_verification_token: token,
+        temp_password_verification_expires: { $gt: Date.now() },
+        temp_password_verified: true
       });
+
+      // If not found, try the original reset token method (for backward compatibility)
+      if (!user) {
+        const hashedToken = crypto
+          .createHash("sha256")
+          .update(token)
+          .digest("hex");
+
+        user = await User.findOne({
+          password_reset_token: hashedToken,
+          password_reset_expires: { $gt: Date.now() },
+        });
+      }
 
       if (!user) {
         return res.status(400).json({
@@ -193,12 +201,25 @@ class AuthController {
       const salt = await bcrypt.genSalt(10);
       user.password = await bcrypt.hash(password, salt);
 
-      // Clear the reset token fields
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpires = undefined;
+      // Clear the reset token fields and temp password verification fields
+      user.password_reset_token = undefined;
+      user.password_reset_expires = undefined;
+      user.temp_password_verified = false;
+      user.temp_password_verification_token = undefined;
+      user.temp_password_verification_expires = undefined;
+      
+      // Reset failed login attempts and unlock account
+      user.failed_login_attempts = 0;
+      user.account_locked_until = undefined;
 
       // Save the updated user
       await user.save();
+
+      // Log password reset activity
+      await user.logActivity("password_reset", null, {
+        reset_time: new Date(),
+        reset_method: user.temp_password_verified ? "temp_password_verification" : "email_token",
+      });
 
       logger.info(`Password successfully reset for user: ${user.email}`);
 
@@ -212,6 +233,194 @@ class AuthController {
         success: false,
         message: "Server error during password reset.",
         error: err.message,
+      });
+    }
+  }
+
+  /**
+   * Verify temporary password
+   * @param {Object} req - Express request object  
+   * @param {Object} res - Express response object
+   */
+  async verifyTempPassword(req, res) {
+    try {
+      const { email, tempPassword } = req.body;
+
+      // Validate input
+      if (!email || !tempPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Email and temporary password are required.",
+          errors: {
+            email: !email ? "Email is required" : null,
+            tempPassword: !tempPassword ? "Temporary password is required" : null,
+          }
+        });
+      }
+
+      // Normalize email to lowercase for case-insensitive handling
+      const normalizedEmail = email.toLowerCase().trim();
+
+      // Find the user
+      const user = await User.findOne({ email: normalizedEmail });
+      if (!user) {
+        logger.auth.warn("Temp password verification attempt for non-existent user", {
+          email: normalizedEmail,
+        });
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Check if user has an active reset token (indicating they requested password reset)
+      if (!user.password_reset_token || !user.password_reset_expires || user.password_reset_expires <= Date.now()) {
+        return res.status(400).json({
+          success: false,
+          message: "No valid password reset request found. Please request a new password reset.",
+        });
+      }
+
+      // Check if account is locked using improved logic
+      const lockStatus = this.isAccountLocked(user);
+      if (lockStatus.isLocked) {
+        return res.status(423).json({
+          success: false,
+          message: `Account is temporarily locked due to multiple failed attempts. Please try again after ${lockStatus.remainingTimeFormatted}.`,
+          lockout_info: {
+            locked_until: lockStatus.lockedUntil,
+            remaining_time: lockStatus.remainingTimeFormatted,
+            remaining_minutes: lockStatus.remainingMinutes,
+            lockout_reason: lockStatus.lockoutReason
+          }
+        });
+      }
+
+      // If lockout period has expired, reset fields
+      if (lockStatus.needsReset) {
+        await this.resetLockoutFields(user);
+      }
+
+      // Debug logging for password verification
+      logger.auth.debug("Starting password verification", {
+        email: normalizedEmail,
+        tempPasswordLength: tempPassword.length,
+        hasPasswordHash: !!user.password,
+        passwordHashPrefix: user.password ? user.password.substring(0, 20) : 'none'
+      });
+
+      // Verify the temporary password
+      const isMatch = await bcrypt.compare(tempPassword, user.password);
+      
+      logger.auth.debug("Password verification result", {
+        email: normalizedEmail,
+        isMatch: isMatch,
+        tempPassword: tempPassword // Only for debugging, remove in production
+      });
+      
+      if (!isMatch) {
+        try {
+          const attemptResult = await this.incrementFailedAttempts(user, 'temp_password');
+          
+          if (attemptResult.shouldReturnError) {
+            if (attemptResult.isLocked) {
+              logger.auth.warn("Account locked due to failed temp password attempts", {
+                email: normalizedEmail,
+                attempts: attemptResult.attempts,
+                lockout_duration_minutes: attemptResult.lockInfo.remainingMinutes
+              });
+              
+              return res.status(423).json({
+                success: false,
+                message: `Account temporarily locked due to multiple failed attempts. Please try again after ${attemptResult.lockInfo.remainingMinutes} minute(s).`,
+                lockout_info: {
+                  locked_until: attemptResult.lockInfo.lockedUntil,
+                  remaining_time: attemptResult.lockInfo.remainingTimeFormatted,
+                  remaining_minutes: attemptResult.lockInfo.remainingMinutes,
+                  lockout_reason: attemptResult.lockInfo.lockoutReason
+                }
+              });
+            } else {
+              logger.auth.warn("Failed temp password verification", {
+                email: normalizedEmail,
+                attempts: attemptResult.attempts,
+                remaining_attempts: attemptResult.remainingAttempts
+              });
+              
+              return res.status(401).json({
+                success: false,
+                message: "Incorrect temporary password",
+                attempts_info: {
+                  failed_attempts: attemptResult.attempts,
+                  remaining_attempts: attemptResult.remainingAttempts,
+                  warning: attemptResult.remainingAttempts <= 1 ? "Account will be locked after next failed attempt" : null
+                }
+              });
+            }
+          }
+        } catch (error) {
+          logger.auth.error("Error handling failed temp password verification", {
+            error: error.message,
+            email: normalizedEmail,
+            stack: error.stack
+          });
+          
+          return res.status(500).json({
+            success: false,
+            message: "Server error during verification",
+            error: process.env.NODE_ENV === "development" ? error.message : "Internal server error"
+          });
+        }
+      }
+
+      // Temporary password is correct - reset failed attempts and prepare for password change
+      await this.resetLockoutFields(user);
+      
+      // Generate a temporary verification token for password reset
+      const verificationToken = crypto.randomBytes(32).toString("hex");
+      user.temp_password_verified = true;
+      user.temp_password_verification_token = verificationToken;
+      user.temp_password_verification_expires = Date.now() + 15 * 60 * 1000; // 15 minutes
+      
+      await user.save();
+
+      // Log successful verification
+      await user.logActivity("temp_password_verified", null, {
+        verification_time: new Date(),
+        ip_address: req.ip,
+        user_agent: req.headers["user-agent"],
+        verification_token: verificationToken
+      }, {
+        ip_address: req.ip,
+        user_agent: req.headers["user-agent"],
+        device_type: this.extractDeviceInfo(req).device_type,
+        geolocation: this.extractLocationInfo(req)
+      });
+
+      logger.auth.info("Temporary password verified successfully", {
+        email: normalizedEmail,
+        verification_token: verificationToken
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Temporary password verified successfully. You can now set a new password.",
+        data: {
+          verification_token: verificationToken,
+          expires_in_minutes: 15,
+          next_step: "Use this token to set a new password via /reset-password endpoint"
+        }
+      });
+
+    } catch (err) {
+      logger.auth.error("Temp password verification process failed", {
+        error: err,
+        stack: err.stack,
+      });
+      return res.status(500).json({
+        success: false,
+        message: "Server error during temporary password verification",
+        error: process.env.NODE_ENV === "development" ? err.message : "Internal server error"
       });
     }
   }
@@ -295,46 +504,76 @@ class AuthController {
         });
       }
 
-      // Check if account is locked
-      if (user.account_locked_until && user.account_locked_until > Date.now()) {
+      // Check if account is locked using improved logic
+      const lockStatus = this.isAccountLocked(user);
+      if (lockStatus.isLocked) {
         return res.status(423).json({
           success: false,
-          message: "Account is temporarily locked. Please try again later.",
-          locked_until: user.account_locked_until,
+          message: `Account is temporarily locked. Please try again after ${lockStatus.remainingTimeFormatted}.`,
+          lockout_info: {
+            locked_until: lockStatus.lockedUntil,
+            remaining_time: lockStatus.remainingTimeFormatted,
+            remaining_minutes: lockStatus.remainingMinutes,
+            lockout_reason: lockStatus.lockoutReason
+          }
         });
+      }
+
+      // If lockout period has expired, reset fields
+      if (lockStatus.needsReset) {
+        await this.resetLockoutFields(user);
       }
 
       // Verify current password
       const isMatch = await user.comparePassword(currentPassword);
       
       if (!isMatch) {
-        // Increment failed attempts for password changes
-        user.password_change_attempts = (user.password_change_attempts || 0) + 1;
-        
-        // Lock account after 3 failed password change attempts
-        if (user.password_change_attempts >= 3) {
-          user.account_locked_until = Date.now() + 15 * 60 * 1000; // 15 minutes
-          logger.warn("Account locked due to multiple failed password change attempts", {
-            userId: user._id,
-            email: user.email,
-            attempts: user.password_change_attempts
-          });
-        }
-        
         try {
-          await dbUtils.save(user);
+          const attemptResult = await this.incrementFailedAttempts(user, 'password_change');
+          
+          if (attemptResult.shouldReturnError) {
+            if (attemptResult.isLocked) {
+              logger.warn("Account locked due to multiple failed password change attempts", {
+                userId: user._id,
+                email: user.email,
+                attempts: attemptResult.attempts,
+                lockoutDurationMinutes: attemptResult.lockInfo.remainingMinutes
+              });
+              
+              return res.status(423).json({
+                success: false,
+                message: `Account temporarily locked due to multiple failed password change attempts. Please try again after ${attemptResult.lockInfo.remainingMinutes} minute(s).`,
+                lockout_info: {
+                  locked_until: attemptResult.lockInfo.lockedUntil,
+                  remaining_time: attemptResult.lockInfo.remainingTimeFormatted,
+                  remaining_minutes: attemptResult.lockInfo.remainingMinutes,
+                  lockout_reason: attemptResult.lockInfo.lockoutReason
+                }
+              });
+            } else {
+              return res.status(400).json({
+                success: false,
+                message: "Current password is incorrect",
+                attempts_info: {
+                  failed_attempts: attemptResult.attempts,
+                  remaining_attempts: attemptResult.remainingAttempts,
+                  warning: attemptResult.remainingAttempts <= 1 ? "Account will be locked after next failed attempt" : null
+                }
+              });
+            }
+          }
         } catch (dbError) {
-          logger.error("Database error saving failed password change attempt", {
+          logger.error("Database error handling failed password change attempt", {
             error: dbError.message,
-            userId
+            userId,
+            stack: dbError.stack
+          });
+          
+          return res.status(400).json({
+            success: false,
+            message: "Current password is incorrect"
           });
         }
-        
-        return res.status(400).json({
-          success: false,
-          message: "Current password is incorrect",
-          attempts_remaining: Math.max(0, 3 - user.password_change_attempts),
-        });
       }
 
       // Check if new password is the same as current
@@ -357,8 +596,7 @@ class AuthController {
       user.password = await bcrypt.hash(newPassword, salt);
 
       // Reset password change attempts and account lock
-      user.password_change_attempts = 0;
-      user.account_locked_until = undefined;
+      await this.resetLockoutFields(user);
       
       // Update password change metadata
       user.last_password_change = new Date();
@@ -827,45 +1065,72 @@ class AuthController {
         });
       }
 
-      // Check if account is locked
-      if (user.account_locked_until && user.account_locked_until > Date.now()) {
+      // Check if account is locked using improved logic
+      const lockStatus = this.isAccountLocked(user);
+      if (lockStatus.isLocked) {
         return res.status(423).json({
           success: false,
-          message: "Account temporarily locked due to multiple failed login attempts",
-          locked_until: user.account_locked_until,
+          message: `Account temporarily locked due to multiple failed login attempts. Please try again after ${lockStatus.remainingMinutes} minute(s).`,
+          lockout_info: {
+            locked_until: lockStatus.lockedUntil,
+            remaining_time: lockStatus.remainingTimeFormatted,
+            remaining_minutes: lockStatus.remainingMinutes,
+            lockout_reason: lockStatus.lockoutReason
+          }
         });
+      }
+
+      // If lockout period has expired, reset fields
+      if (lockStatus.needsReset) {
+        await this.resetLockoutFields(user);
       }
 
       // Verify password
       const isValidPassword = await user.comparePassword(password);
       if (!isValidPassword) {
-        user.failed_login_attempts += 1;
-        
-        // Lock account after 5 failed attempts for 30 minutes
-        if (user.failed_login_attempts >= 5) {
-          user.account_locked_until = Date.now() + 30 * 60 * 1000;
-        }
-        
         try {
-          await dbUtils.save(user);
+          const attemptResult = await this.incrementFailedAttempts(user, 'login');
+          
+          if (attemptResult.shouldReturnError) {
+            if (attemptResult.isLocked) {
+              return res.status(423).json({
+                success: false,
+                message: `Account temporarily locked due to multiple failed attempts. Please try again after ${attemptResult.lockInfo.remainingMinutes} minute(s).`,
+                lockout_info: {
+                  locked_until: attemptResult.lockInfo.lockedUntil,
+                  remaining_time: attemptResult.lockInfo.remainingTimeFormatted,
+                  remaining_minutes: attemptResult.lockInfo.remainingMinutes,
+                  lockout_reason: attemptResult.lockInfo.lockoutReason
+                }
+              });
+            } else {
+              return res.status(401).json({
+                success: false,
+                message: "Invalid credentials",
+                attempts_info: {
+                  failed_attempts: attemptResult.attempts,
+                  remaining_attempts: attemptResult.remainingAttempts,
+                  warning: attemptResult.remainingAttempts <= 1 ? "Account will be locked after next failed attempt" : null
+                }
+              });
+            }
+          }
         } catch (dbError) {
-          logger.error("Database error during login - failed attempt save", {
+          logger.error("Database error during login - failed attempt handling", {
             error: dbError.message,
-            userId: user._id
+            userId: user._id,
+            stack: dbError.stack
           });
-          // Continue with login failure response even if save fails
+          
+          return res.status(401).json({
+            success: false,
+            message: "Invalid credentials"
+          });
         }
-        
-        return res.status(401).json({
-          success: false,
-          message: "Invalid credentials",
-          attempts_remaining: Math.max(0, 5 - user.failed_login_attempts),
-        });
       }
 
       // Reset failed login attempts on successful login
-      user.failed_login_attempts = 0;
-      user.account_locked_until = undefined;
+      await this.resetLockoutFields(user);
 
       // Extract device and location information
       const deviceInfo = this.extractDeviceInfo(req);
@@ -1510,6 +1775,757 @@ class AuthController {
         error: process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
+  }
+
+  // Account Lockout Management Methods
+
+  /**
+   * Calculate progressive lockout duration based on failed attempts
+   * Enhanced with more granular control and better scaling
+   * @param {number} attempts - Number of failed attempts
+   * @returns {number} - Lockout duration in milliseconds
+   */
+  calculateLockoutDuration(attempts) {
+    // Progressive lockout strategy
+    const lockoutLevels = {
+      3: 1 * 60 * 1000,      // 1 minute for 3 attempts
+      4: 5 * 60 * 1000,      // 5 minutes for 4 attempts
+      5: 15 * 60 * 1000,     // 15 minutes for 5 attempts
+      6: 30 * 60 * 1000,     // 30 minutes for 6 attempts
+      7: 60 * 60 * 1000,     // 1 hour for 7 attempts
+      8: 2 * 60 * 60 * 1000, // 2 hours for 8 attempts
+      9: 4 * 60 * 60 * 1000, // 4 hours for 9 attempts
+    };
+    
+    // For 10+ attempts, use 24 hours
+    if (attempts >= 10) {
+      return 24 * 60 * 60 * 1000; // 24 hours
+    }
+    
+    return lockoutLevels[attempts] || 0;
+  }
+
+  /**
+   * Check if account is currently locked
+   * @param {Object} user - User document
+   * @returns {Object} - Lock status information
+   */
+  isAccountLocked(user) {
+    if (!user.account_locked_until) {
+      return { isLocked: false };
+    }
+
+    const now = Date.now();
+    const isLocked = user.account_locked_until > now;
+    
+    if (!isLocked) {
+      // Account was locked but lockout period has expired
+      return { 
+        isLocked: false, 
+        wasLocked: true,
+        needsReset: true 
+      };
+    }
+
+    const remainingTime = user.account_locked_until - now;
+    const remainingMinutes = Math.ceil(remainingTime / (1000 * 60));
+
+    return {
+      isLocked: true,
+      remainingTime,
+      remainingMinutes,
+      remainingTimeFormatted: this.formatRemainingTime(remainingTime),
+      lockedUntil: user.account_locked_until,
+      lockoutReason: user.lockout_reason || 'multiple_failed_attempts'
+    };
+  }
+
+  /**
+   * Safely increment failed attempts and handle locking logic
+   * Uses atomic operations to prevent race conditions
+   * @param {Object} user - User document
+   * @param {string} attemptType - Type of failed attempt ('login', 'temp_password', 'password_change')
+   * @returns {Object} - Result of the attempt increment
+   */
+  async incrementFailedAttempts(user, attemptType = 'login') {
+    try {
+      const lockStatus = this.isAccountLocked(user);
+      
+      // If account was locked but lockout period expired, reset counters
+      if (lockStatus.needsReset) {
+        await this.resetLockoutFields(user);
+        user.failed_login_attempts = 0;
+        user.password_change_attempts = 0;
+        user.account_locked_until = undefined;
+        user.lockout_reason = undefined;
+      }
+
+      // If account is currently locked, return lock information
+      if (lockStatus.isLocked) {
+        return {
+          isLocked: true,
+          lockInfo: lockStatus,
+          shouldReturnError: true
+        };
+      }
+
+      // Determine which counter to increment
+      const attemptField = attemptType === 'password_change' ? 'password_change_attempts' : 'failed_login_attempts';
+      const currentAttempts = (user[attemptField] || 0) + 1;
+
+      // Calculate if this increment should trigger a lockout
+      const lockoutDuration = this.calculateLockoutDuration(currentAttempts);
+      const shouldLock = lockoutDuration > 0;
+
+      // Prepare update object
+      const updateData = {
+        [attemptField]: currentAttempts,
+        last_failed_attempt: new Date()
+      };
+
+      if (shouldLock) {
+        updateData.account_locked_until = Date.now() + lockoutDuration;
+        updateData.lockout_reason = attemptType + '_attempts';
+      }
+
+      // Use atomic update to prevent race conditions
+      const updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        { $set: updateData },
+        { new: true }
+      );
+
+      if (!updatedUser) {
+        throw new Error('Failed to update user attempt counter');
+      }
+
+      // Update local user object
+      Object.assign(user, updateData);
+
+      const result = {
+        isLocked: shouldLock,
+        attempts: currentAttempts,
+        lockoutDuration: shouldLock ? lockoutDuration : 0,
+        lockoutDurationMinutes: shouldLock ? Math.ceil(lockoutDuration / (60 * 1000)) : 0,
+        remainingAttempts: Math.max(0, 3 - currentAttempts),
+        shouldReturnError: shouldLock
+      };
+
+      if (shouldLock) {
+        result.lockInfo = {
+          lockedUntil: updateData.account_locked_until,
+          remainingTime: lockoutDuration,
+          remainingMinutes: result.lockoutDurationMinutes,
+          remainingTimeFormatted: this.formatRemainingTime(lockoutDuration),
+          lockoutReason: updateData.lockout_reason
+        };
+
+        logger.warn(`Account locked due to ${attemptType} attempts`, {
+          userId: user._id,
+          email: user.email,
+          attempts: currentAttempts,
+          lockoutDurationMinutes: result.lockoutDurationMinutes,
+          lockoutReason: updateData.lockout_reason
+        });
+      }
+
+      return result;
+    } catch (error) {
+      logger.error('Error incrementing failed attempts:', {
+        error: error.message,
+        userId: user._id,
+        attemptType,
+        stack: error.stack
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Reset lockout fields atomically
+   * @param {Object} user - User document
+   */
+  async resetLockoutFields(user) {
+    try {
+      const updateData = {
+        failed_login_attempts: 0,
+        password_change_attempts: 0,
+        account_locked_until: undefined,
+        lockout_reason: undefined,
+        last_failed_attempt: undefined
+      };
+
+      const updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        { 
+          $set: { 
+            failed_login_attempts: 0,
+            password_change_attempts: 0
+          },
+          $unset: {
+            account_locked_until: 1,
+            lockout_reason: 1,
+            last_failed_attempt: 1
+          }
+        },
+        { new: true }
+      );
+
+      if (updatedUser) {
+        // Update local user object
+        Object.assign(user, updateData);
+      }
+
+      return updatedUser;
+    } catch (error) {
+      logger.error('Error resetting lockout fields:', {
+        error: error.message,
+        userId: user._id,
+        stack: error.stack
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get all locked accounts
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getLockedAccounts(req, res) {
+    try {
+      // Check if user has admin privileges
+      if (!this.hasAdminAccess(req.user)) {
+        return res.status(403).json({
+          success: false,
+          message: "Unauthorized. Admin access required.",
+        });
+      }
+
+      // Find all locked accounts
+      const lockedUsers = await User.find({
+        account_locked_until: { $exists: true, $ne: null, $gt: Date.now() }
+      }).select('full_name email failed_login_attempts password_change_attempts account_locked_until lockout_reason created_at last_login');
+
+      // Calculate remaining lockout time for each user
+      const lockedAccountsWithDetails = lockedUsers.map(user => {
+        const remainingTime = user.account_locked_until - Date.now();
+        const remainingMinutes = Math.ceil(remainingTime / (1000 * 60));
+        
+        return {
+          id: user._id,
+          full_name: user.full_name,
+          email: user.email,
+          failed_login_attempts: user.failed_login_attempts || 0,
+          password_change_attempts: user.password_change_attempts || 0,
+          lockout_reason: user.lockout_reason || 'unknown',
+          locked_until: user.account_locked_until,
+          remaining_minutes: remainingMinutes,
+          remaining_time_formatted: this.formatRemainingTime(remainingTime),
+          created_at: user.created_at,
+          last_login: user.last_login
+        };
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `Found ${lockedAccountsWithDetails.length} locked accounts`,
+        data: {
+          total_locked: lockedAccountsWithDetails.length,
+          accounts: lockedAccountsWithDetails
+        }
+      });
+    } catch (error) {
+      logger.error("Get locked accounts error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error retrieving locked accounts",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Unlock a specific account
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async unlockAccount(req, res) {
+    try {
+      // Check if user has admin privileges
+      if (!this.hasAdminAccess(req.user)) {
+        return res.status(403).json({
+          success: false,
+          message: "Unauthorized. Admin access required.",
+        });
+      }
+
+      const { userId } = req.params;
+      const { resetAttempts = true } = req.body;
+
+      // Find the user
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Check if account is actually locked
+      if (!user.account_locked_until || user.account_locked_until <= Date.now()) {
+        return res.status(400).json({
+          success: false,
+          message: "Account is not currently locked",
+          data: {
+            user_email: user.email,
+            current_status: "unlocked"
+          }
+        });
+      }
+
+      // Store previous state for logging
+      const previousState = {
+        locked_until: user.account_locked_until,
+        failed_login_attempts: user.failed_login_attempts,
+        password_change_attempts: user.password_change_attempts,
+        lockout_reason: user.lockout_reason
+      };
+
+      // Unlock the account using atomic operation
+      const updateFields = {
+        $unset: {
+          account_locked_until: 1,
+          lockout_reason: 1,
+          last_failed_attempt: 1
+        }
+      };
+
+      if (resetAttempts) {
+        updateFields.$set = {
+          failed_login_attempts: 0,
+          password_change_attempts: 0
+        };
+      }
+
+      const updatedUser = await User.findByIdAndUpdate(
+        user._id,
+        updateFields,
+        { new: true }
+      );
+
+      if (!updatedUser) {
+        return res.status(404).json({
+          success: false,
+          message: "Failed to unlock account - user not found during update",
+        });
+      }
+
+      // Force a fresh reload to ensure no cached data issues
+      await updatedUser.save();
+
+      // Update local user object
+      user.account_locked_until = undefined;
+      user.lockout_reason = undefined;
+      user.last_failed_attempt = undefined;
+      if (resetAttempts) {
+        user.failed_login_attempts = 0;
+        user.password_change_attempts = 0;
+      }
+
+      // Log the unlock activity (using valid enum value)
+      try {
+        await user.logActivity('admin_action', null, {
+          action_type: 'account_unlocked',
+          unlocked_at: new Date(),
+          unlocked_by_admin: req.user.email,
+          previous_state: previousState,
+          attempts_reset: resetAttempts
+        });
+      } catch (logError) {
+        // Continue even if logging fails
+        logger.warn("Failed to log unlock activity", { error: logError.message });
+      }
+
+      logger.info("Account unlocked by admin", {
+        unlockedUserId: user._id,
+        unlockedUserEmail: user.email,
+        adminUserId: req.user.id,
+        adminEmail: req.user.email,
+        previousState
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Account unlocked successfully",
+        data: {
+          user: {
+            id: user._id,
+            email: user.email,
+            full_name: user.full_name,
+            unlocked_at: new Date(),
+            attempts_reset: resetAttempts
+          },
+          previous_state: previousState
+        }
+      });
+    } catch (error) {
+      logger.error("Unlock account error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error unlocking account",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Unlock all locked accounts
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async unlockAllAccounts(req, res) {
+    try {
+      // Check if user has super admin privileges
+      if (!this.hasSuperAdminAccess(req.user)) {
+        return res.status(403).json({
+          success: false,
+          message: "Unauthorized. Super admin access required.",
+        });
+      }
+
+      const { resetAttempts = true } = req.body;
+
+      // Find all locked accounts
+      const lockedUsers = await User.find({
+        account_locked_until: { $exists: true, $ne: null, $gt: Date.now() }
+      });
+
+      if (lockedUsers.length === 0) {
+        return res.status(200).json({
+          success: true,
+          message: "No locked accounts found",
+          data: {
+            unlocked_count: 0,
+            accounts: []
+          }
+        });
+      }
+
+      // Store information about unlocked accounts
+      const unlockedAccounts = [];
+
+      // Unlock all accounts using atomic operation
+      const lockoutQuery = { 
+        account_locked_until: { $exists: true, $ne: null, $gt: Date.now() } 
+      };
+
+      const updateQuery = {
+        $unset: { 
+          account_locked_until: 1,
+          lockout_reason: 1,
+          last_failed_attempt: 1
+        }
+      };
+
+      if (resetAttempts) {
+        updateQuery.$set = {
+          failed_login_attempts: 0,
+          password_change_attempts: 0
+        };
+      }
+
+      const result = await User.updateMany(lockoutQuery, updateQuery);
+
+      // Log activity for each unlocked user
+      for (const user of lockedUsers) {
+        unlockedAccounts.push({
+          id: user._id,
+          email: user.email,
+          full_name: user.full_name,
+          was_locked_until: user.account_locked_until,
+          lockout_reason: user.lockout_reason,
+          failed_login_attempts: user.failed_login_attempts || 0,
+          password_change_attempts: user.password_change_attempts || 0
+        });
+
+        // Log unlock activity for each user
+        // Log bulk unlock activity (using valid enum value)
+        try {
+          await user.logActivity('admin_action', null, {
+            action_type: 'account_unlocked_bulk',
+            unlocked_at: new Date(),
+            unlocked_by_admin: req.user.email,
+            bulk_unlock: true,
+            attempts_reset: resetAttempts
+          });
+        } catch (logError) {
+          // Continue even if logging fails
+          logger.warn("Failed to log bulk unlock activity", { error: logError.message });
+        }
+      }
+
+      logger.info("Bulk account unlock performed", {
+        adminUserId: req.user.id,
+        adminEmail: req.user.email,
+        unlockedCount: result.modifiedCount,
+        attemptReset: resetAttempts
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `Successfully unlocked ${result.modifiedCount} accounts`,
+        data: {
+          unlocked_count: result.modifiedCount,
+          attempts_reset: resetAttempts,
+          accounts: unlockedAccounts
+        }
+      });
+    } catch (error) {
+      logger.error("Unlock all accounts error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error unlocking accounts",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Get account lockout statistics
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getLockoutStats(req, res) {
+    try {
+      // Check if user has admin privileges
+      if (!this.hasAdminAccess(req.user)) {
+        return res.status(403).json({
+          success: false,
+          message: "Unauthorized. Admin access required.",
+        });
+      }
+
+      const now = Date.now();
+      const oneDayAgo = now - 24 * 60 * 60 * 1000;
+      const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+      // Get various lockout statistics
+      const [
+        currentlyLocked,
+        lockedLast24h,
+        lockedLastWeek,
+        lockoutReasons,
+        attemptStats
+      ] = await Promise.all([
+        // Currently locked accounts
+        User.countDocuments({
+          account_locked_until: { $gt: now }
+        }),
+        
+        // Accounts locked in last 24 hours
+        User.countDocuments({
+          account_locked_until: { $gte: oneDayAgo }
+        }),
+        
+        // Accounts locked in last week
+        User.countDocuments({
+          account_locked_until: { $gte: oneWeekAgo }
+        }),
+        
+        // Lockout reasons breakdown
+        User.aggregate([
+          { $match: { lockout_reason: { $exists: true, $ne: null } } },
+          { $group: { _id: "$lockout_reason", count: { $sum: 1 } } }
+        ]),
+        
+        // Failed attempt statistics
+        User.aggregate([
+          {
+            $group: {
+              _id: null,
+              avg_failed_login_attempts: { $avg: "$failed_login_attempts" },
+              max_failed_login_attempts: { $max: "$failed_login_attempts" },
+              avg_password_change_attempts: { $avg: "$password_change_attempts" },
+              max_password_change_attempts: { $max: "$password_change_attempts" },
+              total_users_with_failed_logins: {
+                $sum: { $cond: [{ $gt: ["$failed_login_attempts", 0] }, 1, 0] }
+              },
+              total_users_with_failed_password_changes: {
+                $sum: { $cond: [{ $gt: ["$password_change_attempts", 0] }, 1, 0] }
+              }
+            }
+          }
+        ])
+      ]);
+
+      const stats = attemptStats[0] || {};
+
+      res.status(200).json({
+        success: true,
+        message: "Lockout statistics retrieved successfully",
+        data: {
+          current_status: {
+            currently_locked: currentlyLocked,
+            locked_last_24h: lockedLast24h,
+            locked_last_week: lockedLastWeek
+          },
+          lockout_reasons: lockoutReasons.reduce((acc, item) => {
+            acc[item._id] = item.count;
+            return acc;
+          }, {}),
+          attempt_statistics: {
+            avg_failed_login_attempts: Math.round((stats.avg_failed_login_attempts || 0) * 100) / 100,
+            max_failed_login_attempts: stats.max_failed_login_attempts || 0,
+            users_with_failed_logins: stats.total_users_with_failed_logins || 0,
+            avg_password_change_attempts: Math.round((stats.avg_password_change_attempts || 0) * 100) / 100,
+            max_password_change_attempts: stats.max_password_change_attempts || 0,
+            users_with_failed_password_changes: stats.total_users_with_failed_password_changes || 0
+          },
+          lockout_levels: {
+            level_1: "3 attempts = 1 minute",
+            level_2: "4 attempts = 5 minutes", 
+            level_3: "5 attempts = 15 minutes",
+            level_4: "6 attempts = 30 minutes",
+            level_5: "7 attempts = 1 hour",
+            level_6: "8 attempts = 2 hours",
+            level_7: "9 attempts = 4 hours",
+            level_8: "10+ attempts = 24 hours"
+          }
+        }
+      });
+    } catch (error) {
+      logger.error("Get lockout stats error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error retrieving lockout statistics",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Format remaining time into human readable format
+   * @param {number} timeMs - Time in milliseconds
+   * @returns {string} - Formatted time string
+   */
+  formatRemainingTime(timeMs) {
+    if (timeMs <= 0) return "Expired";
+    
+    const minutes = Math.floor(timeMs / (1000 * 60));
+    const seconds = Math.floor((timeMs % (1000 * 60)) / 1000);
+    
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  }
+
+  /**
+   * Check if user has basic admin roles (without super admin check)
+   * @param {Object} user - User object from token
+   * @returns {boolean} - Whether user has basic admin access
+   */
+  hasBasicAdminAccess(user) {
+    if (!user) return false;
+    
+    // Check various admin role formats
+    const adminRoles = [
+      'admin', 'administrator'
+    ];
+    
+    // Check primary role field
+    if (user.role && adminRoles.includes(user.role.toLowerCase())) {
+      return true;
+    }
+    
+    // Check admin_role field
+    if (user.admin_role && adminRoles.includes(user.admin_role.toLowerCase())) {
+      return true;
+    }
+    
+    // Check if role is an array and contains admin roles
+    if (Array.isArray(user.role)) {
+      return user.role.some(role => adminRoles.includes(role.toLowerCase()));
+    }
+    
+    // Check permissions array if exists
+    if (user.permissions && Array.isArray(user.permissions)) {
+      const adminPermissions = ['admin', 'user_management'];
+      return user.permissions.some(permission => 
+        adminPermissions.includes(permission.toLowerCase())
+      );
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check if user has super admin access (highest level privileges)
+   * @param {Object} user - User object from token
+   * @returns {boolean} - Whether user has super admin access
+   */
+  hasSuperAdminAccess(user) {
+    if (!user) return false;
+    
+    // Check various super admin role formats
+    const superAdminRoles = [
+      'super_admin', 'superadmin', 'super-admin', 'root', 
+      'system_admin', 'master_admin', 'owner'
+    ];
+    
+    // Check primary role field
+    if (user.role && superAdminRoles.includes(user.role.toLowerCase())) {
+      return true;
+    }
+    
+    // Check admin_role field
+    if (user.admin_role && superAdminRoles.includes(user.admin_role.toLowerCase())) {
+      return true;
+    }
+    
+    // Check if role is an array and contains super admin roles
+    if (Array.isArray(user.role)) {
+      return user.role.some(role => superAdminRoles.includes(role.toLowerCase()));
+    }
+    
+    // Check permissions array if exists
+    if (user.permissions && Array.isArray(user.permissions)) {
+      const superAdminPermissions = ['super_admin', 'system_admin', 'root'];
+      return user.permissions.some(permission => 
+        superAdminPermissions.includes(permission.toLowerCase())
+      );
+    }
+    
+    // Check for super admin boolean flags
+    if (user.is_super_admin === true || user.isSuperAdmin === true) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Check if user has admin access (includes both admin and super admin)
+   * Super admin automatically has all admin privileges
+   * @param {Object} user - User object from token
+   * @returns {boolean} - Whether user has admin access
+   */
+  hasAdminAccess(user) {
+    if (!user) return false;
+    
+    // Super admin automatically has admin access
+    if (this.hasSuperAdminAccess(user)) {
+      return true;
+    }
+    
+    // Check for basic admin access
+    if (this.hasBasicAdminAccess(user)) {
+      return true;
+    }
+    
+    return false;
   }
 
   // Helper Methods

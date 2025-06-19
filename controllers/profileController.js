@@ -5,11 +5,60 @@ import Quiz from "../models/quiz-model.js";
 import Order from "../models/Order.js";
 import Progress from "../models/progress-model.js";
 import Certificate from "../models/certificate-model.js";
+import EnhancedProgress from "../models/enhanced-progress.model.js";
 import logger from "../utils/logger.js";
 import { validationResult } from "express-validator";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { ENV_VARS } from "../config/envVars.js";
+
+// Helper functions for enhanced progress analytics
+const calculateLearningStreak = (progressData) => {
+  if (!progressData || progressData.length === 0) return 0;
+  
+  const sortedData = progressData.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  let streak = 0;
+  let currentDate = new Date();
+  
+  for (const entry of sortedData) {
+    const entryDate = new Date(entry.updatedAt);
+    const daysDiff = Math.floor((currentDate - entryDate) / (1000 * 60 * 60 * 24));
+    
+    if (daysDiff <= 1) {
+      streak++;
+      currentDate = entryDate;
+    } else {
+      break;
+    }
+  }
+  
+  return streak;
+};
+
+const calculatePerformanceTrends = (progressData) => {
+  if (!progressData || progressData.length < 2) return { trend: 'stable', change: 0 };
+  
+  const recent = progressData.slice(0, Math.min(10, progressData.length));
+  const older = progressData.slice(10, Math.min(20, progressData.length));
+  
+  const recentAvg = recent.reduce((sum, p) => sum + (p.score || 0), 0) / recent.length;
+  const olderAvg = older.length > 0 ? older.reduce((sum, p) => sum + (p.score || 0), 0) / older.length : recentAvg;
+  
+  const change = recentAvg - olderAvg;
+  const trend = change > 5 ? 'improving' : change < -5 ? 'declining' : 'stable';
+  
+  return { trend, change: Math.round(change * 100) / 100 };
+};
+
+const calculateLearningVelocity = (progressData) => {
+  if (!progressData || progressData.length < 2) return 0;
+  
+  const sortedData = progressData.sort((a, b) => new Date(a.updatedAt) - new Date(b.updatedAt));
+  const timeSpan = new Date(sortedData[sortedData.length - 1].updatedAt) - new Date(sortedData[0].updatedAt);
+  const days = timeSpan / (1000 * 60 * 60 * 24);
+  
+  return days > 0 ? Math.round((progressData.length / days) * 100) / 100 : 0;
+};
 
 /**
  * @desc Get complete user profile
@@ -736,10 +785,61 @@ export const getComprehensiveProfile = async (req, res) => {
       });
     }
 
+    // Get enhanced progress data for comprehensive analytics
+    let enhancedProgressData = [];
+    let enhancedAnalytics = {};
+    try {
+      enhancedProgressData = await EnhancedProgress.find({ 
+        userId: userId,
+        isActive: true
+      })
+      .populate('courseId', 'course_title course_image course_category')
+      .populate('contentId', 'title type')
+      .sort({ updatedAt: -1 })
+      .limit(100); // Get recent 100 entries
+
+      // Calculate enhanced analytics
+      if (enhancedProgressData.length > 0) {
+        const completedEntries = enhancedProgressData.filter(p => p.status === 'completed');
+        const inProgressEntries = enhancedProgressData.filter(p => p.status === 'in_progress');
+        const totalTimeSpent = enhancedProgressData.reduce((sum, p) => sum + (p.timeSpent || 0), 0);
+        const totalScore = enhancedProgressData.reduce((sum, p) => sum + (p.score || 0), 0);
+
+        enhancedAnalytics = {
+          total_entries: enhancedProgressData.length,
+          completed_entries: completedEntries.length,
+          in_progress_entries: inProgressEntries.length,
+          average_completion_rate: enhancedProgressData.length > 0 ? 
+            (enhancedProgressData.reduce((sum, p) => sum + p.progressPercentage, 0) / enhancedProgressData.length) : 0,
+          total_time_spent_enhanced: totalTimeSpent,
+          average_score_enhanced: enhancedProgressData.length > 0 ? (totalScore / enhancedProgressData.length) : 0,
+          content_type_breakdown: enhancedProgressData.reduce((acc, p) => {
+            acc[p.contentType] = (acc[p.contentType] || 0) + 1;
+            return acc;
+          }, {}),
+          recent_learning_streak: calculateLearningStreak(enhancedProgressData),
+          performance_trends: calculatePerformanceTrends(enhancedProgressData),
+          learning_velocity: calculateLearningVelocity(enhancedProgressData)
+        };
+      }
+    } catch (enhancedProgressError) {
+      logger.warn('Could not fetch enhanced progress data', { 
+        userId, 
+        error: enhancedProgressError.message 
+      });
+    }
+
     // Enhanced learning analytics with real-time calculations
     const learningAnalytics = {
-      total_learning_time: user.statistics?.learning?.total_learning_time || 0,
-      current_streak: user.statistics?.learning?.current_streak || 0,
+      // Existing analytics
+      total_learning_time: Math.max(
+        user.statistics?.learning?.total_learning_time || 0,
+        enhancedAnalytics.total_time_spent_enhanced || 0
+      ),
+      current_streak: Math.max(
+        user.statistics?.learning?.current_streak || 0,
+        enhancedAnalytics.recent_learning_streak || 0
+      ),
       longest_streak: user.statistics?.learning?.longest_streak || 0,
       certificates_earned: certificates.length,
       skill_points: user.statistics?.learning?.skill_points || 0,
@@ -747,18 +847,36 @@ export const getComprehensiveProfile = async (req, res) => {
       total_courses_enrolled: courseStats.total_enrolled,
       total_courses_completed: courseStats.completed_courses,
       completion_rate: courseStats.total_enrolled > 0 ? (courseStats.completed_courses / courseStats.total_enrolled * 100) : 0,
-      average_score: quizResults.length > 0 ? quizResults.reduce((sum, quiz) => {
-        const userSubmission = quiz.submissions.find(s => s.student_id.toString() === userId);
-        return sum + (userSubmission?.score || 0);
-      }, 0) / quizResults.length : 0,
+      average_score: Math.max(
+        quizResults.length > 0 ? quizResults.reduce((sum, quiz) => {
+          const userSubmission = quiz.submissions.find(s => s.student_id.toString() === userId);
+          return sum + (userSubmission?.score || 0);
+        }, 0) / quizResults.length : 0,
+        enhancedAnalytics.average_score_enhanced || 0
+      ),
+      
       // Enhanced analytics from Progress model
       total_lessons_completed: detailedProgress.reduce((sum, progress) => sum + (progress.lessons_completed || 0), 0),
       total_assignments_completed: detailedProgress.reduce((sum, progress) => sum + (progress.assignments_completed || 0), 0),
       total_quiz_attempts: quizResults.reduce((sum, quiz) => sum + quiz.submissions.filter(s => s.student_id.toString() === userId).length, 0),
       average_lesson_completion_time: detailedProgress.length > 0 ? 
         detailedProgress.reduce((sum, progress) => sum + (progress.average_lesson_time || 0), 0) / detailedProgress.length : 0,
-      last_learning_activity: detailedProgress.length > 0 ? 
-        Math.max(...detailedProgress.map(p => new Date(p.last_updated || 0).getTime())) : null
+      last_learning_activity: Math.max(
+        detailedProgress.length > 0 ? Math.max(...detailedProgress.map(p => new Date(p.last_updated || 0).getTime())) : 0,
+        enhancedProgressData.length > 0 ? Math.max(...enhancedProgressData.map(p => new Date(p.updatedAt || 0).getTime())) : 0
+      ),
+
+      // New enhanced progress analytics
+      enhanced_progress: {
+        total_tracked_activities: enhancedAnalytics.total_entries || 0,
+        completed_activities: enhancedAnalytics.completed_entries || 0,
+        in_progress_activities: enhancedAnalytics.in_progress_entries || 0,
+        average_completion_rate: enhancedAnalytics.average_completion_rate || 0,
+        content_type_breakdown: enhancedAnalytics.content_type_breakdown || {},
+        performance_trends: enhancedAnalytics.performance_trends || { trend: 'stable', change: 0 },
+        learning_velocity: enhancedAnalytics.learning_velocity || 0,
+        enhanced_time_spent: enhancedAnalytics.total_time_spent_enhanced || 0
+      }
     };
 
     // Enhanced social metrics
@@ -1036,6 +1154,32 @@ export const getComprehensiveProfile = async (req, res) => {
             average_lesson_time: progress.average_lesson_time,
             learning_path: progress.learning_path,
             milestones_reached: progress.milestones_reached
+          })),
+          
+          // Enhanced progress tracking data
+          enhanced_progress: enhancedProgressData.map(progress => ({
+            progress_id: progress._id,
+            user_id: progress.userId,
+            course_id: progress.courseId?._id,
+            course_title: progress.courseId?.course_title,
+            course_image: progress.courseId?.course_image,
+            course_category: progress.courseId?.course_category,
+            content_type: progress.contentType,
+            content_id: progress.contentId?._id,
+            content_title: progress.contentId?.title,
+            progress_percentage: progress.progressPercentage,
+            status: progress.status,
+            time_spent: progress.timeSpent,
+            score: progress.score,
+            attempts: progress.attempts,
+            last_accessed: progress.lastAccessed,
+            completion_date: progress.completionDate,
+            notes: progress.notes,
+            metadata: progress.metadata,
+            learning_objectives_met: progress.learningObjectivesMet,
+            performance_metrics: progress.performanceMetrics,
+            created_at: progress.createdAt,
+            updated_at: progress.updatedAt
           }))
         },
 
@@ -1364,6 +1508,301 @@ export const updateComprehensiveProfile = async (req, res) => {
   }
 };
 
+/**
+ * @desc Get user's enhanced progress analytics
+ * @route GET /api/v1/profile/:userId/enhanced-progress
+ * @access Private (User can view own progress, admins can view any)
+ */
+export const getEnhancedProgressAnalytics = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const requestingUserId = req.user.id;
+    const requestingUserRole = req.user.role;
+    const { courseId, timeframe = 'month', contentType } = req.query;
+
+    // Authorization check
+    if (userId !== requestingUserId && !['admin', 'super-admin', 'instructor'].includes(requestingUserRole)) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to view this progress data"
+      });
+    }
+
+    // Build query for enhanced progress
+    const query = { userId: userId, isActive: true };
+    if (courseId) query.courseId = courseId;
+    if (contentType) query.contentType = contentType;
+
+    // Add time filter
+    if (timeframe !== 'all') {
+      const now = new Date();
+      let startDate;
+      
+      switch (timeframe) {
+        case 'week':
+          startDate = new Date(now - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'month':
+          startDate = new Date(now - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case 'quarter':
+          startDate = new Date(now - 90 * 24 * 60 * 60 * 1000);
+          break;
+        case 'year':
+          startDate = new Date(now - 365 * 24 * 60 * 60 * 1000);
+          break;
+        default:
+          startDate = new Date(now - 30 * 24 * 60 * 60 * 1000);
+      }
+      
+      query.updatedAt = { $gte: startDate };
+    }
+
+    // Get enhanced progress data
+    const progressData = await EnhancedProgress.find(query)
+      .populate('courseId', 'course_title course_category course_image')
+      .populate('contentId', 'title type difficulty')
+      .sort({ updatedAt: -1 });
+
+    // Calculate comprehensive analytics
+    const analytics = {
+      summary: {
+        total_entries: progressData.length,
+        completed: progressData.filter(p => p.status === 'completed').length,
+        in_progress: progressData.filter(p => p.status === 'in_progress').length,
+        not_started: progressData.filter(p => p.status === 'not_started').length,
+        paused: progressData.filter(p => p.status === 'paused').length,
+        total_time_spent: progressData.reduce((sum, p) => sum + (p.timeSpent || 0), 0),
+        average_score: progressData.length > 0 ? 
+          progressData.reduce((sum, p) => sum + (p.score || 0), 0) / progressData.length : 0,
+        completion_rate: progressData.length > 0 ? 
+          (progressData.filter(p => p.status === 'completed').length / progressData.length * 100) : 0
+      },
+      
+      breakdown: {
+        by_content_type: progressData.reduce((acc, p) => {
+          acc[p.contentType] = (acc[p.contentType] || 0) + 1;
+          return acc;
+        }, {}),
+        
+        by_course: progressData.reduce((acc, p) => {
+          const courseTitle = p.courseId?.course_title || 'Unknown Course';
+          if (!acc[courseTitle]) {
+            acc[courseTitle] = { count: 0, completed: 0, total_score: 0, total_time: 0 };
+          }
+          acc[courseTitle].count++;
+          if (p.status === 'completed') acc[courseTitle].completed++;
+          acc[courseTitle].total_score += p.score || 0;
+          acc[courseTitle].total_time += p.timeSpent || 0;
+          return acc;
+        }, {}),
+        
+        by_status: progressData.reduce((acc, p) => {
+          acc[p.status] = (acc[p.status] || 0) + 1;
+          return acc;
+        }, {})
+      },
+      
+      trends: {
+        daily_activity: calculateDailyActivity(progressData),
+        performance_trend: calculatePerformanceTrends(progressData),
+        learning_velocity: calculateLearningVelocity(progressData),
+        streak_analysis: calculateLearningStreak(progressData)
+      },
+      
+      recent_activity: progressData.slice(0, 10).map(p => ({
+        content_type: p.contentType,
+        course_title: p.courseId?.course_title,
+        progress_percentage: p.progressPercentage,
+        status: p.status,
+        score: p.score,
+        time_spent: p.timeSpent,
+        updated_at: p.updatedAt
+      }))
+    };
+
+    logger.info('Enhanced progress analytics retrieved', { 
+      userId, 
+      requestingUserId,
+      timeframe,
+      totalEntries: progressData.length
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Enhanced progress analytics retrieved successfully",
+      data: {
+        analytics,
+        timeframe,
+        query_parameters: { courseId, contentType },
+        generated_at: new Date()
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error retrieving enhanced progress analytics', { 
+      error: error.message, 
+      stack: error.stack,
+      userId: req.params.userId
+    });
+
+    res.status(500).json({
+      success: false,
+      message: "Internal server error while retrieving enhanced progress analytics",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+/**
+ * @desc Sync enrollment progress with enhanced progress tracking
+ * @route POST /api/v1/profile/:userId/sync-progress
+ * @access Private (User can sync own progress, admins can sync any)
+ */
+export const syncEnrollmentProgress = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const requestingUserId = req.user.id;
+    const requestingUserRole = req.user.role;
+
+    // Authorization check
+    if (userId !== requestingUserId && !['admin', 'super-admin', 'instructor'].includes(requestingUserRole)) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to sync progress data"
+      });
+    }
+
+    // Get all enrollments for the user
+    const enrollments = await EnrolledCourse.find({ 
+      student_id: userId 
+    }).populate('course_id', 'course_title course_category');
+
+    let syncedCount = 0;
+    let errors = [];
+
+    // Sync each enrollment's progress to enhanced progress tracking
+    for (const enrollment of enrollments) {
+      try {
+        // Sync overall course progress
+        const courseProgressData = {
+          userId: userId,
+          courseId: enrollment.course_id._id,
+          contentType: 'course',
+          contentId: enrollment.course_id._id,
+          progressPercentage: enrollment.progress || 0,
+          status: enrollment.status === 'completed' ? 'completed' : 
+                  enrollment.progress > 0 ? 'in_progress' : 'not_started',
+          timeSpent: 0, // Will be calculated from detailed progress
+          lastAccessed: enrollment.last_accessed || new Date(),
+          metadata: {
+            enrollment_id: enrollment._id,
+            enrollment_date: enrollment.enrollment_date,
+            access_expiry_date: enrollment.access_expiry_date,
+            enrollment_type: enrollment.enrollment_type,
+            batch_id: enrollment.batch_id,
+            synced_from: 'enrollment'
+          }
+        };
+
+        // Check if enhanced progress entry already exists
+        let enhancedProgress = await EnhancedProgress.findOne({
+          userId: userId,
+          courseId: enrollment.course_id._id,
+          contentType: 'course',
+          contentId: enrollment.course_id._id
+        });
+
+        if (enhancedProgress) {
+          // Update existing entry
+          await EnhancedProgress.findByIdAndUpdate(enhancedProgress._id, {
+            progressPercentage: courseProgressData.progressPercentage,
+            status: courseProgressData.status,
+            lastAccessed: courseProgressData.lastAccessed,
+            metadata: { ...enhancedProgress.metadata, ...courseProgressData.metadata },
+            updatedAt: new Date()
+          });
+        } else {
+          // Create new enhanced progress entry
+          await EnhancedProgress.create(courseProgressData);
+        }
+
+        syncedCount++;
+
+      } catch (syncError) {
+        errors.push({
+          enrollment_id: enrollment._id,
+          course_title: enrollment.course_id?.course_title,
+          error: syncError.message
+        });
+        
+        logger.warn('Error syncing individual enrollment progress', {
+          userId,
+          enrollmentId: enrollment._id,
+          error: syncError.message
+        });
+      }
+    }
+
+    logger.info('Progress synchronization completed', { 
+      userId, 
+      requestingUserId,
+      totalEnrollments: enrollments.length,
+      syncedCount,
+      errorCount: errors.length
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `Progress synchronization completed. ${syncedCount} enrollments synced.`,
+      data: {
+        total_enrollments: enrollments.length,
+        synced_count: syncedCount,
+        error_count: errors.length,
+        errors: errors,
+        sync_timestamp: new Date()
+      }
+    });
+
+  } catch (error) {
+    logger.error('Error during progress synchronization', { 
+      error: error.message, 
+      stack: error.stack,
+      userId: req.params.userId
+    });
+
+    res.status(500).json({
+      success: false,
+      message: "Internal server error during progress synchronization",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// Helper function for daily activity calculation
+const calculateDailyActivity = (progressData) => {
+  const dailyStats = {};
+  
+  progressData.forEach(entry => {
+    const date = new Date(entry.updatedAt).toISOString().split('T')[0];
+    if (!dailyStats[date]) {
+      dailyStats[date] = { count: 0, time_spent: 0, scores: [] };
+    }
+    dailyStats[date].count++;
+    dailyStats[date].time_spent += entry.timeSpent || 0;
+    if (entry.score) dailyStats[date].scores.push(entry.score);
+  });
+
+  // Convert to array and calculate averages
+  return Object.entries(dailyStats).map(([date, stats]) => ({
+    date,
+    activity_count: stats.count,
+    total_time_spent: stats.time_spent,
+    average_score: stats.scores.length > 0 ? 
+      stats.scores.reduce((sum, score) => sum + score, 0) / stats.scores.length : null
+  })).sort((a, b) => new Date(a.date) - new Date(b.date));
+};
+
 export default {
   getProfile,
   updateProfile,
@@ -1372,5 +1811,7 @@ export default {
   getProfileStats,
   updatePreferences,
   getComprehensiveProfile,
-  updateComprehensiveProfile
+  updateComprehensiveProfile,
+  getEnhancedProgressAnalytics,
+  syncEnrollmentProgress
 }; 

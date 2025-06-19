@@ -113,6 +113,28 @@ router.post(
 );
 
 /**
+ * @route   POST /api/v1/auth/verify-temp-password
+ * @desc    Verify temporary password sent via email during password reset
+ * @access  Public
+ */
+router.post(
+  "/verify-temp-password",
+  passwordResetLimiter, // Apply rate limiting to prevent brute force
+  [
+    body("email")
+      .isEmail()
+      .normalizeEmail()
+      .withMessage("Please provide a valid email address"),
+    body("tempPassword")
+      .notEmpty()
+      .withMessage("Temporary password is required")
+      .isLength({ min: 1, max: 50 })
+      .withMessage("Temporary password must be between 1 and 50 characters")
+  ],
+  authController.verifyTempPassword.bind(authController),
+);
+
+/**
  * @route   PUT /api/v1/auth/change-password
  * @desc    Change password for authenticated users with enhanced security
  * @access  Private (Authenticated users only)
@@ -134,6 +156,52 @@ router.get(
   "/users",
   authenticateToken,
   authController.getAllUsers.bind(authController),
+);
+
+// Account Lockout Management Routes
+
+/**
+ * @route   GET /api/v1/auth/locked-accounts
+ * @desc    Get all currently locked accounts
+ * @access  Private (Admin only)
+ */
+router.get(
+  "/locked-accounts",
+  authenticateToken,
+  authController.getLockedAccounts.bind(authController),
+);
+
+/**
+ * @route   POST /api/v1/auth/unlock-account/:userId
+ * @desc    Unlock a specific user account
+ * @access  Private (Admin only)
+ */
+router.post(
+  "/unlock-account/:userId",
+  authenticateToken,
+  authController.unlockAccount.bind(authController),
+);
+
+/**
+ * @route   POST /api/v1/auth/unlock-all-accounts
+ * @desc    Unlock all locked accounts
+ * @access  Private (Super Admin only)
+ */
+router.post(
+  "/unlock-all-accounts",
+  authenticateToken,
+  authController.unlockAllAccounts.bind(authController),
+);
+
+/**
+ * @route   GET /api/v1/auth/lockout-stats
+ * @desc    Get account lockout statistics
+ * @access  Private (Admin only)
+ */
+router.get(
+  "/lockout-stats",
+  authenticateToken,
+  authController.getLockoutStats.bind(authController),
 );
 
 /**
