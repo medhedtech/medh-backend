@@ -748,6 +748,70 @@ export const getComprehensiveProfile = async (req, res) => {
       });
     }
 
+    // Get EMI payment data from enhanced enrollments
+    try {
+      const emiEnrollments = await EnrolledCourse.find({
+        student_id: userId,
+        payment_type: 'emi'
+      }).populate('course_id', 'course_title course_image');
+
+      // Process EMI payments and add to payment history
+      emiEnrollments.forEach(enrollment => {
+        // Add main EMI enrollment payment
+        if (enrollment.payment_details) {
+          paymentHistory.push({
+            source: 'emi_enrollment',
+            enrollment_id: enrollment._id,
+            course_title: enrollment.course_id?.course_title,
+            amount: enrollment.payment_details.amount,
+            currency: enrollment.payment_details.currency,
+            payment_date: enrollment.payment_details.payment_date,
+            payment_method: enrollment.payment_details.payment_method,
+            transaction_id: enrollment.payment_details.payment_id,
+            payment_status: enrollment.payment_status,
+            payment_type: 'emi_enrollment',
+            emi_details: {
+              total_installments: enrollment.emiDetails?.numberOfInstallments,
+              installment_amount: enrollment.emiDetails?.installmentAmount,
+              paid_installments: enrollment.emiDetails?.schedule?.filter(s => s.status === 'paid').length || 0,
+              next_payment_date: enrollment.emiDetails?.nextPaymentDate,
+              grace_period_days: enrollment.emiDetails?.gracePeriodDays
+            }
+          });
+        }
+
+        // Add individual EMI installment payments
+        if (enrollment.emiDetails?.schedule) {
+          enrollment.emiDetails.schedule.forEach((installment, index) => {
+            if (installment.status === 'paid' && installment.paidDate) {
+              paymentHistory.push({
+                source: 'emi_installment',
+                enrollment_id: enrollment._id,
+                course_title: enrollment.course_id?.course_title,
+                amount: installment.amount,
+                currency: enrollment.payment_details?.currency || 'USD',
+                payment_date: installment.paidDate,
+                payment_method: installment.paymentMethod || 'unknown',
+                transaction_id: installment.transactionId,
+                payment_status: 'completed',
+                payment_type: 'emi_installment',
+                installment_details: {
+                  installment_number: index + 1,
+                  due_date: installment.dueDate,
+                  late_fee: installment.lateFee || 0
+                }
+              });
+            }
+          });
+        }
+      });
+    } catch (emiError) {
+      logger.warn('Could not fetch EMI payment data', { 
+        userId, 
+        error: emiError.message 
+      });
+    }
+
     // Get quiz/assessment results with detailed info
     const quizResults = await Quiz.find({ 
       'submissions.student_id': userId 
@@ -785,42 +849,163 @@ export const getComprehensiveProfile = async (req, res) => {
       });
     }
 
-    // Get enhanced progress data for comprehensive analytics
+    // Get comprehensive enhanced progress data with detailed analytics
     let enhancedProgressData = [];
     let enhancedAnalytics = {};
+    let detailedProgressReports = [];
+    
     try {
+      // Get enhanced progress records (from the new comprehensive model)
       enhancedProgressData = await EnhancedProgress.find({ 
-        userId: userId,
-        isActive: true
+        student: userId
       })
-      .populate('courseId', 'course_title course_image course_category')
-      .populate('contentId', 'title type')
-      .sort({ updatedAt: -1 })
-      .limit(100); // Get recent 100 entries
+      .populate('course', 'course_title course_image course_category course_type duration_weeks')
+      .populate('enrollment', 'enrollment_date status payment_status progress')
+      .sort({ lastAccessedAt: -1 });
 
-      // Calculate enhanced analytics
+      // Get detailed progress reports for each course
+      detailedProgressReports = enhancedProgressData.map(progress => ({
+        course_id: progress.course._id,
+        course_title: progress.course.course_title,
+        course_image: progress.course.course_image,
+        course_category: progress.course.course_category,
+        enrollment_id: progress.enrollment._id,
+        enrollment_status: progress.enrollment.status,
+        detailed_report: progress.getProgressReport(),
+        last_accessed: progress.lastAccessedAt,
+        completion_status: progress.completionStatus,
+        next_lesson: progress.nextLesson,
+        recommended_actions: progress.getRecommendedActions()
+      }));
+
+      // Calculate comprehensive enhanced analytics
       if (enhancedProgressData.length > 0) {
-        const completedEntries = enhancedProgressData.filter(p => p.status === 'completed');
-        const inProgressEntries = enhancedProgressData.filter(p => p.status === 'in_progress');
-        const totalTimeSpent = enhancedProgressData.reduce((sum, p) => sum + (p.timeSpent || 0), 0);
-        const totalScore = enhancedProgressData.reduce((sum, p) => sum + (p.score || 0), 0);
-
+        const completedCourses = enhancedProgressData.filter(p => p.isCompleted);
+        const inProgressCourses = enhancedProgressData.filter(p => !p.isCompleted && p.overallProgress.overallCompletionPercentage > 0);
+        const notStartedCourses = enhancedProgressData.filter(p => p.overallProgress.overallCompletionPercentage === 0);
+        
+        // Aggregate lesson and assessment data
+        const totalLessonsCompleted = enhancedProgressData.reduce((sum, p) => sum + p.overallProgress.lessonsCompleted, 0);
+        const totalLessons = enhancedProgressData.reduce((sum, p) => sum + p.courseStructure.totalLessons, 0);
+        const totalAssessmentsCompleted = enhancedProgressData.reduce((sum, p) => sum + p.overallProgress.assessmentsCompleted, 0);
+        const totalAssessments = enhancedProgressData.reduce((sum, p) => sum + p.courseStructure.totalAssessments, 0);
+        const totalTimeSpent = enhancedProgressData.reduce((sum, p) => sum + p.overallProgress.totalTimeSpent, 0);
+        
+        // Calculate average scores
+        const quizScores = enhancedProgressData
+          .filter(p => p.overallProgress.averageQuizScore > 0)
+          .map(p => p.overallProgress.averageQuizScore);
+        const assignmentScores = enhancedProgressData
+          .filter(p => p.overallProgress.averageAssignmentScore > 0)
+          .map(p => p.overallProgress.averageAssignmentScore);
+        
+        // Calculate learning streaks
+        const allStreaks = enhancedProgressData.map(p => ({
+          current: p.learningAnalytics.studyStreak.current,
+          longest: p.learningAnalytics.studyStreak.longest
+        }));
+        
         enhancedAnalytics = {
-          total_entries: enhancedProgressData.length,
-          completed_entries: completedEntries.length,
-          in_progress_entries: inProgressEntries.length,
-          average_completion_rate: enhancedProgressData.length > 0 ? 
-            (enhancedProgressData.reduce((sum, p) => sum + p.progressPercentage, 0) / enhancedProgressData.length) : 0,
-          total_time_spent_enhanced: totalTimeSpent,
-          average_score_enhanced: enhancedProgressData.length > 0 ? (totalScore / enhancedProgressData.length) : 0,
-          content_type_breakdown: enhancedProgressData.reduce((acc, p) => {
-            acc[p.contentType] = (acc[p.contentType] || 0) + 1;
+          // Course-level analytics
+          total_courses_tracked: enhancedProgressData.length,
+          completed_courses: completedCourses.length,
+          in_progress_courses: inProgressCourses.length,
+          not_started_courses: notStartedCourses.length,
+          course_completion_rate: enhancedProgressData.length > 0 ? 
+            (completedCourses.length / enhancedProgressData.length * 100) : 0,
+          
+          // Lesson-level analytics
+          total_lessons_completed: totalLessonsCompleted,
+          total_lessons_available: totalLessons,
+          lesson_completion_rate: totalLessons > 0 ? (totalLessonsCompleted / totalLessons * 100) : 0,
+          
+          // Assessment analytics
+          total_assessments_completed: totalAssessmentsCompleted,
+          total_assessments_available: totalAssessments,
+          assessment_completion_rate: totalAssessments > 0 ? (totalAssessmentsCompleted / totalAssessments * 100) : 0,
+          average_quiz_score: quizScores.length > 0 ? 
+            (quizScores.reduce((sum, score) => sum + score, 0) / quizScores.length) : 0,
+          average_assignment_score: assignmentScores.length > 0 ? 
+            (assignmentScores.reduce((sum, score) => sum + score, 0) / assignmentScores.length) : 0,
+          
+          // Time and engagement analytics
+          total_learning_time: totalTimeSpent,
+          average_time_per_course: enhancedProgressData.length > 0 ? (totalTimeSpent / enhancedProgressData.length) : 0,
+          average_time_per_lesson: totalLessonsCompleted > 0 ? (totalTimeSpent / totalLessonsCompleted) : 0,
+          
+          // Study patterns and streaks
+          current_active_streak: Math.max(...allStreaks.map(s => s.current), 0),
+          longest_study_streak: Math.max(...allStreaks.map(s => s.longest), 0),
+          average_completion_percentage: enhancedProgressData.length > 0 ? 
+            (enhancedProgressData.reduce((sum, p) => sum + p.overallProgress.overallCompletionPercentage, 0) / enhancedProgressData.length) : 0,
+          
+          // Course type breakdown
+          course_type_breakdown: enhancedProgressData.reduce((acc, p) => {
+            const courseType = p.course.course_type || 'unknown';
+            if (!acc[courseType]) {
+              acc[courseType] = { count: 0, completed: 0, total_progress: 0 };
+            }
+            acc[courseType].count++;
+            if (p.isCompleted) acc[courseType].completed++;
+            acc[courseType].total_progress += p.overallProgress.overallCompletionPercentage;
             return acc;
           }, {}),
-          recent_learning_streak: calculateLearningStreak(enhancedProgressData),
-          performance_trends: calculatePerformanceTrends(enhancedProgressData),
-          learning_velocity: calculateLearningVelocity(enhancedProgressData)
+          
+          // Category breakdown
+          category_breakdown: enhancedProgressData.reduce((acc, p) => {
+            const category = p.course.course_category || 'uncategorized';
+            if (!acc[category]) {
+              acc[category] = { count: 0, completed: 0, average_progress: 0 };
+            }
+            acc[category].count++;
+            if (p.isCompleted) acc[category].completed++;
+            acc[category].average_progress = (acc[category].average_progress + p.overallProgress.overallCompletionPercentage) / acc[category].count;
+            return acc;
+          }, {}),
+          
+          // Weekly activity aggregation
+          weekly_activity_summary: enhancedProgressData.reduce((summary, p) => {
+            p.learningAnalytics.weeklyActivity.forEach(week => {
+              if (!summary[week.week]) {
+                summary[week.week] = { 
+                  lessons_completed: 0, 
+                  time_spent: 0, 
+                  quizzes_attempted: 0, 
+                  courses_active: 0,
+                  total_score: 0,
+                  score_count: 0
+                };
+              }
+              summary[week.week].lessons_completed += week.lessonsCompleted || 0;
+              summary[week.week].time_spent += week.timeSpent || 0;
+              summary[week.week].quizzes_attempted += week.quizzesAttempted || 0;
+              summary[week.week].courses_active++;
+              if (week.averageScore > 0) {
+                summary[week.week].total_score += week.averageScore;
+                summary[week.week].score_count++;
+              }
+            });
+            return summary;
+          }, {}),
+          
+          // Learning preferences and patterns
+          learning_patterns: {
+            strong_areas: [...new Set(enhancedProgressData.flatMap(p => p.learningAnalytics.strongAreas || []))],
+            improvement_areas: [...new Set(enhancedProgressData.flatMap(p => p.learningAnalytics.improvementAreas || []))],
+            preferred_study_times: enhancedProgressData.reduce((acc, p) => {
+              const time = p.learningAnalytics.preferredStudyTime;
+              acc[time] = (acc[time] || 0) + 1;
+              return acc;
+            }, {}),
+            most_active_time: null // Will be calculated below
+          }
         };
+        
+        // Calculate most active study time
+        const studyTimes = enhancedAnalytics.learning_patterns.preferred_study_times;
+        enhancedAnalytics.learning_patterns.most_active_time = Object.keys(studyTimes).reduce((a, b) => 
+          studyTimes[a] > studyTimes[b] ? a : b, 'evening'
+        );
       }
     } catch (enhancedProgressError) {
       logger.warn('Could not fetch enhanced progress data', { 
@@ -829,53 +1014,112 @@ export const getComprehensiveProfile = async (req, res) => {
       });
     }
 
-    // Enhanced learning analytics with real-time calculations
+    // Comprehensive learning analytics with enhanced progress integration
     const learningAnalytics = {
-      // Existing analytics
+      // Core learning metrics
       total_learning_time: Math.max(
         user.statistics?.learning?.total_learning_time || 0,
-        enhancedAnalytics.total_time_spent_enhanced || 0
+        enhancedAnalytics.total_learning_time || 0
       ),
       current_streak: Math.max(
         user.statistics?.learning?.current_streak || 0,
-        enhancedAnalytics.recent_learning_streak || 0
+        enhancedAnalytics.current_active_streak || 0
       ),
-      longest_streak: user.statistics?.learning?.longest_streak || 0,
+      longest_streak: Math.max(
+        user.statistics?.learning?.longest_streak || 0,
+        enhancedAnalytics.longest_study_streak || 0
+      ),
+      
+      // Achievement and recognition metrics
       certificates_earned: certificates.length,
       skill_points: user.statistics?.learning?.skill_points || 0,
       achievements_unlocked: user.statistics?.learning?.achievements_unlocked || 0,
+      
+      // Course completion metrics
       total_courses_enrolled: courseStats.total_enrolled,
-      total_courses_completed: courseStats.completed_courses,
-      completion_rate: courseStats.total_enrolled > 0 ? (courseStats.completed_courses / courseStats.total_enrolled * 100) : 0,
-      average_score: Math.max(
+      total_courses_completed: Math.max(
+        courseStats.completed_courses,
+        enhancedAnalytics.completed_courses || 0
+      ),
+      completion_rate: courseStats.total_enrolled > 0 ? 
+        (Math.max(courseStats.completed_courses, enhancedAnalytics.completed_courses || 0) / courseStats.total_enrolled * 100) : 0,
+      
+      // Enhanced course analytics from detailed tracking
+      courses_in_progress: enhancedAnalytics.in_progress_courses || 0,
+      courses_not_started: enhancedAnalytics.not_started_courses || 0,
+      course_completion_rate: enhancedAnalytics.course_completion_rate || 0,
+      
+      // Lesson-level analytics (from enhanced progress)
+      total_lessons_completed: Math.max(
+        detailedProgress.reduce((sum, progress) => sum + (progress.lessons_completed || 0), 0),
+        enhancedAnalytics.total_lessons_completed || 0
+      ),
+      total_lessons_available: enhancedAnalytics.total_lessons_available || 0,
+      lesson_completion_rate: enhancedAnalytics.lesson_completion_rate || 0,
+      
+      // Assessment and performance metrics
+      total_assessments_completed: Math.max(
+        detailedProgress.reduce((sum, progress) => sum + (progress.assignments_completed || 0), 0),
+        enhancedAnalytics.total_assessments_completed || 0
+      ),
+      total_assessments_available: enhancedAnalytics.total_assessments_available || 0,
+      assessment_completion_rate: enhancedAnalytics.assessment_completion_rate || 0,
+      
+      // Scoring and performance analytics
+      average_quiz_score: Math.max(
         quizResults.length > 0 ? quizResults.reduce((sum, quiz) => {
           const userSubmission = quiz.submissions.find(s => s.student_id.toString() === userId);
           return sum + (userSubmission?.score || 0);
         }, 0) / quizResults.length : 0,
-        enhancedAnalytics.average_score_enhanced || 0
+        enhancedAnalytics.average_quiz_score || 0
+      ),
+      average_assignment_score: enhancedAnalytics.average_assignment_score || 0,
+      overall_performance_rating: enhancedAnalytics.average_quiz_score && enhancedAnalytics.average_assignment_score ?
+        ((enhancedAnalytics.average_quiz_score + enhancedAnalytics.average_assignment_score) / 2) : 
+        (enhancedAnalytics.average_quiz_score || enhancedAnalytics.average_assignment_score || 0),
+      
+      // Time and engagement analytics
+      average_time_per_course: enhancedAnalytics.average_time_per_course || 0,
+      average_time_per_lesson: Math.max(
+        detailedProgress.length > 0 ? 
+          detailedProgress.reduce((sum, progress) => sum + (progress.average_lesson_time || 0), 0) / detailedProgress.length : 0,
+        enhancedAnalytics.average_time_per_lesson || 0
+      ),
+      total_quiz_attempts: quizResults.reduce((sum, quiz) => 
+        sum + quiz.submissions.filter(s => s.student_id.toString() === userId).length, 0
       ),
       
-      // Enhanced analytics from Progress model
-      total_lessons_completed: detailedProgress.reduce((sum, progress) => sum + (progress.lessons_completed || 0), 0),
-      total_assignments_completed: detailedProgress.reduce((sum, progress) => sum + (progress.assignments_completed || 0), 0),
-      total_quiz_attempts: quizResults.reduce((sum, quiz) => sum + quiz.submissions.filter(s => s.student_id.toString() === userId).length, 0),
-      average_lesson_completion_time: detailedProgress.length > 0 ? 
-        detailedProgress.reduce((sum, progress) => sum + (progress.average_lesson_time || 0), 0) / detailedProgress.length : 0,
+      // Activity tracking
       last_learning_activity: Math.max(
         detailedProgress.length > 0 ? Math.max(...detailedProgress.map(p => new Date(p.last_updated || 0).getTime())) : 0,
-        enhancedProgressData.length > 0 ? Math.max(...enhancedProgressData.map(p => new Date(p.updatedAt || 0).getTime())) : 0
+        enhancedProgressData.length > 0 ? Math.max(...enhancedProgressData.map(p => new Date(p.lastAccessedAt || 0).getTime())) : 0
       ),
-
-      // New enhanced progress analytics
+      
+      // Comprehensive enhanced progress analytics
       enhanced_progress: {
-        total_tracked_activities: enhancedAnalytics.total_entries || 0,
-        completed_activities: enhancedAnalytics.completed_entries || 0,
-        in_progress_activities: enhancedAnalytics.in_progress_entries || 0,
-        average_completion_rate: enhancedAnalytics.average_completion_rate || 0,
-        content_type_breakdown: enhancedAnalytics.content_type_breakdown || {},
-        performance_trends: enhancedAnalytics.performance_trends || { trend: 'stable', change: 0 },
-        learning_velocity: enhancedAnalytics.learning_velocity || 0,
-        enhanced_time_spent: enhancedAnalytics.total_time_spent_enhanced || 0
+        // Detailed tracking metrics
+        total_courses_tracked: enhancedAnalytics.total_courses_tracked || 0,
+        completed_courses_tracked: enhancedAnalytics.completed_courses || 0,
+        in_progress_courses_tracked: enhancedAnalytics.in_progress_courses || 0,
+        average_completion_percentage: enhancedAnalytics.average_completion_percentage || 0,
+        
+        // Course type and category breakdown
+        course_type_breakdown: enhancedAnalytics.course_type_breakdown || {},
+        category_breakdown: enhancedAnalytics.category_breakdown || {},
+        
+        // Learning patterns and preferences
+        learning_patterns: enhancedAnalytics.learning_patterns || {
+          strong_areas: [],
+          improvement_areas: [],
+          preferred_study_times: {},
+          most_active_time: 'evening'
+        },
+        
+        // Weekly activity patterns
+        weekly_activity_summary: enhancedAnalytics.weekly_activity_summary || {},
+        
+        // Detailed progress reports for active courses
+        detailed_course_reports: detailedProgressReports.slice(0, 10) // Limit to top 10 most recent
       }
     };
 
@@ -905,30 +1149,172 @@ export const getComprehensiveProfile = async (req, res) => {
       login_pattern: user.getLoginPattern?.() || { pattern: 'unknown', description: 'No pattern data' }
     };
 
-    // Enhanced financial metrics with detailed payment info
+    // Enhanced financial metrics with comprehensive payment and EMI analysis
     const totalSpentFromPayments = paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+    
+    // Separate payment types for detailed analysis
+    const regularPayments = paymentHistory.filter(p => !p.payment_type?.includes('emi'));
+    const emiPayments = paymentHistory.filter(p => p.payment_type?.includes('emi'));
+    const installmentPayments = paymentHistory.filter(p => p.payment_type === 'emi_installment');
+    const emiEnrollments = paymentHistory.filter(p => p.payment_type === 'emi_enrollment');
+    
+    // Calculate EMI-specific metrics
+    const emiMetrics = {
+      total_emi_enrollments: emiEnrollments.length,
+      total_emi_amount: emiEnrollments.reduce((sum, payment) => sum + (payment.amount || 0), 0),
+      total_installments_paid: installmentPayments.length,
+      total_installment_amount: installmentPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0),
+      pending_emi_enrollments: enrollments.filter(e => e.payment_type === 'emi' && ['pending', 'active'].includes(e.payment_status)).length,
+      upcoming_installments: enrollments.reduce((count, enrollment) => {
+        if (enrollment.payment_type === 'emi' && enrollment.emiDetails?.schedule) {
+          return count + enrollment.emiDetails.schedule.filter(s => s.status === 'pending').length;
+        }
+        return count;
+      }, 0),
+      overdue_installments: enrollments.reduce((count, enrollment) => {
+        if (enrollment.payment_type === 'emi' && enrollment.emiDetails?.schedule) {
+          const now = new Date();
+          return count + enrollment.emiDetails.schedule.filter(s => 
+            s.status === 'pending' && new Date(s.dueDate) < now
+          ).length;
+        }
+        return count;
+      }, 0),
+      emi_completion_rate: emiEnrollments.length > 0 ? 
+        (emiEnrollments.filter(payment => {
+          const enrollment = enrollments.find(e => e._id.toString() === payment.enrollment_id?.toString());
+          if (!enrollment?.emiDetails?.schedule) return false;
+          const totalInstallments = enrollment.emiDetails.schedule.length;
+          const paidInstallments = enrollment.emiDetails.schedule.filter(s => s.status === 'paid').length;
+          return paidInstallments === totalInstallments;
+        }).length / emiEnrollments.length * 100) : 0
+    };
+    
+    // Calculate comprehensive financial metrics
     const financialMetrics = {
+      // Core spending metrics
       total_spent: Math.max(courseStats.total_payments, totalSpentFromPayments),
+      regular_payments_total: regularPayments.reduce((sum, p) => sum + (p.amount || 0), 0),
+      emi_payments_total: emiPayments.reduce((sum, p) => sum + (p.amount || 0), 0),
+      
+      // Course and subscription metrics
       total_courses_purchased: courseStats.total_enrolled,
       subscription_months: user.statistics?.financial?.subscription_months || 0,
       lifetime_value: Math.max(courseStats.total_payments, totalSpentFromPayments),
+      
+      // Average and per-course costs
       average_course_cost: courseStats.total_enrolled > 0 ? totalSpentFromPayments / courseStats.total_enrolled : 0,
+      average_transaction_amount: paymentHistory.length > 0 ? totalSpentFromPayments / paymentHistory.length : 0,
+      highest_single_payment: Math.max(...paymentHistory.map(p => p.amount || 0), 0),
+      
+      // Payment method analytics
       payment_methods_used: [...new Set(paymentHistory.map(p => p.payment_method).filter(Boolean))],
-      pending_payments: enrollments.filter(e => e.payment_status === 'pending').length,
+      payment_method_distribution: paymentHistory.reduce((acc, payment) => {
+        const method = payment.payment_method || 'unknown';
+        if (!acc[method]) {
+          acc[method] = { count: 0, total_amount: 0 };
+        }
+        acc[method].count++;
+        acc[method].total_amount += payment.amount || 0;
+        return acc;
+      }, {}),
+      most_used_payment_method: paymentHistory.length > 0 ? 
+        Object.entries(paymentHistory.reduce((acc, payment) => {
+          const method = payment.payment_method || 'unknown';
+          acc[method] = (acc[method] || 0) + 1;
+          return acc;
+        }, {})).sort(([,a], [,b]) => b - a)[0]?.[0] : null,
+      
+      // Transaction status analytics
       successful_transactions: paymentHistory.filter(p => ['completed', 'success', 'paid'].includes(p.payment_status?.toLowerCase())).length,
       failed_transactions: paymentHistory.filter(p => ['failed', 'cancelled', 'rejected'].includes(p.payment_status?.toLowerCase())).length,
       pending_transactions: paymentHistory.filter(p => ['pending', 'processing'].includes(p.payment_status?.toLowerCase())).length,
-      most_used_payment_method: paymentHistory.length > 0 ? 
-        paymentHistory.reduce((acc, payment) => {
-          acc[payment.payment_method] = (acc[payment.payment_method] || 0) + 1;
-          return acc;
-        }, {}) : {},
+      transaction_success_rate: paymentHistory.length > 0 ? 
+        (paymentHistory.filter(p => ['completed', 'success', 'paid'].includes(p.payment_status?.toLowerCase())).length / paymentHistory.length * 100) : 100,
+      
+      // EMI-specific metrics
+      emi_metrics: emiMetrics,
+      
+      // Spending patterns and trends
       monthly_spending: paymentHistory.reduce((acc, payment) => {
         const month = new Date(payment.payment_date).toISOString().slice(0, 7); // YYYY-MM
-        acc[month] = (acc[month] || 0) + (payment.amount || 0);
+        if (!acc[month]) {
+          acc[month] = { total: 0, count: 0, types: {} };
+        }
+        acc[month].total += payment.amount || 0;
+        acc[month].count++;
+        acc[month].types[payment.payment_type] = (acc[month].types[payment.payment_type] || 0) + (payment.amount || 0);
         return acc;
-      }, {})
+      }, {}),
+      
+      // Payment timing analytics
+      payment_frequency: {
+        last_payment_date: paymentHistory.length > 0 ? 
+          Math.max(...paymentHistory.map(p => new Date(p.payment_date).getTime())) : null,
+        first_payment_date: paymentHistory.length > 0 ? 
+          Math.min(...paymentHistory.map(p => new Date(p.payment_date).getTime())) : null,
+        average_days_between_payments: paymentHistory.length > 1 ? 
+          calculateAverageDaysBetweenPayments(paymentHistory) : 0
+      },
+      
+      // Financial health indicators
+      financial_health: {
+        pending_payment_ratio: enrollments.length > 0 ? 
+          (enrollments.filter(e => e.payment_status === 'pending').length / enrollments.length * 100) : 0,
+        emi_default_risk: emiMetrics.overdue_installments > 0 ? 'high' : 
+                          emiMetrics.upcoming_installments > 3 ? 'medium' : 'low',
+        payment_consistency: calculatePaymentConsistency(paymentHistory),
+        total_outstanding_amount: calculateOutstandingAmount(enrollments)
+      }
     };
+    
+    // Helper function to calculate average days between payments
+    function calculateAverageDaysBetweenPayments(payments) {
+      if (payments.length < 2) return 0;
+      
+      const sortedDates = payments
+        .map(p => new Date(p.payment_date))
+        .sort((a, b) => a - b);
+      
+      let totalDays = 0;
+      for (let i = 1; i < sortedDates.length; i++) {
+        const daysDiff = (sortedDates[i] - sortedDates[i-1]) / (1000 * 60 * 60 * 24);
+        totalDays += daysDiff;
+      }
+      
+      return Math.round(totalDays / (sortedDates.length - 1));
+    }
+    
+    // Helper function to calculate payment consistency score
+    function calculatePaymentConsistency(payments) {
+      if (payments.length < 3) return 100; // Too few payments to determine consistency
+      
+      const successfulPayments = payments.filter(p => 
+        ['completed', 'success', 'paid'].includes(p.payment_status?.toLowerCase())
+      );
+      
+      const consistencyScore = (successfulPayments.length / payments.length) * 100;
+      
+      if (consistencyScore >= 95) return 'excellent';
+      if (consistencyScore >= 80) return 'good';
+      if (consistencyScore >= 60) return 'fair';
+      return 'poor';
+    }
+    
+    // Helper function to calculate total outstanding amount
+    function calculateOutstandingAmount(enrollments) {
+      return enrollments.reduce((total, enrollment) => {
+        if (enrollment.payment_type === 'emi' && enrollment.emiDetails?.schedule) {
+          const pendingInstallments = enrollment.emiDetails.schedule.filter(s => s.status === 'pending');
+          const pendingAmount = pendingInstallments.reduce((sum, installment) => sum + (installment.amount || 0), 0);
+          return total + pendingAmount;
+        }
+        if (enrollment.payment_status === 'pending') {
+          return total + (enrollment.payment_details?.amount || 0);
+        }
+        return total;
+      }, 0);
+    }
 
     // Comprehensive account status
     const accountStatus = {
@@ -1156,28 +1542,114 @@ export const getComprehensiveProfile = async (req, res) => {
             milestones_reached: progress.milestones_reached
           })),
           
-          // Enhanced progress tracking data
+          // Enhanced progress tracking data with comprehensive lesson and assessment details
           enhanced_progress: enhancedProgressData.map(progress => ({
+            // Basic progress information
             progress_id: progress._id,
-            user_id: progress.userId,
-            course_id: progress.courseId?._id,
-            course_title: progress.courseId?.course_title,
-            course_image: progress.courseId?.course_image,
-            course_category: progress.courseId?.course_category,
-            content_type: progress.contentType,
-            content_id: progress.contentId?._id,
-            content_title: progress.contentId?.title,
-            progress_percentage: progress.progressPercentage,
-            status: progress.status,
-            time_spent: progress.timeSpent,
-            score: progress.score,
-            attempts: progress.attempts,
-            last_accessed: progress.lastAccessed,
-            completion_date: progress.completionDate,
-            notes: progress.notes,
-            metadata: progress.metadata,
-            learning_objectives_met: progress.learningObjectivesMet,
-            performance_metrics: progress.performanceMetrics,
+            student_id: progress.student,
+            course_id: progress.course?._id,
+            course_title: progress.course?.course_title,
+            course_image: progress.course?.course_image,
+            course_category: progress.course?.course_category,
+            course_type: progress.course?.course_type,
+            enrollment_id: progress.enrollment?._id,
+            enrollment_status: progress.enrollment?.status,
+            
+            // Course structure and completion overview
+            course_structure: progress.courseStructure,
+            overall_progress: progress.overallProgress,
+            is_completed: progress.isCompleted,
+            completed_at: progress.completedAt,
+            completion_status: progress.completionStatus,
+            
+            // Detailed lesson progress
+            lesson_progress: {
+              total_lessons: progress.lessonProgress.length,
+              completed_lessons: progress.lessonProgress.filter(l => l.status === 'completed').length,
+              in_progress_lessons: progress.lessonProgress.filter(l => l.status === 'in_progress').length,
+              not_started_lessons: progress.lessonProgress.filter(l => l.status === 'not_started').length,
+              skipped_lessons: progress.lessonProgress.filter(l => l.status === 'skipped').length,
+              
+              // Lesson type breakdown
+              lesson_type_breakdown: progress.lessonProgress.reduce((acc, lesson) => {
+                acc[lesson.lessonType] = (acc[lesson.lessonType] || 0) + 1;
+                return acc;
+              }, {}),
+              
+              // Video progress analytics
+              video_analytics: {
+                total_video_duration: progress.lessonProgress.reduce((sum, lesson) => 
+                  sum + (lesson.videoProgress?.totalDuration || 0), 0),
+                total_watched_duration: progress.lessonProgress.reduce((sum, lesson) => 
+                  sum + (lesson.videoProgress?.watchedDuration || 0), 0),
+                average_watch_percentage: progress.lessonProgress.length > 0 ? 
+                  progress.lessonProgress.reduce((sum, lesson) => 
+                    sum + (lesson.videoProgress?.watchedPercentage || 0), 0) / progress.lessonProgress.length : 0
+              },
+              
+              // Recent lesson activity
+              recent_lessons: progress.lessonProgress
+                .sort((a, b) => new Date(b.lastAccessedAt) - new Date(a.lastAccessedAt))
+                .slice(0, 5)
+                .map(lesson => ({
+                  lesson_id: lesson.lessonId,
+                  week_id: lesson.weekId,
+                  section_id: lesson.sectionId,
+                  lesson_type: lesson.lessonType,
+                  status: lesson.status,
+                  progress_percentage: lesson.progressPercentage,
+                  time_spent: lesson.timeSpent,
+                  last_accessed: lesson.lastAccessedAt,
+                  attempts: lesson.attempts
+                }))
+            },
+            
+            // Assessment progress details
+            assessment_progress: {
+              total_assessments: progress.assessmentProgress.length,
+              completed_assessments: progress.assessmentProgress.filter(a => a.status === 'completed').length,
+              passed_assessments: progress.assessmentProgress.filter(a => a.isPassed).length,
+              
+              // Assessment type breakdown
+              assessment_type_breakdown: progress.assessmentProgress.reduce((acc, assessment) => {
+                acc[assessment.assessmentType] = (acc[assessment.assessmentType] || 0) + 1;
+                return acc;
+              }, {}),
+              
+              // Performance metrics
+              average_score: progress.assessmentProgress.length > 0 ? 
+                progress.assessmentProgress.reduce((sum, assessment) => 
+                  sum + (assessment.bestScore || 0), 0) / progress.assessmentProgress.length : 0,
+              
+              // Recent assessments
+              recent_assessments: progress.assessmentProgress
+                .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+                .slice(0, 5)
+                .map(assessment => ({
+                  assessment_id: assessment.assessmentId,
+                  assessment_type: assessment.assessmentType,
+                  status: assessment.status,
+                  best_score: assessment.bestScore,
+                  average_score: assessment.averageScore,
+                  is_passed: assessment.isPassed,
+                  total_attempts: assessment.attempts.length,
+                  total_time_spent: assessment.totalTimeSpent
+                }))
+            },
+            
+            // Learning path and navigation
+            learning_path: progress.learningPath,
+            next_lesson: progress.nextLesson,
+            
+            // Learning analytics and insights
+            learning_analytics: progress.learningAnalytics,
+            
+            // Recommended actions
+            recommended_actions: progress.getRecommendedActions(),
+            
+            // Timestamps and access information
+            first_accessed: progress.firstAccessedAt,
+            last_accessed: progress.lastAccessedAt,
             created_at: progress.createdAt,
             updated_at: progress.updatedAt
           }))
