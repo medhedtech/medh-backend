@@ -4933,6 +4933,209 @@ const getCoursesByCategory = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get all courses with curriculum by category name
+ * @route   GET /api/v1/courses/by-category/:categoryName
+ * @access  Public
+ * @param   {string} categoryName - Direct category name (e.g., 'Digital Marketing with Data Analytics')
+ * @param   {string} include_curriculum - Include full curriculum details (default: true)
+ * @param   {string} status - Filter by course status (default: Published)
+ * @param   {number} page - Page number for pagination (default: 1)
+ * @param   {number} limit - Number of courses per page (default: 10)
+ */
+const getCoursesByCategoryName = async (req, res) => {
+  try {
+    const { categoryName } = req.params;
+    const {
+      include_curriculum = "true",
+      status = "Published",
+      page = 1,
+      limit = 10,
+      sort_by = "createdAt",
+      sort_order = "desc"
+    } = req.query;
+
+    // Decode the category name from URL encoding
+    const decodedCategoryName = fullyDecodeURIComponent(categoryName);
+
+    // Build filter object
+    const filter = {
+      status: { $regex: status, $options: "i" },
+      course_category: { $regex: createSafeRegex(decodedCategoryName) }
+    };
+
+    // Build sort object
+    const sortOrder = sort_order === "asc" ? 1 : -1;
+    const sortObj = {};
+    sortObj[sort_by] = sortOrder;
+
+    // Define projection based on curriculum inclusion
+    const baseProjection = {
+      course_title: 1,
+      course_category: 1,
+      course_subcategory: 1,
+      course_tag: 1,
+      course_image: 1,
+      course_description: 1,
+      course_level: 1,
+      course_duration: 1,
+      course_fee: 1,
+      prices: 1,
+      isFree: 1,
+      status: 1,
+      category_type: 1,
+      class_type: 1,
+      assigned_instructor: 1,
+      no_of_Sessions: 1,
+      session_duration: 1,
+      language: 1,
+      is_Certification: 1,
+      is_Assignments: 1,
+      is_Projects: 1,
+      is_Quizes: 1,
+      createdAt: 1,
+      updatedAt: 1,
+      slug: 1,
+      meta: 1
+    };
+
+    if (include_curriculum === "true") {
+      baseProjection.curriculum = 1;
+    }
+
+    // Calculate pagination
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Execute queries in parallel for all course models
+    const [legacyCourses, blendedCourses, liveCourses, freeCourses] = await Promise.all([
+      // Legacy Course model
+      Course.find(filter, baseProjection)
+        .populate({
+          path: 'assigned_instructor',
+          select: 'full_name email role domain',
+          match: { role: { $in: ['instructor'] } }
+        })
+        .sort(sortObj)
+        .lean(),
+      
+      // New course-types models
+      BlendedCourse.find(filter, baseProjection)
+        .populate({
+          path: 'assigned_instructor',
+          select: 'full_name email role domain',
+          match: { role: { $in: ['instructor'] } }
+        })
+        .sort(sortObj)
+        .lean(),
+      
+      LiveCourse.find(filter, baseProjection)
+        .populate({
+          path: 'assigned_instructor',
+          select: 'full_name email role domain',
+          match: { role: { $in: ['instructor'] } }
+        })
+        .sort(sortObj)
+        .lean(),
+      
+      FreeCourse.find(filter, baseProjection)
+        .populate({
+          path: 'assigned_instructor',
+          select: 'full_name email role domain',
+          match: { role: { $in: ['instructor'] } }
+        })
+        .sort(sortObj)
+        .lean()
+    ]);
+
+    // Combine all courses and mark course types
+    const newTypeCourses = [
+      ...blendedCourses.map(c => ({ ...c, course_type: "blended", _source: "new_model" })),
+      ...liveCourses.map(c => ({ ...c, course_type: "live", _source: "new_model" })),
+      ...freeCourses.map(c => ({ ...c, course_type: "free", _source: "new_model" }))
+    ];
+
+    const legacyCoursesMarked = legacyCourses.map(c => ({ ...c, _source: "legacy_model" }));
+    let allCourses = [...legacyCoursesMarked, ...newTypeCourses];
+
+    // Process courses response (format durations, etc.)
+    allCourses = processCoursesResponse(allCourses);
+
+    // Apply pagination
+    const totalCourses = allCourses.length;
+    const paginatedCourses = allCourses.slice(skip, skip + limitNum);
+
+    // Calculate curriculum statistics if curriculum is included
+    let curriculumStats = null;
+    if (include_curriculum === "true" && paginatedCourses.length > 0) {
+      curriculumStats = {
+        courses_with_curriculum: paginatedCourses.filter(course => course.curriculum && course.curriculum.length > 0).length,
+        total_weeks: paginatedCourses.reduce((total, course) => {
+          return total + (course.curriculum ? course.curriculum.length : 0);
+        }, 0),
+        avg_weeks_per_course: 0
+      };
+      
+      if (curriculumStats.courses_with_curriculum > 0) {
+        curriculumStats.avg_weeks_per_course = Math.round(
+          curriculumStats.total_weeks / curriculumStats.courses_with_curriculum
+        );
+      }
+    }
+
+    // Build response
+    const response = {
+      success: true,
+      message: `Courses retrieved successfully for category: ${decodedCategoryName}`,
+      data: {
+        courses: paginatedCourses,
+        category: {
+          name: decodedCategoryName,
+          total_courses: totalCourses
+        },
+        pagination: {
+          current_page: pageNum,
+          total_pages: Math.ceil(totalCourses / limitNum),
+          total_courses: totalCourses,
+          per_page: limitNum,
+          has_next: pageNum < Math.ceil(totalCourses / limitNum),
+          has_prev: pageNum > 1
+        },
+        filters: {
+          status: status,
+          include_curriculum: include_curriculum === "true"
+        },
+        sorting: {
+          sort_by,
+          sort_order
+        },
+        sources: {
+          legacy_model: legacyCoursesMarked.length,
+          new_model: newTypeCourses.length
+        }
+      }
+    };
+
+    // Add curriculum stats if available
+    if (curriculumStats) {
+      response.data.curriculum_stats = curriculumStats;
+    }
+
+    res.status(200).json(response);
+
+  } catch (error) {
+    console.error("Error fetching courses by category name:", error);
+    logger.error("Error fetching courses by category name:", error);
+    
+    res.status(500).json({
+      success: false,
+      message: "Error fetching courses by category name",
+      error: error.message || "An unexpected error occurred",
+    });
+  }
+};
+
 export {
   createCourse,
   getAllCourses,
@@ -4943,6 +5146,7 @@ export {
   getCourseTitles,
   getAllCoursesWithLimits,
   getCoursesByCategory,
+  getCoursesByCategoryName,
   toggleCourseStatus,
   updateRecordedVideos,
   getRecordedVideosForUser,

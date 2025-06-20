@@ -56,6 +56,7 @@ import formSchemaRoutes from "./form-schema-routes.js";
 import demoBookingRoutes from "./demo-bookingRoutes.js";
 import demoFeedbackRoutes from "./demo-feedbackRoutes.js";
 import hireFromMedhRoutes from "./hire-from-medh-routes.js";
+import membershipEnrollmentRoutes from "./membershipEnrollmentRoutes.js";
 
 const router = express.Router();
 
@@ -135,6 +136,10 @@ const moduleRoutes = [
   {
     path: "/membership",
     route: membership,
+  },
+  {
+    path: "/memberships",
+    route: membershipEnrollmentRoutes,
   },
   {
     path: "/resources",

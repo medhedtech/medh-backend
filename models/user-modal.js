@@ -702,6 +702,11 @@ const userSchema = new Schema({
     enum: ["free", "premium", "enterprise", "instructor", "admin"],
     default: "free"
   },
+  membership_type: {
+    type: String,
+    enum: ["general", "gold", "silver"],
+    default: "general"
+  },
   role: {
     type: Schema.Types.Mixed, // Supports both String and Array
     validate: {

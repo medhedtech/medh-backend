@@ -11,6 +11,7 @@ import {
   getCourseTitles,
   getAllCoursesWithLimits,
   getCoursesByCategory,
+  getCoursesByCategoryName,
   toggleCourseStatus,
   updateRecordedVideos,
   getRecordedVideosForUser,
@@ -75,10 +76,15 @@ router.get("/prices", getAllCoursesWithPrices);
 router.get("/fields", getCoursesWithFields);
 router.get("/home", getHomeCourses);
 router.get("/scheduled-publishes", getAllScheduledPublishes);
-router.get("/:id", getCourseById);
-router.get("/coorporate/:id", getCoorporateCourseById);
 router.get("/titles", getCourseTitles);
 router.get("/related", getAllRelatedCourses);
+
+// Category name route - specific path to avoid conflicts
+router.get("/by-category/:categoryName", getCoursesByCategoryName);
+
+// Generic ID route - must be last among GET routes
+router.get("/:id", getCourseById);
+router.get("/coorporate/:id", getCoorporateCourseById);
 
 // Admin Routes (Protected) - Place these BEFORE student routes to avoid conflicts
 router.post(
