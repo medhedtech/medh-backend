@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
-// Payment schema embedded in enrollment
+// Enhanced Payment schema with membership support
 const paymentSchema = new Schema({
   amount: {
     type: Number,
@@ -32,9 +32,32 @@ const paymentSchema = new Schema({
     enum: ["pending", "completed", "failed", "refunded", "partially_refunded"],
     default: "pending"
   },
+  payment_type: {
+    type: String,
+    enum: ["course", "membership", "upgrade", "renewal", "addon"],
+    default: "course"
+  },
+      membership_info: {
+      membership_type: {
+        type: String,
+        enum: ["silver", "gold"]
+      },
+          billing_cycle: {
+        type: String,
+        enum: ["monthly", "quarterly", "half_yearly", "annual", "one_time"]
+      },
+    next_billing_date: Date,
+    renewal_amount: Number
+  },
   receipt_url: {
     type: String,
     trim: true
+  },
+  refund_info: {
+    refund_amount: Number,
+    refund_date: Date,
+    refund_reason: String,
+    refund_transaction_id: String
   },
   metadata: {
     type: Map,
@@ -131,9 +154,45 @@ const enrollmentSchema = new Schema(
     // Enhanced enrollment type to distinguish individual vs batch
     enrollment_type: {
       type: String,
-      enum: ["individual", "batch", "corporate", "group", "scholarship", "trial"],
+      enum: ["individual", "batch", "corporate", "group", "scholarship", "trial", "membership"],
       default: "individual",
       required: [true, "Enrollment type is required"]
+    },
+    // Membership specific information
+    membership_info: {
+      membership_type: {
+        type: String,
+        enum: ["silver", "gold"],
+        sparse: true // Only for membership enrollments
+      },
+      membership_duration_months: {
+        type: Number,
+        min: 1,
+        sparse: true
+      },
+      membership_start_date: {
+        type: Date,
+        sparse: true
+      },
+      membership_end_date: {
+        type: Date,
+        sparse: true
+      },
+      auto_renewal: {
+        type: Boolean,
+        default: false
+      },
+      membership_benefits: [{
+        benefit_type: {
+          type: String,
+          enum: ["course_access", "discount_percentage", "priority_support", "exclusive_content", "certification_priority"]
+        },
+        benefit_value: String,
+        description: String
+      }],
+      previous_membership_type: String,
+      upgrade_date: Date,
+      downgrade_date: Date
     },
     enrollment_source: {
       type: String,
@@ -261,8 +320,24 @@ enrollmentSchema.index({ enrollment_date: 1 });
 enrollmentSchema.index({ access_expiry_date: 1 });
 enrollmentSchema.index({ "payments.payment_status": 1 });
 enrollmentSchema.index({ "payments.payment_date": 1 });
+enrollmentSchema.index({ "payments.payment_type": 1 });
 enrollmentSchema.index({ enrollment_type: 1 });
 enrollmentSchema.index({ batch: 1 });
+// Membership-specific indexes
+enrollmentSchema.index({ 
+  student: 1, 
+  enrollment_type: 1, 
+  status: 1 
+}, { 
+  partialFilterExpression: { enrollment_type: 'membership' } 
+});
+// membership_info indexes are handled by sparse: true in field definitions
+enrollmentSchema.index({ 
+  "membership_info.membership_end_date": 1, 
+  status: 1 
+}, { 
+  partialFilterExpression: { enrollment_type: 'membership' } 
+});
 
 // Virtual properties
 enrollmentSchema.virtual('isActive').get(function() {
@@ -561,6 +636,159 @@ enrollmentSchema.methods.syncAssessmentToEnhancedProgress = async function(asses
   }
 };
 
+// Membership-specific methods
+enrollmentSchema.methods.createMembershipEnrollment = async function(membershipData) {
+  if (this.enrollment_type !== 'membership') {
+    throw new Error('This method is only for membership enrollments');
+  }
+
+  const { membership_type, duration_months, auto_renewal } = membershipData;
+  
+  // Set membership info
+  this.membership_info = {
+    membership_type,
+    membership_duration_months: duration_months,
+    membership_start_date: new Date(),
+    membership_end_date: new Date(Date.now() + (duration_months * 30 * 24 * 60 * 60 * 1000)),
+    auto_renewal: auto_renewal || false,
+    membership_benefits: this.getMembershipBenefits(membership_type)
+  };
+
+  // Update user's membership type
+  const User = mongoose.model('User');
+  await User.findByIdAndUpdate(this.student, { 
+    membership_type,
+    updated_at: new Date()
+  });
+
+  return this.save();
+};
+
+enrollmentSchema.methods.upgradeMembership = async function(newMembershipType) {
+  if (this.enrollment_type !== 'membership') {
+    throw new Error('Can only upgrade membership enrollments');
+  }
+
+  const currentType = this.membership_info.membership_type;
+  const membershipHierarchy = { 'general': 1, 'silver': 2, 'gold': 3 };
+  
+  if (membershipHierarchy[newMembershipType] <= membershipHierarchy[currentType]) {
+    throw new Error('New membership type must be higher than current type');
+  }
+
+  // Store previous membership info
+  this.membership_info.previous_membership_type = currentType;
+  this.membership_info.upgrade_date = new Date();
+  this.membership_info.membership_type = newMembershipType;
+  this.membership_info.membership_benefits = this.getMembershipBenefits(newMembershipType);
+
+  // Update user's membership type
+  const User = mongoose.model('User');
+  await User.findByIdAndUpdate(this.student, { 
+    membership_type: newMembershipType,
+    updated_at: new Date()
+  });
+
+  return this.save();
+};
+
+enrollmentSchema.methods.renewMembership = async function(renewalData) {
+  if (this.enrollment_type !== 'membership') {
+    throw new Error('Can only renew membership enrollments');
+  }
+
+  const { duration_months, payment_info } = renewalData;
+  
+  // Extend membership end date
+  const currentEndDate = this.membership_info.membership_end_date;
+  const newEndDate = new Date(currentEndDate.getTime() + (duration_months * 30 * 24 * 60 * 60 * 1000));
+  
+  this.membership_info.membership_end_date = newEndDate;
+  this.membership_info.membership_duration_months += duration_months;
+
+  // Record renewal payment
+  if (payment_info) {
+    await this.recordMembershipPayment({
+      ...payment_info,
+      payment_type: 'renewal'
+    });
+  }
+
+  return this.save();
+};
+
+enrollmentSchema.methods.getMembershipBenefits = function(membershipType) {
+  const benefits = {
+    silver: [
+      { benefit_type: 'course_access', benefit_value: 'single_category', description: 'Access to all self-paced blended courses within any Single-Category of your preference' },
+      { benefit_type: 'live_qa_sessions', benefit_value: 'included', description: 'Access to LIVE Q&A Doubt Clearing Sessions' },
+      { benefit_type: 'discount_percentage', benefit_value: 'special', description: 'Special discount on all live courses' },
+      { benefit_type: 'community_access', benefit_value: 'included', description: 'Community access' },
+      { benefit_type: 'free_courses', benefit_value: 'included', description: 'Access to free courses' },
+      { benefit_type: 'placement_assistance', benefit_value: 'included', description: 'Placement Assistance' }
+    ],
+    gold: [
+      { benefit_type: 'course_access', benefit_value: 'three_categories', description: 'Access to all self-paced blended courses within any 03-Categories of your preference' },
+      { benefit_type: 'live_qa_sessions', benefit_value: 'included', description: 'Access to LIVE Q&A Doubt Clearing Sessions' },
+      { benefit_type: 'discount_percentage', benefit_value: '15', description: 'Minimum 15% discount on all live courses' },
+      { benefit_type: 'community_access', benefit_value: 'included', description: 'Community access' },
+      { benefit_type: 'free_courses', benefit_value: 'included', description: 'Access to free courses' },
+      { benefit_type: 'career_counselling', benefit_value: 'included', description: 'Career Counselling' },
+      { benefit_type: 'placement_assistance', benefit_value: 'included', description: 'Placement Assistance' }
+    ]
+  };
+
+  return benefits[membershipType] || benefits.silver;
+};
+
+enrollmentSchema.methods.recordMembershipPayment = async function(paymentData) {
+  const membershipPayment = {
+    ...paymentData,
+    payment_type: paymentData.payment_type || 'membership',
+    membership_info: {
+      membership_type: this.membership_info.membership_type,
+      billing_cycle: paymentData.billing_cycle || 'monthly',
+      next_billing_date: paymentData.next_billing_date,
+      renewal_amount: paymentData.renewal_amount
+    }
+  };
+
+  this.payments.push(membershipPayment);
+  
+  // Update total amount paid
+  this.total_amount_paid = this.payments
+    .filter(payment => payment.payment_status === 'completed')
+    .reduce((sum, payment) => sum + payment.amount, 0);
+
+  return this.save();
+};
+
+enrollmentSchema.methods.isMembershipActive = function() {
+  if (this.enrollment_type !== 'membership') return false;
+  
+  const now = new Date();
+  return this.status === 'active' && 
+         this.membership_info.membership_end_date > now;
+};
+
+enrollmentSchema.methods.getMembershipStatus = function() {
+  if (this.enrollment_type !== 'membership') {
+    return { status: 'not_membership', message: 'Not a membership enrollment' };
+  }
+
+  const now = new Date();
+  const endDate = this.membership_info.membership_end_date;
+  const daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+
+  if (daysRemaining > 30) {
+    return { status: 'active', daysRemaining, message: 'Membership is active' };
+  } else if (daysRemaining > 0) {
+    return { status: 'expiring_soon', daysRemaining, message: `Membership expires in ${daysRemaining} days` };
+  } else {
+    return { status: 'expired', daysRemaining: 0, message: 'Membership has expired' };
+  }
+};
+
 // Static methods
 enrollmentSchema.statics.findActiveEnrollments = function(studentId = null) {
   const query = { 
@@ -669,6 +897,7 @@ enrollmentSchema.statics.getDashboardStats = async function() {
     totalCompleted: await this.countDocuments({ status: 'completed' }),
     individualEnrollments: await this.countDocuments({ enrollment_type: 'individual' }),
     batchEnrollments: await this.countDocuments({ enrollment_type: 'batch' }),
+    membershipEnrollments: await this.countDocuments({ enrollment_type: 'membership' }),
     recentEnrollments: await this.find()
       .sort({ enrollment_date: -1 })
       .limit(10)
@@ -702,6 +931,162 @@ enrollmentSchema.statics.getDashboardStats = async function() {
       }
     ])
   };
+};
+
+// Membership-specific static methods
+enrollmentSchema.statics.findActiveMemberships = function(studentId = null) {
+  const query = { 
+    enrollment_type: 'membership',
+    status: 'active',
+    'membership_info.membership_end_date': { $gte: new Date() }
+  };
+  
+  if (studentId) {
+    query.student = studentId;
+  }
+  
+  return this.find(query)
+    .populate('student', 'full_name email membership_type')
+    .select('membership_info payments enrollment_date total_amount_paid');
+};
+
+enrollmentSchema.statics.findExpiringMemberships = function(daysAhead = 30) {
+  const futureDate = new Date(Date.now() + (daysAhead * 24 * 60 * 60 * 1000));
+  
+  return this.find({
+    enrollment_type: 'membership',
+    status: 'active',
+    'membership_info.membership_end_date': { 
+      $gte: new Date(),
+      $lte: futureDate 
+    }
+  })
+  .populate('student', 'full_name email')
+  .select('membership_info enrollment_date');
+};
+
+enrollmentSchema.statics.getMembershipStats = async function() {
+  const stats = await this.aggregate([
+    {
+      $match: { enrollment_type: 'membership' }
+    },
+    {
+      $group: {
+        _id: '$membership_info.membership_type',
+        count: { $sum: 1 },
+        total_revenue: { $sum: '$total_amount_paid' },
+        active_count: {
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ['$status', 'active'] },
+                  { $gte: ['$membership_info.membership_end_date', new Date()] }
+                ]
+              },
+              1,
+              0
+            ]
+          }
+        }
+      }
+    },
+    {
+      $sort: { count: -1 }
+    }
+  ]);
+
+  return {
+    membershipBreakdown: stats,
+    totalMemberships: stats.reduce((sum, stat) => sum + stat.count, 0),
+    totalRevenue: stats.reduce((sum, stat) => sum + stat.total_revenue, 0),
+    totalActive: stats.reduce((sum, stat) => sum + stat.active_count, 0)
+  };
+};
+
+enrollmentSchema.statics.createMembershipEnrollment = async function(enrollmentData) {
+  const { student_id, membership_type, duration_months, payment_info } = enrollmentData;
+  
+  // Validate membership type
+  const validTypes = ['silver', 'gold'];
+  if (!validTypes.includes(membership_type)) {
+    throw new Error('Invalid membership type');
+  }
+
+  // Check if user already has an active membership
+  const existingMembership = await this.findOne({
+    student: student_id,
+    enrollment_type: 'membership',
+    status: 'active',
+    'membership_info.membership_end_date': { $gte: new Date() }
+  });
+
+  if (existingMembership) {
+    throw new Error('User already has an active membership');
+  }
+
+  // Define membership pricing (INR)
+  const membershipPricing = {
+    silver: { 
+      monthly: 999, 
+      quarterly: 2499, 
+      half_yearly: 3999, 
+      annual: 4999 
+    },
+    gold: { 
+      monthly: 1999, 
+      quarterly: 3999, 
+      half_yearly: 5999, 
+      annual: 6999 
+    }
+  };
+
+  const billing_cycle = duration_months === 1 ? 'monthly' : 
+                       duration_months === 3 ? 'quarterly' : 
+                       duration_months === 6 ? 'half_yearly' :
+                       duration_months === 12 ? 'annual' : 'one_time';
+  
+  const amount = membershipPricing[membership_type][billing_cycle] || 
+                membershipPricing[membership_type].monthly * duration_months;
+
+  // Create enrollment
+  const enrollment = new this({
+    student: student_id,
+    course: null, // No specific course for membership
+    enrollment_type: 'membership',
+    enrollment_date: new Date(),
+    access_expiry_date: new Date(Date.now() + (duration_months * 30 * 24 * 60 * 60 * 1000)),
+    status: 'active',
+    membership_info: {
+      membership_type,
+      membership_duration_months: duration_months,
+      membership_start_date: new Date(),
+      membership_end_date: new Date(Date.now() + (duration_months * 30 * 24 * 60 * 60 * 1000)),
+      auto_renewal: enrollmentData.auto_renewal || false
+    },
+    pricing_snapshot: {
+      original_price: amount,
+      final_price: payment_info?.amount || amount,
+      currency: payment_info?.currency || 'INR',
+      pricing_type: 'membership'
+    }
+  });
+
+  // Set membership benefits
+  enrollment.membership_info.membership_benefits = enrollment.getMembershipBenefits(membership_type);
+
+  // Record payment if provided
+  if (payment_info) {
+    await enrollment.recordMembershipPayment({
+      ...payment_info,
+      amount: payment_info.amount || amount,
+      billing_cycle,
+      next_billing_date: enrollmentData.auto_renewal ? 
+        new Date(Date.now() + (duration_months * 30 * 24 * 60 * 60 * 1000)) : null
+    });
+  }
+
+  return enrollment.save();
 };
 
 const Enrollment = mongoose.model("Enrollment", enrollmentSchema);
