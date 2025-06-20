@@ -9,6 +9,7 @@ import { verifyAccessToken } from '../utils/jwt.js';
 
 /**
  * Helper function to check if user has a specific role
+ * Implements role hierarchy: super-admin > admin > instructor > student
  * @param {string|string[]} userRole - User's role(s)
  * @param {string|string[]} requiredRoles - Required role(s)
  * @returns {boolean} - Whether user has the required role
@@ -16,7 +17,35 @@ import { verifyAccessToken } from '../utils/jwt.js';
 const hasRole = (userRole, requiredRoles) => {
   const userRoles = Array.isArray(userRole) ? userRole : [userRole];
   const required = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
-  return userRoles.some(role => required.includes(role));
+  
+  // Check for direct role match first
+  if (userRoles.some(role => required.includes(role))) {
+    return true;
+  }
+  
+  // Implement role hierarchy: super-admin has all permissions
+  if (userRoles.includes('super-admin')) {
+    // super-admin can access anything that admin, instructor, or student can access
+    if (required.includes('admin') || required.includes('instructor') || required.includes('student')) {
+      return true;
+    }
+  }
+  
+  // admin can access anything that instructor or student can access
+  if (userRoles.includes('admin')) {
+    if (required.includes('instructor') || required.includes('student')) {
+      return true;
+    }
+  }
+  
+  // instructor can access anything that student can access
+  if (userRoles.includes('instructor')) {
+    if (required.includes('student')) {
+      return true;
+    }
+  }
+  
+  return false;
 };
 
 /**
@@ -292,7 +321,7 @@ const verifyStudentOwnership = async (req, res, next) => {
     const { student_id } = req.params;
     const userId = req.user._id;
 
-    // Allow access if user is admin or instructor
+    // Allow access if user is admin or instructor (super-admin automatically qualifies)
     if (hasRole(req.user.role, ["admin", "instructor"])) {
       return next();
     }
@@ -344,7 +373,7 @@ export const verifyToken = async (req, res, next) => {
   }
 };
 
-// Check if user is admin
+// Check if user is admin (super-admin automatically qualifies)
 export const isAdmin = (req, res, next) => {
   if (req.user && hasRole(req.user.role, "admin")) {
     return next();
@@ -352,18 +381,18 @@ export const isAdmin = (req, res, next) => {
   next(new AppError("Access denied. Admin only.", 403));
 };
 
-// Check if user is instructor
+// Check if user is instructor (admin and super-admin automatically qualify)
 export const isInstructor = (req, res, next) => {
-  if (req.user && hasRole(req.user.role, ["instructor", "admin"])) {
+  if (req.user && hasRole(req.user.role, "instructor")) {
     next();
   } else {
     next(new AppError("Access denied. Instructor only.", 403));
   }
 };
 
-// Check if user is student
+// Check if user is student (instructor, admin, and super-admin automatically qualify)
 export const isStudent = (req, res, next) => {
-  if (req.user && hasRole(req.user.role, ["student", "admin"])) {
+  if (req.user && hasRole(req.user.role, "student")) {
     next();
   } else {
     next(new AppError("Access denied. Student only.", 403));

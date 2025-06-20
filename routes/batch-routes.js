@@ -66,7 +66,7 @@ router.get(
 router.post(
   "/courses/:courseId/batches",
   isAuthenticated,
-  authorize(["admin"]),
+  authorize(["admin", "super-admin"]),
   validateCourseId,
   validateBatchCreate,
   createBatch
@@ -98,7 +98,7 @@ router.get(
 router.put(
   "/:batchId",
   isAuthenticated,
-  authorize(["admin"]),
+  authorize(["admin", "super-admin"]),
   validateBatchId,
   validateBatchUpdate,
   updateBatch
@@ -107,7 +107,7 @@ router.put(
 router.delete(
   "/:batchId",
   isAuthenticated,
-  authorize(["admin"]),
+  authorize(["admin", "super-admin"]),
   validateBatchId,
   deleteBatch
 );
@@ -116,7 +116,7 @@ router.delete(
 router.put(
   "/:batchId/assign-instructor/:instructorId",
   isAuthenticated,
-  authorize(["admin"]),
+  authorize(["admin", "super-admin"]),
   validateBatchId,
   validateInstructorId,
   assignInstructorToBatch

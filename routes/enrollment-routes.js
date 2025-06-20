@@ -22,7 +22,7 @@ const router = express.Router();
 router.post(
   "/students/:studentId/enroll",
   authenticateToken,
-  authorize(["admin", "student"]),
+  authorize(["admin", "student", "super-admin"]),
   enrollStudentInBatch
 );
 
