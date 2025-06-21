@@ -1132,6 +1132,23 @@ class AuthController {
       // Reset failed login attempts on successful login
       await this.resetLockoutFields(user);
 
+      // Check if MFA is enabled for this user
+      if (user.two_factor_enabled) {
+        // For MFA-enabled users, return a temporary response indicating MFA is required
+        return res.status(200).json({
+          success: true,
+          message: "Password verified. Please provide your two-factor authentication code.",
+          requires_mfa: true,
+          mfa_method: user.two_factor_method,
+          data: {
+            user_id: user._id.toString(),
+            temp_session: true,
+            phone_hint: user.two_factor_method === 'sms' && user.two_factor_phone ? 
+              `***-***-${user.two_factor_phone.slice(-4)}` : null
+          }
+        });
+      }
+
       // Extract device and location information
       const deviceInfo = this.extractDeviceInfo(req);
       const locationInfo = this.extractLocationInfo(req);
@@ -1215,39 +1232,136 @@ class AuthController {
         await this.sendLoginNotification(user, deviceInfo, locationInfo);
       }
 
-      res.status(200).json({
-        success: true,
-        message: "Login successful",
-        data: {
-          user: {
-            id: user._id,
-            full_name: user.full_name,
-            email: user.email,
-            username: user.username,
-            role: user.role,
-            student_id: user.student_id,
-            user_image: user.user_image,
-            account_type: user.account_type,
-            email_verified: user.email_verified,
-            profile_completion: user.profile_completion,
-            is_online: true,
-            last_seen: user.last_seen,
-            statistics: user.statistics,
-            preferences: user.preferences,
-          },
-          token,
-          session_id: sessionId,
-          expires_in: tokenExpiry,
-        },
-      });
+      return this.completeLogin(user, deviceInfo, locationInfo, sessionId, token, remember_me, res);
     } catch (error) {
-      console.error("Login error:", error);
+      logger.error("Login error:", {
+        error: error.message,
+        stack: error.stack,
+        email: req.body?.email
+      });
+
       res.status(500).json({
         success: false,
         message: "Internal server error during login",
         error: process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
+  }
+
+  /**
+   * Complete login process after MFA verification
+   */
+  async completeMFALogin(req, res) {
+    try {
+      const { user_id, verified } = req.body;
+
+      if (!verified) {
+        return res.status(400).json({
+          success: false,
+          message: "MFA verification required"
+        });
+      }
+
+      const user = await User.findById(user_id);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found"
+        });
+      }
+
+      // Extract device and location information
+      const deviceInfo = this.extractDeviceInfo(req);
+      const locationInfo = this.extractLocationInfo(req);
+
+      // Create session
+      const sessionId = crypto.randomBytes(32).toString("hex");
+      const sessionData = {
+        session_id: sessionId,
+        device_id: deviceInfo.device_id,
+        ip_address: deviceInfo.ip_address,
+        user_agent: req.headers["user-agent"],
+        geolocation: locationInfo,
+      };
+
+      await user.createSession(sessionData);
+
+      // Update user statistics
+      user.last_login = new Date();
+      user.statistics.engagement.last_active_date = new Date();
+      user.statistics.engagement.total_logins += 1;
+
+      await user.save();
+
+      // Generate JWT token
+      const token = this.generateJWT(user);
+
+      return this.completeLogin(user, deviceInfo, locationInfo, sessionId, token, false, res);
+    } catch (error) {
+      logger.error("Complete MFA login error:", {
+        error: error.message,
+        stack: error.stack,
+        userId: req.body?.user_id
+      });
+
+      res.status(500).json({
+        success: false,
+        message: "Internal server error completing login",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Complete login process (shared between regular and MFA login)
+   */
+  completeLogin(user, deviceInfo, locationInfo, sessionId, token, remember_me, res) {
+    // Track real-time login
+    this.activeUsers.set(user._id.toString(), {
+      user_id: user._id,
+      session_id: sessionId,
+      login_time: new Date(),
+      device_info: deviceInfo,
+      location_info: locationInfo,
+    });
+
+    this.sessionStore.set(sessionId, {
+      user_id: user._id,
+      created_at: new Date(),
+      last_activity: new Date(),
+      device_info: deviceInfo,
+    });
+
+    // Send login notification email if from new device
+    if (this.isNewDevice(user, deviceInfo)) {
+      this.sendLoginNotification(user, deviceInfo, locationInfo);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Login successful",
+      data: {
+        user: {
+          id: user._id,
+          full_name: user.full_name,
+          email: user.email,
+          username: user.username,
+          role: user.role,
+          student_id: user.student_id,
+          user_image: user.user_image,
+          account_type: user.account_type,
+          email_verified: user.email_verified,
+          profile_completion: user.profile_completion,
+          is_online: true,
+          last_seen: user.last_seen,
+          statistics: user.statistics,
+          preferences: user.preferences,
+        },
+        token,
+        session_id: sessionId,
+        expires_in: remember_me ? "30d" : "24h",
+      },
+    });
   }
 
   // Enhanced Logout with Session Cleanup
@@ -1283,6 +1397,104 @@ class AuthController {
       res.status(500).json({
         success: false,
         message: "Internal server error during logout",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Logout from all devices - invalidate all sessions for the user
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async logoutAllDevices(req, res) {
+    try {
+      const user = req.user;
+      
+      // Get count of active sessions before invalidation
+      const activeSessionCount = user.sessions ? user.sessions.filter(s => s.is_active).length : 0;
+      
+      // Invalidate all sessions for this user
+      await user.invalidateAllSessions();
+      
+      // Remove from active users tracking
+      this.activeUsers.delete(user._id.toString());
+      
+      // Clear all sessions from our session store for this user
+      for (const [sessionId, sessionData] of this.sessionStore.entries()) {
+        if (sessionData.user_id.toString() === user._id.toString()) {
+          this.sessionStore.delete(sessionId);
+        }
+      }
+      
+      // Revoke all refresh tokens for this user
+      try {
+        await jwtUtils.revokeAllUserTokens(user._id.toString());
+      } catch (tokenError) {
+        logger.warn("Failed to revoke all refresh tokens", {
+          error: tokenError.message,
+          userId: user._id
+        });
+      }
+      
+      // Log the logout all devices activity
+      await user.logActivity("logout_all_devices", null, {
+        logout_time: new Date(),
+        sessions_terminated: activeSessionCount,
+        security_action: true
+      }, {
+        ip_address: req.ip,
+        user_agent: req.headers["user-agent"],
+        device_type: this.extractDeviceInfo(req).device_type,
+        geolocation: this.extractLocationInfo(req),
+        security_event: true
+      });
+      
+      // Send security notification email
+      try {
+        const deviceInfo = this.extractDeviceInfo(req);
+        const locationInfo = this.extractLocationInfo(req);
+        
+        await this.sendLogoutAllDevicesNotification(user, deviceInfo, locationInfo, activeSessionCount);
+      } catch (emailError) {
+        logger.warn("Failed to send logout all devices notification email", {
+          error: emailError.message,
+          userId: user._id,
+          email: user.email
+        });
+        // Don't fail the logout if email fails
+      }
+      
+      logger.info("All sessions invalidated by user request", {
+        userId: user._id,
+        email: user.email,
+        sessionCount: activeSessionCount
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Successfully logged out from all devices",
+        data: {
+          sessions_terminated: activeSessionCount,
+          logout_time: new Date(),
+          security_recommendations: [
+            "Change your password if you suspect unauthorized access",
+            "Review your recent login activity",
+            "Enable two-factor authentication for added security",
+            "Use strong, unique passwords for all accounts"
+          ]
+        }
+      });
+    } catch (error) {
+      logger.error("Logout all devices error:", {
+        error: error.message,
+        stack: error.stack,
+        userId: req.user?.id
+      });
+      
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during logout from all devices",
         error: process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
@@ -2534,12 +2746,55 @@ class AuthController {
     const ua = UAParser(req.headers["user-agent"]);
     const ip = req.ip || req.connection.remoteAddress;
     
+    // Enhanced device detection
+    const deviceVendor = ua.device.vendor || (ua.os.name === 'iOS' ? 'Apple' : (ua.os.name === 'Android' ? 'Google' : ''));
+    const deviceModel = ua.device.model || '';
+    
+    // Build a meaningful device name
+    let deviceName = 'Unknown Device';
+    if (deviceVendor && deviceModel) {
+      deviceName = `${deviceVendor} ${deviceModel}`;
+    } else if (ua.os.name && ua.browser.name) {
+      // For desktop browsers, create a meaningful name
+      if (ua.device.type === 'mobile') {
+        deviceName = `Mobile ${ua.browser.name}`;
+      } else if (ua.device.type === 'tablet') {
+        deviceName = `Tablet ${ua.browser.name}`;
+      } else {
+        deviceName = `${ua.os.name} Computer`;
+      }
+    } else if (ua.browser.name) {
+      deviceName = `${ua.browser.name} Browser`;
+    }
+    
+    // Enhanced browser info
+    const browserInfo = ua.browser.name ? 
+      `${ua.browser.name} ${ua.browser.version || ''}`.trim() : 
+      'Unknown Browser';
+    
+    // Enhanced OS info
+    const osInfo = ua.os.name ? 
+      `${ua.os.name} ${ua.os.version || ''}`.trim() : 
+      'Unknown OS';
+    
+    // Better device type detection
+    let deviceType = ua.device.type || 'desktop';
+    if (!ua.device.type) {
+      // Fallback detection based on user agent
+      const userAgent = req.headers["user-agent"]?.toLowerCase() || '';
+      if (userAgent.includes('mobile') || userAgent.includes('iphone') || userAgent.includes('android')) {
+        deviceType = 'mobile';
+      } else if (userAgent.includes('tablet') || userAgent.includes('ipad')) {
+        deviceType = 'tablet';
+      }
+    }
+    
     return {
       device_id: crypto.createHash("md5").update(req.headers["user-agent"] + ip).digest("hex"),
-      device_name: `${ua.device.vendor || "Unknown"} ${ua.device.model || "Device"}`,
-      device_type: ua.device.type || "desktop",
-      operating_system: `${ua.os.name || "Unknown"} ${ua.os.version || ""}`,
-      browser: `${ua.browser.name || "Unknown"} ${ua.browser.version || ""}`,
+      device_name: deviceName,
+      device_type: deviceType,
+      operating_system: osInfo,
+      browser: browserInfo,
       ip_address: ip,
       user_agent: req.headers["user-agent"],
       screen_resolution: req.headers["screen-resolution"],
@@ -2548,7 +2803,7 @@ class AuthController {
   }
 
   extractLocationInfo(req) {
-    // Enhanced IP address extraction
+    // Enhanced IP address extraction with better IPv6 handling
     let ip = req.ip || 
              req.connection.remoteAddress || 
              req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
@@ -2557,28 +2812,61 @@ class AuthController {
              req.connection.socket?.remoteAddress ||
              'unknown';
     
-    // Skip geolocation for localhost/private IPs
-    if (ip === '::1' || ip === '127.0.0.1' || ip === 'localhost' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
+    // Handle IPv6 mapped IPv4 addresses (::ffff:x.x.x.x)
+    if (ip.startsWith('::ffff:')) {
+      ip = ip.substring(7);
+    }
+    
+    // Handle IPv6 loopback
+    if (ip === '::1') {
+      ip = '127.0.0.1';
+    }
+    
+    // Skip geolocation for localhost/private IPs but provide better fallback
+    const isLocalhost = ip === '127.0.0.1' || ip === 'localhost';
+    const isPrivateIP = ip.startsWith('192.168.') || 
+                       ip.startsWith('10.') || 
+                       (ip.startsWith('172.') && parseInt(ip.split('.')[1]) >= 16 && parseInt(ip.split('.')[1]) <= 31);
+    const isUnknown = ip === 'unknown' || !ip;
+    
+    if (isLocalhost || isPrivateIP || isUnknown) {
+      // Better handling for development/local environments
       return {
-        country: "Local",
-        region: "Local",
-        city: "Development",
+        country: isLocalhost ? "Local Development" : (isPrivateIP ? "Private Network" : "Unknown"),
+        region: isLocalhost ? "Localhost" : (isPrivateIP ? "Local Network" : "Unknown"),
+        city: isLocalhost ? "Development Environment" : (isPrivateIP ? "Local Network" : "Unknown"),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
         coordinates: null,
       };
     }
     
+    // Use GeoIP lookup for public IPs
+    try {
     const geo = geoip.lookup(ip);
     
+      if (geo) {
     return {
-      country: geo?.country || "Unknown",
-      region: geo?.region || "Unknown", 
-      city: geo?.city || "Unknown",
-      timezone: geo?.timezone || "UTC",
-      coordinates: geo ? {
+          country: geo.country || "Unknown",
+          region: geo.region || "Unknown", 
+          city: geo.city || "Unknown",
+          timezone: geo.timezone || "UTC",
+          coordinates: geo.ll ? {
         latitude: geo.ll[0],
         longitude: geo.ll[1],
       } : null,
+        };
+      }
+    } catch (error) {
+      logger.warn('GeoIP lookup failed', { ip, error: error.message });
+    }
+    
+    // Fallback for when GeoIP lookup fails
+    return {
+      country: "Unknown",
+      region: "Unknown", 
+      city: "Unknown",
+      timezone: "UTC",
+      coordinates: null,
     };
   }
 
@@ -3738,6 +4026,61 @@ class AuthController {
       console.error('Error generating unique username:', error);
       // Fallback to timestamp-based username
       return `user${Date.now()}`;
+    }
+  }
+
+  /**
+   * Send logout all devices notification email
+   * @param {Object} user - User object
+   * @param {Object} deviceInfo - Device information
+   * @param {Object} locationInfo - Location information  
+   * @param {number} sessionCount - Number of sessions terminated
+   */
+  async sendLogoutAllDevicesNotification(user, deviceInfo, locationInfo, sessionCount) {
+    try {
+      const emailService = (await import('../services/emailService.js')).default;
+      
+      const logoutDetails = {
+        'Initiated From Device': deviceInfo.device_name || 'Unknown Device',
+        'Browser': deviceInfo.browser || 'Unknown Browser', 
+        'Operating System': deviceInfo.operating_system || 'Unknown OS',
+        'Location': `${locationInfo.city || 'Unknown'}, ${locationInfo.country || 'Unknown'}`,
+        'IP Address': deviceInfo.ip_address || 'Unknown',
+        'Logout Time': new Date().toLocaleString('en-US', { 
+          timeZone: user.preferences?.timezone || 'UTC',
+          dateStyle: 'full',
+          timeStyle: 'medium'
+        }),
+        'Sessions Terminated': sessionCount.toString()
+      };
+
+      await emailService.sendNotificationEmail(
+        user.email,
+        '🚪 Logged Out From All Devices - Medh Learning Platform',
+        `Hello ${user.full_name}, you have been logged out from all devices on your Medh Learning Platform account. This action was initiated from one of your devices. If you did not request this, please contact support immediately.`,
+        {
+          user_name: user.full_name,
+          email: user.email,
+          details: logoutDetails,
+          actionUrl: `${process.env.FRONTEND_URL || 'https://app.medh.co'}/login`,
+          actionText: 'Login Again',
+          currentYear: new Date().getFullYear(),
+          urgent: true
+        }
+      );
+      
+      logger.info('Logout all devices notification sent successfully', {
+        userId: user._id,
+        email: user.email,
+        sessionCount
+      });
+    } catch (error) {
+      logger.error('Failed to send logout all devices notification', {
+        error: error.message,
+        userId: user._id,
+        email: user.email
+      });
+      throw error;
     }
   }
 }

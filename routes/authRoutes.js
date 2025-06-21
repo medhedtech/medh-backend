@@ -63,6 +63,13 @@ router.post("/check-user-status", authController.checkUserStatus.bind(authContro
 router.post("/login", loginLimiter, authController.loginUser.bind(authController));
 
 /**
+ * @route   POST /api/v1/auth/complete-mfa-login
+ * @desc    Complete login after MFA verification
+ * @access  Public
+ */
+router.post("/complete-mfa-login", authController.completeMFALogin.bind(authController));
+
+/**
  * @route   POST /api/v1/auth/refresh-token
  * @desc    Get a new access token using a refresh token
  * @access  Public
@@ -89,6 +96,13 @@ router.post("/refresh-token", (req, res, next) => {
  * @access  Private
  */
 router.post("/logout", authenticateToken, authController.logout.bind(authController));
+
+/**
+ * @route   POST /api/v1/auth/logout-all-devices
+ * @desc    Logout a user from all devices by invalidating all sessions and tokens
+ * @access  Private
+ */
+router.post("/logout-all-devices", authenticateToken, authController.logoutAllDevices.bind(authController));
 
 /**
  * @route   POST /api/v1/auth/forgot-password

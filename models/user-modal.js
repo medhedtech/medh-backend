@@ -87,12 +87,15 @@ const userActivitySchema = new Schema({
     type: String,
     required: true,
     enum: [
-      "register", "login", "logout", "profile_update", "profile_view", "course_view", "course_purchase",
+      "register", "login", "logout", "logout_all_devices", "profile_update", "profile_view", "course_view", "course_purchase",
       "content_view", "content_complete", "search", "review_submit",
       "social_share", "message_send", "notification_read", "setting_change",
       "feature_use", "error_encounter", "page_view", "api_call",
       "password_reset", "password_reset_request", "password_change", "temp_password_verified",
-      "admin_action", "profile_restore"
+      "admin_action", "profile_restore",
+      // MFA-related actions
+      "mfa_setup_initiated", "mfa_enabled", "mfa_disabled", "mfa_verification_success", "mfa_verification_failed",
+      "backup_codes_regenerated", "mfa_recovery_requested"
     ]
   },
   resource: {
@@ -759,8 +762,25 @@ const userSchema = new Schema({
     type: Boolean,
     default: false
   },
+  two_factor_method: {
+    type: String,
+    enum: ['totp', 'sms'],
+    sparse: true
+  },
   two_factor_secret: String,
+  two_factor_temp_secret: String, // Temporary secret during setup
+  two_factor_phone: String, // Phone number for SMS MFA
+  two_factor_temp_phone: String, // Temporary phone during setup
+  two_factor_temp_code: String, // Temporary SMS code
+  two_factor_temp_code_expires: Date, // SMS code expiry
+  two_factor_setup_date: Date,
+  two_factor_disabled_date: Date,
   backup_codes: [String],
+  backup_codes_regenerated_date: Date,
+  // MFA Recovery fields
+  mfa_recovery_token: String,
+  mfa_recovery_expires: Date,
+  mfa_recovery_reason: String,
   password_reset_token: String,
   password_reset_expires: Date,
   email_verification_token: String,
@@ -915,7 +935,10 @@ const userSchema = new Schema({
     transform: function(doc, ret) {
       delete ret.password;
       delete ret.two_factor_secret;
+      delete ret.two_factor_temp_secret;
+      delete ret.two_factor_temp_code;
       delete ret.backup_codes;
+      delete ret.mfa_recovery_token;
       delete ret.password_reset_token;
       delete ret.email_verification_token;
       delete ret.temp_password_verification_token;
@@ -1181,6 +1204,31 @@ userSchema.methods.endSession = function(sessionId) {
   if (activeSessions.length === 0) {
     this.is_online = false;
   }
+  
+  return this.save();
+};
+
+/**
+ * Invalidate all active sessions for this user
+ */
+userSchema.methods.invalidateAllSessions = function() {
+  if (!this.sessions) {
+    this.sessions = [];
+  }
+  
+  // Mark all sessions as inactive
+  this.sessions.forEach(session => {
+    if (session.is_active) {
+      session.is_active = false;
+      session.end_time = new Date();
+      if (session.start_time) {
+        session.duration = session.end_time - session.start_time;
+      }
+    }
+  });
+  
+  // Set user as offline
+  this.is_online = false;
   
   return this.save();
 };

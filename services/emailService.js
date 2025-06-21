@@ -520,6 +520,181 @@ class EmailService {
   }
 
   /**
+   * Send beautiful login notification email
+   * @param {string} email - Recipient email
+   * @param {string} userName - User's name
+   * @param {Object} loginDetails - Login details object
+   * @param {Object} options - Additional options
+   * @returns {Promise} Email sending result
+   */
+  async sendLoginNotificationEmail(email, userName, loginDetails, options = {}) {
+    try {
+      // Calculate risk level based on login patterns
+      const riskLevel = this.calculateLoginRiskLevel(loginDetails, options);
+      
+      const templateData = {
+        user_name: userName,
+        email: email,
+        details: {
+          Login_Time: loginDetails['Login Time'] || loginDetails.loginTime,
+          Location: loginDetails['Location'] || loginDetails.location,
+          Device: loginDetails['Device'] || loginDetails.device,
+          Browser: loginDetails['Browser'] || loginDetails.browser,
+          Operating_System: loginDetails['Operating System'] || loginDetails.operatingSystem,
+          IP_Address: loginDetails['IP Address'] || loginDetails.ipAddress
+        },
+        risk_level: riskLevel,
+        actionUrl: options.actionUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/security`,
+        logoutAllUrl: options.logoutAllUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/logout-all-devices`,
+        loginUrl: options.loginUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/login`,
+        helpUrl: options.helpUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/help`,
+        securityUrl: options.securityUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/security`,
+        privacyUrl: options.privacyUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/privacy`,
+        contactUrl: options.contactUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/contact`,
+        currentYear: new Date().getFullYear(),
+        recent_activity: options.recentActivity
+      };
+
+      const html = await this.renderTemplate("login-notification", templateData);
+
+      const subject = `🔐 New Login Detected - Medh Learning Platform`;
+      if (riskLevel === 'high') {
+        subject = `🚨 Suspicious Login Detected - Immediate Action Required`;
+      } else if (riskLevel === 'medium') {
+        subject = `⚠️ New Login Detected - Please Review`;
+      }
+
+      const mailOptions = {
+        to: email,
+        subject: subject,
+        html,
+      };
+
+      return this.sendEmail(mailOptions, { priority: riskLevel === 'high' ? 'high' : 'normal' });
+    } catch (error) {
+      logger.email.error("Failed to send login notification email", {
+        error,
+        email,
+        userName,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Send beautiful logout all devices notification email
+   * @param {string} email - Recipient email
+   * @param {string} userName - User's name
+   * @param {Object} logoutDetails - Logout details object
+   * @param {Object} options - Additional options
+   * @returns {Promise} Email sending result
+   */
+  async sendLogoutAllDevicesEmail(email, userName, logoutDetails, options = {}) {
+    try {
+      const templateData = {
+        user_name: userName,
+        email: email,
+        details: {
+          Logout_Time: logoutDetails['Logout Time'] || logoutDetails.logoutTime,
+          Location: logoutDetails['Location'] || logoutDetails.location,
+          Initiated_From_Device: logoutDetails['Initiated From Device'] || logoutDetails.initiatedFromDevice,
+          Browser: logoutDetails['Browser'] || logoutDetails.browser,
+          Operating_System: logoutDetails['Operating System'] || logoutDetails.operatingSystem,
+          IP_Address: logoutDetails['IP Address'] || logoutDetails.ipAddress,
+          Sessions_Terminated: logoutDetails['Sessions Terminated'] || logoutDetails.sessionsTerminated
+        },
+        urgent: options.urgent || false,
+        security_recommendations: options.securityRecommendations || [
+          "Change your password if you suspect unauthorized access",
+          "Review your recent login history",
+          "Enable two-factor authentication for added security", 
+          "Use strong, unique passwords for all accounts",
+          "Avoid using public computers for sensitive accounts",
+          "Regularly monitor your account activity"
+        ],
+        actionUrl: options.actionUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/login`,
+        supportUrl: options.supportUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/contact`,
+        loginUrl: options.loginUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/login`,
+        helpUrl: options.helpUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/help`,
+        securityUrl: options.securityUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/security`,
+        contactUrl: options.contactUrl || `${process.env.FRONTEND_URL || 'https://app.medh.co'}/contact`,
+        currentYear: new Date().getFullYear()
+      };
+
+      const html = await this.renderTemplate("logout-all-devices", templateData);
+
+      const subject = options.urgent 
+        ? `🚨 Security Alert: All Sessions Terminated - Medh Learning Platform`
+        : `🚪 Logged Out From All Devices - Medh Learning Platform`;
+
+      const mailOptions = {
+        to: email,
+        subject: subject,
+        html,
+      };
+
+      return this.sendEmail(mailOptions, { priority: options.urgent ? 'high' : 'normal' });
+    } catch (error) {
+      logger.email.error("Failed to send logout all devices email", {
+        error,
+        email,
+        userName,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate login risk level based on various factors
+   * @param {Object} loginDetails - Login details
+   * @param {Object} options - Additional context
+   * @returns {string} Risk level: 'low', 'medium', or 'high'
+   */
+  calculateLoginRiskLevel(loginDetails, options = {}) {
+    let riskScore = 0;
+    
+    // Check for suspicious IP patterns
+    const ipAddress = loginDetails['IP Address'] || loginDetails.ipAddress;
+    if (ipAddress && ipAddress.includes('127.0.0.1') || ipAddress.includes('::1')) {
+      riskScore += 0; // Local development
+    } else if (ipAddress && ipAddress.includes('192.168.') || ipAddress.includes('10.')) {
+      riskScore += 1; // Private network
+    } else {
+      riskScore += 2; // Public IP
+    }
+
+    // Check for unusual location
+    const location = loginDetails['Location'] || loginDetails.location;
+    if (location && location.includes('Unknown')) {
+      riskScore += 2;
+    }
+
+    // Check for new device patterns
+    if (options.isNewDevice) {
+      riskScore += 3;
+    }
+
+    // Check for unusual timing (could be enhanced with actual user patterns)
+    if (options.unusualTime) {
+      riskScore += 2;
+    }
+
+    // Check for multiple recent failed attempts
+    if (options.recentFailedAttempts > 3) {
+      riskScore += 4;
+    }
+
+    // Determine risk level
+    if (riskScore >= 8) {
+      return 'high';
+    } else if (riskScore >= 4) {
+      return 'medium';
+    } else {
+      return 'low';
+    }
+  }
+
+  /**
    * Send bulk emails (with rate limiting)
    * @param {Array<string>} emails - List of recipient emails
    * @param {string} subject - Email subject
@@ -740,6 +915,130 @@ class EmailService {
     }
   }
   
+  /**
+   * Send session reminder email using template
+   * @param {string} email - Recipient email
+   * @param {string} subject - Email subject
+   * @param {Object} sessionData - Session data for template
+   * @param {Object} options - Additional options
+   */
+  async sendSessionReminderEmail(email, subject, sessionData, options = {}) {
+    try {
+      logger.email.info(`Sending session reminder email to ${email}`, {
+        subject,
+        sessionTitle: sessionData.session_title,
+        reminderInterval: sessionData.reminder_interval,
+        isUrgent: sessionData.is_urgent
+      });
+
+      const templateData = {
+        ...sessionData,
+        currentYear: new Date().getFullYear(),
+        support_email: process.env.SUPPORT_EMAIL || 'support@medh.co',
+        dashboard_url: process.env.FRONTEND_URL || 'https://app.medh.co',
+        // Add additional computed fields
+        urgent_class: sessionData.is_urgent ? 'urgent' : '',
+        time_icon: sessionData.is_urgent ? '🚨' : '📅',
+        button_text: sessionData.is_urgent ? 'Join Now' : 'Join Session'
+      };
+
+      return await this.sendTemplatedEmail(
+        email,
+        'session-reminder',
+        subject,
+        templateData,
+        options
+      );
+    } catch (error) {
+      logger.email.error('Failed to send session reminder email:', {
+        error: error.message,
+        email,
+        subject,
+        sessionId: sessionData.session_id
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Send templated email (general method)
+   * @param {string} email - Recipient email
+   * @param {string} templateName - Template name
+   * @param {string} subject - Email subject
+   * @param {Object} templateData - Data for template
+   * @param {Object} options - Additional options
+   */
+  async sendTemplatedEmail(email, templateName, subject, templateData, options = {}) {
+    try {
+      const htmlContent = await this.renderTemplate(templateName, templateData);
+      
+      const mailOptions = {
+        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+        to: email,
+        subject: subject,
+        html: htmlContent,
+        // Add plain text fallback
+        text: this.generatePlainTextFromTemplate(templateName, templateData),
+        ...options.mailOptions
+      };
+
+      return await this.sendEmail(mailOptions, {
+        priority: options.priority || (templateData.is_urgent ? 'high' : 'normal'),
+        useQueue: options.useQueue !== false
+      });
+    } catch (error) {
+      logger.email.error('Failed to send templated email:', {
+        error: error.message,
+        email,
+        templateName,
+        subject
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Generate plain text fallback for templates
+   * @param {string} templateName - Template name
+   * @param {Object} data - Template data
+   * @returns {string} Plain text content
+   */
+  generatePlainTextFromTemplate(templateName, data) {
+    switch (templateName) {
+      case 'session-reminder':
+        return `
+Session Reminder - ${data.session_title}
+
+Hello ${data.student_name},
+
+This is a reminder about your upcoming session in ${data.reminder_interval}.
+
+Session Details:
+- Course: ${data.batch_name}
+- Date: ${data.session_date}
+- Time: ${data.session_time} - ${data.session_end_time} (${data.timezone})
+- Duration: ${data.session_duration} minutes
+
+${data.meeting_url ? `Join URL: ${data.meeting_url}` : ''}
+${data.meeting_id ? `Meeting ID: ${data.meeting_id}` : ''}
+${data.meeting_password ? `Password: ${data.meeting_password}` : ''}
+
+${data.instructor_name ? `Instructor: ${data.instructor_name}` : ''}
+
+${data.is_urgent ? 'URGENT: Your session is starting soon! Please join now.' : 'Please mark your calendar and prepare for the session.'}
+
+Best regards,
+Medh Learning Platform Team
+
+---
+© ${data.current_year} Medh Learning Platform. All rights reserved.
+        `.trim();
+      
+      default:
+        return `Hello ${data.user_name || data.student_name || ''},\n\nThis is a notification from Medh Learning Platform.\n\nBest regards,\nMedh Team`;
+    }
+  }
+
   /**
    * Get email queue statistics
    * @returns {Promise<Object>} Queue stats
