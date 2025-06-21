@@ -419,7 +419,7 @@ describe('Password Change API', () => {
 ## Support & Contact
 
 For API support or security concerns:
-- **Email:** api-support@medh.co
+- **Email:** api-care@medh.co
 - **Security Issues:** security@medh.co
 - **Documentation:** https://docs.medh.co/auth/password-change
 

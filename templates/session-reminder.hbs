@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Reminder - {{session_title}}</title>
+    <style>
+        /* Reset and base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Header styles */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 20px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .header.urgent {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+        
+        .header-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            display: block;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            line-height: 1.2;
+        }
+        
+        .header .subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+        
+        /* Content styles */
+        .content {
+            padding: 40px 30px;
+        }
+        
+        .greeting {
+            font-size: 18px;
+            color: #2d3748;
+            margin-bottom: 25px;
+            font-weight: 500;
+        }
+        
+        .session-card {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            border-radius: 12px;
+            padding: 25px;
+            margin: 25px 0;
+            border-left: 5px solid #667eea;
+            position: relative;
+        }
+        
+        .session-card.urgent {
+            background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+            border-left-color: #f56565;
+        }
+        
+        .session-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .session-title .icon {
+            margin-right: 10px;
+            font-size: 24px;
+        }
+        
+        .session-details {
+            display: grid;
+            gap: 15px;
+        }
+        
+        .detail-row {
+            display: flex;
+            align-items: center;
+            font-size: 16px;
+        }
+        
+        .detail-icon {
+            width: 20px;
+            text-align: center;
+            margin-right: 12px;
+            color: #667eea;
+        }
+        
+        .detail-value {
+            font-weight: 600;
+            color: #2d3748;
+        }
+        
+        .detail-label {
+            color: #718096;
+            font-weight: 400;
+        }
+        
+        .time-highlight {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 20px 0;
+            font-size: 18px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .time-highlight.urgent {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            box-shadow: 0 4px 15px rgba(245, 101, 101, 0.3);
+        }
+        
+        /* Action buttons */
+        .action-buttons {
+            margin: 30px 0;
+            text-align: center;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 5px 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .btn-secondary:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+        
+        /* Meeting details card */
+        .meeting-details {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .meeting-details h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .meeting-info {
+            font-family: 'Courier New', monospace;
+            background: #ffffff;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #e2e8f0;
+            margin: 8px 0;
+            word-break: break-all;
+        }
+        
+        /* Instructor info */
+        .instructor-info {
+            background: linear-gradient(135deg, #edf2f7 0%, #e2e8f0 100%);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .instructor-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            margin: 0 auto 15px;
+        }
+        
+        /* Urgency banner */
+        .urgency-banner {
+            background: linear-gradient(90deg, #f56565 0%, #e53e3e 100%);
+            color: white;
+            text-align: center;
+            padding: 12px;
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateY(-10px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        /* Tips section */
+        .tips-section {
+            background: #f0fff4;
+            border: 1px solid #9ae6b4;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        
+        .tips-section h3 {
+            color: #2d3748;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .tips-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .tips-list li {
+            padding: 8px 0;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .tips-list li::before {
+            content: "✓";
+            color: #38a169;
+            font-weight: bold;
+            margin-right: 10px;
+            margin-top: 2px;
+        }
+        
+        /* Footer */
+        .footer {
+            background: #2d3748;
+            color: #a0aec0;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .footer-content {
+            margin-bottom: 20px;
+        }
+        
+        .footer-links {
+            margin: 15px 0;
+        }
+        
+        .footer-links a {
+            color: #81c784;
+            text-decoration: none;
+            margin: 0 15px;
+            font-size: 14px;
+        }
+        
+        .footer-links a:hover {
+            text-decoration: underline;
+        }
+        
+        .company-info {
+            font-size: 12px;
+            color: #718096;
+            margin-top: 20px;
+        }
+        
+        /* Responsive design */
+        @media (max-width: 600px) {
+            .email-container {
+                margin: 0;
+                border-radius: 0;
+            }
+            
+            .content {
+                padding: 30px 20px;
+            }
+            
+            .session-card {
+                padding: 20px;
+                margin: 20px 0;
+            }
+            
+            .btn {
+                display: block;
+                margin: 10px 0;
+            }
+            
+            .detail-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="header {{#if is_urgent}}urgent{{/if}}">
+            <div class="header-icon">
+                {{#if is_urgent}}🔔{{else}}📅{{/if}}
+            </div>
+            <h1>Session Reminder</h1>
+            <div class="subtitle">{{reminder_interval}} until your session</div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            {{#if is_urgent}}
+            <div class="urgency-banner">
+                ⚡ Your session is starting {{reminder_interval}}! Don't miss it!
+            </div>
+            {{/if}}
+
+            <div class="greeting">
+                Hello {{student_name}},
+            </div>
+
+            <p style="margin-bottom: 25px; font-size: 16px; color: #4a5568;">
+                {{#if is_urgent}}
+                Your session is starting very soon! Make sure you're ready to join.
+                {{else}}
+                This is a friendly reminder about your upcoming session in {{reminder_interval}}.
+                {{/if}}
+            </p>
+
+            <!-- Session Details Card -->
+            <div class="session-card {{#if is_urgent}}urgent{{/if}}">
+                <div class="session-title">
+                    <span class="icon">🎓</span>
+                    {{session_title}}
+                </div>
+                
+                <div class="session-details">
+                    <div class="detail-row">
+                        <div class="detail-icon">📚</div>
+                        <div>
+                            <span class="detail-label">Course:</span>
+                            <span class="detail-value">{{batch_name}}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-icon">📅</div>
+                        <div>
+                            <span class="detail-label">Date:</span>
+                            <span class="detail-value">{{session_date}}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-icon">⏰</div>
+                        <div>
+                            <span class="detail-label">Time:</span>
+                            <span class="detail-value">{{session_time}} - {{session_end_time}} ({{timezone}})</span>
+                        </div>
+                    </div>
+                    
+                    <div class="detail-row">
+                        <div class="detail-icon">⏱️</div>
+                        <div>
+                            <span class="detail-label">Duration:</span>
+                            <span class="detail-value">{{session_duration}} minutes</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Time Highlight -->
+            <div class="time-highlight {{#if is_urgent}}urgent{{/if}}">
+                {{#if is_urgent}}
+                🚨 Starting in {{time_until_session}}
+                {{else}}
+                📅 Starting in {{time_until_session}}
+                {{/if}}
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                {{#if meeting_url}}
+                <a href="{{meeting_url}}" class="btn btn-primary" style="color: white; text-decoration: none;">
+                    {{#if is_urgent}}🚀 Join Session Now{{else}}🔗 Join Session{{/if}}
+                </a>
+                {{/if}}
+                
+                <a href="{{calendar_url}}" class="btn btn-secondary" style="color: #4a5568; text-decoration: none;">
+                    📅 Add to Calendar
+                </a>
+            </div>
+
+            <!-- Meeting Details -->
+            {{#if meeting_url}}
+            <div class="meeting-details">
+                <h3>
+                    <span style="margin-right: 8px;">💻</span>
+                    Meeting Details
+                </h3>
+                
+                {{#if meeting_id}}
+                <div>
+                    <strong>Meeting ID:</strong>
+                    <div class="meeting-info">{{meeting_id}}</div>
+                </div>
+                {{/if}}
+                
+                {{#if meeting_password}}
+                <div>
+                    <strong>Password:</strong>
+                    <div class="meeting-info">{{meeting_password}}</div>
+                </div>
+                {{/if}}
+                
+                <div>
+                    <strong>Join URL:</strong>
+                    <div class="meeting-info">
+                        <a href="{{meeting_url}}" style="color: #667eea; text-decoration: none;">{{meeting_url}}</a>
+                    </div>
+                </div>
+            </div>
+            {{/if}}
+
+            <!-- Instructor Info -->
+            {{#if instructor_name}}
+            <div class="instructor-info">
+                <div class="instructor-avatar">
+                    {{substring instructor_name 0 1}}
+                </div>
+                <div>
+                    <strong>Your Instructor</strong><br>
+                    <span style="color: #4a5568;">{{instructor_name}}</span>
+                </div>
+            </div>
+            {{/if}}
+
+            <!-- Session Description -->
+            {{#if session_description}}
+            <div style="background: #f7fafc; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea;">
+                <h3 style="margin-bottom: 10px; color: #2d3748;">📝 Session Overview</h3>
+                <p style="color: #4a5568; margin: 0;">{{session_description}}</p>
+            </div>
+            {{/if}}
+
+            <!-- Tips Section -->
+            <div class="tips-section">
+                <h3>
+                    <span style="margin-right: 8px;">💡</span>
+                    Session Preparation Tips
+                </h3>
+                <ul class="tips-list">
+                    <li>Join the session 5-10 minutes early to test your connection</li>
+                    <li>Ensure you have a stable internet connection</li>
+                    <li>Keep your camera and microphone ready</li>
+                    <li>Have a notebook and pen for taking notes</li>
+                    {{#if is_urgent}}
+                    <li><strong>Join NOW to avoid missing the session!</strong></li>
+                    {{/if}}
+                </ul>
+            </div>
+
+            <!-- Support Info -->
+            <div style="background: #f0f4f8; padding: 20px; border-radius: 8px; margin: 25px 0; text-align: center;">
+                <h3 style="color: #2d3748; margin-bottom: 10px;">Need Help?</h3>
+                <p style="color: #4a5568; margin-bottom: 15px;">
+                    Having trouble joining the session or need technical support?
+                </p>
+                <a href="mailto:{{support_email}}" class="btn btn-secondary" style="color: #4a5568; text-decoration: none;">
+                    📧 Contact Support
+                </a>
+                <br>
+                <small style="color: #718096; margin-top: 10px; display: block;">
+                    Or visit your <a href="{{dashboard_url}}" style="color: #667eea;">dashboard</a> for more options
+                </small>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="footer-content">
+                <strong style="color: #e2e8f0;">Medh Learning Platform</strong><br>
+                <span>Empowering your learning journey</span>
+            </div>
+            
+            <div class="footer-links">
+                <a href="{{dashboard_url}}">Dashboard</a>
+                <a href="{{dashboard_url}}/courses">My Courses</a>
+                <a href="{{dashboard_url}}/profile">Profile</a>
+                <a href="mailto:{{support_email}}">Support</a>
+            </div>
+            
+            <div class="company-info">
+                © {{current_year}} Medh Learning Platform. All rights reserved.<br>
+                You're receiving this email because you're enrolled in {{batch_name}}.
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

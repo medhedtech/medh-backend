@@ -46,6 +46,15 @@ connectDB().catch(error => {
   // We don't exit the process here to allow the app to run even without DB
 });
 
+// Initialize session reminder cron jobs
+import initializeSessionReminderCrons from './cronjob/session-reminder-cron.js';
+
+// Start session reminder cron jobs after database connection
+mongoose.connection.once('open', () => {
+  console.log('MongoDB connected, initializing session reminder cron jobs...');
+  initializeSessionReminderCrons();
+});
+
 // Middleware - CORS handling must be first
 // Apply CORS middleware before any other middleware
 app.use(handlePreflight);

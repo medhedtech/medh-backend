@@ -57,6 +57,9 @@ import demoBookingRoutes from "./demo-bookingRoutes.js";
 import demoFeedbackRoutes from "./demo-feedbackRoutes.js";
 import hireFromMedhRoutes from "./hire-from-medh-routes.js";
 import membershipEnrollmentRoutes from "./membershipEnrollmentRoutes.js";
+import securityRoutes from "./securityRoutes.js";
+import mfaRoutes from "./mfaRoutes.js";
+import sessionReminderRoutes from "./sessionReminderRoutes.js";
 
 const router = express.Router();
 
@@ -268,6 +271,18 @@ const moduleRoutes = [
   {
     path: "/demo-feedback",
     route: demoFeedbackRoutes,
+  },
+  {
+    path: "/security",
+    route: securityRoutes,
+  },
+  {
+    path: "/auth/mfa",
+    route: mfaRoutes,
+  },
+  {
+    path: "/session-reminders",
+    route: sessionReminderRoutes,
   }
 ];
 
