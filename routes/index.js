@@ -65,6 +65,8 @@ import mfaRoutes from "./mfaRoutes.js";
 import sessionReminderRoutes from "./sessionReminderRoutes.js";
 import parentRoutes from "./parentRoutes.js";
 import programCoordinatorRoutes from "./programCoordinatorRoutes.js";
+import studentProgressRoutes from "./studentProgressRoutes.js";
+import courseMaterialRoutes from "./courseMaterialRoutes.js";
 
 const router = express.Router();
 
@@ -100,6 +102,10 @@ const moduleRoutes = [
   {
     path: "/students",
     route: studentRoutes,
+  },
+  {
+    path: "/student",
+    route: studentProgressRoutes,
   },
   {
     path: "/instructors",
@@ -312,6 +318,10 @@ const moduleRoutes = [
   {
     path: "/coordinator",
     route: programCoordinatorRoutes,
+  },
+  {
+    path: "/materials",
+    route: courseMaterialRoutes,
   }
 ];
 

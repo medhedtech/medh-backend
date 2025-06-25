@@ -23,6 +23,9 @@ import trackingMiddleware from "./middleware/trackingMiddleware.js";
 import routes from "./routes/index.js";
 import sentryUtils from "./utils/sentry.js";
 import "./config/passport-config.js";
+import wishlistRoutes from './routes/wishlistRoutes.js';
+import studentProgressRoutes from './routes/studentProgressRoutes.js';
+import courseMaterialRoutes from "./routes/courseMaterialRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -124,6 +127,11 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use("/api/v1", routes);
+
+// API Routes
+app.use('/api/v1/wishlist', wishlistRoutes);
+app.use('/api/v1/student', studentProgressRoutes);
+app.use("/api/v1/materials", courseMaterialRoutes);
 
 // Add Sentry error handler before other error handlers
 sentryUtils.setupSentryErrorHandler(app);
