@@ -10,6 +10,7 @@ const ROLES = {
   CORPORATE: "corporate",
   CORPORATE_STUDENT: "corporate-student",
   PARENT: "parent",
+  PROGRAM_COORDINATOR: "program_coordinator",
 };
 
 const PERMISSIONS = {

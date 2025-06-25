@@ -85,8 +85,9 @@ const userValidation = joi.object({
           "admin",
           "student",
           "instructor",
-          "coorporate",
-          "coorporate-student",
+          "corporate",
+          "corporate-student",
+          "parent",
         ),
     )
     .default(["student"]),
