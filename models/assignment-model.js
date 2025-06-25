@@ -163,5 +163,6 @@ assignmentSchema.pre("save", function (next) {
   next();
 });
 
-const Assignment = mongoose.model("Assignment", assignmentSchema);
+// Check if model exists before compiling
+const Assignment = mongoose.models.Assignment || mongoose.model("Assignment", assignmentSchema);
 export default Assignment;
