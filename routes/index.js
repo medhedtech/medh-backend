@@ -32,6 +32,9 @@ import grievance from "./grievanceRoute.js";
 import healthRoutes from "./healthRoutes.js";
 import homeDisplayRoutes from "./homeDisplayRoutes.js";
 import instructorRoutes from "./instructorRoutes.js";
+import instructorDashboardRoutes from "./instructorDashboardRoutes.js";
+import instructorRevenueRoutes from "./instructorRevenueRoutes.js";
+import attendanceRoutes from "./attendanceRoutes.js";
 import jobPost from "./jobRoutes.js";
 import membership from "./membershipRoutes.js";
 import newsLetterRoute from "./newsletterRoutes.js";
@@ -60,6 +63,8 @@ import membershipEnrollmentRoutes from "./membershipEnrollmentRoutes.js";
 import securityRoutes from "./securityRoutes.js";
 import mfaRoutes from "./mfaRoutes.js";
 import sessionReminderRoutes from "./sessionReminderRoutes.js";
+import parentRoutes from "./parentRoutes.js";
+import programCoordinatorRoutes from "./programCoordinatorRoutes.js";
 
 const router = express.Router();
 
@@ -99,6 +104,18 @@ const moduleRoutes = [
   {
     path: "/instructors",
     route: instructorRoutes,
+  },
+  {
+    path: "/instructors",
+    route: instructorDashboardRoutes,
+  },
+  {
+    path: "/instructors",
+    route: instructorRevenueRoutes,
+  },
+  {
+    path: "/attendance",
+    route: attendanceRoutes,
   },
   {
     path: "/certificates",
@@ -182,6 +199,10 @@ const moduleRoutes = [
   },
   {
     path: "/job-post",
+    route: jobPost,
+  },
+  {
+    path: "/jobs",
     route: jobPost,
   },
   {
@@ -283,6 +304,14 @@ const moduleRoutes = [
   {
     path: "/session-reminders",
     route: sessionReminderRoutes,
+  },
+  {
+    path: "/parent",
+    route: parentRoutes,
+  },
+  {
+    path: "/coordinator",
+    route: programCoordinatorRoutes,
   }
 ];
 

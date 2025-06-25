@@ -1,8 +1,15 @@
+import express from "express";
+import { ENV_VARS } from "./config/envVars.js";
+import corsMiddleware from "./config/cors.js";
+import connectDB from "./config/db.js";
+import logger from "./utils/logger.js";
+
+const app = express();
+
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
 import cors from "cors";
-import express from "express";
 import helmet from "helmet";
 import mongoose from "mongoose";
 import morgan from "morgan";
@@ -11,21 +18,17 @@ import passport from "passport";
 
 import { corsOptions } from "./config/cors.js";
 import handlePreflight from "./config/cors.js";
-import { ENV_VARS } from "./config/envVars.js";
 import errorHandler from "./middleware/errorHandler.js";
 import trackingMiddleware from "./middleware/trackingMiddleware.js";
 import routes from "./routes/index.js";
 import sentryUtils from "./utils/sentry.js";
-import connectDB from "./config/db.js";  // Import the more robust DB connection
+import "./config/passport-config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Initialize Sentry
 sentryUtils.initSentry();
-
-// Initialize express app
-const app = express();
 
 // Trust proxy - Enable to get real IP addresses through load balancers/proxies
 app.set('trust proxy', true);
@@ -149,7 +152,8 @@ app.use('/api/cors-debug', (req, res) => {
           "https://admin.medh.co",
           "https://api.medh.co",
           "https://staging.medh.co",
-          "https://api2.medh.co"
+          "https://api2.medh.co",
+          "https://devlopment.d1jhsaafm20wk0.amplifyapp.com"
         ],
     origin: req.headers.origin || 'No origin in request',
     corsHeadersApplied: {

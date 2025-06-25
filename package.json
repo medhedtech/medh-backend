@@ -10,8 +10,11 @@
     "start:mongo": "node scripts/start-local-mongo.js",
     "dev:full-local": "npm run start:mongo && npm run dev:local",
     "debug": "NODE_ENV=development nodemon --inspect index.js",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest --detectOpenHandles --testPathIgnorePatterns=tests/zoom.test.js --passWithNoTests",
-    "test:zoom": "NODE_OPTIONS=--experimental-vm-modules jest --config tests/zoom.test.config.js tests/zoom.test.js",
+    "test": "NODE_OPTIONS=--experimental-vm-modules npx jest --detectOpenHandles --testPathIgnorePatterns=tests/zoom.test.js --passWithNoTests",
+    "test:parent": "NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand tests/parent.test.js",
+    "test:instructor": "NODE_OPTIONS=--experimental-vm-modules npx jest --runInBand tests/instructor.test.js",
+    "test:all": "npm run test:parent && npm run test:instructor",
+    "test:zoom": "NODE_OPTIONS=--experimental-vm-modules npx jest --config tests/zoom.test.config.js tests/zoom.test.js",
     "test:api": "node tests/api-test.js",
     "test:api:debug": "DEBUG=true node tests/api-test.js",
     "test:api:auto": "node tests/run-api-tests.js",
@@ -34,14 +37,6 @@
     "migrate:auth": "node scripts/fast-auth-migration.js",
     "migrate:auth:db-only": "node scripts/migrate-auth-structure.js",
     "migrate:auth:code-only": "node scripts/update-auth-code.js"
-  },
-  "jest": {
-    "transform": {},
-    "moduleFileExtensions": [
-      "js",
-      "json"
-    ],
-    "testEnvironment": "node"
   },
   "keywords": [],
   "author": "",
@@ -122,11 +117,15 @@
     "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
+    "@babel/core": "^7.27.4",
+    "@babel/preset-env": "^7.27.2",
     "@faker-js/faker": "^9.6.0",
     "@typescript-eslint/eslint-plugin": "^8.29.1",
     "@typescript-eslint/parser": "^8.29.1",
     "axios": "^1.8.4",
+    "babel-jest": "^30.0.2",
     "colors": "^1.4.0",
+    "cross-env": "^7.0.3",
     "eslint": "^9.24.0",
     "eslint-config-prettier": "^10.1.2",
     "eslint-plugin-import": "^2.31.0",
@@ -142,7 +141,7 @@
     "newman-reporter-htmlextra": "^1.23.1",
     "prettier": "3.5.3",
     "snyk": "^1.1296.1",
-    "supertest": "^7.1.0"
+    "supertest": "^7.1.1"
   },
   "engines": {
     "node": ">=18.0.0"

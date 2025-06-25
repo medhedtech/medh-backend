@@ -890,73 +890,103 @@ universalFormSchema.methods.updateStatus = function(newStatus, userId = null) {
 };
 
 // Method to create corporate training inquiry from API data
-universalFormSchema.statics.createCorporateTraining = function(data) {
-  const formData = {
-    form_type: 'corporate_training_inquiry',
-    contact_info: {
+universalFormSchema.statics.createCorporateTraining = async function(data) {
+  // Ensure the form type is set correctly
+  data.form_type = 'corporate_training_inquiry';
+
+  // Normalize contact information
+  if (!data.contact_info && (data.full_name || data.email)) {
+    data.contact_info = {
       full_name: data.full_name,
       email: data.email,
-      phone_number: data.phone_number, // Should already include country code
+      phone_number: data.phone_number,
       country: data.country
-    },
-    professional_info: {
-      designation: data.designation,
+    };
+  }
+
+  // Normalize professional information
+  if (!data.professional_info && (data.company_name || data.designation)) {
+    data.professional_info = {
       company_name: data.company_name,
+      designation: data.designation,
       company_website: data.company_website
-    },
-    message: data.message,
-    accept: data.accept,
-    terms_accepted: data.accept,
-    privacy_policy_accepted: data.accept,
-    marketing_consent: false,
-    status: 'submitted',
-    priority: 'high', // Corporate training inquiries are high priority
-    source: 'website'
-  };
-  
-  return this.create(formData);
+    };
+  }
+
+  // Normalize message and training requirements
+  if (data.training_requirements && typeof data.training_requirements === 'object') {
+    // If training_requirements is an object, try to extract a message
+    data.message = data.message || 
+      (data.training_requirements.message || 
+       (typeof data.training_requirements === 'string' 
+        ? data.training_requirements 
+        : JSON.stringify(data.training_requirements)));
+  }
+
+  // Ensure terms are accepted
+  data.terms_accepted = data.terms_accepted || data.accept || false;
+  data.privacy_policy_accepted = data.privacy_policy_accepted || data.terms_accepted;
+
+  // Set default priority and status for corporate training inquiries
+  data.priority = data.priority || 'high';
+  data.status = data.status || 'submitted';
+
+  // Create the form
+  const corporateForm = new this(data);
+
+  // Save and return
+  return await corporateForm.save();
 };
 
-// Method to create hire from medh inquiry from API data
-universalFormSchema.statics.createHireFromMedh = function(data) {
-  const formData = {
-    form_type: 'hire_from_medh_inquiry',
-    contact_info: {
+// Static method to create Hire from Medh inquiry
+universalFormSchema.statics.createHireFromMedh = async function(data) {
+  // Set form type
+  data.form_type = 'hire_from_medh_inquiry';
+
+  // Normalize contact_info
+  if (!data.contact_info && (data.full_name || data.email)) {
+    data.contact_info = {
       full_name: data.full_name,
       email: data.email,
-      phone_number: data.phone, // Using 'phone' as per form schema
+      phone_number: data.phone || data.phone_number, // Handle both field names
       country: data.country
-    },
-    professional_info: {
-      company_name: data.company_name,
-      company_website: data.company_website,
-      department: data.department
-    },
-    hire_requirements: {
-      requirement_type: data.requirement_type,
-      training_domain: data.training_domain,
-      start_date: data.start_date ? new Date(data.start_date) : null,
-      budget_range: data.budget_range,
-      detailed_requirements: data.detailed_requirements,
-      team_size: data.team_size,
-      document_upload: data.document_upload
-    },
-    message: data.detailed_requirements, // Use detailed requirements as message
-    accept: data.terms_accepted,
-    terms_accepted: data.terms_accepted,
-    privacy_policy_accepted: data.terms_accepted,
-    marketing_consent: false,
-    status: 'submitted',
-    priority: 'high', // Hire from Medh inquiries are high priority
-    source: 'website',
-    total_steps: 4,
-    current_step: 4,
-    completed_steps: [1, 2, 3, 4],
-    is_complete: true,
-    completion_percentage: 100
+    };
+  }
+
+  // Normalize company_info to professional_info
+  data.professional_info = data.company_info || {
+    company_name: data.company_name,
+    company_website: data.company_website,
+    department: data.department
   };
-  
-  return this.create(formData);
+
+  // Normalize requirements to hire_requirements
+  data.hire_requirements = data.requirements || {
+    requirement_type: data.requirement_type,
+    training_domain: data.training_domain,
+    team_size: data.team_size, // Add team_size mapping
+    start_date: data.start_date,
+    budget_range: data.budget_range,
+    detailed_requirements: data.detailed_requirements,
+    document_upload: data.document_upload,
+    has_document: !!data.document_upload
+  };
+
+  // Map detailed_requirements to message field (required by schema)
+  data.message = data.detailed_requirements || data.message;
+
+  // Normalize acceptance
+  data.terms_accepted = data.terms_accepted || data.accept || false;
+  data.privacy_policy_accepted = data.privacy_policy_accepted || data.terms_accepted;
+  data.accept = data.terms_accepted; // Ensure accept field is set
+
+  // Default metadata
+  data.priority = data.priority || 'high';
+  data.status = data.status || 'submitted';
+
+  // Save form
+  const form = new this(data);
+  return await form.save();
 };
 
 universalFormSchema.methods.markComplete = function() {

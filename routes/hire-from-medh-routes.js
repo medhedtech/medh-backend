@@ -36,6 +36,7 @@ const router = express.Router();
  * }
  */
 router.post("/", createHireFromMedh);
+router.post("/create", createHireFromMedh); // Legacy endpoint
 
 /**
  * @route   GET /api/v1/hire-from-medh/info
@@ -43,6 +44,7 @@ router.post("/", createHireFromMedh);
  * @access  Public
  */
 router.get("/info", getHireFromMedhFormInfo);
+router.get("/form-info", getHireFromMedhFormInfo); // Alias endpoint
 
 // Protected routes (require authentication)
 /**
@@ -59,6 +61,7 @@ router.get("/info", getHireFromMedhFormInfo);
  * }
  */
 router.get("/", authenticateToken, getAllHireFromMedh);
+router.get("/getAll", authenticateToken, getAllHireFromMedh); // Legacy endpoint
 
 /**
  * @route   GET /api/v1/hire-from-medh/analytics
@@ -72,6 +75,7 @@ router.get("/analytics", authenticateToken, getHireFromMedhAnalytics);
  * @desc    Get a specific hire from medh inquiry by ID
  * @access  Private
  */
+router.get("/get/:id", authenticateToken, getHireFromMedhById); // Legacy endpoint
 router.get("/:id", authenticateToken, getHireFromMedhById);
 
 /**
@@ -85,6 +89,7 @@ router.get("/:id", authenticateToken, getHireFromMedhById);
  *   internal_notes?: string
  * }
  */
+router.put("/update/:id", authenticateToken, updateHireFromMedh); // Legacy endpoint
 router.put("/:id", authenticateToken, updateHireFromMedh);
 
 /**
@@ -92,6 +97,7 @@ router.put("/:id", authenticateToken, updateHireFromMedh);
  * @desc    Delete (soft delete) a hire from medh inquiry by ID
  * @access  Private
  */
+router.delete("/delete/:id", authenticateToken, deleteHireFromMedh); // Legacy endpoint
 router.delete("/:id", authenticateToken, deleteHireFromMedh);
 
 export default router; 
