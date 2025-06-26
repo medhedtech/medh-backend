@@ -67,6 +67,7 @@ import parentRoutes from "./parentRoutes.js";
 import programCoordinatorRoutes from "./programCoordinatorRoutes.js";
 import studentProgressRoutes from "./studentProgressRoutes.js";
 import courseMaterialRoutes from "./courseMaterialRoutes.js";
+import demoCertificateRoutes from "./demoCertificateRoutes.js";
 
 const router = express.Router();
 
@@ -322,6 +323,10 @@ const moduleRoutes = [
   {
     path: "/materials",
     route: courseMaterialRoutes,
+  },
+  {
+    path: "/demo-certificates",
+    route: demoCertificateRoutes,
   }
 ];
 
