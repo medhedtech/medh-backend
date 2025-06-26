@@ -12,9 +12,10 @@ export const createStudent = async (req, res) => {
       full_name,
       email,
       password,
-      phone_numbers,
       status: status || "Active",
-      role: [USER_ROLES.STUDENT]
+      role: [USER_ROLES.STUDENT],
+      email_verified: true,
+      identity_verified: true,
     });
     await newUser.save();
     res.status(201).json({ message: "Student user created successfully", user: newUser });
