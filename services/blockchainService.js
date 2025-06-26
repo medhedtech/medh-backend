@@ -17,9 +17,15 @@ const {
   BLOCKCHAIN_PRIVATE_KEY,
 } = process.env;
 
-if (!RPC_URL || !CERTIFICATE_CONTRACT_ADDRESS || !BLOCKCHAIN_PRIVATE_KEY) {
-  throw new Error(
-    "Blockchain environment variables missing. Please set RPC_URL, CERTIFICATE_CONTRACT_ADDRESS and BLOCKCHAIN_PRIVATE_KEY in .env",
+// Flag: enabled only when all required env vars are present
+export const blockchainEnabled =
+  !!(RPC_URL && CERTIFICATE_CONTRACT_ADDRESS && BLOCKCHAIN_PRIVATE_KEY);
+
+if (!blockchainEnabled) {
+  // Don't crash the whole app in development/test when blockchain isn't configured.
+  // Instead, operate in "noop" mode and log a clear warning so operators know.
+  console.warn(
+    "[Blockchain] Environment variables missing – integration disabled. Provide RPC_URL, CERTIFICATE_CONTRACT_ADDRESS and BLOCKCHAIN_PRIVATE_KEY in .env to enable.",
   );
 }
 
@@ -49,6 +55,10 @@ function getContract() {
  * @returns {Promise<string>}             The hex-encoded keccak256 hash that was stored
  */
 export async function storeHash(pdfBuffer, certificateId) {
+  if (!blockchainEnabled) {
+    // No-op when blockchain is disabled – return undefined instead of throwing
+    return undefined;
+  }
   const hash = keccak256(getBytes(pdfBuffer));
   const registry = getContract();
   const tx = await registry.store(hash, certificateId);
@@ -62,6 +72,10 @@ export async function storeHash(pdfBuffer, certificateId) {
  * @returns {Promise<boolean>}            True if hash exists in registry
  */
 export async function verifyHash(pdfBuffer) {
+  if (!blockchainEnabled) {
+    // Without blockchain, treat certificate as unverified (could also return true)
+    return false;
+  }
   const hash = keccak256(getBytes(pdfBuffer));
   const registry = getContract();
   return registry.exists(hash);
