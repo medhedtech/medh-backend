@@ -1468,83 +1468,201 @@ export const getRecordedLessonsForSession = async (req, res) => {
 export const getRecordedLessonsForStudent = async (req, res) => {
   try {
     const { studentId } = req.params;
+    
     // Authorization: students can only access their own recorded lessons
     if (req.user.role === 'student' && req.user.id !== studentId) {
       return res.status(403).json({ success: false, message: "Unauthorized to access other student's recorded lessons" });
     }
+    
     // Verify student exists
     const student = await User.findById(studentId);
     if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
-    // Find active enrollments for the student
-    const enrollments = await Enrollment.find({ student: studentId, status: 'active' })
-      .populate({ path: 'batch', select: 'batch_name schedule' })
-      .lean();
-    const lessonsData = [];
-    // Iterate through enrollments and collect recorded lessons
-    for (const enrollment of enrollments) {
-      const batch = enrollment.batch;
-      if (!batch || !batch.schedule) continue;
-      for (const session of batch.schedule) {
-        if (session.recorded_lessons && session.recorded_lessons.length) {
-          // Generate signed URLs for video lessons stored on CloudFront or S3
-          const recordedLessonsWithSignedUrls = session.recorded_lessons.map(lesson => {
-            if (lesson.url) {
-              // Convert S3 URLs to CloudFront URLs and sign them (only for medh-filess bucket)
-              if (lesson.url.includes('medh-filess.s3.') && lesson.url.includes('.amazonaws.com')) {
-                try {
-                  // Extract the object key from S3 URL
-                  const s3UrlParts = lesson.url.split('.amazonaws.com/');
-                  if (s3UrlParts.length === 2) {
-                    const objectKey = s3UrlParts[1];
-                    const cloudFrontUrl = `https://cdn.medh.co/${objectKey}`;
-                    const signedUrl = generateSignedUrl(cloudFrontUrl);
-                    return {
-                      ...lesson,
-                      url: signedUrl  // Replace S3 URL with signed CloudFront URL
-                    };
-                  }
-                } catch (signError) {
-                  console.error("Error converting S3 URL to signed CloudFront URL:", signError);
-                  return lesson; // Return original lesson if signing fails
-                }
-              }
-              // Sign existing CloudFront URLs
-              else if (lesson.url.includes('cdn.medh.co')) {
-                try {
-                  const signedUrl = generateSignedUrl(lesson.url);
-                  return {
-                    ...lesson,
-                    url: signedUrl  // Replace original URL with signed URL
-                  };
-                } catch (signError) {
-                  console.error("Error signing CloudFront URL for recorded lesson:", signError);
-                  return lesson; // Return original lesson if signing fails
-                }
-              }
-            }
-            
-            return lesson; // Return original lesson for non-S3/non-CloudFront URLs (like YouTube)
-          });
 
-          lessonsData.push({
-            batch: {
-              id: batch._id,
-              name: batch.batch_name
-            },
-            session: {
-              id: session._id,
-              day: session.day,
-              start_time: session.start_time,
-              end_time: session.end_time
-            },
-            recorded_lessons: recordedLessonsWithSignedUrls
+    // Import required AWS modules dynamically
+    const { s3Client } = await import("../config/aws-config.js");
+    const { ListObjectsV2Command } = await import("@aws-sdk/client-s3");
+    const { ENV_VARS } = await import("../config/envVars.js");
+    const { generateSignedUrl } = await import("../utils/cloudfrontSigner.js");
+
+    let s3VideosData = [];
+    let databaseVideosData = [];
+    let s3Available = true;
+    
+    // Step 1: Try to get videos from S3 (Your Previous Sessions)
+    try {
+      // List all files in the student's S3 directory (bypassing folder structure)
+      const listParams = {
+        Bucket: ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME,
+        Prefix: `videos/student/${studentId}/`,
+        MaxKeys: 1000 // Adjust as needed
+      };
+
+      const listCommand = new ListObjectsV2Command(listParams);
+      const listResponse = await s3Client.send(listCommand);
+
+      if (listResponse.Contents && listResponse.Contents.length > 0) {
+        // Process each video file found
+        for (const object of listResponse.Contents) {
+          // Skip directories (objects ending with '/')
+          if (object.Key.endsWith('/')) continue;
+          
+          // Extract file info
+          const fileName = object.Key.split('/').pop();
+          const fileUrl = `https://${ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME}.s3.${ENV_VARS.AWS_REGION}.amazonaws.com/${object.Key}`;
+          
+          // Generate signed URL for the video
+          let signedUrl = fileUrl;
+          try {
+            // Convert S3 URL to CloudFront URL and sign it
+            const cloudFrontUrl = `https://cdn.medh.co/${object.Key}`;
+            signedUrl = generateSignedUrl(cloudFrontUrl);
+          } catch (signError) {
+            console.error("Error generating signed URL:", signError);
+            // Fallback to original URL if signing fails
+          }
+
+          s3VideosData.push({
+            id: object.Key.replace(/[^a-zA-Z0-9]/g, '_'), // Create a unique ID from the key
+            title: fileName,
+            url: signedUrl,
+            originalUrl: fileUrl,
+            fileSize: object.Size,
+            lastModified: object.LastModified,
+            source: 'your_previous_sessions',
+            student: {
+              id: studentId,
+              name: student.full_name
+            }
           });
         }
+        
+        // Sort by last modified date (newest first)
+        s3VideosData.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
       }
+
+      console.log(`Found ${s3VideosData.length} video files for student ${studentId} in S3`);
+
+    } catch (s3Error) {
+      console.error("Error listing S3 objects for student:", s3Error);
+      s3Available = false;
     }
-    res.status(200).json({ success: true, count: lessonsData.length, data: lessonsData });
+    
+    // Step 2: Always get videos from database (Scheduled Sessions)
+    try {
+      // Find active enrollments for the student
+      const enrollments = await Enrollment.find({ student: studentId, status: 'active' })
+        .populate({ path: 'batch', select: 'batch_name schedule' })
+        .lean();
+      
+      // Iterate through enrollments and collect recorded lessons from batch schedules
+      for (const enrollment of enrollments) {
+        const batch = enrollment.batch;
+        if (!batch || !batch.schedule) continue;
+        
+        for (const session of batch.schedule) {
+          if (session.recorded_lessons && session.recorded_lessons.length) {
+            // Generate signed URLs for video lessons stored on CloudFront or S3
+            const recordedLessonsWithSignedUrls = session.recorded_lessons.map(lesson => {
+              if (lesson.url) {
+                // Convert S3 URLs to CloudFront URLs and sign them (only for medh-filess bucket)
+                if (lesson.url.includes('medh-filess.s3.') && lesson.url.includes('.amazonaws.com')) {
+                  try {
+                    // Extract the object key from S3 URL
+                    const s3UrlParts = lesson.url.split('.amazonaws.com/');
+                    if (s3UrlParts.length === 2) {
+                      const objectKey = s3UrlParts[1];
+                      const cloudFrontUrl = `https://cdn.medh.co/${objectKey}`;
+                      const signedUrl = generateSignedUrl(cloudFrontUrl);
+                      return {
+                        ...lesson,
+                        url: signedUrl  // Replace S3 URL with signed CloudFront URL
+                      };
+                    }
+                  } catch (signError) {
+                    console.error("Error converting S3 URL to signed CloudFront URL:", signError);
+                    return lesson; // Return original lesson if signing fails
+                  }
+                }
+                // Sign existing CloudFront URLs
+                else if (lesson.url.includes('cdn.medh.co')) {
+                  try {
+                    const signedUrl = generateSignedUrl(lesson.url);
+                    return {
+                      ...lesson,
+                      url: signedUrl  // Replace original URL with signed URL
+                    };
+                  } catch (signError) {
+                    console.error("Error signing CloudFront URL for recorded lesson:", signError);
+                    return lesson; // Return original lesson if signing fails
+                  }
+                }
+              }
+              
+              return lesson; // Return original lesson for non-S3/non-CloudFront URLs (like YouTube)
+            });
+
+            databaseVideosData.push({
+              batch: {
+                id: batch._id,
+                name: batch.batch_name
+              },
+              session: {
+                id: session._id,
+                day: session.day,
+                start_time: session.start_time,
+                end_time: session.end_time
+              },
+              recorded_lessons: recordedLessonsWithSignedUrls,
+              source: 'scheduled_sessions'
+            });
+          }
+        }
+      }
+      
+      console.log(`Found ${databaseVideosData.length} scheduled sessions with videos for student ${studentId}`);
+      
+    } catch (dbError) {
+      console.error("Error fetching scheduled sessions for student:", dbError);
+    }
+    
+    // Step 3: Prepare organized response
+    const totalVideosCount = s3VideosData.length + databaseVideosData.reduce((total, session) => {
+      return total + (session.recorded_lessons ? session.recorded_lessons.length : 0);
+    }, 0);
+    
+    const responseData = {
+      your_previous_sessions: {
+        count: s3VideosData.length,
+        videos: s3VideosData,
+        description: "Videos uploaded directly to your personal folder"
+      },
+      scheduled_sessions: {
+        count: databaseVideosData.length,
+        sessions: databaseVideosData,
+        description: "Videos from your scheduled batch sessions"
+      }
+    };
+    
+    // Determine the method used
+    let method;
+    if (s3Available && s3VideosData.length > 0) {
+      method = databaseVideosData.length > 0 ? "Combined (S3 + Database)" : "S3 Direct Listing";
+    } else if (databaseVideosData.length > 0) {
+      method = "Database Fallback";
+    } else {
+      method = s3Available ? "S3 Direct Listing" : "Database Fallback";
+    }
+    
+    res.status(200).json({ 
+      success: true, 
+      count: totalVideosCount, 
+      data: responseData,
+      message: `Retrieved ${totalVideosCount} recorded videos for student`,
+      method: method,
+      s3_available: s3Available
+    });
   } catch (error) {
     console.error("Error fetching recorded lessons for student:", error.message);
     res.status(500).json({ success: false, message: "Server error while fetching recorded lessons for student", error: error.message });

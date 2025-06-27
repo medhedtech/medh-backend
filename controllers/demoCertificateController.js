@@ -7,6 +7,7 @@ import crypto from "crypto";
 import Certificate from "../models/certificate-model.js";
 import { uploadFile } from "../utils/uploadFile.js";
 import { storeHash, verifyHash } from "../services/blockchainService.js";
+import mongoose from "mongoose";
 
 // -----------------------------------------------------------------------------
 // Helper – build the demo certificate PDF using the template and dynamic values
@@ -34,6 +35,39 @@ async function buildCertificatePDF({
   const fontSizeLarge = 24;
   const fontSizeMedium = 18;
   const fontSizeSmall = 12;
+
+  /* ---------------------------------------------------------------------
+     COVER TEMPLATE PLACEHOLDER TEXT
+     The provided template already contains placeholder labels like
+     "THIS IS TO CERTIFY THAT", "{COURSE NAME}", etc.  The easiest way
+     to hide them without editing the original PDF is to draw white
+     rectangles over the regions where those placeholders are printed,
+     then render our dynamic values on top.  Coordinates are tuned
+     empirically and may be adjusted further after visual inspection.
+  --------------------------------------------------------------------- */
+
+  const cover = (
+    x,
+    y,
+    w,
+    h,
+  ) => {
+    page.drawRectangle({
+      x,
+      y,
+      width: w,
+      height: h,
+      color: rgb(1, 1, 1), // white fill to match background
+      borderWidth: 0,
+    });
+  };
+
+  // Top-center placeholders block (approx.)
+  cover(40, height - 360, width - 80, 140);
+
+  // Bottom-meta placeholders block (approx.)
+  cover(40, 40, width - 80, 140);
+
   const center = (text, size, y) => {
     const textWidth = font.widthOfTextAtSize(text, size);
     page.drawText(text, {
@@ -45,13 +79,18 @@ async function buildCertificatePDF({
     });
   };
 
-  // Write dynamic values – coordinates tuned visually (can be refined later)
-  center(fullName.toUpperCase(), fontSizeLarge, height - 260);
-  center(courseName.toUpperCase(), fontSizeMedium, height - 320);
-  center(dateString, fontSizeMedium, height - 360);
-  center(enrollmentId, fontSizeSmall, height - 470);
-  center(certificateId, fontSizeSmall, height - 510);
-  center(instructorName, fontSizeSmall, height - 400);
+  // Write dynamic values – coordinates aligned to replace template placeholders
+  // Top section – personalise participant name and course/context
+  center(fullName.toUpperCase(), fontSizeLarge, height - 250); // replaces {full name}
+  center(courseName.toUpperCase(), fontSizeMedium, height - 300); // replaces {COURSE NAME}
+  center(dateString, fontSizeMedium, height - 350); // replaces {DATE}
+
+  // Middle section – instructor and session meta
+  center(instructorName, fontSizeSmall, height - 395); // {Instructor name}
+
+  // Bottom section – ids for verification
+  center(enrollmentId, fontSizeSmall, height - 450); // {enrollment_id}
+  center(certificateId, fontSizeSmall, height - 480); // {certificate_id}
 
   // Generate QR – link to verification endpoint
   const verifyUrl = `https://medh.co/certificate-verify/${certificateId}`;
@@ -107,24 +146,26 @@ export const createDemoCertificate = async (req, res) => {
       certificateId,
     });
 
-    // 2. Anchor hash on-chain
-    await storeHash(pdfBuffer, certificateId);
+    // 2. Anchor hash on-chain (best effort – non-fatal on failure)
+    try {
+      await storeHash(pdfBuffer, certificateId);
+    } catch (chainErr) {
+      console.error("[DemoCertificate] Blockchain anchoring skipped:", chainErr.message);
+    }
 
     // 3. Upload PDF to S3
     const s3Key = `demo-certificates/${studentId}/${certificateId}.pdf`;
     const uploadParams = {
+      bucketName: "medhdocuments",
       key: s3Key,
       file: pdfBuffer,
       contentType: "application/pdf",
     };
 
-    const s3Url = await new Promise((resolve, reject) => {
-      uploadFile(
-        uploadParams,
-        (url) => resolve(url),
-        (err) => reject(err),
-      );
-    });
+    // Updated uploadFile returns a promise with { success, data: { url } }
+    const {
+      data: { url: s3Url },
+    } = await uploadFile(uploadParams);
 
     // 4. Persist certificate record (uses existing Certificate model)
     const verificationUrl = `https://medh.co/certificate-verify/${certificateId}`;
@@ -133,7 +174,8 @@ export const createDemoCertificate = async (req, res) => {
       id: certificateId,
       course: courseId,
       student: studentId,
-      enrollment: enrollmentId,
+      // Only set enrollment if it's a valid ObjectId; otherwise store in metadata
+      ...(mongoose.isValidObjectId(enrollmentId) && { enrollment: enrollmentId }),
       certificateNumber: certificateId,
       issueDate: new Date(),
       completionDate: new Date(date || Date.now()),
@@ -147,6 +189,7 @@ export const createDemoCertificate = async (req, res) => {
         issuerSignature: "https://medh.co/signature.png",
         institutionLogo: "https://medh.co/logo.png",
         certificateTemplate: "Demo",
+        ...( !mongoose.isValidObjectId(enrollmentId) && { rawEnrollmentId: enrollmentId } ),
       },
     });
 

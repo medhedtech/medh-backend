@@ -6,10 +6,10 @@ import emailService from "../services/emailService.js";
 export const createInstructor = async (req, res) => {
   const { full_name, email, phone_number, password, domain, meta } = req.body;
 
-  if (!full_name || !email || !phone_number || !password) {
+  if (!full_name || !email || !password) {
     return res
       .status(400)
-      .json({ success: false, message: "All fields are required" });
+      .json({ success: false, message: "Full name, email, and password are required" });
   }
 
   try {

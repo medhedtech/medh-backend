@@ -18,17 +18,14 @@ const hasRole = (userRole, requiredRoles) => {
   const userRoles = Array.isArray(userRole) ? userRole : [userRole];
   const required = Array.isArray(requiredRoles) ? requiredRoles : [requiredRoles];
   
-  // Check for direct role match first
-  if (userRoles.some(role => required.includes(role))) {
+  // Super-admin has access to everything
+  if (userRoles.includes('super-admin')) {
     return true;
   }
   
-  // Implement role hierarchy: super-admin has all permissions
-  if (userRoles.includes('super-admin')) {
-    // super-admin can access anything that admin, instructor, or student can access
-    if (required.includes('admin') || required.includes('instructor') || required.includes('student')) {
-      return true;
-    }
+  // Check for direct role match
+  if (userRoles.some(role => required.includes(role))) {
+    return true;
   }
   
   // admin can access anything that instructor or student can access

@@ -20,7 +20,7 @@ const certificateSchema = new mongoose.Schema(
     enrollment: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Enrollment",
-      required: [true, "Enrollment reference is required"],
+      required: false,
     },
     certificateNumber: {
       type: String,
