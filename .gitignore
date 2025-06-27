@@ -1,6 +1,19 @@
 node_modules/
+# Environment variables (CRITICAL - NEVER COMMIT)
 .env
+.env.*
+!.env.example
 .vercel
+
+# Sensitive files
+private_key.pem
+public_key.pem
+*.pem
+*.key
+
+# AWS credentials
+aws-credentials.txt
+aws-config.txt
 
 # Ignore all files in logs directory but keep the directory structure
 logs/*
