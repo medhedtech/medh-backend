@@ -4,6 +4,12 @@ on:
     branches: ['main']
   pull_request:
     branches: ['main']
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+
 jobs:
   build:
     runs-on: self-hosted
@@ -12,6 +18,9 @@ jobs:
         node-version: [22.x] # Add more versions as needed
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
       # Update cache action to v3
       - name: Cache npm modules
         uses: actions/cache@v3
@@ -29,7 +38,13 @@ jobs:
       - run: npm ci --legacy-peer-deps
       # Create .env file securely
       - name: Create .env file
-        run: echo "${{ secrets.PROD_ENV_FILE }}" > .env
+        run: |
+          if [ -n "${{ secrets.PROD_ENV_FILE }}" ]; then
+            echo "${{ secrets.PROD_ENV_FILE }}" > .env
+          else
+            echo "Warning: PROD_ENV_FILE secret not found"
+            cp .env.example .env 2>/dev/null || echo "No .env.example found"
+          fi
       # Build the application
       - name: Build application
         run: npm run build --if-present
