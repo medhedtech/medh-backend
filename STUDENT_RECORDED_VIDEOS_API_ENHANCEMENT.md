@@ -17,16 +17,27 @@ GET /api/v1/batches/students/:studentId/recorded-lessons
 ## New Implementation Features
 
 ### 🚀 **Dual Data Sources**
-- **Your Previous Sessions**: Direct S3 listing of files under `videos/student/{studentId}/`
+- **Your Previous Sessions**: Direct S3 listing of files under `videos/student/{studentId}/` including all subfolders
 - **Scheduled Sessions**: Database lookup for recorded lessons in batch sessions
 - **Combined Response**: Organizes data from both sources in a structured format
 - **Independent Operation**: Both methods run independently for complete coverage
+- **Recursive Discovery**: Finds videos in nested folder structures (e.g., `videos/student/{studentId}/isaac/subfolder/video.mp4`)
 
 ### 🔄 **Enhanced Logic Flow**
 1. **Step 1**: Check S3 for direct uploads (Your Previous Sessions)
 2. **Step 2**: Query database for scheduled session recordings
 3. **Step 3**: Combine both results in organized response structure
 4. **Always Available**: Both data sources are checked regardless of individual failures
+
+### 🔍 **Enhanced Subfolder Discovery**
+- **Recursive Search**: Discovers videos in any subfolder depth under `videos/student/{studentId}/`
+- **Folder Tracking**: Each video includes `folderPath` showing its subfolder location
+- **Video File Filtering**: Only includes files with video extensions (.mp4, .avi, .mov, .wmv, .flv, .webm, .mkv, .m4v)
+- **Debug Logging**: Provides detailed logs about folder distribution and file discovery
+- **Example Paths**: 
+  - `videos/student/123/isaac/session1/recording.mp4`
+  - `videos/student/123/batch-recordings/week1/lesson.mp4`
+  - `videos/student/123/direct-upload.mp4`
 
 ### 🔐 **Security Features**
 - **Signed URLs**: All S3 URLs are converted to signed CloudFront URLs

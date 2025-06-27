@@ -1492,24 +1492,119 @@ export const getRecordedLessonsForStudent = async (req, res) => {
     
     // Step 1: Try to get videos from S3 (Your Previous Sessions)
     try {
-      // List all files in the student's S3 directory (bypassing folder structure)
-      const listParams = {
-        Bucket: ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME,
-        Prefix: `videos/student/${studentId}/`,
-        MaxKeys: 1000 // Adjust as needed
-      };
+      // Define video file extensions
+      const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv', '.m4v'];
+      
+      // Try multiple search patterns to find videos for the student
+      const searchPatterns = [
+        `videos/student/${studentId}/`,  // Standard pattern
+        `videos/${studentId}/`,          // Alternative pattern  
+        `videos/`,                       // Broad search to find all videos
+      ];
+      
+      let allFoundObjects = [];
+      let searchResults = {};
+      
+      for (const prefix of searchPatterns) {
+        const listParams = {
+          Bucket: ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME,
+          Prefix: prefix,
+          MaxKeys: 1000
+        };
 
-      const listCommand = new ListObjectsV2Command(listParams);
-      const listResponse = await s3Client.send(listCommand);
+        const listCommand = new ListObjectsV2Command(listParams);
+        const listResponse = await s3Client.send(listCommand);
+        
+        searchResults[prefix] = {
+          keyCount: listResponse.KeyCount || 0,
+          totalObjects: listResponse.Contents?.length || 0,
+          isTruncated: listResponse.IsTruncated
+        };
+        
+        if (listResponse.Contents && listResponse.Contents.length > 0) {
+          // Filter for video files and relevant paths
+          const relevantObjects = listResponse.Contents.filter(obj => {
+            // Skip directories
+            if (obj.Key.endsWith('/')) return false;
+            
+            // Check if it's a video file
+            const fileName = obj.Key.split('/').pop();
+            const fileExtension = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+            if (!videoExtensions.includes(fileExtension)) return false;
+            
+            // For broad search, only include objects that might be related to this student
+            if (prefix === 'videos/') {
+              // Check if the path contains the studentId or student name
+              const keyLower = obj.Key.toLowerCase();
+              const studentName = student.full_name?.toLowerCase() || '';
+              const studentEmail = student.email?.toLowerCase() || '';
+              
+              return keyLower.includes(studentId.toLowerCase()) || 
+                     (studentName && keyLower.includes(studentName.split(' ')[0])) ||
+                     (studentEmail && keyLower.includes(studentEmail.split('@')[0]));
+            }
+            
+            return true;
+          });
+          
+          allFoundObjects = allFoundObjects.concat(relevantObjects);
+        }
+      }
+      
+      console.log(`S3 Search Results for student ${studentId} (${student.full_name}):`, searchResults);
+      
+      // Remove duplicates based on Key
+      const uniqueObjects = allFoundObjects.filter((obj, index, self) => 
+        index === self.findIndex(o => o.Key === obj.Key)
+      );
+      
+      console.log(`Found ${uniqueObjects.length} unique video files across all search patterns`);
+      
+      // Log sample findings for debugging
+      if (uniqueObjects.length > 0) {
+        console.log('Sample video files found:', 
+          uniqueObjects.slice(0, 10).map(obj => ({
+            key: obj.Key,
+            size: `${(obj.Size / 1024 / 1024).toFixed(2)}MB`,
+            lastModified: obj.LastModified
+          }))
+        );
+      } else {
+        console.log('No video files found. Checking if any files exist in videos/ folder...');
+        // Do a very broad search to see what's actually in the videos folder
+        const broadListParams = {
+          Bucket: ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME,
+          Prefix: 'videos/',
+          MaxKeys: 100
+        };
+        const broadListCommand = new ListObjectsV2Command(broadListParams);
+        const broadListResponse = await s3Client.send(broadListCommand);
+        
+        if (broadListResponse.Contents) {
+          console.log('Files/folders found in videos/ directory:',
+            broadListResponse.Contents.slice(0, 20).map(obj => ({
+              key: obj.Key,
+              isDirectory: obj.Key.endsWith('/'),
+              size: obj.Size
+            }))
+          );
+        }
+      }
 
-      if (listResponse.Contents && listResponse.Contents.length > 0) {
+      if (uniqueObjects.length > 0) {
         // Process each video file found
-        for (const object of listResponse.Contents) {
-          // Skip directories (objects ending with '/')
-          if (object.Key.endsWith('/')) continue;
+        for (const object of uniqueObjects) {
+          // Extract folder structure for better organization
+          const keyParts = object.Key.split('/');
+          const fileName = keyParts[keyParts.length - 1];
+          
+          // Determine the folder path relative to videos/
+          let folderPath = 'root';
+          if (keyParts.length > 2) {
+            folderPath = keyParts.slice(1, -1).join('/'); // Remove 'videos/' and filename
+          }
           
           // Extract file info
-          const fileName = object.Key.split('/').pop();
           const fileUrl = `https://${ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME}.s3.${ENV_VARS.AWS_REGION}.amazonaws.com/${object.Key}`;
           
           // Generate signed URL for the video
@@ -1526,6 +1621,8 @@ export const getRecordedLessonsForStudent = async (req, res) => {
           s3VideosData.push({
             id: object.Key.replace(/[^a-zA-Z0-9]/g, '_'), // Create a unique ID from the key
             title: fileName,
+            folderPath: folderPath, // Show which folder/subfolder the video is in
+            fullPath: object.Key,
             url: signedUrl,
             originalUrl: fileUrl,
             fileSize: object.Size,
@@ -1543,6 +1640,15 @@ export const getRecordedLessonsForStudent = async (req, res) => {
       }
 
       console.log(`Found ${s3VideosData.length} video files for student ${studentId} in S3`);
+      
+      // Log folder distribution for debugging
+      if (s3VideosData.length > 0) {
+        const folderDistribution = s3VideosData.reduce((acc, video) => {
+          acc[video.folderPath] = (acc[video.folderPath] || 0) + 1;
+          return acc;
+        }, {});
+        console.log('Video distribution by folder:', folderDistribution);
+      }
 
     } catch (s3Error) {
       console.error("Error listing S3 objects for student:", s3Error);
@@ -1953,6 +2059,21 @@ export const getUpcomingSessionsForBatch = async (req, res) => {
   }
 };
 
+// Add helper for legacy day-based scheduling
+const getDatesForDayOfWeek = (dayOfWeek, startDate, endDate) => {
+  const daysMap = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 };
+  const dates = [];
+  const date = new Date(startDate);
+  const targetDay = daysMap[dayOfWeek];
+  const diff = (targetDay - date.getDay() + 7) % 7;
+  date.setDate(date.getDate() + diff);
+  while (date <= endDate) {
+    dates.push(new Date(date));
+    date.setDate(date.getDate() + 7);
+  }
+  return dates;
+};
+
 // Get upcoming sessions for a student across all their enrolled batches
 export const getUpcomingSessionsForStudent = async (req, res) => {
   try {
@@ -2019,22 +2140,17 @@ export const getUpcomingSessionsForStudent = async (req, res) => {
 
       // Filter and process sessions for this batch
       batch.schedule.forEach(session => {
-        // Handle both old day-based and new date-based sessions
         if (session.date) {
           // New date-based session
           const sessionDate = new Date(session.date);
           const [startHours, startMinutes] = session.start_time.split(':').map(Number);
           const [endHours, endMinutes] = session.end_time.split(':').map(Number);
-          
           sessionDate.setHours(startHours, startMinutes, 0, 0);
           const sessionEndDate = new Date(sessionDate);
           sessionEndDate.setHours(endHours, endMinutes, 0, 0);
-          
-          // Only include sessions that are in the future and within the time range
           const isInFuture = sessionDate > now;
           const isWithinRange = sessionDate <= actualEndDate;
           const isAfterBatchStart = !batch.start_date || sessionDate >= new Date(batch.start_date);
-          
           if (isInFuture && isWithinRange && isAfterBatchStart) {
             upcomingSessions.push({
               session_id: session._id,
@@ -2064,8 +2180,48 @@ export const getUpcomingSessionsForStudent = async (req, res) => {
               is_upcoming: true,
             });
           }
-      }
-        // Note: We're not processing legacy day-based sessions anymore
+        } else if (session.day) {
+          // Legacy day-based session: generate weekly occurrences within the period
+          const occDates = getDatesForDayOfWeek(session.day, now, actualEndDate);
+          occDates.forEach(dateOnly => {
+            const sessionDate = new Date(dateOnly);
+            const [startHours, startMinutes] = session.start_time.split(':').map(Number);
+            const [endHours, endMinutes] = session.end_time.split(':').map(Number);
+            sessionDate.setHours(startHours, startMinutes, 0, 0);
+            const sessionEndDate = new Date(sessionDate);
+            sessionEndDate.setHours(endHours, endMinutes, 0, 0);
+            const isAfterBatchStart = !batch.start_date || sessionDate >= new Date(batch.start_date);
+            if (isAfterBatchStart) {
+              upcomingSessions.push({
+                session_id: session._id,
+                session_date: sessionDate,
+                session_end_date: sessionEndDate,
+                date: sessionDate.toISOString().split('T')[0],
+                start_time: session.start_time,
+                end_time: session.end_time,
+                title: session.title || `Session on ${sessionDate.toLocaleDateString()}`,
+                description: session.description || '',
+                batch: {
+                  id: batch._id,
+                  name: batch.batch_name,
+                  code: batch.batch_code,
+                  status: batch.status,
+                  start_date: batch.start_date,
+                  end_date: batch.end_date,
+                },
+                course: {
+                  id: enrollment.course._id,
+                  title: enrollment.course.course_title,
+                },
+                instructor: batch.assigned_instructor,
+                zoom_meeting: session.zoom_meeting,
+                has_recorded_lessons: session.recorded_lessons?.length > 0,
+                enrollment_status: enrollment.status,
+                is_upcoming: true,
+              });
+            }
+          });
+        }
       });
     });
 
