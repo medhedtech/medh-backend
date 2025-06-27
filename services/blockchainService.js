@@ -1,4 +1,11 @@
-import { keccak256, getBytes, JsonRpcProvider, Wallet, Contract } from "ethers";
+import {
+  keccak256,
+  getBytes,
+  JsonRpcProvider,
+  Wallet,
+  Contract,
+  isAddress,
+} from "ethers";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -17,15 +24,30 @@ const {
   BLOCKCHAIN_PRIVATE_KEY,
 } = process.env;
 
-// Flag: enabled only when all required env vars are present
+// ---------------------------------------------------------------------------
+// Helpers – validate that env values are not placeholders and have correct form
+// ---------------------------------------------------------------------------
+const PLACEHOLDER_REGEX = /(your_|<.*?>|placeholder|dummy)/i;
+
+function hasRealValue(value) {
+  return typeof value === "string" && value.trim() !== "" && !PLACEHOLDER_REGEX.test(value);
+}
+
+function isValidPrivateKey(key) {
+  return typeof key === "string" && /^0x[0-9a-fA-F]{64}$/.test(key);
+}
+
+// Comprehensive flag – only enable when every input is present _and_ valid
 export const blockchainEnabled =
-  !!(RPC_URL && CERTIFICATE_CONTRACT_ADDRESS && BLOCKCHAIN_PRIVATE_KEY);
+  hasRealValue(RPC_URL) &&
+  isValidPrivateKey(BLOCKCHAIN_PRIVATE_KEY) &&
+  isAddress(CERTIFICATE_CONTRACT_ADDRESS || "");
 
 if (!blockchainEnabled) {
   // Don't crash the whole app in development/test when blockchain isn't configured.
   // Instead, operate in "noop" mode and log a clear warning so operators know.
   console.warn(
-    "[Blockchain] Environment variables missing – integration disabled. Provide RPC_URL, CERTIFICATE_CONTRACT_ADDRESS and BLOCKCHAIN_PRIVATE_KEY in .env to enable.",
+    "[Blockchain] Disabled – missing or invalid RPC_URL, CERTIFICATE_CONTRACT_ADDRESS or BLOCKCHAIN_PRIVATE_KEY. Demo certificate generation will skip on-chain anchoring.",
   );
 }
 
@@ -41,11 +63,22 @@ let wallet;
 let contract;
 
 function getContract() {
+  if (!blockchainEnabled) {
+    throw new Error("Blockchain integration is disabled");
+  }
+
   if (contract) return contract;
-  provider = new JsonRpcProvider(RPC_URL);
-  wallet = new Wallet(BLOCKCHAIN_PRIVATE_KEY, provider);
-  contract = new Contract(CERTIFICATE_CONTRACT_ADDRESS, REGISTRY_ABI, wallet);
-  return contract;
+
+  try {
+    provider = new JsonRpcProvider(RPC_URL);
+    wallet = new Wallet(BLOCKCHAIN_PRIVATE_KEY, provider);
+    contract = new Contract(CERTIFICATE_CONTRACT_ADDRESS, REGISTRY_ABI, wallet);
+    return contract;
+  } catch (err) {
+    // If instantiation fails (e.g., malformed key/address), disable blockchain to avoid runtime crashes.
+    console.error("[Blockchain] Failed to initialise contract – proceeding without on-chain anchoring:", err.message);
+    return undefined;
+  }
 }
 
 /**

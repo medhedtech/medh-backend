@@ -68,9 +68,41 @@ Authorization: Bearer <token>
 {
   "base64String": "data:video/mp4;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEA...",
   "title": "Live Session Recording",
-  "recorded_date": "2025-01-07T14:30:00Z"
+  "recorded_date": "2025-01-07T14:30:00Z",
+  "textFile": {
+    "content": "This is the content of the supplementary text document...",
+    "filename": "lesson-notes.txt",
+    "description": "Additional notes and resources for this lesson"
+  }
 }
 ```
+
+**Response (202 Accepted):**
+```json
+{
+  "success": true,
+  "message": "Upload started successfully",
+  "status": "uploading",
+  "data": {
+    "batchId": "68557a9d841fabd88f839df0",
+    "sessionId": "68557a9d841fabd88f839df1",
+    "title": "Live Session Recording",
+    "uploadStatus": "in_progress",
+    "hasTextFile": true
+  }
+}
+```
+
+**Note**: This endpoint returns immediately with status 202 (Accepted) and processes the upload in the background. The video and optional text file will be uploaded to AWS S3 and automatically added to the specified batch session.
+
+**Text File Support:**
+- **Optional**: Text files are completely optional
+- **Supported formats**: .txt, .md, .rtf, .doc, .docx
+- **Size limit**: Maximum 1MB content
+- **Fields**:
+  - `content`: The actual text content (required if textFile is provided)
+  - `filename`: Name with extension (required if textFile is provided)
+  - `description`: Optional description of the text file
 
 
 ### 4. **Upload Recorded Session**
@@ -260,6 +292,112 @@ const getStudentLessons = async (studentId) => {
 };
 ```
 
+### Frontend Integration Examples
+
+### JavaScript/React Example with Text File
+```javascript
+const uploadRecordedLessonWithTextFile = async (batchId, sessionId, videoFile, textFileContent = null, textFileName = null) => {
+  try {
+    // Convert video file to base64
+    const videoBase64 = await convertFileToBase64(videoFile);
+    
+    const payload = {
+      base64String: videoBase64,
+      title: "Live Session Recording",
+      recorded_date: new Date().toISOString()
+    };
+    
+    // Add text file if provided
+    if (textFileContent && textFileName) {
+      payload.textFile = {
+        content: textFileContent,
+        filename: textFileName,
+        description: "Lesson notes and supplementary materials"
+      };
+    }
+    
+    const response = await fetch(`/api/v1/batches/${batchId}/schedule/${sessionId}/upload-recorded-lesson`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log('Upload started:', result);
+      return result;
+    } else {
+      throw new Error('Upload failed');
+    }
+  } catch (error) {
+    console.error('Error uploading recorded lesson:', error);
+    throw error;
+  }
+};
+
+// Helper function to convert file to base64
+const convertFileToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+  });
+};
+
+// Usage example
+const handleUpload = async () => {
+  const videoFile = document.getElementById('videoInput').files[0];
+  const textContent = document.getElementById('textContent').value;
+  const textFileName = 'lesson-notes.txt';
+  
+  try {
+    await uploadRecordedLessonWithTextFile(
+      '68557a9d841fabd88f839df0', 
+      '68557a9d841fabd88f839df1', 
+      videoFile,
+      textContent,
+      textFileName
+    );
+    alert('Upload started successfully!');
+  } catch (error) {
+    alert('Upload failed: ' + error.message);
+  }
+};
+```
+
+### File Upload Form Example
+```html
+<form id="uploadForm">
+  <div>
+    <label for="videoInput">Video File:</label>
+    <input type="file" id="videoInput" accept="video/*" required>
+  </div>
+  
+  <div>
+    <label for="lessonTitle">Lesson Title:</label>
+    <input type="text" id="lessonTitle" value="Live Session Recording">
+  </div>
+  
+  <div>
+    <label for="textContent">Optional Text File Content:</label>
+    <textarea id="textContent" rows="10" cols="50" 
+              placeholder="Enter lesson notes, transcripts, or additional materials..."></textarea>
+  </div>
+  
+  <div>
+    <label for="textFileName">Text File Name:</label>
+    <input type="text" id="textFileName" value="lesson-notes.txt" 
+           placeholder="e.g., lesson-notes.txt, transcript.md">
+  </div>
+  
+  <button type="button" onclick="handleUpload()">Upload Lesson</button>
+</form>
+```
+
 ### Video Player Integration
 ```html
 <!-- Use signed URL in video player -->
@@ -283,4 +421,4 @@ const getStudentLessons = async (studentId) => {
 - CloudFront cache hit rates
 - URL signing performance
 
-This service provides a complete solution for managing recorded lesson uploads with enterprise-grade security, performance, and scalability features. 
+This service provides a complete solution for managing recorded lesson uploads with enterprise-grade security, performance, and scalability features.
