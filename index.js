@@ -257,143 +257,158 @@ app.use((err, req, res) => {
   });
 });
 
-// Graceful shutdown handling
-const gracefulShutdown = () => {
-  logger.info("Received shutdown signal. Starting graceful shutdown...");
-  
-  // Close both HTTP and HTTPS servers if they exist
-  if (httpServer) {
-    httpServer.close(async () => {
-      logger.connection.closed("HTTP Server", {
-        port: PORT,
-        environment: ENV_VARS.NODE_ENV,
-      });
-      
-      if (!httpsServer) {
-        // Only exit if HTTPS server doesn't exist or is already closed
-        await shutdownServices();
-      }
-    });
-  }
-  
-  if (httpsServer) {
-    httpsServer.close(async () => {
-      logger.connection.closed("HTTPS Server", {
-        port: HTTPS_PORT,
-        environment: ENV_VARS.NODE_ENV,
-      });
-      
-      await shutdownServices();
-    });
-  }
-};
 
-// Extract shared shutdown logic
-const shutdownServices = async () => {
+
+// Initialize DB connection and start servers only after DB is connected
+const startServer = async () => {
   try {
-    await mongoose.connection.close();
-    logger.connection.closed("MongoDB", {
-      reason: "Application shutdown",
-      graceful: true,
-    });
-    process.exit(0);
-  } catch (err) {
-    logger.connection.error("MongoDB", err, {
-      reason: "Application shutdown",
-      graceful: false,
-    });
+    // Wait for database connection to be established
+    await connectDB();
+    logger.info('Database connection established, starting server...');
+    
+    // Start server(s) after DB connection is ready
+    const PORT = ENV_VARS.PORT;
+    const HTTPS_PORT = ENV_VARS.HTTPS_PORT || 443;
+    let httpServer, httpsServer;
+
+    // In production, use HTTPS if certificates are available and USE_HTTPS is enabled
+    if (ENV_VARS.NODE_ENV === 'production' && ENV_VARS.USE_HTTPS === 'true' && ENV_VARS.TLS_CERT_PATH && ENV_VARS.TLS_CERT_PATH.trim()) {
+      try {
+        const certPath = ENV_VARS.TLS_CERT_PATH;
+        
+        // Validate certificate files exist before creating HTTPS server
+        const certFile = path.join(certPath, 'fullchain.pem');
+        const keyFile = path.join(certPath, 'privkey.pem');
+        
+        if (!fs.existsSync(certFile) || !fs.existsSync(keyFile)) {
+          throw new Error(`Certificate files not found: ${certFile} or ${keyFile}`);
+        }
+        
+        // Create HTTPS server
+        httpsServer = https.createServer(tlsConfig.production(certPath), app);
+        
+        httpsServer.listen(HTTPS_PORT, () => {
+          logger.info(`HTTPS Server running on port ${HTTPS_PORT} in ${ENV_VARS.NODE_ENV} mode`);
+          logger.connection.success("HTTPS Server", {
+            port: HTTPS_PORT,
+            environment: ENV_VARS.NODE_ENV,
+          });
+        });
+        
+        // Also create HTTP server for redirect to HTTPS
+        httpServer = http.createServer((req, res) => {
+          // Redirect HTTP to HTTPS
+          res.writeHead(301, { 
+            'Location': `https://${req.headers.host.split(':')[0]}:${HTTPS_PORT}${req.url}` 
+          });
+          res.end();
+        });
+        
+        httpServer.listen(PORT, () => {
+          logger.info(`HTTP->HTTPS redirect server running on port ${PORT}`);
+        });
+      } catch (error) {
+        // If HTTPS setup fails, fall back to HTTP
+        logger.error(`HTTPS server setup failed: ${error.message}. Falling back to HTTP.`);
+        httpServer = http.createServer(app);
+        httpServer.listen(PORT, () => {
+          logger.info(`Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode (HTTP fallback)`);
+          logger.connection.success("HTTP Server", {
+            port: PORT,
+            environment: ENV_VARS.NODE_ENV,
+          });
+        });
+      }
+    } else if (ENV_VARS.NODE_ENV === 'development' && ENV_VARS.USE_HTTPS === 'true') {
+      // In development, use HTTPS with self-signed certificates if requested
+      try {
+        // Create HTTPS server with development certificates
+        httpsServer = https.createServer(tlsConfig.development(), app);
+        
+        httpsServer.listen(PORT, () => {
+          logger.info(`HTTPS Development Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode`);
+        });
+      } catch (error) {
+        // If HTTPS setup fails in development, fall back to HTTP
+        logger.error(`HTTPS development server setup failed: ${error.message}. Falling back to HTTP.`);
+        httpServer = http.createServer(app);
+        httpServer.listen(PORT, () => {
+          logger.info(`Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode (HTTP fallback)`);
+        });
+      }
+    } else {
+      // Standard HTTP server for development or when HTTPS is not configured
+      httpServer = http.createServer(app);
+      httpServer.listen(PORT, () => {
+        logger.info(`HTTP Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode`);
+        logger.connection.success("HTTP Server", {
+          port: PORT,
+          environment: ENV_VARS.NODE_ENV,
+        });
+      });
+    }
+
+    // Register shutdown handlers
+    const gracefulShutdown = () => {
+      logger.info("Received shutdown signal. Starting graceful shutdown...");
+      
+      // Close both HTTP and HTTPS servers if they exist
+      if (httpServer) {
+        httpServer.close(async () => {
+          logger.connection.closed("HTTP Server", {
+            port: PORT,
+            environment: ENV_VARS.NODE_ENV,
+          });
+          
+          if (!httpsServer) {
+            // Only exit if HTTPS server doesn't exist or is already closed
+            await shutdownServices();
+          }
+        });
+      }
+      
+      if (httpsServer) {
+        httpsServer.close(async () => {
+          logger.connection.closed("HTTPS Server", {
+            port: HTTPS_PORT,
+            environment: ENV_VARS.NODE_ENV,
+          });
+          
+          await shutdownServices();
+        });
+      }
+    };
+
+    // Extract shared shutdown logic
+    const shutdownServices = async () => {
+      try {
+        await mongoose.connection.close();
+        logger.connection.closed("MongoDB", {
+          reason: "Application shutdown",
+          graceful: true,
+        });
+        process.exit(0);
+      } catch (err) {
+        logger.connection.error("MongoDB", err, {
+          reason: "Application shutdown",
+          graceful: false,
+        });
+        process.exit(1);
+      }
+    };
+
+    // Register shutdown handlers
+    process.on("SIGTERM", gracefulShutdown);
+    process.on("SIGINT", gracefulShutdown);
+
+  } catch (error) {
+    logger.error('Failed to start server:', error);
     process.exit(1);
   }
 };
 
-// Initialize DB connection
-connectDB();
-
-// Start server(s)
-const PORT = ENV_VARS.PORT;
-const HTTPS_PORT = ENV_VARS.HTTPS_PORT || 443;
-let httpServer, httpsServer;
-
-// In production, use HTTPS if certificates are available and USE_HTTPS is enabled
-if (ENV_VARS.NODE_ENV === 'production' && ENV_VARS.USE_HTTPS === 'true' && ENV_VARS.TLS_CERT_PATH && ENV_VARS.TLS_CERT_PATH.trim()) {
-  try {
-    const certPath = ENV_VARS.TLS_CERT_PATH;
-    
-    // Validate certificate files exist before creating HTTPS server
-    const certFile = path.join(certPath, 'fullchain.pem');
-    const keyFile = path.join(certPath, 'privkey.pem');
-    
-    if (!fs.existsSync(certFile) || !fs.existsSync(keyFile)) {
-      throw new Error(`Certificate files not found: ${certFile} or ${keyFile}`);
-    }
-    
-    // Create HTTPS server
-    httpsServer = https.createServer(tlsConfig.production(certPath), app);
-    
-    httpsServer.listen(HTTPS_PORT, () => {
-      logger.info(`HTTPS Server running on port ${HTTPS_PORT} in ${ENV_VARS.NODE_ENV} mode`);
-      logger.connection.success("HTTPS Server", {
-        port: HTTPS_PORT,
-        environment: ENV_VARS.NODE_ENV,
-      });
-    });
-    
-    // Also create HTTP server for redirect to HTTPS
-    httpServer = http.createServer((req, res) => {
-      // Redirect HTTP to HTTPS
-      res.writeHead(301, { 
-        'Location': `https://${req.headers.host.split(':')[0]}:${HTTPS_PORT}${req.url}` 
-      });
-      res.end();
-    });
-    
-    httpServer.listen(PORT, () => {
-      logger.info(`HTTP->HTTPS redirect server running on port ${PORT}`);
-    });
-  } catch (error) {
-    // If HTTPS setup fails, fall back to HTTP
-    logger.error(`HTTPS server setup failed: ${error.message}. Falling back to HTTP.`);
-    httpServer = http.createServer(app);
-    httpServer.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode (HTTP fallback)`);
-      logger.connection.success("HTTP Server", {
-        port: PORT,
-        environment: ENV_VARS.NODE_ENV,
-      });
-    });
-  }
-} else if (ENV_VARS.NODE_ENV === 'development' && ENV_VARS.USE_HTTPS === 'true') {
-  // In development, use HTTPS with self-signed certificates if requested
-  try {
-    // Create HTTPS server with development certificates
-    httpsServer = https.createServer(tlsConfig.development(), app);
-    
-    httpsServer.listen(PORT, () => {
-      logger.info(`HTTPS Development Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode`);
-    });
-  } catch (error) {
-    // If HTTPS setup fails in development, fall back to HTTP
-    logger.error(`HTTPS development server setup failed: ${error.message}. Falling back to HTTP.`);
-    httpServer = http.createServer(app);
-    httpServer.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode (HTTP fallback)`);
-    });
-  }
-} else {
-  // Standard HTTP server for development or when HTTPS is not configured
-  httpServer = http.createServer(app);
-  httpServer.listen(PORT, () => {
-    logger.info(`HTTP Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode`);
-    logger.connection.success("HTTP Server", {
-      port: PORT,
-      environment: ENV_VARS.NODE_ENV,
-    });
-  });
-}
-
-// Register shutdown handlers
-process.on("SIGTERM", gracefulShutdown);
-process.on("SIGINT", gracefulShutdown);
+// Start the application
+startServer();
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
@@ -407,7 +422,7 @@ process.on('unhandledRejection', (reason, promise) => {
   if (ENV_VARS.NODE_ENV === 'production') {
     logger.error('Unhandled rejection detected, shutting down gracefully...');
     setTimeout(() => {
-      gracefulShutdown();
+      process.exit(1);
     }, 1000);
   }
 });
@@ -424,7 +439,7 @@ process.on('uncaughtException', (error) => {
   if (ENV_VARS.NODE_ENV === 'production') {
     logger.error('Uncaught exception detected, shutting down gracefully...');
     setTimeout(() => {
-      gracefulShutdown();
+      process.exit(1);
     }, 1000);
   }
 });

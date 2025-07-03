@@ -7,8 +7,8 @@ import { ENV_VARS } from "./envVars.js";
 // Set mongoose options
 mongoose.set("strictQuery", false);
 
-// Disable mongoose buffering globally to handle connection issues better
-mongoose.set('bufferCommands', false);
+// Enable mongoose buffering since we now wait for connection before starting server
+mongoose.set('bufferCommands', true);
 
 // MongoDB connection with retries
 const connectDB = async (retryCount = 0, maxRetries = 5) => {
