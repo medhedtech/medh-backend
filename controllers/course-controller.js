@@ -1,5 +1,6 @@
 import mime from "mime-types";
 import mongoose from "mongoose";
+import path from "path";
 
 import ENV_VARS from "../config/env.js";
 import Bookmark from "../models/bookmark-model.js";
@@ -5636,6 +5637,174 @@ const getLessonSignedVideoUrl = async (req, res) => {
       success: false,
       message: "Failed to generate signed URL",
       error: error.message,
+    });
+  }
+};
+
+/**
+ * @desc    Get only the brochures array for a course
+ * @route   GET /api/v1/courses/:id/brochures
+ * @access  Public
+ */
+export const getCourseBrochures = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid course ID format",
+      });
+    }
+    const course = await Course.findById(id).select("brochures").lean();
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
+    }
+    res.status(200).json({
+      success: true,
+      data: { brochures: course.brochures || [] },
+    });
+  } catch (error) {
+    console.error("Error fetching course brochures:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching course brochures",
+      error: error.message || "An unexpected error occurred",
+    });
+  }
+};
+
+/**
+ * @desc    Update only the brochures array for a course
+ * @route   PUT /api/v1/courses/:id/brochures
+ * @access  Admin/Manager
+ */
+export const updateCourseBrochures = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { brochures } = req.body;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid course ID format",
+      });
+    }
+    if (!Array.isArray(brochures)) {
+      return res.status(400).json({
+        success: false,
+        message: "Brochures must be an array of PDF URLs",
+      });
+    }
+    // Validate each brochure URL
+    const isValidPdfUrl = (url) =>
+      url &&
+      url.trim().length > 0 &&
+      (/\.pdf($|\?|#)/.test(url) ||
+        /\/pdf\//.test(url) ||
+        /documents.*\.amazonaws\.com/.test(url) ||
+        /drive\.google\.com/.test(url) ||
+        /dropbox\.com/.test(url));
+    if (!brochures.every(isValidPdfUrl)) {
+      return res.status(400).json({
+        success: false,
+        message: "All brochures must be valid PDF URLs",
+      });
+    }
+    const course = await Course.findByIdAndUpdate(
+      id,
+      { $set: { brochures } },
+      { new: true, runValidators: true, select: "brochures" }
+    ).lean();
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
+    }
+    res.status(200).json({
+      success: true,
+      message: "Brochures updated successfully",
+      data: { brochures: course.brochures || [] },
+    });
+  } catch (error) {
+    console.error("Error updating course brochures:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error updating course brochures",
+      error: error.message || "An unexpected error occurred",
+    });
+  }
+};
+
+/**
+ * @desc    Upload a brochure PDF for a course
+ * @route   POST /api/v1/courses/:id/brochures/upload
+ * @access  Admin/Manager
+ * @body    multipart/form-data with field 'file'
+ */
+export const uploadCourseBrochure = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid course ID format",
+      });
+    }
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded. Please provide a PDF file in the 'file' field.",
+      });
+    }
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    if (ext !== ".pdf" || req.file.mimetype !== "application/pdf") {
+      return res.status(400).json({
+        success: false,
+        message: "Only PDF files are allowed.",
+      });
+    }
+    // Fetch course to get slug
+    const course = await Course.findById(id).select('slug');
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
+    }
+    const slug = course.slug || id;
+    // S3 key: broucher/courses/{slug}-{id}/{timestamp}-{filename}
+    const key = `broucher/courses/${slug}-${id}/${Date.now()}-${req.file.originalname.replace(/\s+/g, "-")}`;
+    const uploadResult = await uploadFile({
+      key,
+      file: req.file.buffer,
+      contentType: req.file.mimetype,
+    });
+    // Optionally, add to course.brochures if query param addToCourse=true
+    let updated = false;
+    if (req.query.addToCourse === "true") {
+      await Course.findByIdAndUpdate(id, { $set: { brochures: [uploadResult.data.url] } });
+      updated = true;
+    }
+    res.status(200).json({
+      success: true,
+      message: `Brochure uploaded successfully${updated ? " and added to course." : "."}`,
+      data: {
+        url: uploadResult.data.url,
+        key: uploadResult.data.key,
+        bucket: uploadResult.data.bucket,
+        contentType: uploadResult.data.contentType,
+        addedToCourse: updated,
+      },
+    });
+  } catch (error) {
+    console.error("Error uploading course brochure:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error uploading course brochure",
+      error: error.message || "An unexpected error occurred",
     });
   }
 };
