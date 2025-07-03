@@ -32,7 +32,7 @@ router.get("/check-availability", authController.checkAvailability.bind(authCont
  * @desc    Register a new user
  * @access  Public
  */
-router.post("/register", registerLimiter, authController.registerUser.bind(authController));
+router.post("/register", authController.registerUser.bind(authController));
 
 /**
  * @route   POST /api/v1/auth/verify-email
