@@ -60,7 +60,7 @@ router.post("/check-user-status", authController.checkUserStatus.bind(authContro
  * @desc    Login a user and get token
  * @access  Public
  */
-router.post("/login", loginLimiter, authController.loginUser.bind(authController));
+router.post("/login", authController.loginUser.bind(authController));
 
 /**
  * @route   POST /api/v1/auth/complete-mfa-login
