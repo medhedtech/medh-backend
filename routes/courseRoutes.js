@@ -58,6 +58,9 @@ import {
   updateVideoLesson,
   deleteVideoLesson,
   getLessonSignedVideoUrl,
+  getCourseBrochures,
+  updateCourseBrochures,
+  uploadCourseBrochure,
 } from "../controllers/course-controller.js";
 import { authenticateToken } from "../middleware/auth.js";
 import {
@@ -84,6 +87,9 @@ router.get("/by-category/:categoryName", getCoursesByCategoryName);
 
 // Generic ID route - must be last among GET routes
 router.get("/:id", getCourseById);
+router.get("/:id/brochures", getCourseBrochures);
+router.put("/:id/brochures", authenticateToken, updateCourseBrochures);
+router.post("/:id/brochures/upload", authenticateToken, upload.single("file"), uploadCourseBrochure);
 router.get("/coorporate/:id", getCoorporateCourseById);
 
 // Admin Routes (Protected) - Place these BEFORE student routes to avoid conflicts
