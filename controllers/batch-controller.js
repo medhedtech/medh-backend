@@ -31,7 +31,7 @@ export const createBatch = async (req, res) => {
 
     // Validate batch_type if provided
     if (batchDataWithoutStudent.batch_type) {
-      const validBatchTypes = ['group', 'individual'];
+      const validBatchTypes = ["group", "individual"];
       if (!validBatchTypes.includes(batchDataWithoutStudent.batch_type)) {
         return res.status(400).json({
           success: false,
@@ -40,13 +40,13 @@ export const createBatch = async (req, res) => {
       }
     } else {
       // Set default batch_type to 'group' if not provided
-      batchDataWithoutStudent.batch_type = 'group';
+      batchDataWithoutStudent.batch_type = "group";
     }
 
     // Validate student_id if provided
     if (student_id) {
       // Ensure batch_type is individual when student_id is provided
-      if (batchDataWithoutStudent.batch_type !== 'individual') {
+      if (batchDataWithoutStudent.batch_type !== "individual") {
         return res.status(400).json({
           success: false,
           message: "student_id can only be provided for individual batch type",
@@ -62,14 +62,14 @@ export const createBatch = async (req, res) => {
         });
       }
 
-      if (!student.role.includes('student')) {
+      if (!student.role.includes("student")) {
         return res.status(400).json({
           success: false,
           message: "User is not a student",
         });
       }
 
-      if (student.status !== 'Active') {
+      if (student.status !== "Active") {
         return res.status(400).json({
           success: false,
           message: "Student account is inactive",
@@ -78,40 +78,44 @@ export const createBatch = async (req, res) => {
     }
 
     // Create the batch using the Course static method
-    const newBatch = await Course.createBatch(courseId, batchDataWithoutStudent, adminId);
+    const newBatch = await Course.createBatch(
+      courseId,
+      batchDataWithoutStudent,
+      adminId,
+    );
 
     // If student_id was provided and batch is individual, automatically enroll the student
     let enrollmentResult = null;
-    if (student_id && batchDataWithoutStudent.batch_type === 'individual') {
+    if (student_id && batchDataWithoutStudent.batch_type === "individual") {
       try {
         // Get the course details for enrollment
         const course = await Course.findById(courseId);
-        
+
         // Create enrollment data
         const enrollmentData = {
           student: student_id,
           course: courseId,
           batch: newBatch._id,
           enrollment_date: new Date(),
-          status: 'active',
-          enrollment_type: 'batch', // Use 'batch' type since this is a batch session, even if capacity=1
+          status: "active",
+          enrollment_type: "batch", // Use 'batch' type since this is a batch session, even if capacity=1
           access_expiry_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
           pricing_snapshot: {
             original_price: course?.course_price || 1000,
             final_price: course?.course_price || 1000,
-            currency: 'INR',
-            pricing_type: 'individual', // But pricing is individual since it's 1:1
-            discount_applied: 0
+            currency: "INR",
+            pricing_type: "individual", // But pricing is individual since it's 1:1
+            discount_applied: 0,
           },
           batch_info: {
             batch_size: 1, // Individual batch has size 1
             is_batch_leader: true,
-            batch_members: []
+            batch_members: [],
           },
-          payment_plan: 'full',
+          payment_plan: "full",
           total_amount_paid: course?.course_price || 0,
           notes: `Auto-enrolled during individual batch creation`,
-          created_by: adminId
+          created_by: adminId,
         };
 
         // Create the enrollment
@@ -120,22 +124,22 @@ export const createBatch = async (req, res) => {
 
         // Update batch enrolled_students count
         await Batch.findByIdAndUpdate(newBatch._id, {
-          $inc: { enrolled_students: 1 }
+          $inc: { enrolled_students: 1 },
         });
 
         enrollmentResult = {
           student_id: student_id,
           enrollment_id: enrollment._id,
-          enrollment_status: 'active'
+          enrollment_status: "active",
         };
-
       } catch (enrollmentError) {
         console.error("Error auto-enrolling student:", enrollmentError);
         // Don't fail the batch creation, just log the enrollment error
         enrollmentResult = {
           student_id: student_id,
-          enrollment_error: "Failed to auto-enroll student. Please enroll manually.",
-          error_details: enrollmentError.message
+          enrollment_error:
+            "Failed to auto-enroll student. Please enroll manually.",
+          error_details: enrollmentError.message,
         };
       }
     }
@@ -176,7 +180,7 @@ export const assignInstructorToBatch = async (req, res) => {
     const updatedBatch = await Course.assignInstructorToBatch(
       batchId,
       instructorId,
-      adminId
+      adminId,
     );
 
     res.status(200).json({
@@ -234,47 +238,50 @@ export const getBatchesForCourse = async (req, res) => {
  */
 export const getAllBatches = async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
+    const {
+      page = 1,
+      limit = 10,
       status,
       batch_type,
       search,
-      sort_by = 'createdAt',
-      sort_order = 'desc',
-      include_students = 'true'
+      sort_by = "createdAt",
+      sort_order = "desc",
+      include_students = "true",
     } = req.query;
 
     const skip = (page - 1) * limit;
-    
+
     // Build filter object
     const filter = {};
-    
+
     if (status) {
       filter.status = status;
     }
-    
+
     if (batch_type) {
-      if (['group', 'individual'].includes(batch_type)) {
+      if (["group", "individual"].includes(batch_type)) {
         filter.batch_type = batch_type;
       }
     }
-    
+
     if (search) {
       filter.$or = [
-        { batch_name: { $regex: search, $options: 'i' } },
-        { batch_code: { $regex: search, $options: 'i' } },
+        { batch_name: { $regex: search, $options: "i" } },
+        { batch_code: { $regex: search, $options: "i" } },
       ];
     }
 
     // Build sort object
     const sortObj = {};
-    sortObj[sort_by] = sort_order === 'desc' ? -1 : 1;
+    sortObj[sort_by] = sort_order === "desc" ? -1 : 1;
 
     // Get batches with populated course and instructor details
     const batches = await Batch.find(filter)
-      .populate('course', 'course_title course_image slug course_type course_category')
-      .populate('assigned_instructor', 'full_name email phone_numbers')
+      .populate(
+        "course",
+        "course_title course_image slug course_type course_category",
+      )
+      .populate("assigned_instructor", "full_name email phone_numbers")
       .sort(sortObj)
       .skip(skip)
       .limit(parseInt(limit))
@@ -286,18 +293,23 @@ export const getAllBatches = async (req, res) => {
         // Get active enrollments for this batch
         const enrollments = await Enrollment.find({
           batch: batch._id,
-          status: 'active'
+          status: "active",
         })
-        .populate('student', 'full_name email phone_numbers user_image status')
-        .select('student enrollment_date status progress.overall_percentage payment_plan')
-        .lean();
+          .populate(
+            "student",
+            "full_name email phone_numbers user_image status",
+          )
+          .select(
+            "student enrollment_date status progress.overall_percentage payment_plan",
+          )
+          .lean();
 
         const actualEnrolledCount = enrollments.length;
 
         // Update the batch document if the count is different
         if (actualEnrolledCount !== batch.enrolled_students) {
           await Batch.findByIdAndUpdate(batch._id, {
-            enrolled_students: actualEnrolledCount
+            enrolled_students: actualEnrolledCount,
           });
         }
 
@@ -308,18 +320,20 @@ export const getAllBatches = async (req, res) => {
         };
 
         // Include student details if requested
-        if (include_students === 'true') {
-          batchWithStudents.enrolled_students_details = enrollments.map(enrollment => ({
-            student: enrollment.student,
-            enrollment_date: enrollment.enrollment_date,
-            enrollment_status: enrollment.status,
-            progress: enrollment.progress?.overall_percentage || 0,
-            payment_plan: enrollment.payment_plan
-          }));
+        if (include_students === "true") {
+          batchWithStudents.enrolled_students_details = enrollments.map(
+            (enrollment) => ({
+              student: enrollment.student,
+              enrollment_date: enrollment.enrollment_date,
+              enrollment_status: enrollment.status,
+              progress: enrollment.progress?.overall_percentage || 0,
+              payment_plan: enrollment.payment_plan,
+            }),
+          );
         }
 
         return batchWithStudents;
-      })
+      }),
     );
 
     // Get total count for pagination
@@ -327,9 +341,16 @@ export const getAllBatches = async (req, res) => {
     const totalPages = Math.ceil(totalBatches / limit);
 
     // Calculate summary statistics
-    const totalEnrolledStudents = batchesWithStudentInfo.reduce((sum, batch) => sum + batch.enrolled_students, 0);
-    const activeBatches = batchesWithStudentInfo.filter(batch => batch.status === 'active').length;
-    const upcomingBatches = batchesWithStudentInfo.filter(batch => batch.status === 'Upcoming').length;
+    const totalEnrolledStudents = batchesWithStudentInfo.reduce(
+      (sum, batch) => sum + batch.enrolled_students,
+      0,
+    );
+    const activeBatches = batchesWithStudentInfo.filter(
+      (batch) => batch.status === "active",
+    ).length;
+    const upcomingBatches = batchesWithStudentInfo.filter(
+      (batch) => batch.status === "Upcoming",
+    ).length;
 
     res.status(200).json({
       success: true,
@@ -343,14 +364,18 @@ export const getAllBatches = async (req, res) => {
         total_enrolled_students: totalEnrolledStudents,
         active_batches: activeBatches,
         upcoming_batches: upcomingBatches,
-        completed_batches: batchesWithStudentInfo.filter(b => b.status === 'Completed').length,
-        cancelled_batches: batchesWithStudentInfo.filter(b => b.status === 'Cancelled').length,
+        completed_batches: batchesWithStudentInfo.filter(
+          (b) => b.status === "Completed",
+        ).length,
+        cancelled_batches: batchesWithStudentInfo.filter(
+          (b) => b.status === "Cancelled",
+        ).length,
       },
       filters_applied: {
-        status: status || 'all',
-        batch_type: batch_type || 'all',
+        status: status || "all",
+        batch_type: batch_type || "all",
         search: search || null,
-        include_students: include_students === 'true'
+        include_students: include_students === "true",
       },
       data: batchesWithStudentInfo,
     });
@@ -389,20 +414,20 @@ export const getBatchDetails = async (req, res) => {
     // Calculate actual enrolled students count
     const actualEnrolledCount = await Enrollment.countDocuments({
       batch: batchId,
-      status: 'active'
+      status: "active",
     });
 
     // Update the batch document if the count is different
     if (actualEnrolledCount !== batch.enrolled_students) {
       await Batch.findByIdAndUpdate(batchId, {
-        enrolled_students: actualEnrolledCount
+        enrolled_students: actualEnrolledCount,
       });
     }
 
     // Return batch with correct enrolled students count
     const batchWithCorrectCount = {
       ...batch,
-      enrolled_students: actualEnrolledCount
+      enrolled_students: actualEnrolledCount,
     };
 
     res.status(200).json({
@@ -431,7 +456,7 @@ export const updateBatch = async (req, res) => {
 
     // Validate batch_type if provided in update
     if (updateData.batch_type) {
-      const validBatchTypes = ['group', 'individual'];
+      const validBatchTypes = ["group", "individual"];
       if (!validBatchTypes.includes(updateData.batch_type)) {
         return res.status(400).json({
           success: false,
@@ -450,12 +475,13 @@ export const updateBatch = async (req, res) => {
     }
 
     // Update the batch with the provided data
-    Object.keys(updateData).forEach(key => {
-      if (key !== 'course' && key !== 'batch_code') { // Prevent changing course reference or batch code
+    Object.keys(updateData).forEach((key) => {
+      if (key !== "course" && key !== "batch_code") {
+        // Prevent changing course reference or batch code
         batch[key] = updateData[key];
       }
     });
-    
+
     // Track who updated the batch
     batch.updated_by = adminId;
 
@@ -529,15 +555,13 @@ export const deleteBatch = async (req, res) => {
 export const getBatchStudents = async (req, res) => {
   try {
     const { batchId } = req.params;
-    const { 
-      page = 1, 
-      limit = 20, 
-      status = "active",
-      search 
-    } = req.query;
+    const { page = 1, limit = 20, status = "active", search } = req.query;
 
     // Verify batch exists
-    const batch = await Batch.findById(batchId).populate('course', 'course_title');
+    const batch = await Batch.findById(batchId).populate(
+      "course",
+      "course_title",
+    );
     if (!batch) {
       return res.status(404).json({
         success: false,
@@ -546,30 +570,35 @@ export const getBatchStudents = async (req, res) => {
     }
 
     const skip = (page - 1) * limit;
-    
+
     // Build filter for enrollments
-    const filter = { 
-      batch: batchId
+    const filter = {
+      batch: batchId,
     };
-    
-    if (status && status !== 'all') {
+
+    if (status && status !== "all") {
       filter.status = status;
     }
 
     // Get enrollments with populated student details
     let enrollmentsQuery = Enrollment.find(filter)
-      .populate('student', 'full_name email phone_numbers user_image status created_at')
-      .populate('course', 'course_title')
-      .select('student enrollment_date status progress.overall_percentage total_amount_paid payment_plan access_expiry_date')
+      .populate(
+        "student",
+        "full_name email phone_numbers user_image status created_at",
+      )
+      .populate("course", "course_title")
+      .select(
+        "student enrollment_date status progress.overall_percentage total_amount_paid payment_plan access_expiry_date",
+      )
       .sort({ enrollment_date: -1 });
 
     // Apply search filter if provided
     if (search) {
       enrollmentsQuery = enrollmentsQuery.where({
         $or: [
-          { 'student.full_name': { $regex: search, $options: 'i' } },
-          { 'student.email': { $regex: search, $options: 'i' } }
-        ]
+          { "student.full_name": { $regex: search, $options: "i" } },
+          { "student.email": { $regex: search, $options: "i" } },
+        ],
       });
     }
 
@@ -583,7 +612,7 @@ export const getBatchStudents = async (req, res) => {
     const totalPages = Math.ceil(totalStudents / limit);
 
     // Transform data for response
-    const students = enrollments.map(enrollment => ({
+    const students = enrollments.map((enrollment) => ({
       enrollmentId: enrollment._id,
       student: enrollment.student,
       enrollmentDate: enrollment.enrollment_date,
@@ -591,7 +620,7 @@ export const getBatchStudents = async (req, res) => {
       progress: enrollment.progress?.overall_percentage || 0,
       totalPaid: enrollment.total_amount_paid,
       paymentPlan: enrollment.payment_plan,
-      accessExpiryDate: enrollment.access_expiry_date
+      accessExpiryDate: enrollment.access_expiry_date,
     }));
 
     res.status(200).json({
@@ -601,7 +630,7 @@ export const getBatchStudents = async (req, res) => {
         name: batch.batch_name,
         course: batch.course.course_title,
         capacity: batch.capacity,
-        enrolled: batch.enrolled_students
+        enrolled: batch.enrolled_students,
       },
       students: {
         count: students.length,
@@ -610,8 +639,8 @@ export const getBatchStudents = async (req, res) => {
         currentPage: parseInt(page),
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
-        data: students
-      }
+        data: students,
+      },
     });
   } catch (error) {
     console.error("Error fetching batch students:", error);
@@ -634,7 +663,7 @@ export const addStudentToBatch = async (req, res) => {
     const { studentId, paymentPlan = "full_payment", notes } = req.body;
 
     // Verify batch exists and has capacity
-    const batch = await Batch.findById(batchId).populate('course');
+    const batch = await Batch.findById(batchId).populate("course");
     if (!batch) {
       return res.status(404).json({
         success: false,
@@ -643,7 +672,7 @@ export const addStudentToBatch = async (req, res) => {
     }
 
     // Check batch type and capacity constraints
-    if (batch.batch_type === 'individual') {
+    if (batch.batch_type === "individual") {
       // For individual batches, only allow one student
       if (batch.enrolled_students >= 1) {
         return res.status(400).json({
@@ -674,7 +703,7 @@ export const addStudentToBatch = async (req, res) => {
     const existingEnrollment = await Enrollment.findOne({
       student: studentId,
       batch: batchId,
-      status: { $ne: 'cancelled' }
+      status: { $ne: "cancelled" },
     });
 
     if (existingEnrollment) {
@@ -685,7 +714,10 @@ export const addStudentToBatch = async (req, res) => {
     }
 
     // Get course pricing for the enrollment
-    const coursePricing = batch.course.prices?.[0] || { batch: 0, currency: 'INR' };
+    const coursePricing = batch.course.prices?.[0] || {
+      batch: 0,
+      currency: "INR",
+    };
     const enrollmentEndDate = new Date(batch.end_date);
     enrollmentEndDate.setDate(enrollmentEndDate.getDate() + 30); // 30 days after batch ends
 
@@ -694,24 +726,26 @@ export const addStudentToBatch = async (req, res) => {
       student: studentId,
       course: batch.course._id,
       batch: batchId,
-      enrollment_type: batch.batch_type === 'individual' ? 'individual' : 'batch',
+      enrollment_type:
+        batch.batch_type === "individual" ? "individual" : "batch",
       payment_plan: paymentPlan,
       enrollment_date: new Date(),
       access_expiry_date: enrollmentEndDate,
-      status: 'active',
+      status: "active",
       pricing_snapshot: {
         original_price: coursePricing.batch || 0,
         final_price: coursePricing.batch || 0,
-        currency: coursePricing.currency || 'INR',
-        pricing_type: batch.batch_type === 'individual' ? 'individual' : 'batch'
+        currency: coursePricing.currency || "INR",
+        pricing_type:
+          batch.batch_type === "individual" ? "individual" : "batch",
       },
       progress: {
         overall_percentage: 0,
         completed_lessons: 0,
-        total_lessons: batch.course.total_lessons || 0
+        total_lessons: batch.course.total_lessons || 0,
       },
       created_by: req.user.id,
-      notes: notes
+      notes: notes,
     };
 
     const enrollment = new Enrollment(enrollmentData);
@@ -722,7 +756,7 @@ export const addStudentToBatch = async (req, res) => {
     await batch.save();
 
     // Populate the enrollment for response
-    await enrollment.populate('student', 'full_name email user_image');
+    await enrollment.populate("student", "full_name email user_image");
 
     res.status(201).json({
       success: true,
@@ -737,9 +771,9 @@ export const addStudentToBatch = async (req, res) => {
           name: batch.batch_name,
           type: batch.batch_type,
           enrolled: batch.enrolled_students,
-          capacity: batch.capacity
-        }
-      }
+          capacity: batch.capacity,
+        },
+      },
     });
   } catch (error) {
     console.error("Error adding student to batch:", error);
@@ -765,8 +799,8 @@ export const removeStudentFromBatch = async (req, res) => {
     const enrollment = await Enrollment.findOne({
       student: studentId,
       batch: batchId,
-      status: { $ne: 'cancelled' }
-    }).populate('student', 'full_name email');
+      status: { $ne: "cancelled" },
+    }).populate("student", "full_name email");
 
     if (!enrollment) {
       return res.status(404).json({
@@ -776,7 +810,7 @@ export const removeStudentFromBatch = async (req, res) => {
     }
 
     // Update enrollment status to cancelled
-    enrollment.status = 'cancelled';
+    enrollment.status = "cancelled";
     enrollment.cancellation_reason = reason;
     enrollment.cancelled_date = new Date();
     enrollment.cancelled_by = req.user.id;
@@ -795,8 +829,8 @@ export const removeStudentFromBatch = async (req, res) => {
       data: {
         student: enrollment.student,
         cancellationReason: reason,
-        cancelledDate: enrollment.cancelled_date
-      }
+        cancelledDate: enrollment.cancelled_date,
+      },
     });
   } catch (error) {
     console.error("Error removing student from batch:", error);
@@ -829,8 +863,8 @@ export const transferStudentToBatch = async (req, res) => {
     const sourceEnrollment = await Enrollment.findOne({
       student: studentId,
       batch: batchId,
-      status: 'active'
-    }).populate('student', 'full_name email');
+      status: "active",
+    }).populate("student", "full_name email");
 
     if (!sourceEnrollment) {
       return res.status(404).json({
@@ -840,7 +874,7 @@ export const transferStudentToBatch = async (req, res) => {
     }
 
     // Verify target batch exists and has capacity
-    const targetBatch = await Batch.findById(targetBatchId).populate('course');
+    const targetBatch = await Batch.findById(targetBatchId).populate("course");
     if (!targetBatch) {
       return res.status(404).json({
         success: false,
@@ -867,7 +901,7 @@ export const transferStudentToBatch = async (req, res) => {
     const existingTargetEnrollment = await Enrollment.findOne({
       student: studentId,
       batch: targetBatchId,
-      status: { $ne: 'cancelled' }
+      status: { $ne: "cancelled" },
     });
 
     if (existingTargetEnrollment) {
@@ -887,27 +921,30 @@ export const transferStudentToBatch = async (req, res) => {
         from_batch: batchId,
         transfer_date: new Date(),
         transfer_reason: reason,
-        transferred_by: req.user.id
-      }
+        transferred_by: req.user.id,
+      },
     };
 
     const newEnrollment = new Enrollment(newEnrollmentData);
     await newEnrollment.save();
 
     // Cancel old enrollment
-    sourceEnrollment.status = 'transferred';
+    sourceEnrollment.status = "transferred";
     sourceEnrollment.transfer_info = {
       to_batch: targetBatchId,
       transfer_date: new Date(),
       transfer_reason: reason,
-      transferred_by: req.user.id
+      transferred_by: req.user.id,
     };
     await sourceEnrollment.save();
 
     // Update batch counts
     const sourceBatch = await Batch.findById(batchId);
     if (sourceBatch) {
-      sourceBatch.enrolled_students = Math.max(0, sourceBatch.enrolled_students - 1);
+      sourceBatch.enrolled_students = Math.max(
+        0,
+        sourceBatch.enrolled_students - 1,
+      );
       await sourceBatch.save();
     }
 
@@ -922,17 +959,17 @@ export const transferStudentToBatch = async (req, res) => {
         transfer: {
           from: {
             batchId: batchId,
-            batchName: sourceBatch?.batch_name
+            batchName: sourceBatch?.batch_name,
           },
           to: {
             batchId: targetBatchId,
-            batchName: targetBatch.batch_name
+            batchName: targetBatch.batch_name,
           },
           transferDate: new Date(),
-          reason: reason
+          reason: reason,
         },
-        newEnrollmentId: newEnrollment._id
-      }
+        newEnrollmentId: newEnrollment._id,
+      },
     });
   } catch (error) {
     console.error("Error transferring student:", error);
@@ -965,8 +1002,8 @@ export const updateStudentStatusInBatch = async (req, res) => {
     // Find enrollment
     const enrollment = await Enrollment.findOne({
       student: studentId,
-      batch: batchId
-    }).populate('student', 'full_name email');
+      batch: batchId,
+    }).populate("student", "full_name email");
 
     if (!enrollment) {
       return res.status(404).json({
@@ -977,24 +1014,26 @@ export const updateStudentStatusInBatch = async (req, res) => {
 
     const oldStatus = enrollment.status;
     enrollment.status = status;
-    
+
     if (reason) {
       enrollment.status_change_reason = reason;
     }
-    
+
     enrollment.status_updated_by = req.user.id;
     enrollment.status_updated_at = new Date();
 
     await enrollment.save();
 
     // Update batch count if status affects enrollment
-    if ((oldStatus === 'active' && status !== 'active') || 
-        (oldStatus !== 'active' && status === 'active')) {
+    if (
+      (oldStatus === "active" && status !== "active") ||
+      (oldStatus !== "active" && status === "active")
+    ) {
       const batch = await Batch.findById(batchId);
       if (batch) {
         const activeEnrollments = await Enrollment.countDocuments({
           batch: batchId,
-          status: 'active'
+          status: "active",
         });
         batch.enrolled_students = activeEnrollments;
         await batch.save();
@@ -1009,8 +1048,8 @@ export const updateStudentStatusInBatch = async (req, res) => {
         oldStatus: oldStatus,
         newStatus: status,
         reason: reason,
-        updatedAt: enrollment.status_updated_at
-      }
+        updatedAt: enrollment.status_updated_at,
+      },
     });
   } catch (error) {
     console.error("Error updating student status:", error);
@@ -1034,7 +1073,7 @@ export const updateBatchStatus = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Validation errors",
-        errors: errors.array()
+        errors: errors.array(),
       });
     }
 
@@ -1047,7 +1086,7 @@ export const updateBatchStatus = async (req, res) => {
     if (!batch) {
       return res.status(404).json({
         success: false,
-        message: "Batch not found"
+        message: "Batch not found",
       });
     }
 
@@ -1056,16 +1095,16 @@ export const updateBatchStatus = async (req, res) => {
 
     // Validate status transition
     const validTransitions = {
-      'Upcoming': ['Active', 'Cancelled'],
-      'Active': ['Completed', 'Cancelled'],
-      'Completed': [], // Cannot change from completed
-      'Cancelled': ['Upcoming', 'Active'] // Can reactivate if needed
+      Upcoming: ["Active", "Cancelled"],
+      Active: ["Completed", "Cancelled"],
+      Completed: [], // Cannot change from completed
+      Cancelled: ["Upcoming", "Active"], // Can reactivate if needed
     };
 
     if (!validTransitions[previousStatus]?.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: `Cannot change status from "${previousStatus}" to "${status}". Valid transitions: ${validTransitions[previousStatus]?.join(', ') || 'None'}`
+        message: `Cannot change status from "${previousStatus}" to "${status}". Valid transitions: ${validTransitions[previousStatus]?.join(", ") || "None"}`,
       });
     }
 
@@ -1080,32 +1119,34 @@ export const updateBatchStatus = async (req, res) => {
             new_status: status,
             changed_by: adminId,
             changed_at: new Date(),
-            reason: reason || `Status changed from ${previousStatus} to ${status}`
-          }
+            reason:
+              reason || `Status changed from ${previousStatus} to ${status}`,
+          },
         },
         updated_by: adminId,
-        updated_at: new Date()
+        updated_at: new Date(),
       },
-      { 
+      {
         new: true,
-        runValidators: true
-      }
-    ).populate('course', 'course_title course_image slug')
-     .populate('assigned_instructor', 'full_name email phone_numbers');
+        runValidators: true,
+      },
+    )
+      .populate("course", "course_title course_image slug")
+      .populate("assigned_instructor", "full_name email phone_numbers");
 
     // If batch is being activated, validate that it has required data
-    if (status === 'Active') {
+    if (status === "Active") {
       if (!updatedBatch.assigned_instructor) {
         return res.status(400).json({
           success: false,
-          message: "Cannot activate batch without an assigned instructor"
+          message: "Cannot activate batch without an assigned instructor",
         });
       }
-      
+
       if (!updatedBatch.schedule || updatedBatch.schedule.length === 0) {
         return res.status(400).json({
           success: false,
-          message: "Cannot activate batch without a schedule"
+          message: "Cannot activate batch without a schedule",
         });
       }
     }
@@ -1120,17 +1161,17 @@ export const updateBatchStatus = async (req, res) => {
           to: status,
           changed_by: adminId,
           changed_at: new Date(),
-          reason: reason || `Status changed from ${previousStatus} to ${status}`
-        }
-      }
+          reason:
+            reason || `Status changed from ${previousStatus} to ${status}`,
+        },
+      },
     });
-
   } catch (error) {
     console.error("Error updating batch status:", error);
     res.status(500).json({
       success: false,
       message: "Server error while updating batch status",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1140,12 +1181,17 @@ export const getBatchesByCategory = async (req, res) => {
   try {
     const { courseCategory } = req.params;
     // Find course IDs matching the provided category
-    const courses = await Course.find({ course_category: courseCategory }).select('_id');
-    const courseIds = courses.map(c => c._id);
+    const courses = await Course.find({
+      course_category: courseCategory,
+    }).select("_id");
+    const courseIds = courses.map((c) => c._id);
     // Fetch batches for those courses
     const batches = await Batch.find({ course: { $in: courseIds } })
-      .populate('assigned_instructor', 'full_name email phone_numbers')
-      .populate('course', 'course_title course_image slug course_type course_category');
+      .populate("assigned_instructor", "full_name email phone_numbers")
+      .populate(
+        "course",
+        "course_title course_image slug course_type course_category",
+      );
     res.status(200).json({
       success: true,
       count: batches.length,
@@ -1169,13 +1215,17 @@ export const addRecordedLessonToBatch = async (req, res) => {
     // Find the batch
     const batch = await Batch.findById(batchId);
     if (!batch) {
-      return res.status(404).json({ success: false, message: "Batch not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Batch not found" });
     }
 
     // Find the scheduled session sub-document
     const session = batch.schedule.id(sessionId);
     if (!session) {
-      return res.status(404).json({ success: false, message: "Scheduled session not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Scheduled session not found" });
     }
 
     // Add the recorded lesson under the scheduled session
@@ -1190,7 +1240,11 @@ export const addRecordedLessonToBatch = async (req, res) => {
     res.status(201).json({ success: true, data: session.recorded_lessons });
   } catch (error) {
     console.error("Error adding recorded lesson to batch:", error.message);
-    res.status(500).json({ success: false, message: "Server error while adding recorded lesson", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Server error while adding recorded lesson",
+      error: error.message,
+    });
   }
 };
 
@@ -1207,13 +1261,17 @@ export const addRecordedLessonToBatchWithUpload = async (req, res) => {
     // Find the batch
     const batch = await Batch.findById(batchId);
     if (!batch) {
-      return res.status(404).json({ success: false, message: "Batch not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Batch not found" });
     }
 
     // Find the scheduled session sub-document
     const session = batch.schedule.id(sessionId);
     if (!session) {
-      return res.status(404).json({ success: false, message: "Scheduled session not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Scheduled session not found" });
     }
 
     // Create the recorded lesson object
@@ -1228,10 +1286,10 @@ export const addRecordedLessonToBatchWithUpload = async (req, res) => {
     if (url) {
       try {
         let signedUrl;
-        
+
         // Convert S3 URL to CloudFront URL and sign it (only for medh-filess bucket)
-        if (url.includes('medh-filess.s3.') && url.includes('.amazonaws.com')) {
-          const s3UrlParts = url.split('.amazonaws.com/');
+        if (url.includes("medh-filess.s3.") && url.includes(".amazonaws.com")) {
+          const s3UrlParts = url.split(".amazonaws.com/");
           if (s3UrlParts.length === 2) {
             const objectKey = s3UrlParts[1];
             const cloudFrontUrl = `https://cdn.medh.co/${objectKey}`;
@@ -1239,16 +1297,19 @@ export const addRecordedLessonToBatchWithUpload = async (req, res) => {
           }
         }
         // Sign existing CloudFront URLs
-        else if (url.includes('cdn.medh.co')) {
+        else if (url.includes("cdn.medh.co")) {
           signedUrl = generateSignedUrl(url);
         }
-        
+
         // Add signed URL to the response data
         if (signedUrl) {
           recordedLessonData.signedUrl = signedUrl;
         }
       } catch (signError) {
-        console.error("Error generating signed URL for recorded lesson:", signError);
+        console.error(
+          "Error generating signed URL for recorded lesson:",
+          signError,
+        );
         // Don't fail the operation, just log the error
       }
     }
@@ -1258,33 +1319,34 @@ export const addRecordedLessonToBatchWithUpload = async (req, res) => {
     await batch.save();
 
     // Get the newly added lesson
-    const newLesson = session.recorded_lessons[session.recorded_lessons.length - 1];
+    const newLesson =
+      session.recorded_lessons[session.recorded_lessons.length - 1];
 
-    res.status(201).json({ 
-      success: true, 
+    res.status(201).json({
+      success: true,
       message: "Recorded lesson added successfully",
       data: {
         lesson: newLesson,
         batch: {
           id: batch._id,
           name: batch.batch_name,
-          type: batch.batch_type
+          type: batch.batch_type,
         },
         session: {
           id: session._id,
           date: session.date,
           day: session.day,
           start_time: session.start_time,
-          end_time: session.end_time
-        }
-      }
+          end_time: session.end_time,
+        },
+      },
     });
   } catch (error) {
     console.error("Error adding recorded lesson to batch:", error.message);
-    res.status(500).json({ 
-      success: false, 
-      message: "Server error while adding recorded lesson", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Server error while adding recorded lesson",
+      error: error.message,
     });
   }
 };
@@ -1302,7 +1364,7 @@ export const uploadAndAddRecordedLesson = async (req, res) => {
     if (!base64String) {
       return res.status(400).json({
         success: false,
-        message: "base64String is required"
+        message: "base64String is required",
       });
     }
 
@@ -1314,43 +1376,59 @@ export const uploadAndAddRecordedLesson = async (req, res) => {
       data: {
         batchId,
         sessionId,
-        title: title || 'Recorded Lesson',
-        uploadStatus: "in_progress"
-      }
+        title: title || "Recorded Lesson",
+        uploadStatus: "in_progress",
+      },
     });
 
     // Continue with upload in background
-    processUploadInBackground(batchId, sessionId, base64String, title, recorded_date, req.user.id);
-    
+    processUploadInBackground(
+      batchId,
+      sessionId,
+      base64String,
+      title,
+      recorded_date,
+      req.user.id,
+    );
   } catch (error) {
     console.error("Error starting upload:", error);
     if (!res.headersSent) {
       res.status(500).json({
         success: false,
         message: "Server error while starting upload",
-        error: error.message
+        error: error.message,
       });
     }
   }
 };
 
 // Background upload processing function
-const processUploadInBackground = async (batchId, sessionId, base64String, title, recorded_date, userId) => {
+const processUploadInBackground = async (
+  batchId,
+  sessionId,
+  base64String,
+  title,
+  recorded_date,
+  userId,
+) => {
   try {
-
     // Import required modules
     const { Batch } = await import("../models/course-model.js");
     const Enrollment = (await import("../models/enrollment-model.js")).default;
-    const { uploadBase64FileOptimized, uploadBase64FileChunked } = await import("../utils/uploadFile.js");
+    const { uploadBase64FileOptimized, uploadBase64FileChunked } = await import(
+      "../utils/uploadFile.js"
+    );
     const { ENV_VARS } = await import("../config/envVars.js");
 
-    console.log(`[Background Upload] Starting upload for batch ${batchId}, session ${sessionId}`);
+    console.log(
+      `[Background Upload] Starting upload for batch ${batchId}, session ${sessionId}`,
+    );
 
     // Find the batch and determine upload path
     const batch = await Batch.findById(batchId)
-      .populate('course', 'course_title')
+      .populate("course", "course_title")
       .lean();
-    
+
     if (!batch) {
       console.error(`[Background Upload] Batch ${batchId} not found`);
       return;
@@ -1359,18 +1437,20 @@ const processUploadInBackground = async (batchId, sessionId, base64String, title
     // Determine upload directory based on batch type
     // Determine upload directory based on batch type
     let uploadFolder;
-    if (batch.batch_type === 'individual') {
+    if (batch.batch_type === "individual") {
       // For individual batch, find the enrolled student
-      const enrollment = await Enrollment.findOne({ 
-        batch: batchId, 
-        status: 'active' 
-      }).select('student');
-      
+      const enrollment = await Enrollment.findOne({
+        batch: batchId,
+        status: "active",
+      }).select("student");
+
       if (!enrollment) {
-        console.error(`[Background Upload] No active student found for individual batch ${batchId}`);
+        console.error(
+          `[Background Upload] No active student found for individual batch ${batchId}`,
+        );
         return;
       }
-      
+
       uploadFolder = `videos/student/${enrollment.student}`;
     } else {
       // For group batch, use batch ID
@@ -1380,7 +1460,7 @@ const processUploadInBackground = async (batchId, sessionId, base64String, title
     // Parse base64 data
     let mimeType;
     let base64Data;
-    
+
     const dataUriMatch = base64String.match(/^data:(.*?);base64,(.*)$/);
     if (dataUriMatch) {
       mimeType = dataUriMatch[1];
@@ -1400,47 +1480,67 @@ const processUploadInBackground = async (batchId, sessionId, base64String, title
     // Quick size estimation
     const estimatedSize = (base64Data.length * 3) / 4;
     if (estimatedSize > ENV_VARS.UPLOAD_CONSTANTS.MAX_FILE_SIZE) {
-      console.error(`[Background Upload] File too large: ${estimatedSize} bytes`);
+      console.error(
+        `[Background Upload] File too large: ${estimatedSize} bytes`,
+      );
       return;
     }
 
-    console.log(`[Background Upload] Uploading ${(estimatedSize / 1024 / 1024).toFixed(2)}MB to ${uploadFolder}`);
+    console.log(
+      `[Background Upload] Uploading ${(estimatedSize / 1024 / 1024).toFixed(2)}MB to ${uploadFolder}`,
+    );
 
     // Choose processing method based on file size
     const CHUNKED_THRESHOLD = 25 * 1024 * 1024; // 25MB threshold
-    
+
     let uploadResult;
     if (estimatedSize > CHUNKED_THRESHOLD) {
-      uploadResult = await uploadBase64FileChunked(base64Data, mimeType, uploadFolder);
+      uploadResult = await uploadBase64FileChunked(
+        base64Data,
+        mimeType,
+        uploadFolder,
+      );
     } else {
-      uploadResult = await uploadBase64FileOptimized(base64Data, mimeType, uploadFolder);
+      uploadResult = await uploadBase64FileOptimized(
+        base64Data,
+        mimeType,
+        uploadFolder,
+      );
     }
 
-    console.log(`[Background Upload] Upload completed: ${uploadResult.data.url}`);
+    console.log(
+      `[Background Upload] Upload completed: ${uploadResult.data.url}`,
+    );
 
     // Add the recorded lesson to the batch session
     const batchDoc = await Batch.findById(batchId);
     const session = batchDoc.schedule.id(sessionId);
-    
+
     if (!session) {
-      console.error(`[Background Upload] Session ${sessionId} not found in batch ${batchId}`);
+      console.error(
+        `[Background Upload] Session ${sessionId} not found in batch ${batchId}`,
+      );
       return;
     }
 
     // Add the recorded lesson
     session.recorded_lessons.push({
-      title: title || 'Recorded Lesson',
+      title: title || "Recorded Lesson",
       url: uploadResult.data.url,
       recorded_date: recorded_date || new Date(),
       created_by: userId,
     });
-    
+
     await batchDoc.save();
 
-    console.log(`[Background Upload] Successfully added recorded lesson to batch ${batchId}, session ${sessionId}`);
-
+    console.log(
+      `[Background Upload] Successfully added recorded lesson to batch ${batchId}, session ${sessionId}`,
+    );
   } catch (error) {
-    console.error(`[Background Upload] Error processing upload for batch ${batchId}:`, error);
+    console.error(
+      `[Background Upload] Error processing upload for batch ${batchId}:`,
+      error,
+    );
   }
 };
 
@@ -1450,17 +1550,25 @@ export const getRecordedLessonsForSession = async (req, res) => {
     const { batchId, sessionId } = req.params;
     const batch = await Batch.findById(batchId);
     if (!batch) {
-      return res.status(404).json({ success: false, message: "Batch not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Batch not found" });
     }
     const session = batch.schedule.id(sessionId);
     if (!session) {
-      return res.status(404).json({ success: false, message: "Scheduled session not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Scheduled session not found" });
     }
     const lessons = session.recorded_lessons || [];
     res.status(200).json({ success: true, data: lessons });
   } catch (error) {
     console.error("Error fetching recorded lessons:", error.message);
-    res.status(500).json({ success: false, message: "Server error while fetching recorded lessons", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching recorded lessons",
+      error: error.message,
+    });
   }
 };
 
@@ -1468,16 +1576,21 @@ export const getRecordedLessonsForSession = async (req, res) => {
 export const getRecordedLessonsForStudent = async (req, res) => {
   try {
     const { studentId } = req.params;
-    
+
     // Authorization: students can only access their own recorded lessons
-    if (req.user.role === 'student' && req.user.id !== studentId) {
-      return res.status(403).json({ success: false, message: "Unauthorized to access other student's recorded lessons" });
+    if (req.user.role === "student" && req.user.id !== studentId) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to access other student's recorded lessons",
+      });
     }
-    
+
     // Verify student exists
     const student = await User.findById(studentId);
     if (!student) {
-      return res.status(404).json({ success: false, message: 'Student not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: "Student not found" });
     }
 
     // Import required AWS modules dynamically
@@ -1489,104 +1602,127 @@ export const getRecordedLessonsForStudent = async (req, res) => {
     let s3VideosData = [];
     let databaseVideosData = [];
     let s3Available = true;
-    
+
     // Step 1: Try to get videos from S3 (Your Previous Sessions)
     try {
       // Define video file extensions
-      const videoExtensions = ['.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv', '.m4v'];
-      
+      const videoExtensions = [
+        ".mp4",
+        ".avi",
+        ".mov",
+        ".wmv",
+        ".flv",
+        ".webm",
+        ".mkv",
+        ".m4v",
+      ];
+
       // Try multiple search patterns to find videos for the student
       const searchPatterns = [
-        `videos/student/${studentId}/`,  // Standard pattern
-        `videos/${studentId}/`,          // Alternative pattern  
-        `videos/`,                       // Broad search to find all videos
+        `videos/student/${studentId}/`, // Standard pattern
+        `videos/${studentId}/`, // Alternative pattern
+        `videos/`, // Broad search to find all videos
       ];
-      
+
       let allFoundObjects = [];
       let searchResults = {};
-      
+
       for (const prefix of searchPatterns) {
         const listParams = {
           Bucket: ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME,
           Prefix: prefix,
-          MaxKeys: 1000
+          MaxKeys: 1000,
         };
 
         const listCommand = new ListObjectsV2Command(listParams);
         const listResponse = await s3Client.send(listCommand);
-        
+
         searchResults[prefix] = {
           keyCount: listResponse.KeyCount || 0,
           totalObjects: listResponse.Contents?.length || 0,
-          isTruncated: listResponse.IsTruncated
+          isTruncated: listResponse.IsTruncated,
         };
-        
+
         if (listResponse.Contents && listResponse.Contents.length > 0) {
           // Filter for video files and relevant paths
-          const relevantObjects = listResponse.Contents.filter(obj => {
+          const relevantObjects = listResponse.Contents.filter((obj) => {
             // Skip directories
-            if (obj.Key.endsWith('/')) return false;
-            
+            if (obj.Key.endsWith("/")) return false;
+
             // Check if it's a video file
-            const fileName = obj.Key.split('/').pop();
-            const fileExtension = fileName.toLowerCase().substring(fileName.lastIndexOf('.'));
+            const fileName = obj.Key.split("/").pop();
+            const fileExtension = fileName
+              .toLowerCase()
+              .substring(fileName.lastIndexOf("."));
             if (!videoExtensions.includes(fileExtension)) return false;
-            
+
             // For broad search, only include objects that might be related to this student
-            if (prefix === 'videos/') {
+            if (prefix === "videos/") {
               // Check if the path contains the studentId or student name
               const keyLower = obj.Key.toLowerCase();
-              const studentName = student.full_name?.toLowerCase() || '';
-              const studentEmail = student.email?.toLowerCase() || '';
-              
-              return keyLower.includes(studentId.toLowerCase()) || 
-                     (studentName && keyLower.includes(studentName.split(' ')[0])) ||
-                     (studentEmail && keyLower.includes(studentEmail.split('@')[0]));
+              const studentName = student.full_name?.toLowerCase() || "";
+              const studentEmail = student.email?.toLowerCase() || "";
+
+              return (
+                keyLower.includes(studentId.toLowerCase()) ||
+                (studentName && keyLower.includes(studentName.split(" ")[0])) ||
+                (studentEmail && keyLower.includes(studentEmail.split("@")[0]))
+              );
             }
-            
+
             return true;
           });
-          
+
           allFoundObjects = allFoundObjects.concat(relevantObjects);
         }
       }
-      
-      console.log(`S3 Search Results for student ${studentId} (${student.full_name}):`, searchResults);
-      
-      // Remove duplicates based on Key
-      const uniqueObjects = allFoundObjects.filter((obj, index, self) => 
-        index === self.findIndex(o => o.Key === obj.Key)
+
+      console.log(
+        `S3 Search Results for student ${studentId} (${student.full_name}):`,
+        searchResults,
       );
-      
-      console.log(`Found ${uniqueObjects.length} unique video files across all search patterns`);
-      
+
+      // Remove duplicates based on Key
+      const uniqueObjects = allFoundObjects.filter(
+        (obj, index, self) =>
+          index === self.findIndex((o) => o.Key === obj.Key),
+      );
+
+      console.log(
+        `Found ${uniqueObjects.length} unique video files across all search patterns`,
+      );
+
       // Log sample findings for debugging
       if (uniqueObjects.length > 0) {
-        console.log('Sample video files found:', 
-          uniqueObjects.slice(0, 10).map(obj => ({
+        console.log(
+          "Sample video files found:",
+          uniqueObjects.slice(0, 10).map((obj) => ({
             key: obj.Key,
             size: `${(obj.Size / 1024 / 1024).toFixed(2)}MB`,
-            lastModified: obj.LastModified
-          }))
+            lastModified: obj.LastModified,
+          })),
         );
       } else {
-        console.log('No video files found. Checking if any files exist in videos/ folder...');
+        console.log(
+          "No video files found. Checking if any files exist in videos/ folder...",
+        );
         // Do a very broad search to see what's actually in the videos folder
         const broadListParams = {
           Bucket: ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME,
-          Prefix: 'videos/',
-          MaxKeys: 100
+          Prefix: "videos/",
+          MaxKeys: 100,
         };
         const broadListCommand = new ListObjectsV2Command(broadListParams);
         const broadListResponse = await s3Client.send(broadListCommand);
-        
+
         if (broadListResponse.Contents) {
-          console.log('Files/folders found in videos/ directory:',
-            broadListResponse.Contents.slice(0, 20).map(obj => ({
+          console.log(
+            "Files/folders found in videos/ directory:",
+            broadListResponse.Contents.slice(0, 20).map((obj) => ({
               key: obj.Key,
-              isDirectory: obj.Key.endsWith('/'),
-              size: obj.Size
-            }))
+              isDirectory: obj.Key.endsWith("/"),
+              size: obj.Size,
+            })),
           );
         }
       }
@@ -1595,18 +1731,18 @@ export const getRecordedLessonsForStudent = async (req, res) => {
         // Process each video file found
         for (const object of uniqueObjects) {
           // Extract folder structure for better organization
-          const keyParts = object.Key.split('/');
+          const keyParts = object.Key.split("/");
           const fileName = keyParts[keyParts.length - 1];
-          
+
           // Determine the folder path relative to videos/
-          let folderPath = 'root';
+          let folderPath = "root";
           if (keyParts.length > 2) {
-            folderPath = keyParts.slice(1, -1).join('/'); // Remove 'videos/' and filename
+            folderPath = keyParts.slice(1, -1).join("/"); // Remove 'videos/' and filename
           }
-          
+
           // Extract file info
           const fileUrl = `https://${ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME}.s3.${ENV_VARS.AWS_REGION}.amazonaws.com/${object.Key}`;
-          
+
           // Generate signed URL for the video
           let signedUrl = fileUrl;
           try {
@@ -1619,7 +1755,7 @@ export const getRecordedLessonsForStudent = async (req, res) => {
           }
 
           s3VideosData.push({
-            id: object.Key.replace(/[^a-zA-Z0-9]/g, '_'), // Create a unique ID from the key
+            id: object.Key.replace(/[^a-zA-Z0-9]/g, "_"), // Create a unique ID from the key
             title: fileName,
             folderPath: folderPath, // Show which folder/subfolder the video is in
             fullPath: object.Key,
@@ -1627,151 +1763,184 @@ export const getRecordedLessonsForStudent = async (req, res) => {
             originalUrl: fileUrl,
             fileSize: object.Size,
             lastModified: object.LastModified,
-            source: 'your_previous_sessions',
+            source: "your_previous_sessions",
             student: {
               id: studentId,
-              name: student.full_name
-            }
+              name: student.full_name,
+            },
           });
         }
-        
+
         // Sort by last modified date (newest first)
-        s3VideosData.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+        s3VideosData.sort(
+          (a, b) => new Date(b.lastModified) - new Date(a.lastModified),
+        );
       }
 
-      console.log(`Found ${s3VideosData.length} video files for student ${studentId} in S3`);
-      
+      console.log(
+        `Found ${s3VideosData.length} video files for student ${studentId} in S3`,
+      );
+
       // Log folder distribution for debugging
       if (s3VideosData.length > 0) {
         const folderDistribution = s3VideosData.reduce((acc, video) => {
           acc[video.folderPath] = (acc[video.folderPath] || 0) + 1;
           return acc;
         }, {});
-        console.log('Video distribution by folder:', folderDistribution);
+        console.log("Video distribution by folder:", folderDistribution);
       }
-
     } catch (s3Error) {
       console.error("Error listing S3 objects for student:", s3Error);
       s3Available = false;
     }
-    
+
     // Step 2: Always get videos from database (Scheduled Sessions)
     try {
       // Find active enrollments for the student
-      const enrollments = await Enrollment.find({ student: studentId, status: 'active' })
-        .populate({ path: 'batch', select: 'batch_name schedule' })
+      const enrollments = await Enrollment.find({
+        student: studentId,
+        status: "active",
+      })
+        .populate({ path: "batch", select: "batch_name schedule" })
         .lean();
-      
+
       // Iterate through enrollments and collect recorded lessons from batch schedules
       for (const enrollment of enrollments) {
         const batch = enrollment.batch;
         if (!batch || !batch.schedule) continue;
-        
+
         for (const session of batch.schedule) {
           if (session.recorded_lessons && session.recorded_lessons.length) {
             // Generate signed URLs for video lessons stored on CloudFront or S3
-            const recordedLessonsWithSignedUrls = session.recorded_lessons.map(lesson => {
-              if (lesson.url) {
-                // Convert S3 URLs to CloudFront URLs and sign them (only for medh-filess bucket)
-                if (lesson.url.includes('medh-filess.s3.') && lesson.url.includes('.amazonaws.com')) {
-                  try {
-                    // Extract the object key from S3 URL
-                    const s3UrlParts = lesson.url.split('.amazonaws.com/');
-                    if (s3UrlParts.length === 2) {
-                      const objectKey = s3UrlParts[1];
-                      const cloudFrontUrl = `https://cdn.medh.co/${objectKey}`;
-                      const signedUrl = generateSignedUrl(cloudFrontUrl);
+            const recordedLessonsWithSignedUrls = session.recorded_lessons.map(
+              (lesson) => {
+                if (lesson.url) {
+                  // Convert S3 URLs to CloudFront URLs and sign them (only for medh-filess bucket)
+                  if (
+                    lesson.url.includes("medh-filess.s3.") &&
+                    lesson.url.includes(".amazonaws.com")
+                  ) {
+                    try {
+                      // Extract the object key from S3 URL
+                      const s3UrlParts = lesson.url.split(".amazonaws.com/");
+                      if (s3UrlParts.length === 2) {
+                        const objectKey = s3UrlParts[1];
+                        const cloudFrontUrl = `https://cdn.medh.co/${objectKey}`;
+                        const signedUrl = generateSignedUrl(cloudFrontUrl);
+                        return {
+                          ...lesson,
+                          url: signedUrl, // Replace S3 URL with signed CloudFront URL
+                        };
+                      }
+                    } catch (signError) {
+                      console.error(
+                        "Error converting S3 URL to signed CloudFront URL:",
+                        signError,
+                      );
+                      return lesson; // Return original lesson if signing fails
+                    }
+                  }
+                  // Sign existing CloudFront URLs
+                  else if (lesson.url.includes("cdn.medh.co")) {
+                    try {
+                      const signedUrl = generateSignedUrl(lesson.url);
                       return {
                         ...lesson,
-                        url: signedUrl  // Replace S3 URL with signed CloudFront URL
+                        url: signedUrl, // Replace original URL with signed URL
                       };
+                    } catch (signError) {
+                      console.error(
+                        "Error signing CloudFront URL for recorded lesson:",
+                        signError,
+                      );
+                      return lesson; // Return original lesson if signing fails
                     }
-                  } catch (signError) {
-                    console.error("Error converting S3 URL to signed CloudFront URL:", signError);
-                    return lesson; // Return original lesson if signing fails
                   }
                 }
-                // Sign existing CloudFront URLs
-                else if (lesson.url.includes('cdn.medh.co')) {
-                  try {
-                    const signedUrl = generateSignedUrl(lesson.url);
-                    return {
-                      ...lesson,
-                      url: signedUrl  // Replace original URL with signed URL
-                    };
-                  } catch (signError) {
-                    console.error("Error signing CloudFront URL for recorded lesson:", signError);
-                    return lesson; // Return original lesson if signing fails
-                  }
-                }
-              }
-              
-              return lesson; // Return original lesson for non-S3/non-CloudFront URLs (like YouTube)
-            });
+
+                return lesson; // Return original lesson for non-S3/non-CloudFront URLs (like YouTube)
+              },
+            );
 
             databaseVideosData.push({
               batch: {
                 id: batch._id,
-                name: batch.batch_name
+                name: batch.batch_name,
               },
               session: {
                 id: session._id,
                 day: session.day,
                 start_time: session.start_time,
-                end_time: session.end_time
+                end_time: session.end_time,
               },
               recorded_lessons: recordedLessonsWithSignedUrls,
-              source: 'scheduled_sessions'
+              source: "scheduled_sessions",
             });
           }
         }
       }
-      
-      console.log(`Found ${databaseVideosData.length} scheduled sessions with videos for student ${studentId}`);
-      
+
+      console.log(
+        `Found ${databaseVideosData.length} scheduled sessions with videos for student ${studentId}`,
+      );
     } catch (dbError) {
       console.error("Error fetching scheduled sessions for student:", dbError);
     }
-    
+
     // Step 3: Prepare organized response
-    const totalVideosCount = s3VideosData.length + databaseVideosData.reduce((total, session) => {
-      return total + (session.recorded_lessons ? session.recorded_lessons.length : 0);
-    }, 0);
-    
+    const totalVideosCount =
+      s3VideosData.length +
+      databaseVideosData.reduce((total, session) => {
+        return (
+          total +
+          (session.recorded_lessons ? session.recorded_lessons.length : 0)
+        );
+      }, 0);
+
     const responseData = {
       your_previous_sessions: {
         count: s3VideosData.length,
         videos: s3VideosData,
-        description: "Videos uploaded directly to your personal folder"
+        description: "Videos uploaded directly to your personal folder",
       },
       scheduled_sessions: {
         count: databaseVideosData.length,
         sessions: databaseVideosData,
-        description: "Videos from your scheduled batch sessions"
-      }
+        description: "Videos from your scheduled batch sessions",
+      },
     };
-    
+
     // Determine the method used
     let method;
     if (s3Available && s3VideosData.length > 0) {
-      method = databaseVideosData.length > 0 ? "Combined (S3 + Database)" : "S3 Direct Listing";
+      method =
+        databaseVideosData.length > 0
+          ? "Combined (S3 + Database)"
+          : "S3 Direct Listing";
     } else if (databaseVideosData.length > 0) {
       method = "Database Fallback";
     } else {
       method = s3Available ? "S3 Direct Listing" : "Database Fallback";
     }
-    
-    res.status(200).json({ 
-      success: true, 
-      count: totalVideosCount, 
+
+    res.status(200).json({
+      success: true,
+      count: totalVideosCount,
       data: responseData,
       message: `Retrieved ${totalVideosCount} recorded videos for student`,
       method: method,
-      s3_available: s3Available
+      s3_available: s3Available,
     });
   } catch (error) {
-    console.error("Error fetching recorded lessons for student:", error.message);
-    res.status(500).json({ success: false, message: "Server error while fetching recorded lessons for student", error: error.message });
+    console.error(
+      "Error fetching recorded lessons for student:",
+      error.message,
+    );
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching recorded lessons for student",
+      error: error.message,
+    });
   }
 };
 
@@ -1779,64 +1948,143 @@ export const getRecordedLessonsForStudent = async (req, res) => {
 export const addScheduledSessionToBatch = async (req, res) => {
   try {
     const { batchId } = req.params;
-    const { date, start_time, end_time, title, description } = req.body;
+    const {
+      date,
+      start_time,
+      end_time,
+      title,
+      description,
+      create_zoom_meeting = true,
+    } = req.body;
+
+    console.log("Scheduling session for batch:", batchId);
+    console.log("Session data:", {
+      date,
+      start_time,
+      end_time,
+      title,
+      description,
+      create_zoom_meeting,
+    });
 
     // Find the batch
-    const batch = await Batch.findById(batchId);
+    const batch = await Batch.findById(batchId).populate(
+      "course",
+      "course_title",
+    );
     if (!batch) {
-      return res.status(404).json({ success: false, message: "Batch not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Batch not found" });
+    }
+
+    console.log("Batch found:", {
+      id: batch._id,
+      name: batch.batch_name,
+      start_date: batch.start_date,
+      end_date: batch.end_date,
+    });
+
+    // Check if batch has required date fields
+    if (!batch.start_date || !batch.end_date) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Batch must have start_date and end_date set before scheduling sessions",
+        batch_info: {
+          has_start_date: !!batch.start_date,
+          has_end_date: !!batch.end_date,
+        },
+      });
     }
 
     // Check if session date is within batch duration
     const sessionDate = new Date(date);
     const batchStartDate = new Date(batch.start_date);
     const batchEndDate = new Date(batch.end_date);
-    
-    if (sessionDate < batchStartDate || sessionDate > batchEndDate) {
-      return res.status(400).json({ 
-        success: false, 
+
+    // Compare dates without time components
+    const sessionDay = new Date(
+      sessionDate.getFullYear(),
+      sessionDate.getMonth(),
+      sessionDate.getDate(),
+    );
+    const batchStartDay = new Date(
+      batchStartDate.getFullYear(),
+      batchStartDate.getMonth(),
+      batchStartDate.getDate(),
+    );
+    const batchEndDay = new Date(
+      batchEndDate.getFullYear(),
+      batchEndDate.getMonth(),
+      batchEndDate.getDate(),
+    );
+
+    if (sessionDay < batchStartDay || sessionDay > batchEndDay) {
+      return res.status(400).json({
+        success: false,
         message: "Session date must be within batch start and end dates",
         batch_duration: {
           start_date: batch.start_date,
-          end_date: batch.end_date
-        }
+          end_date: batch.end_date,
+          requested_date: date,
+        },
       });
     }
 
     // Check for duplicate sessions on the same date and overlapping times
-    const existingSession = batch.schedule.find(session => {
+    const existingSession = batch.schedule.find((session) => {
       if (!session.date) return false; // Skip old day-based sessions
-      
+
       const existingSessionDate = new Date(session.date);
-      const isSameDate = existingSessionDate.toDateString() === sessionDate.toDateString();
-      
+      const isSameDate =
+        existingSessionDate.toDateString() === sessionDate.toDateString();
+
       if (!isSameDate) return false;
-      
+
       // Check for time overlap
       const newStart = start_time;
       const newEnd = end_time;
       const existingStart = session.start_time;
       const existingEnd = session.end_time;
-      
-      const newStartMins = newStart.split(':').reduce((acc, time) => (60 * acc) + +time);
-      const newEndMins = newEnd.split(':').reduce((acc, time) => (60 * acc) + +time);
-      const existingStartMins = existingStart.split(':').reduce((acc, time) => (60 * acc) + +time);
-      const existingEndMins = existingEnd.split(':').reduce((acc, time) => (60 * acc) + +time);
-      
-      return (newStartMins < existingEndMins && newEndMins > existingStartMins);
+
+      const newStartMins = newStart
+        .split(":")
+        .reduce((acc, time) => 60 * acc + +time);
+      const newEndMins = newEnd
+        .split(":")
+        .reduce((acc, time) => 60 * acc + +time);
+      const existingStartMins = existingStart
+        .split(":")
+        .reduce((acc, time) => 60 * acc + +time);
+      const existingEndMins = existingEnd
+        .split(":")
+        .reduce((acc, time) => 60 * acc + +time);
+
+      return newStartMins < existingEndMins && newEndMins > existingStartMins;
     });
 
     if (existingSession) {
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         message: "A session already exists at this date and time",
         conflicting_session: {
           date: existingSession.date,
           start_time: existingSession.start_time,
-          end_time: existingSession.end_time
-        }
+          end_time: existingSession.end_time,
+        },
       });
     }
+
+    // Calculate session duration in minutes
+    const [startHours, startMinutes] = start_time.split(":").map(Number);
+    const [endHours, endMinutes] = end_time.split(":").map(Number);
+    const durationMinutes =
+      endHours * 60 + endMinutes - (startHours * 60 + startMinutes);
+
+    // Create session start time for Zoom
+    const sessionStartTime = new Date(sessionDate);
+    sessionStartTime.setHours(startHours, startMinutes, 0, 0);
 
     // Add the new scheduled session with date instead of day
     const newSessionData = {
@@ -1844,28 +2092,125 @@ export const addScheduledSessionToBatch = async (req, res) => {
       start_time: start_time,
       end_time: end_time,
       title: title || `Session on ${sessionDate.toLocaleDateString()}`,
-      description: description || '',
+      description: description || "",
       recorded_lessons: [],
       zoom_meeting: {},
       created_by: req.user.id,
-      created_at: new Date()
+      created_at: new Date(),
     };
+
+    // Create Zoom meeting if requested
+    let zoomMeetingData = null;
+    if (create_zoom_meeting) {
+      try {
+        console.log("🎥 Creating Zoom meeting for session...");
+        /**
+         * Zoom meeting settings:
+         * - join_before_host: true (participants and AI can join before host)
+         * - ai_companion_auto_start: true (AI Companion starts automatically)
+         * - ai_companion_meeting_summary: true (enable meeting summary)
+         * - ai_companion_meeting_questions: true (enable meeting Q&A)
+         */
+        // Prepare Zoom meeting data
+        const zoomMeetingRequest = {
+          topic: `${batch.course?.course_title || "Course"} - ${newSessionData.title}`,
+          type: 2, // Scheduled meeting
+          start_time: sessionStartTime.toISOString(),
+          duration: Math.max(30, durationMinutes), // Minimum 30 minutes
+          timezone: "Asia/Kolkata", // Default to IST
+          agenda: description || `Session for ${batch.batch_name}`,
+          settings: {
+            host_video: true,
+            participant_video: false,
+            join_before_host: true,
+            mute_upon_entry: true,
+            waiting_room: false,
+            meeting_authentication: false, // Allow students to join without Zoom accounts
+            auto_recording: "cloud", // Enable cloud recording
+            password: Math.random().toString(36).substring(2, 8).toUpperCase(), // Generate random password
+            // AI Companion settings
+            ai_companion_auto_start: true,
+            ai_companion_meeting_summary: true,
+            ai_companion_meeting_questions: true,
+          },
+        };
+
+        // Create Zoom meeting
+        zoomMeetingData = await zoomService.createMeeting(zoomMeetingRequest);
+
+        console.log(
+          "✅ Zoom meeting created successfully:",
+          zoomMeetingData.id,
+        );
+
+        // Add Zoom meeting details to session
+        newSessionData.zoom_meeting = {
+          meeting_id: zoomMeetingData.id,
+          join_url: zoomMeetingData.join_url,
+          topic: zoomMeetingData.topic,
+          password: zoomMeetingData.password,
+          start_url: zoomMeetingData.start_url,
+          recording_synced: false,
+          sync_attempts: 0,
+          last_sync_error: null,
+          next_retry_at: null,
+        };
+      } catch (zoomError) {
+        console.error("❌ Error creating Zoom meeting:", zoomError);
+
+        // Continue without Zoom meeting if creation fails
+        newSessionData.zoom_meeting = {
+          meeting_id: null,
+          join_url: null,
+          topic: null,
+          password: null,
+          start_url: null,
+          recording_synced: false,
+          sync_attempts: 0,
+          last_sync_error: `Failed to create Zoom meeting: ${zoomError.message}`,
+          next_retry_at: null,
+        };
+      }
+    }
 
     batch.schedule.push(newSessionData);
     await batch.save();
 
     const newSession = batch.schedule[batch.schedule.length - 1];
-    res.status(201).json({ 
-      success: true, 
+
+    // Prepare response
+    const response = {
+      success: true,
       message: "Session scheduled successfully",
-      data: newSession 
-    });
+      data: {
+        session: newSession,
+        zoom_meeting: zoomMeetingData
+          ? {
+              id: zoomMeetingData.id,
+              join_url: zoomMeetingData.join_url,
+              start_url: zoomMeetingData.start_url,
+              password: zoomMeetingData.password,
+              topic: zoomMeetingData.topic,
+              start_time: zoomMeetingData.start_time,
+              duration: zoomMeetingData.duration,
+            }
+          : null,
+      },
+    };
+
+    // Add warning if Zoom meeting creation failed
+    if (create_zoom_meeting && !zoomMeetingData) {
+      response.warning =
+        "Session scheduled but Zoom meeting creation failed. You can create it manually later.";
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     console.error("Error scheduling session for batch:", error.message);
-    res.status(500).json({ 
-      success: false, 
-      message: "Server error while scheduling session", 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      message: "Server error while scheduling session",
+      error: error.message,
     });
   }
 };
@@ -1882,11 +2227,15 @@ export const createZoomMeetingForSession = async (req, res) => {
     // Find batch and session
     const batch = await Batch.findById(batchId);
     if (!batch) {
-      return res.status(404).json({ success: false, message: "Batch not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Batch not found" });
     }
     const session = batch.schedule.id(sessionId);
     if (!session) {
-      return res.status(404).json({ success: false, message: "Scheduled session not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Scheduled session not found" });
     }
 
     // Store meeting details in session
@@ -1901,7 +2250,11 @@ export const createZoomMeetingForSession = async (req, res) => {
     res.status(201).json({ success: true, data: session.zoom_meeting });
   } catch (error) {
     console.error("Error creating Zoom meeting for session:", error.message);
-    res.status(500).json({ success: false, message: "Server error while creating Zoom meeting", error: error.message });
+    res.status(500).json({
+      success: false,
+      message: "Server error while creating Zoom meeting",
+      error: error.message,
+    });
   }
 };
 
@@ -1910,7 +2263,7 @@ export const getBatchesForStudent = async (req, res) => {
   try {
     const { studentId } = req.params;
     // Authorization: students can only access their own batches
-    if (req.user.role === 'student' && req.user.id !== studentId) {
+    if (req.user.role === "student" && req.user.id !== studentId) {
       return res.status(403).json({
         success: false,
         message: "Unauthorized to access other student's batches",
@@ -1926,16 +2279,19 @@ export const getBatchesForStudent = async (req, res) => {
     }
     // Fetch enrollments for student with batch and course details
     const enrollments = await Enrollment.find({ student: studentId })
-      .populate('batch', 'batch_name batch_code start_date end_date schedule status')
-      .populate('course', 'course_title');
+      .populate(
+        "batch",
+        "batch_name batch_code start_date end_date schedule status",
+      )
+      .populate("course", "course_title");
     // Transform enrollments to batch list
     const batches = enrollments
-      .filter(e => e.batch)
-      .map(e => ({
+      .filter((e) => e.batch)
+      .map((e) => ({
         batch: e.batch,
         course: e.course,
         enrollmentDate: e.enrollment_date,
-        enrollmentStatus: e.status
+        enrollmentStatus: e.status,
       }));
     return res.status(200).json({
       success: true,
@@ -1960,9 +2316,9 @@ export const getUpcomingSessionsForBatch = async (req, res) => {
 
     // Find the batch
     const batch = await Batch.findById(batchId)
-      .populate('assigned_instructor', 'full_name email')
+      .populate("assigned_instructor", "full_name email")
       .lean();
-    
+
     if (!batch) {
       return res.status(404).json({
         success: false,
@@ -1981,20 +2337,25 @@ export const getUpcomingSessionsForBatch = async (req, res) => {
     }
 
     const now = new Date();
-    const searchEndDate = new Date(now.getTime() + (parseInt(days_ahead) * 24 * 60 * 60 * 1000));
+    const searchEndDate = new Date(
+      now.getTime() + parseInt(days_ahead) * 24 * 60 * 60 * 1000,
+    );
     const batchEndDate = batch.end_date ? new Date(batch.end_date) : null;
-    const actualEndDate = batchEndDate && batchEndDate < searchEndDate ? batchEndDate : searchEndDate;
-    
+    const actualEndDate =
+      batchEndDate && batchEndDate < searchEndDate
+        ? batchEndDate
+        : searchEndDate;
+
     // Filter sessions that are in the future and within the time range
     const upcomingSessions = batch.schedule
-      .filter(session => {
+      .filter((session) => {
         // Handle both old day-based and new date-based sessions
         if (session.date) {
           // New date-based session
           const sessionDate = new Date(session.date);
-        const [hours, minutes] = session.start_time.split(':').map(Number);
-        sessionDate.setHours(hours, minutes, 0, 0);
-        
+          const [hours, minutes] = session.start_time.split(":").map(Number);
+          sessionDate.setHours(hours, minutes, 0, 0);
+
           return sessionDate > now && sessionDate <= actualEndDate;
         } else if (session.day) {
           // Legacy day-based session - we'll keep this for backward compatibility
@@ -2003,35 +2364,38 @@ export const getUpcomingSessionsForBatch = async (req, res) => {
         }
         return false;
       })
-      .map(session => {
+      .map((session) => {
         const sessionDate = new Date(session.date);
-        const [startHours, startMinutes] = session.start_time.split(':').map(Number);
-        const [endHours, endMinutes] = session.end_time.split(':').map(Number);
-        
+        const [startHours, startMinutes] = session.start_time
+          .split(":")
+          .map(Number);
+        const [endHours, endMinutes] = session.end_time.split(":").map(Number);
+
         sessionDate.setHours(startHours, startMinutes, 0, 0);
         const sessionEndDate = new Date(sessionDate);
         sessionEndDate.setHours(endHours, endMinutes, 0, 0);
-        
+
         return {
-            session_id: session._id,
-            session_date: sessionDate,
-            session_end_date: sessionEndDate,
+          session_id: session._id,
+          session_date: sessionDate,
+          session_end_date: sessionEndDate,
           date: session.date,
-            start_time: session.start_time,
-            end_time: session.end_time,
-          title: session.title || `Session on ${sessionDate.toLocaleDateString()}`,
-          description: session.description || '',
-            batch: {
-              id: batch._id,
-              name: batch.batch_name,
-              code: batch.batch_code,
-              status: batch.status,
-              start_date: batch.start_date,
-              end_date: batch.end_date,
-            },
-            instructor: batch.assigned_instructor,
-            zoom_meeting: session.zoom_meeting,
-            has_recorded_lessons: session.recorded_lessons?.length > 0,
+          start_time: session.start_time,
+          end_time: session.end_time,
+          title:
+            session.title || `Session on ${sessionDate.toLocaleDateString()}`,
+          description: session.description || "",
+          batch: {
+            id: batch._id,
+            name: batch.batch_name,
+            code: batch.batch_code,
+            status: batch.status,
+            start_date: batch.start_date,
+            end_date: batch.end_date,
+          },
+          instructor: batch.assigned_instructor,
+          zoom_meeting: session.zoom_meeting,
+          has_recorded_lessons: session.recorded_lessons?.length > 0,
           is_upcoming: true,
         };
       })
@@ -2061,7 +2425,15 @@ export const getUpcomingSessionsForBatch = async (req, res) => {
 
 // Add helper for legacy day-based scheduling
 const getDatesForDayOfWeek = (dayOfWeek, startDate, endDate) => {
-  const daysMap = { Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3, Thursday: 4, Friday: 5, Saturday: 6 };
+  const daysMap = {
+    Sunday: 0,
+    Monday: 1,
+    Tuesday: 2,
+    Wednesday: 3,
+    Thursday: 4,
+    Friday: 5,
+    Saturday: 6,
+  };
   const dates = [];
   const date = new Date(startDate);
   const targetDay = daysMap[dayOfWeek];
@@ -2081,7 +2453,7 @@ export const getUpcomingSessionsForStudent = async (req, res) => {
     const { limit = 20, days_ahead = 28 } = req.query;
 
     // Authorization: students can only access their own sessions
-    if (req.user.role === 'student' && req.user.id !== studentId) {
+    if (req.user.role === "student" && req.user.id !== studentId) {
       return res.status(403).json({
         success: false,
         message: "Unauthorized to access other student's sessions",
@@ -2098,7 +2470,7 @@ export const getUpcomingSessionsForStudent = async (req, res) => {
     }
 
     // Check if user has student role
-    if (!student.role.includes('student')) {
+    if (!student.role.includes("student")) {
       return res.status(400).json({
         success: false,
         message: "User is not a student",
@@ -2106,29 +2478,32 @@ export const getUpcomingSessionsForStudent = async (req, res) => {
     }
 
     // Find active enrollments for the student
-    const enrollments = await Enrollment.find({ 
-      student: studentId, 
-      status: 'active' 
+    const enrollments = await Enrollment.find({
+      student: studentId,
+      status: "active",
     })
-    .populate({
-      path: 'batch',
-      select: 'batch_name batch_code schedule status assigned_instructor start_date end_date',
-      populate: {
-        path: 'assigned_instructor',
-        select: 'full_name email'
-      }
-    })
-    .populate('course', 'course_title')
-    .lean();
+      .populate({
+        path: "batch",
+        select:
+          "batch_name batch_code schedule status assigned_instructor start_date end_date",
+        populate: {
+          path: "assigned_instructor",
+          select: "full_name email",
+        },
+      })
+      .populate("course", "course_title")
+      .lean();
 
     const upcomingSessions = [];
     const now = new Date();
-    const searchEndDate = new Date(now.getTime() + (parseInt(days_ahead) * 24 * 60 * 60 * 1000));
+    const searchEndDate = new Date(
+      now.getTime() + parseInt(days_ahead) * 24 * 60 * 60 * 1000,
+    );
 
     // Iterate through each enrollment
-    enrollments.forEach(enrollment => {
+    enrollments.forEach((enrollment) => {
       const batch = enrollment.batch;
-      
+
       // Skip if batch doesn't exist or has no schedule
       if (!batch || !batch.schedule || batch.schedule.length === 0) {
         return;
@@ -2136,21 +2511,29 @@ export const getUpcomingSessionsForStudent = async (req, res) => {
 
       // Consider batch end date
       const batchEndDate = batch.end_date ? new Date(batch.end_date) : null;
-      const actualEndDate = batchEndDate && batchEndDate < searchEndDate ? batchEndDate : searchEndDate;
+      const actualEndDate =
+        batchEndDate && batchEndDate < searchEndDate
+          ? batchEndDate
+          : searchEndDate;
 
       // Filter and process sessions for this batch
-      batch.schedule.forEach(session => {
+      batch.schedule.forEach((session) => {
         if (session.date) {
           // New date-based session
           const sessionDate = new Date(session.date);
-          const [startHours, startMinutes] = session.start_time.split(':').map(Number);
-          const [endHours, endMinutes] = session.end_time.split(':').map(Number);
+          const [startHours, startMinutes] = session.start_time
+            .split(":")
+            .map(Number);
+          const [endHours, endMinutes] = session.end_time
+            .split(":")
+            .map(Number);
           sessionDate.setHours(startHours, startMinutes, 0, 0);
           const sessionEndDate = new Date(sessionDate);
           sessionEndDate.setHours(endHours, endMinutes, 0, 0);
           const isInFuture = sessionDate > now;
           const isWithinRange = sessionDate <= actualEndDate;
-          const isAfterBatchStart = !batch.start_date || sessionDate >= new Date(batch.start_date);
+          const isAfterBatchStart =
+            !batch.start_date || sessionDate >= new Date(batch.start_date);
           if (isInFuture && isWithinRange && isAfterBatchStart) {
             upcomingSessions.push({
               session_id: session._id,
@@ -2159,8 +2542,10 @@ export const getUpcomingSessionsForStudent = async (req, res) => {
               date: session.date,
               start_time: session.start_time,
               end_time: session.end_time,
-              title: session.title || `Session on ${sessionDate.toLocaleDateString()}`,
-              description: session.description || '',
+              title:
+                session.title ||
+                `Session on ${sessionDate.toLocaleDateString()}`,
+              description: session.description || "",
               batch: {
                 id: batch._id,
                 name: batch.batch_name,
@@ -2182,25 +2567,36 @@ export const getUpcomingSessionsForStudent = async (req, res) => {
           }
         } else if (session.day) {
           // Legacy day-based session: generate weekly occurrences within the period
-          const occDates = getDatesForDayOfWeek(session.day, now, actualEndDate);
-          occDates.forEach(dateOnly => {
+          const occDates = getDatesForDayOfWeek(
+            session.day,
+            now,
+            actualEndDate,
+          );
+          occDates.forEach((dateOnly) => {
             const sessionDate = new Date(dateOnly);
-            const [startHours, startMinutes] = session.start_time.split(':').map(Number);
-            const [endHours, endMinutes] = session.end_time.split(':').map(Number);
+            const [startHours, startMinutes] = session.start_time
+              .split(":")
+              .map(Number);
+            const [endHours, endMinutes] = session.end_time
+              .split(":")
+              .map(Number);
             sessionDate.setHours(startHours, startMinutes, 0, 0);
             const sessionEndDate = new Date(sessionDate);
             sessionEndDate.setHours(endHours, endMinutes, 0, 0);
-            const isAfterBatchStart = !batch.start_date || sessionDate >= new Date(batch.start_date);
+            const isAfterBatchStart =
+              !batch.start_date || sessionDate >= new Date(batch.start_date);
             if (isAfterBatchStart) {
               upcomingSessions.push({
                 session_id: session._id,
                 session_date: sessionDate,
                 session_end_date: sessionEndDate,
-                date: sessionDate.toISOString().split('T')[0],
+                date: sessionDate.toISOString().split("T")[0],
                 start_time: session.start_time,
                 end_time: session.end_time,
-                title: session.title || `Session on ${sessionDate.toLocaleDateString()}`,
-                description: session.description || '',
+                title:
+                  session.title ||
+                  `Session on ${sessionDate.toLocaleDateString()}`,
+                description: session.description || "",
                 batch: {
                   id: batch._id,
                   name: batch.batch_name,
@@ -2232,16 +2628,20 @@ export const getUpcomingSessionsForStudent = async (req, res) => {
     const limitedSessions = upcomingSessions.slice(0, parseInt(limit));
 
     // Count batches by status (but only those with actual upcoming sessions)
-    const batchesWithUpcomingSessions = [...new Set(upcomingSessions.map(s => s.batch.id))];
-    const activeBatches = enrollments.filter(e => 
-      e.batch && 
-      e.batch.status === 'active' && 
-      batchesWithUpcomingSessions.includes(e.batch._id.toString())
+    const batchesWithUpcomingSessions = [
+      ...new Set(upcomingSessions.map((s) => s.batch.id)),
+    ];
+    const activeBatches = enrollments.filter(
+      (e) =>
+        e.batch &&
+        e.batch.status === "active" &&
+        batchesWithUpcomingSessions.includes(e.batch._id.toString()),
     ).length;
-    const upcomingBatches = enrollments.filter(e => 
-      e.batch && 
-      e.batch.status === 'Upcoming' && 
-      batchesWithUpcomingSessions.includes(e.batch._id.toString())
+    const upcomingBatches = enrollments.filter(
+      (e) =>
+        e.batch &&
+        e.batch.status === "Upcoming" &&
+        batchesWithUpcomingSessions.includes(e.batch._id.toString()),
     ).length;
 
     res.status(200).json({
@@ -2259,7 +2659,7 @@ export const getUpcomingSessionsForStudent = async (req, res) => {
       student: {
         id: student._id,
         name: student.full_name,
-        email: student.email
+        email: student.email,
       },
       data: limitedSessions,
     });
@@ -2271,4 +2671,474 @@ export const getUpcomingSessionsForStudent = async (req, res) => {
       error: error.message,
     });
   }
-}; 
+};
+
+// Add controller to manually sync Zoom recordings for a batch
+export const syncZoomRecordingsForBatch = async (req, res) => {
+  try {
+    const { batchId } = req.params;
+    const { force_sync = false } = req.query;
+
+    // Find the batch
+    const batch = await Batch.findById(batchId).populate(
+      "course",
+      "course_title",
+    );
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: "Batch not found",
+      });
+    }
+
+    // Import the sync function
+    const { manualSyncZoomRecordings } = await import(
+      "../cronjob/zoom-recording-sync.js"
+    );
+
+    // Start sync process
+    console.log(
+      `🔄 [Manual Sync] Starting sync for batch: ${batch.batch_name}`,
+    );
+
+    // Run sync in background to avoid timeout
+    manualSyncZoomRecordings(batchId).catch((error) => {
+      console.error(`❌ [Manual Sync] Error syncing batch ${batchId}:`, error);
+    });
+
+    res.status(202).json({
+      success: true,
+      message: "Zoom recording sync started for batch",
+      data: {
+        batch_id: batchId,
+        batch_name: batch.batch_name,
+        course_title: batch.course?.course_title,
+        sync_status: "started",
+        force_sync: force_sync === "true",
+      },
+    });
+  } catch (error) {
+    console.error("Error starting Zoom recording sync:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while starting Zoom recording sync",
+      error: error.message,
+    });
+  }
+};
+
+// Add controller to get Zoom recording sync status for a batch
+export const getZoomRecordingSyncStatus = async (req, res) => {
+  try {
+    const { batchId } = req.params;
+
+    // Find the batch
+    const batch = await Batch.findById(batchId).populate(
+      "course",
+      "course_title",
+    );
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: "Batch not found",
+      });
+    }
+
+    // Analyze sync status for each session
+    const syncStatus = batch.schedule.map((session) => {
+      const zoomMeeting = session.zoom_meeting || {};
+      const recordedLessons = session.recorded_lessons || [];
+
+      const zoomRecordings = recordedLessons.filter(
+        (lesson) => lesson.source === "zoom_auto_sync",
+      );
+
+      return {
+        session_id: session._id,
+        session_date: session.date,
+        session_title: session.title,
+        zoom_meeting: {
+          meeting_id: zoomMeeting.meeting_id,
+          topic: zoomMeeting.topic,
+          recording_synced: zoomMeeting.recording_synced || false,
+          last_sync_date: zoomMeeting.last_sync_date,
+          sync_attempts: zoomMeeting.sync_attempts || 0,
+          last_sync_error: zoomMeeting.last_sync_error,
+        },
+        recorded_lessons: {
+          total: recordedLessons.length,
+          zoom_auto_sync: zoomRecordings.length,
+          manual_upload: recordedLessons.filter(
+            (l) => l.source === "manual_upload",
+          ).length,
+          external_link: recordedLessons.filter(
+            (l) => l.source === "external_link",
+          ).length,
+        },
+        zoom_recordings: zoomRecordings.map((recording) => ({
+          title: recording.title,
+          file_type: recording.zoom_recording_info?.file_type,
+          file_size: recording.zoom_recording_info?.file_size,
+          sync_date: recording.zoom_recording_info?.sync_date,
+        })),
+      };
+    });
+
+    // Calculate overall sync statistics
+    const totalSessions = syncStatus.length;
+    const sessionsWithZoomMeetings = syncStatus.filter(
+      (s) => s.zoom_meeting.meeting_id,
+    ).length;
+    const syncedSessions = syncStatus.filter(
+      (s) => s.zoom_meeting.recording_synced,
+    ).length;
+    const totalRecordings = syncStatus.reduce(
+      (sum, s) => sum + s.recorded_lessons.zoom_auto_sync,
+      0,
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        batch: {
+          id: batch._id,
+          name: batch.batch_name,
+          course_title: batch.course?.course_title,
+          batch_type: batch.batch_type,
+        },
+        sync_statistics: {
+          total_sessions: totalSessions,
+          sessions_with_zoom_meetings: sessionsWithZoomMeetings,
+          synced_sessions: syncedSessions,
+          total_zoom_recordings: totalRecordings,
+          sync_percentage:
+            sessionsWithZoomMeetings > 0
+              ? Math.round((syncedSessions / sessionsWithZoomMeetings) * 100)
+              : 0,
+        },
+        sessions: syncStatus,
+      },
+    });
+  } catch (error) {
+    console.error("Error getting Zoom recording sync status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while getting Zoom recording sync status",
+      error: error.message,
+    });
+  }
+};
+
+// Add controller to retry failed Zoom recording syncs
+export const retryFailedZoomRecordings = async (req, res) => {
+  try {
+    const { batchId } = req.params;
+    const { sessionId } = req.body;
+
+    // Find the batch
+    const batch = await Batch.findById(batchId);
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: "Batch not found",
+      });
+    }
+
+    let sessionsToRetry = [];
+
+    if (sessionId) {
+      // Retry specific session
+      const session = batch.schedule.id(sessionId);
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          message: "Session not found",
+        });
+      }
+      if (session.zoom_meeting?.meeting_id) {
+        sessionsToRetry.push(session);
+      }
+    } else {
+      // Retry all failed sessions
+      sessionsToRetry = batch.schedule.filter(
+        (session) =>
+          session.zoom_meeting?.meeting_id &&
+          !session.zoom_meeting.recording_synced,
+      );
+    }
+
+    if (sessionsToRetry.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No sessions found that need retry",
+      });
+    }
+
+    // Import the sync function
+    const { manualSyncZoomRecordings } = await import(
+      "../cronjob/zoom-recording-sync.js"
+    );
+
+    // Start retry process
+    console.log(
+      `🔄 [Retry Sync] Starting retry for ${sessionsToRetry.length} sessions`,
+    );
+
+    // Run sync in background
+    manualSyncZoomRecordings(batchId).catch((error) => {
+      console.error(`❌ [Retry Sync] Error retrying batch ${batchId}:`, error);
+    });
+
+    res.status(202).json({
+      success: true,
+      message: "Zoom recording retry started",
+      data: {
+        batch_id: batchId,
+        sessions_to_retry: sessionsToRetry.length,
+        session_ids: sessionsToRetry.map((s) => s._id),
+        retry_status: "started",
+      },
+    });
+  } catch (error) {
+    console.error("Error retrying Zoom recording sync:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while retrying Zoom recording sync",
+      error: error.message,
+    });
+  }
+};
+
+// Add controller to fix AI companion host requirement for existing meetings
+export const fixAICompanionHostRequirement = async (req, res) => {
+  try {
+    const { batchId, sessionId } = req.params;
+    const { meetingId } = req.body;
+
+    // Find the batch
+    const batch = await Batch.findById(batchId).populate(
+      "course",
+      "course_title",
+    );
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: "Batch not found",
+      });
+    }
+
+    // Find the session
+    const session = batch.schedule.id(sessionId);
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: "Session not found",
+      });
+    }
+
+    // Use provided meeting ID or session's meeting ID
+    const targetMeetingId = meetingId || session.zoom_meeting?.meeting_id;
+
+    if (!targetMeetingId) {
+      return res.status(400).json({
+        success: false,
+        message: "No Zoom meeting ID found for this session",
+      });
+    }
+
+    console.log(
+      `🔧 Fixing AI companion host requirement for meeting: ${targetMeetingId}`,
+    );
+
+    // Update the Zoom meeting to enable AI companion without host
+    const updatedMeeting =
+      await zoomService.enableAICompanionWithoutHost(targetMeetingId);
+
+    console.log("✅ AI companion settings updated successfully");
+
+    // Update session with new meeting details if it's the session's meeting
+    if (!meetingId && session.zoom_meeting) {
+      session.zoom_meeting.meeting_id = updatedMeeting.id;
+      session.zoom_meeting.join_url = updatedMeeting.join_url;
+      session.zoom_meeting.topic = updatedMeeting.topic;
+      session.zoom_meeting.password = updatedMeeting.password;
+      await batch.save();
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "AI companion host requirement fixed successfully",
+      data: {
+        session: {
+          id: session._id,
+          date: session.date,
+          start_time: session.start_time,
+          end_time: session.end_time,
+          title: session.title,
+        },
+        zoom_meeting: {
+          id: updatedMeeting.id,
+          topic: updatedMeeting.topic,
+          join_url: updatedMeeting.join_url,
+          password: updatedMeeting.password,
+          settings: {
+            ai_companion_auto_start:
+              updatedMeeting.settings?.ai_companion_auto_start,
+            join_before_host: updatedMeeting.settings?.join_before_host,
+            waiting_room: updatedMeeting.settings?.waiting_room,
+            meeting_authentication:
+              updatedMeeting.settings?.meeting_authentication,
+          },
+        },
+        batch: {
+          id: batch._id,
+          name: batch.batch_name,
+          course_title: batch.course?.course_title,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error fixing AI companion host requirement:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fixing AI companion settings",
+      error: error.message,
+    });
+  }
+};
+
+// Add controller to manually create Zoom meeting for an existing session
+export const createZoomMeetingForExistingSession = async (req, res) => {
+  try {
+    const { batchId, sessionId } = req.params;
+    const { force_create = false } = req.query;
+
+    // Find the batch
+    const batch = await Batch.findById(batchId).populate(
+      "course",
+      "course_title",
+    );
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: "Batch not found",
+      });
+    }
+
+    // Find the session
+    const session = batch.schedule.id(sessionId);
+    if (!session) {
+      return res.status(404).json({
+        success: false,
+        message: "Session not found",
+      });
+    }
+
+    // Check if session already has a Zoom meeting
+    if (session.zoom_meeting?.meeting_id && !force_create) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Session already has a Zoom meeting. Use force_create=true to create a new one.",
+        existing_meeting: {
+          meeting_id: session.zoom_meeting.meeting_id,
+          join_url: session.zoom_meeting.join_url,
+          topic: session.zoom_meeting.topic,
+        },
+      });
+    }
+
+    // Calculate session duration in minutes
+    const [startHours, startMinutes] = session.start_time
+      .split(":")
+      .map(Number);
+    const [endHours, endMinutes] = session.end_time.split(":").map(Number);
+    const durationMinutes =
+      endHours * 60 + endMinutes - (startHours * 60 + startMinutes);
+
+    // Create session start time for Zoom
+    const sessionStartTime = new Date(session.date);
+    sessionStartTime.setHours(startHours, startMinutes, 0, 0);
+
+    console.log("🎥 Creating Zoom meeting for existing session...");
+
+    // Prepare Zoom meeting data
+    const zoomMeetingRequest = {
+      topic: `${batch.course?.course_title || "Course"} - ${session.title}`,
+      type: 2, // Scheduled meeting
+      start_time: sessionStartTime.toISOString(),
+      duration: Math.max(30, durationMinutes), // Minimum 30 minutes
+      timezone: "Asia/Kolkata", // Default to IST
+      agenda: session.description || `Session for ${batch.batch_name}`,
+      settings: {
+        host_video: true,
+        participant_video: false,
+        join_before_host: true,
+        mute_upon_entry: true,
+        waiting_room: false,
+        meeting_authentication: false, // Allow students to join without Zoom accounts
+        auto_recording: "cloud", // Enable cloud recording
+        password: Math.random().toString(36).substring(2, 8).toUpperCase(), // Generate random password
+        // AI Companion settings
+        ai_companion_auto_start: true,
+        ai_companion_meeting_summary: true,
+        ai_companion_meeting_questions: true,
+      },
+    };
+
+    // Create Zoom meeting
+    const zoomMeetingData = await zoomService.createMeeting(zoomMeetingRequest);
+
+    console.log("✅ Zoom meeting created successfully:", zoomMeetingData.id);
+
+    // Update session with Zoom meeting details
+    session.zoom_meeting = {
+      meeting_id: zoomMeetingData.id,
+      join_url: zoomMeetingData.join_url,
+      topic: zoomMeetingData.topic,
+      password: zoomMeetingData.password,
+      start_url: zoomMeetingData.start_url,
+      recording_synced: false,
+      sync_attempts: 0,
+      last_sync_error: null,
+      next_retry_at: null,
+    };
+
+    await batch.save();
+
+    res.status(201).json({
+      success: true,
+      message: "Zoom meeting created successfully for session",
+      data: {
+        session: {
+          id: session._id,
+          date: session.date,
+          start_time: session.start_time,
+          end_time: session.end_time,
+          title: session.title,
+        },
+        zoom_meeting: {
+          id: zoomMeetingData.id,
+          join_url: zoomMeetingData.join_url,
+          start_url: zoomMeetingData.start_url,
+          password: zoomMeetingData.password,
+          topic: zoomMeetingData.topic,
+          start_time: zoomMeetingData.start_time,
+          duration: zoomMeetingData.duration,
+        },
+        batch: {
+          id: batch._id,
+          name: batch.batch_name,
+          course_title: batch.course?.course_title,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error creating Zoom meeting for existing session:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while creating Zoom meeting",
+      error: error.message,
+    });
+  }
+};

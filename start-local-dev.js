@@ -6,12 +6,12 @@
  */
 
 // Set environment variables before importing the app
-process.env.NODE_ENV = 'development';
-process.env.MONGO_URI = 'mongodb://localhost:27017/medh';
-process.env.REDIS_ENABLED = 'false'; // Disable Redis for local development
+process.env.NODE_ENV = "development";
+process.env.MONGODB_URL = "mongodb://localhost:27017/medh";
+process.env.REDIS_ENABLED = "false"; // Disable Redis for local development
 
 // Import and run the app
-import('./index.js').catch(err => {
-  console.error('Failed to start application:', err);
+import("./index.js").catch((err) => {
+  console.error("Failed to start application:", err);
   process.exit(1);
-}); 
+});

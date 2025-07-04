@@ -5,10 +5,10 @@
  * Imports converted blog data into MongoDB using the blog model
  */
 
-import fs from 'fs';
-import mongoose from 'mongoose';
-import BlogsModel from './models/blog-model.js';
-import dotenv from 'dotenv';
+import fs from "fs";
+import mongoose from "mongoose";
+import BlogsModel from "./models/blog-model.js";
+import dotenv from "dotenv";
 
 // Load environment variables
 dotenv.config();
@@ -25,11 +25,12 @@ class BlogImporter {
    */
   async connectToDatabase() {
     try {
-      const mongoUri = process.env.MONGO_URI || 'mongodb://localhost:27017/medh';
+      const mongoUri =
+        process.env.MONGODB_URL || "mongodb://localhost:27017/medh";
       await mongoose.connect(mongoUri);
-      console.log('✅ Connected to MongoDB successfully');
+      console.log("✅ Connected to MongoDB successfully");
     } catch (error) {
-      console.error('❌ Failed to connect to MongoDB:', error.message);
+      console.error("❌ Failed to connect to MongoDB:", error.message);
       throw error;
     }
   }
@@ -40,9 +41,9 @@ class BlogImporter {
   async disconnectFromDatabase() {
     try {
       await mongoose.disconnect();
-      console.log('✅ Disconnected from MongoDB');
+      console.log("✅ Disconnected from MongoDB");
     } catch (error) {
-      console.error('❌ Error disconnecting from MongoDB:', error.message);
+      console.error("❌ Error disconnecting from MongoDB:", error.message);
     }
   }
 
@@ -51,10 +52,7 @@ class BlogImporter {
    */
   async blogExists(blog) {
     const existingBlog = await BlogsModel.findOne({
-      $or: [
-        { slug: blog.slug },
-        { title: blog.title }
-      ]
+      $or: [{ slug: blog.slug }, { title: blog.title }],
     });
     return existingBlog !== null;
   }
@@ -66,23 +64,23 @@ class BlogImporter {
     const errors = [];
 
     if (!blog.title || blog.title.trim().length === 0) {
-      errors.push('Title is required');
+      errors.push("Title is required");
     }
 
     if (!blog.content || blog.content.trim().length === 0) {
-      errors.push('Content is required');
+      errors.push("Content is required");
     }
 
     if (!blog.upload_image) {
-      errors.push('Upload image is required');
+      errors.push("Upload image is required");
     }
 
     if (!blog.author) {
-      errors.push('Author is required');
+      errors.push("Author is required");
     }
 
     if (!blog.slug || blog.slug.trim().length === 0) {
-      errors.push('Slug is required');
+      errors.push("Slug is required");
     }
 
     return errors;
@@ -102,10 +100,7 @@ class BlogImporter {
         } else if (options.updateExisting) {
           // Update existing blog
           const existingBlog = await BlogsModel.findOne({
-            $or: [
-              { slug: blogData.slug },
-              { title: blogData.title }
-            ]
+            $or: [{ slug: blogData.slug }, { title: blogData.title }],
           });
 
           if (existingBlog) {
@@ -120,7 +115,10 @@ class BlogImporter {
       // Validate blog data
       const validationErrors = this.validateBlogData(blogData);
       if (validationErrors.length > 0) {
-        console.error(`❌ Validation errors for "${blogData.title}":`, validationErrors);
+        console.error(
+          `❌ Validation errors for "${blogData.title}":`,
+          validationErrors,
+        );
         this.errorCount++;
         return null;
       }
@@ -131,9 +129,11 @@ class BlogImporter {
       console.log(`✅ Imported blog: ${blogData.title}`);
       this.importedCount++;
       return savedBlog;
-
     } catch (error) {
-      console.error(`❌ Error importing blog "${blogData.title}":`, error.message);
+      console.error(
+        `❌ Error importing blog "${blogData.title}":`,
+        error.message,
+      );
       this.errorCount++;
       return null;
     }
@@ -144,8 +144,8 @@ class BlogImporter {
    */
   async importAllBlogs(inputFile, options = {}) {
     try {
-      console.log('📖 Reading converted blog data...');
-      const rawData = fs.readFileSync(inputFile, 'utf8');
+      console.log("📖 Reading converted blog data...");
+      const rawData = fs.readFileSync(inputFile, "utf8");
       const convertedData = JSON.parse(rawData);
 
       console.log(`📊 Found ${convertedData.blogs.length} blogs to import`);
@@ -153,8 +153,10 @@ class BlogImporter {
       const results = [];
       for (let i = 0; i < convertedData.blogs.length; i++) {
         const blog = convertedData.blogs[i];
-        console.log(`\n🔄 Processing blog ${i + 1}/${convertedData.blogs.length}: ${blog.title}`);
-        
+        console.log(
+          `\n🔄 Processing blog ${i + 1}/${convertedData.blogs.length}: ${blog.title}`,
+        );
+
         const result = await this.importBlog(blog, options);
         if (result) {
           results.push(result);
@@ -163,7 +165,7 @@ class BlogImporter {
 
       return results;
     } catch (error) {
-      console.error('❌ Error importing blogs:', error);
+      console.error("❌ Error importing blogs:", error);
       throw error;
     }
   }
@@ -172,11 +174,13 @@ class BlogImporter {
    * Generate import summary
    */
   generateSummary() {
-    console.log('\n📈 Import Summary:');
+    console.log("\n📈 Import Summary:");
     console.log(`✅ Successfully imported: ${this.importedCount} blogs`);
     console.log(`⏭️  Skipped existing: ${this.skippedCount} blogs`);
     console.log(`❌ Errors encountered: ${this.errorCount} blogs`);
-    console.log(`📊 Total processed: ${this.importedCount + this.skippedCount + this.errorCount} blogs`);
+    console.log(
+      `📊 Total processed: ${this.importedCount + this.skippedCount + this.errorCount} blogs`,
+    );
   }
 
   /**
@@ -186,25 +190,30 @@ class BlogImporter {
     try {
       // Note: You'll need to create a Category model and import it
       // This is just a placeholder for category creation
-      console.log('📝 Note: Categories need to be created separately using your Category model');
-      
+      console.log(
+        "📝 Note: Categories need to be created separately using your Category model",
+      );
+
       const sampleCategories = [
-        { name: 'Technology', slug: 'technology' },
-        { name: 'Programming', slug: 'programming' },
-        { name: 'Data Science', slug: 'data-science' },
-        { name: 'Digital Marketing', slug: 'digital-marketing' },
-        { name: 'Cybersecurity', slug: 'cybersecurity' },
-        { name: 'Cloud Computing', slug: 'cloud-computing' },
-        { name: 'Leadership', slug: 'leadership' },
-        { name: 'Personal Development', slug: 'personal-development' },
-        { name: 'Mathematics', slug: 'mathematics' },
-        { name: 'Career Development', slug: 'career-development' }
+        { name: "Technology", slug: "technology" },
+        { name: "Programming", slug: "programming" },
+        { name: "Data Science", slug: "data-science" },
+        { name: "Digital Marketing", slug: "digital-marketing" },
+        { name: "Cybersecurity", slug: "cybersecurity" },
+        { name: "Cloud Computing", slug: "cloud-computing" },
+        { name: "Leadership", slug: "leadership" },
+        { name: "Personal Development", slug: "personal-development" },
+        { name: "Mathematics", slug: "mathematics" },
+        { name: "Career Development", slug: "career-development" },
       ];
 
-      console.log('📋 Suggested categories:', sampleCategories.map(c => c.name).join(', '));
+      console.log(
+        "📋 Suggested categories:",
+        sampleCategories.map((c) => c.name).join(", "),
+      );
       return sampleCategories;
     } catch (error) {
-      console.error('❌ Error creating categories:', error);
+      console.error("❌ Error creating categories:", error);
       return [];
     }
   }
@@ -217,12 +226,14 @@ class BlogImporter {
       console.log(`🔄 Updating all blog authors to: ${authorId}`);
       const result = await BlogsModel.updateMany(
         {},
-        { $set: { author: authorId } }
+        { $set: { author: authorId } },
       );
-      console.log(`✅ Updated ${result.modifiedCount} blogs with new author ID`);
+      console.log(
+        `✅ Updated ${result.modifiedCount} blogs with new author ID`,
+      );
       return result;
     } catch (error) {
-      console.error('❌ Error updating author IDs:', error);
+      console.error("❌ Error updating author IDs:", error);
       throw error;
     }
   }
@@ -233,11 +244,13 @@ class BlogImporter {
   async getImportStats() {
     try {
       const totalBlogs = await BlogsModel.countDocuments();
-      const publishedBlogs = await BlogsModel.countDocuments({ status: 'published' });
-      const draftBlogs = await BlogsModel.countDocuments({ status: 'draft' });
+      const publishedBlogs = await BlogsModel.countDocuments({
+        status: "published",
+      });
+      const draftBlogs = await BlogsModel.countDocuments({ status: "draft" });
       const featuredBlogs = await BlogsModel.countDocuments({ featured: true });
 
-      console.log('\n📊 Database Statistics:');
+      console.log("\n📊 Database Statistics:");
       console.log(`Total blogs: ${totalBlogs}`);
       console.log(`Published blogs: ${publishedBlogs}`);
       console.log(`Draft blogs: ${draftBlogs}`);
@@ -247,10 +260,10 @@ class BlogImporter {
         total: totalBlogs,
         published: publishedBlogs,
         draft: draftBlogs,
-        featured: featuredBlogs
+        featured: featuredBlogs,
       };
     } catch (error) {
-      console.error('❌ Error getting import stats:', error);
+      console.error("❌ Error getting import stats:", error);
       return null;
     }
   }
@@ -259,20 +272,20 @@ class BlogImporter {
 // Main execution function
 async function main() {
   const importer = new BlogImporter();
-  
+
   try {
     // Connect to database
     await importer.connectToDatabase();
 
     // Configuration options
     const options = {
-      skipExisting: true,      // Skip blogs that already exist
-      updateExisting: false,   // Set to true to update existing blogs instead of skipping
+      skipExisting: true, // Skip blogs that already exist
+      updateExisting: false, // Set to true to update existing blogs instead of skipping
     };
 
-    const inputFile = 'converted_blogs_for_model.json';
-    
-    console.log('🚀 Starting blog import process...');
+    const inputFile = "converted_blogs_for_model.json";
+
+    console.log("🚀 Starting blog import process...");
     console.log(`📁 Input file: ${inputFile}`);
     console.log(`⚙️  Options:`, options);
 
@@ -288,16 +301,19 @@ async function main() {
     // Create sample categories (informational)
     await importer.createSampleCategories();
 
-    console.log('\n🎉 Blog import process completed!');
-    console.log('\n📝 Next steps:');
-    console.log('1. Create categories using your Category model');
-    console.log('2. Update blog categories by mapping content to appropriate categories');
-    console.log('3. Update author IDs to match actual users in your User collection');
-    console.log('4. Review imported blogs in your MongoDB database');
-    console.log('5. Set featured flags for important blogs');
-
+    console.log("\n🎉 Blog import process completed!");
+    console.log("\n📝 Next steps:");
+    console.log("1. Create categories using your Category model");
+    console.log(
+      "2. Update blog categories by mapping content to appropriate categories",
+    );
+    console.log(
+      "3. Update author IDs to match actual users in your User collection",
+    );
+    console.log("4. Review imported blogs in your MongoDB database");
+    console.log("5. Set featured flags for important blogs");
   } catch (error) {
-    console.error('💥 Import process failed:', error);
+    console.error("💥 Import process failed:", error);
     process.exit(1);
   } finally {
     // Disconnect from database
@@ -309,17 +325,19 @@ async function main() {
 const args = process.argv.slice(2);
 const command = args[0];
 
-if (command === 'update-authors' && args[1]) {
+if (command === "update-authors" && args[1]) {
   // Update author IDs for all blogs
   const importer = new BlogImporter();
-  importer.connectToDatabase()
+  importer
+    .connectToDatabase()
     .then(() => importer.updateAuthorIds(args[1]))
     .then(() => importer.disconnectFromDatabase())
     .catch(console.error);
-} else if (command === 'stats') {
+} else if (command === "stats") {
   // Show database statistics
   const importer = new BlogImporter();
-  importer.connectToDatabase()
+  importer
+    .connectToDatabase()
     .then(() => importer.getImportStats())
     .then(() => importer.disconnectFromDatabase())
     .catch(console.error);
@@ -328,4 +346,4 @@ if (command === 'update-authors' && args[1]) {
   main();
 }
 
-export default BlogImporter; 
+export default BlogImporter;

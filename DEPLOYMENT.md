@@ -16,7 +16,7 @@ Ensure all required environment variables are set in your production environment
 
 - `PORT`: The port your server will run on (default: 8080)
 - `NODE_ENV`: Set to 'production' in production environments
-- `MONGO_URI`: Your MongoDB connection string
+- `MONGODB_URL`: Your MongoDB connection string
 - `JWT_SECRET_KEY`: Secret key for JWT token signing
 - `ALLOWED_ORIGINS`: Comma-separated list of allowed origins for CORS
 

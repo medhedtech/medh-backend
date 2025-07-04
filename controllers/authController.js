@@ -45,7 +45,7 @@ class AuthController {
 
       return res.status(200).json({
         success: true,
-        message: `User status changed to ${user.is_active ? 'active' : 'inactive'}`,
+        message: `User status changed to ${user.is_active ? "active" : "inactive"}`,
         data: user,
       });
     } catch (err) {
@@ -116,7 +116,9 @@ class AuthController {
           tempPassword,
         );
 
-        logger.auth.info("Password reset email sent", { email: normalizedEmail });
+        logger.auth.info("Password reset email sent", {
+          email: normalizedEmail,
+        });
         return res.status(200).json({
           success: true,
           message: "Password reset email sent",
@@ -174,7 +176,7 @@ class AuthController {
       let user = await User.findOne({
         temp_password_verification_token: token,
         temp_password_verification_expires: { $gt: Date.now() },
-        temp_password_verified: true
+        temp_password_verified: true,
       });
 
       // If not found, try the original reset token method (for backward compatibility)
@@ -207,7 +209,7 @@ class AuthController {
       user.temp_password_verified = false;
       user.temp_password_verification_token = undefined;
       user.temp_password_verification_expires = undefined;
-      
+
       // Reset failed login attempts and unlock account
       user.failed_login_attempts = 0;
       user.account_locked_until = undefined;
@@ -218,7 +220,9 @@ class AuthController {
       // Log password reset activity
       await user.logActivity("password_reset", null, {
         reset_time: new Date(),
-        reset_method: user.temp_password_verified ? "temp_password_verification" : "email_token",
+        reset_method: user.temp_password_verified
+          ? "temp_password_verification"
+          : "email_token",
       });
 
       logger.info(`Password successfully reset for user: ${user.email}`);
@@ -239,7 +243,7 @@ class AuthController {
 
   /**
    * Verify temporary password
-   * @param {Object} req - Express request object  
+   * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
   async verifyTempPassword(req, res) {
@@ -253,8 +257,10 @@ class AuthController {
           message: "Email and temporary password are required.",
           errors: {
             email: !email ? "Email is required" : null,
-            tempPassword: !tempPassword ? "Temporary password is required" : null,
-          }
+            tempPassword: !tempPassword
+              ? "Temporary password is required"
+              : null,
+          },
         });
       }
 
@@ -264,9 +270,12 @@ class AuthController {
       // Find the user
       const user = await User.findOne({ email: normalizedEmail });
       if (!user) {
-        logger.auth.warn("Temp password verification attempt for non-existent user", {
-          email: normalizedEmail,
-        });
+        logger.auth.warn(
+          "Temp password verification attempt for non-existent user",
+          {
+            email: normalizedEmail,
+          },
+        );
         return res.status(404).json({
           success: false,
           message: "User not found",
@@ -274,10 +283,15 @@ class AuthController {
       }
 
       // Check if user has an active reset token (indicating they requested password reset)
-      if (!user.password_reset_token || !user.password_reset_expires || user.password_reset_expires <= Date.now()) {
+      if (
+        !user.password_reset_token ||
+        !user.password_reset_expires ||
+        user.password_reset_expires <= Date.now()
+      ) {
         return res.status(400).json({
           success: false,
-          message: "No valid password reset request found. Please request a new password reset.",
+          message:
+            "No valid password reset request found. Please request a new password reset.",
         });
       }
 
@@ -291,8 +305,8 @@ class AuthController {
             locked_until: lockStatus.lockedUntil,
             remaining_time: lockStatus.remainingTimeFormatted,
             remaining_minutes: lockStatus.remainingMinutes,
-            lockout_reason: lockStatus.lockoutReason
-          }
+            lockout_reason: lockStatus.lockoutReason,
+          },
         });
       }
 
@@ -306,30 +320,39 @@ class AuthController {
         email: normalizedEmail,
         tempPasswordLength: tempPassword.length,
         hasPasswordHash: !!user.password,
-        passwordHashPrefix: user.password ? user.password.substring(0, 20) : 'none'
+        passwordHashPrefix: user.password
+          ? user.password.substring(0, 20)
+          : "none",
       });
 
       // Verify the temporary password
       const isMatch = await bcrypt.compare(tempPassword, user.password);
-      
+
       logger.auth.debug("Password verification result", {
         email: normalizedEmail,
         isMatch: isMatch,
-        tempPassword: tempPassword // Only for debugging, remove in production
+        tempPassword: tempPassword, // Only for debugging, remove in production
       });
-      
+
       if (!isMatch) {
         try {
-          const attemptResult = await this.incrementFailedAttempts(user, 'temp_password');
-          
+          const attemptResult = await this.incrementFailedAttempts(
+            user,
+            "temp_password",
+          );
+
           if (attemptResult.shouldReturnError) {
             if (attemptResult.isLocked) {
-              logger.auth.warn("Account locked due to failed temp password attempts", {
-                email: normalizedEmail,
-                attempts: attemptResult.attempts,
-                lockout_duration_minutes: attemptResult.lockInfo.remainingMinutes
-              });
-              
+              logger.auth.warn(
+                "Account locked due to failed temp password attempts",
+                {
+                  email: normalizedEmail,
+                  attempts: attemptResult.attempts,
+                  lockout_duration_minutes:
+                    attemptResult.lockInfo.remainingMinutes,
+                },
+              );
+
               return res.status(423).json({
                 success: false,
                 message: `Account temporarily locked due to multiple failed attempts. Please try again after ${attemptResult.lockInfo.remainingMinutes} minute(s).`,
@@ -337,81 +360,96 @@ class AuthController {
                   locked_until: attemptResult.lockInfo.lockedUntil,
                   remaining_time: attemptResult.lockInfo.remainingTimeFormatted,
                   remaining_minutes: attemptResult.lockInfo.remainingMinutes,
-                  lockout_reason: attemptResult.lockInfo.lockoutReason
-                }
+                  lockout_reason: attemptResult.lockInfo.lockoutReason,
+                },
               });
             } else {
               logger.auth.warn("Failed temp password verification", {
                 email: normalizedEmail,
                 attempts: attemptResult.attempts,
-                remaining_attempts: attemptResult.remainingAttempts
+                remaining_attempts: attemptResult.remainingAttempts,
               });
-              
+
               return res.status(401).json({
                 success: false,
                 message: "Incorrect temporary password",
                 attempts_info: {
                   failed_attempts: attemptResult.attempts,
                   remaining_attempts: attemptResult.remainingAttempts,
-                  warning: attemptResult.remainingAttempts <= 1 ? "Account will be locked after next failed attempt" : null
-                }
+                  warning:
+                    attemptResult.remainingAttempts <= 1
+                      ? "Account will be locked after next failed attempt"
+                      : null,
+                },
               });
             }
           }
         } catch (error) {
-          logger.auth.error("Error handling failed temp password verification", {
-            error: error.message,
-            email: normalizedEmail,
-            stack: error.stack
-          });
-          
+          logger.auth.error(
+            "Error handling failed temp password verification",
+            {
+              error: error.message,
+              email: normalizedEmail,
+              stack: error.stack,
+            },
+          );
+
           return res.status(500).json({
             success: false,
             message: "Server error during verification",
-            error: process.env.NODE_ENV === "development" ? error.message : "Internal server error"
+            error:
+              process.env.NODE_ENV === "development"
+                ? error.message
+                : "Internal server error",
           });
         }
       }
 
       // Temporary password is correct - reset failed attempts and prepare for password change
       await this.resetLockoutFields(user);
-      
+
       // Generate a temporary verification token for password reset
       const verificationToken = crypto.randomBytes(32).toString("hex");
       user.temp_password_verified = true;
       user.temp_password_verification_token = verificationToken;
       user.temp_password_verification_expires = Date.now() + 15 * 60 * 1000; // 15 minutes
-      
+
       await user.save();
 
       // Log successful verification
-      await user.logActivity("temp_password_verified", null, {
-        verification_time: new Date(),
-        ip_address: req.ip,
-        user_agent: req.headers["user-agent"],
-        verification_token: verificationToken
-      }, {
-        ip_address: req.ip,
-        user_agent: req.headers["user-agent"],
-        device_type: this.extractDeviceInfo(req).device_type,
-        geolocation: this.extractLocationInfo(req)
-      });
+      await user.logActivity(
+        "temp_password_verified",
+        null,
+        {
+          verification_time: new Date(),
+          ip_address: req.ip,
+          user_agent: req.headers["user-agent"],
+          verification_token: verificationToken,
+        },
+        {
+          ip_address: req.ip,
+          user_agent: req.headers["user-agent"],
+          device_type: this.extractDeviceInfo(req).device_type,
+          geolocation: this.extractLocationInfo(req),
+        },
+      );
 
       logger.auth.info("Temporary password verified successfully", {
         email: normalizedEmail,
-        verification_token: verificationToken
+        verification_token: verificationToken,
       });
 
       return res.status(200).json({
         success: true,
-        message: "Temporary password verified successfully. You can now set a new password.",
+        message:
+          "Temporary password verified successfully. You can now set a new password.",
         data: {
           verification_token: verificationToken,
           expires_in_minutes: 15,
-          next_step: "Use this token to set a new password via /reset-password endpoint"
-        }
+          next_step:
+            "Use this token to set a new password via /reset-password endpoint",
+        },
       });
-
     } catch (err) {
       logger.auth.error("Temp password verification process failed", {
         error: err,
@@ -420,7 +458,10 @@ class AuthController {
       return res.status(500).json({
         success: false,
         message: "Server error during temporary password verification",
-        error: process.env.NODE_ENV === "development" ? err.message : "Internal server error"
+        error:
+          process.env.NODE_ENV === "development"
+            ? err.message
+            : "Internal server error",
       });
     }
   }
@@ -433,19 +474,29 @@ class AuthController {
    */
   async changePassword(req, res) {
     try {
-      const { currentPassword, newPassword, confirmPassword, invalidateAllSessions = false } = req.body;
+      const {
+        currentPassword,
+        newPassword,
+        confirmPassword,
+        invalidateAllSessions = false,
+      } = req.body;
       const userId = req.user.id;
 
       // Input validation
       if (!currentPassword || !newPassword || !confirmPassword) {
         return res.status(400).json({
           success: false,
-          message: "Current password, new password, and password confirmation are required.",
+          message:
+            "Current password, new password, and password confirmation are required.",
           errors: {
-            currentPassword: !currentPassword ? "Current password is required" : null,
+            currentPassword: !currentPassword
+              ? "Current password is required"
+              : null,
             newPassword: !newPassword ? "New password is required" : null,
-            confirmPassword: !confirmPassword ? "Password confirmation is required" : null,
-          }
+            confirmPassword: !confirmPassword
+              ? "Password confirmation is required"
+              : null,
+          },
         });
       }
 
@@ -455,8 +506,8 @@ class AuthController {
           success: false,
           message: "New password and confirmation do not match.",
           errors: {
-            confirmPassword: "Password confirmation does not match"
-          }
+            confirmPassword: "Password confirmation does not match",
+          },
         });
       }
 
@@ -467,9 +518,9 @@ class AuthController {
           success: false,
           message: "Password does not meet security requirements.",
           errors: {
-            newPassword: passwordValidation.errors
+            newPassword: passwordValidation.errors,
           },
-          requirements: passwordValidation.requirements
+          requirements: passwordValidation.requirements,
         });
       }
 
@@ -487,13 +538,13 @@ class AuthController {
         logger.error("Database error during password change - user lookup", {
           error: dbError.message,
           userId,
-          stack: dbError.stack
+          stack: dbError.stack,
         });
-        
+
         return res.status(500).json({
           success: false,
           message: "Database connection issue. Please try again in a moment.",
-          error: "Database temporarily unavailable"
+          error: "Database temporarily unavailable",
         });
       }
 
@@ -514,8 +565,8 @@ class AuthController {
             locked_until: lockStatus.lockedUntil,
             remaining_time: lockStatus.remainingTimeFormatted,
             remaining_minutes: lockStatus.remainingMinutes,
-            lockout_reason: lockStatus.lockoutReason
-          }
+            lockout_reason: lockStatus.lockoutReason,
+          },
         });
       }
 
@@ -526,20 +577,27 @@ class AuthController {
 
       // Verify current password
       const isMatch = await user.comparePassword(currentPassword);
-      
+
       if (!isMatch) {
         try {
-          const attemptResult = await this.incrementFailedAttempts(user, 'password_change');
-          
+          const attemptResult = await this.incrementFailedAttempts(
+            user,
+            "password_change",
+          );
+
           if (attemptResult.shouldReturnError) {
             if (attemptResult.isLocked) {
-              logger.warn("Account locked due to multiple failed password change attempts", {
-                userId: user._id,
-                email: user.email,
-                attempts: attemptResult.attempts,
-                lockoutDurationMinutes: attemptResult.lockInfo.remainingMinutes
-              });
-              
+              logger.warn(
+                "Account locked due to multiple failed password change attempts",
+                {
+                  userId: user._id,
+                  email: user.email,
+                  attempts: attemptResult.attempts,
+                  lockoutDurationMinutes:
+                    attemptResult.lockInfo.remainingMinutes,
+                },
+              );
+
               return res.status(423).json({
                 success: false,
                 message: `Account temporarily locked due to multiple failed password change attempts. Please try again after ${attemptResult.lockInfo.remainingMinutes} minute(s).`,
@@ -547,8 +605,8 @@ class AuthController {
                   locked_until: attemptResult.lockInfo.lockedUntil,
                   remaining_time: attemptResult.lockInfo.remainingTimeFormatted,
                   remaining_minutes: attemptResult.lockInfo.remainingMinutes,
-                  lockout_reason: attemptResult.lockInfo.lockoutReason
-                }
+                  lockout_reason: attemptResult.lockInfo.lockoutReason,
+                },
               });
             } else {
               return res.status(400).json({
@@ -557,21 +615,27 @@ class AuthController {
                 attempts_info: {
                   failed_attempts: attemptResult.attempts,
                   remaining_attempts: attemptResult.remainingAttempts,
-                  warning: attemptResult.remainingAttempts <= 1 ? "Account will be locked after next failed attempt" : null
-                }
+                  warning:
+                    attemptResult.remainingAttempts <= 1
+                      ? "Account will be locked after next failed attempt"
+                      : null,
+                },
               });
             }
           }
         } catch (dbError) {
-          logger.error("Database error handling failed password change attempt", {
-            error: dbError.message,
-            userId,
-            stack: dbError.stack
-          });
-          
+          logger.error(
+            "Database error handling failed password change attempt",
+            {
+              error: dbError.message,
+              userId,
+              stack: dbError.stack,
+            },
+          );
+
           return res.status(400).json({
             success: false,
-            message: "Current password is incorrect"
+            message: "Current password is incorrect",
           });
         }
       }
@@ -583,8 +647,8 @@ class AuthController {
           success: false,
           message: "New password cannot be the same as your current password.",
           errors: {
-            newPassword: "Password must be different from current password"
-          }
+            newPassword: "Password must be different from current password",
+          },
         });
       }
 
@@ -597,7 +661,7 @@ class AuthController {
 
       // Reset password change attempts and account lock
       await this.resetLockoutFields(user);
-      
+
       // Update password change metadata
       user.last_password_change = new Date();
       user.password_change_count = (user.password_change_count || 0) + 1;
@@ -609,47 +673,52 @@ class AuthController {
         logger.error("Database error during password change - user save", {
           error: dbError.message,
           userId,
-          stack: dbError.stack
+          stack: dbError.stack,
         });
-        
+
         return res.status(500).json({
           success: false,
           message: "Failed to save password changes. Please try again.",
-          error: "Database save error"
+          error: "Database save error",
         });
       }
 
       // Log password change activity with enhanced details
-      await user.logActivity("password_change", null, {
-        password_changed_at: new Date(),
-        password_strength: passwordValidation.score,
-        invalidate_sessions: invalidateAllSessions,
-        change_count: user.password_change_count,
-        ip_address: req.ip,
-        user_agent: req.headers["user-agent"]
-      }, {
-        ip_address: req.ip,
-        user_agent: req.headers["user-agent"],
-        device_type: this.extractDeviceInfo(req).device_type,
-        geolocation: this.extractLocationInfo(req),
-        security_event: true
-      });
+      await user.logActivity(
+        "password_change",
+        null,
+        {
+          password_changed_at: new Date(),
+          password_strength: passwordValidation.score,
+          invalidate_sessions: invalidateAllSessions,
+          change_count: user.password_change_count,
+          ip_address: req.ip,
+          user_agent: req.headers["user-agent"],
+        },
+        {
+          ip_address: req.ip,
+          user_agent: req.headers["user-agent"],
+          device_type: this.extractDeviceInfo(req).device_type,
+          geolocation: this.extractLocationInfo(req),
+          security_event: true,
+        },
+      );
 
       // Invalidate all sessions if requested (security measure)
       if (invalidateAllSessions) {
         await user.invalidateAllSessions();
         this.activeUsers.delete(user._id.toString());
-        
+
         // Clear all sessions from our session store for this user
         for (const [sessionId, sessionData] of this.sessionStore.entries()) {
           if (sessionData.user_id.toString() === userId) {
             this.sessionStore.delete(sessionId);
           }
         }
-        
+
         logger.info("All sessions invalidated after password change", {
           userId: user._id,
-          email: user.email
+          email: user.email,
         });
       }
 
@@ -657,13 +726,18 @@ class AuthController {
       try {
         const deviceInfo = this.extractDeviceInfo(req);
         const locationInfo = this.extractLocationInfo(req);
-        
-        await this.sendPasswordChangeNotification(user, deviceInfo, locationInfo, invalidateAllSessions);
+
+        await this.sendPasswordChangeNotification(
+          user,
+          deviceInfo,
+          locationInfo,
+          invalidateAllSessions,
+        );
       } catch (emailError) {
         logger.warn("Failed to send password change notification email", {
           error: emailError.message,
           userId: user._id,
-          email: user.email
+          email: user.email,
         });
         // Don't fail the password change if email fails
       }
@@ -678,7 +752,7 @@ class AuthController {
         userId: user._id,
         email: user.email,
         sessions_invalidated: invalidateAllSessions,
-        password_strength: passwordValidation.score
+        password_strength: passwordValidation.score,
       });
 
       return res.status(200).json({
@@ -692,21 +766,24 @@ class AuthController {
             "Use a unique password for each account",
             "Enable two-factor authentication for added security",
             "Regularly review your account activity",
-            "Keep your recovery information up to date"
-          ]
-        }
+            "Keep your recovery information up to date",
+          ],
+        },
       });
     } catch (err) {
       logger.error("Error in change password process:", {
         error: err.message,
         stack: err.stack,
-        userId: req.user?.id
+        userId: req.user?.id,
       });
-      
+
       return res.status(500).json({
         success: false,
         message: "Server error during password change.",
-        error: process.env.NODE_ENV === "development" ? err.message : "Internal server error"
+        error:
+          process.env.NODE_ENV === "development"
+            ? err.message
+            : "Internal server error",
       });
     }
   }
@@ -724,7 +801,7 @@ class AuthController {
       requireLowercase: true,
       requireNumbers: true,
       requireSpecialChars: true,
-      noCommonPatterns: true
+      noCommonPatterns: true,
     };
 
     const errors = [];
@@ -732,13 +809,17 @@ class AuthController {
 
     // Length check
     if (password.length < requirements.minLength) {
-      errors.push(`Password must be at least ${requirements.minLength} characters long`);
+      errors.push(
+        `Password must be at least ${requirements.minLength} characters long`,
+      );
     } else if (password.length >= requirements.minLength) {
       score += 20;
     }
 
     if (password.length > requirements.maxLength) {
-      errors.push(`Password must not exceed ${requirements.maxLength} characters`);
+      errors.push(
+        `Password must not exceed ${requirements.maxLength} characters`,
+      );
     }
 
     // Character requirements
@@ -760,7 +841,10 @@ class AuthController {
       score += 15;
     }
 
-    if (requirements.requireSpecialChars && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    if (
+      requirements.requireSpecialChars &&
+      !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)
+    ) {
       errors.push("Password must contain at least one special character");
     } else if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
       score += 15;
@@ -777,7 +861,9 @@ class AuthController {
       /(.)\1{3,}/, // Repeated characters
     ];
 
-    const hasCommonPattern = commonPatterns.some(pattern => pattern.test(password));
+    const hasCommonPattern = commonPatterns.some((pattern) =>
+      pattern.test(password),
+    );
     if (hasCommonPattern) {
       errors.push("Password contains common patterns and is not secure");
       score -= 20;
@@ -790,7 +876,12 @@ class AuthController {
     if (password.length >= 16) score += 10;
     if (/[A-Z].*[A-Z]/.test(password)) score += 5; // Multiple uppercase
     if (/\d.*\d/.test(password)) score += 5; // Multiple numbers
-    if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?].*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) score += 5; // Multiple special chars
+    if (
+      /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?].*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(
+        password,
+      )
+    )
+      score += 5; // Multiple special chars
 
     score = Math.max(0, Math.min(100, score));
 
@@ -798,8 +889,17 @@ class AuthController {
       isValid: errors.length === 0,
       errors: errors,
       score: score,
-      strength: score >= 80 ? 'Very Strong' : score >= 60 ? 'Strong' : score >= 40 ? 'Medium' : score >= 20 ? 'Weak' : 'Very Weak',
-      requirements: requirements
+      strength:
+        score >= 80
+          ? "Very Strong"
+          : score >= 60
+            ? "Strong"
+            : score >= 40
+              ? "Medium"
+              : score >= 20
+                ? "Weak"
+                : "Very Weak",
+      requirements: requirements,
     };
   }
 
@@ -807,60 +907,63 @@ class AuthController {
    * Send password change notification email
    * @param {Object} user - User object
    * @param {Object} deviceInfo - Device information
-   * @param {Object} locationInfo - Location information  
+   * @param {Object} locationInfo - Location information
    * @param {boolean} sessionsInvalidated - Whether all sessions were invalidated
    */
-  async sendPasswordChangeNotification(user, deviceInfo, locationInfo, sessionsInvalidated = false) {
+  async sendPasswordChangeNotification(
+    user,
+    deviceInfo,
+    locationInfo,
+    sessionsInvalidated = false,
+  ) {
     try {
-      const emailService = (await import('../services/emailService.js')).default;
-      
+      const emailService = (await import("../services/emailService.js"))
+        .default;
+
       const changeDetails = {
-        'Changed On': new Date().toLocaleString('en-US', { 
-          timeZone: user.preferences?.timezone || 'UTC',
-          dateStyle: 'full',
-          timeStyle: 'medium'
+        "Changed On": new Date().toLocaleString("en-US", {
+          timeZone: user.preferences?.timezone || "UTC",
+          dateStyle: "full",
+          timeStyle: "medium",
         }),
-        'Device': deviceInfo.device_name || 'Unknown Device',
-        'Browser': deviceInfo.browser || 'Unknown Browser', 
-        'Operating System': deviceInfo.operating_system || 'Unknown OS',
-        'Location': `${locationInfo.city || 'Unknown'}, ${locationInfo.country || 'Unknown'}`,
-        'IP Address': deviceInfo.ip_address || 'Unknown',
-        'Sessions Invalidated': sessionsInvalidated ? 'Yes - All devices logged out' : 'No - Current session maintained'
+        Device: deviceInfo.device_name || "Unknown Device",
+        Browser: deviceInfo.browser || "Unknown Browser",
+        "Operating System": deviceInfo.operating_system || "Unknown OS",
+        Location: `${locationInfo.city || "Unknown"}, ${locationInfo.country || "Unknown"}`,
+        "IP Address": deviceInfo.ip_address || "Unknown",
+        "Sessions Invalidated": sessionsInvalidated
+          ? "Yes - All devices logged out"
+          : "No - Current session maintained",
       };
 
-      const subject = sessionsInvalidated 
-        ? '🔐 Password Changed & All Sessions Terminated - Medh Learning Platform'
-        : '🔐 Password Changed Successfully - Medh Learning Platform';
+      const subject = sessionsInvalidated
+        ? "🔐 Password Changed & All Sessions Terminated - Medh Learning Platform"
+        : "🔐 Password Changed Successfully - Medh Learning Platform";
 
       const message = sessionsInvalidated
         ? `Your password has been changed successfully and all active sessions have been terminated for security. You will need to log in again on all devices. If you did not make this change, please contact support immediately.`
         : `Your password has been changed successfully. If you did not make this change, please secure your account immediately and contact support.`;
 
-      await emailService.sendNotificationEmail(
-        user.email,
-        subject,
-        message,
-        {
-          user_name: user.full_name,
-          email: user.email,
-          details: changeDetails,
-          actionUrl: `${process.env.FRONTEND_URL || 'https://app.medh.co'}/security`,
-          actionText: 'Review Account Security',
-          currentYear: new Date().getFullYear(),
-          urgent: true
-        }
-      );
-      
-      logger.info('Password change notification sent successfully', {
+      await emailService.sendNotificationEmail(user.email, subject, message, {
+        user_name: user.full_name,
+        email: user.email,
+        details: changeDetails,
+        actionUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/security`,
+        actionText: "Review Account Security",
+        currentYear: new Date().getFullYear(),
+        urgent: true,
+      });
+
+      logger.info("Password change notification sent successfully", {
         userId: user._id,
         email: user.email,
-        sessionsInvalidated
+        sessionsInvalidated,
       });
     } catch (error) {
-      logger.error('Failed to send password change notification', {
+      logger.error("Failed to send password change notification", {
         error: error.message,
         userId: user._id,
-        email: user.email
+        email: user.email,
       });
       throw error;
     }
@@ -881,32 +984,36 @@ class AuthController {
       let { full_name, email, password, username, phone_numbers } = req.body;
 
       // Check if email already exists
-      const existingEmailUser = await User.findOne({ email: email.toLowerCase() });
+      const existingEmailUser = await User.findOne({
+        email: email.toLowerCase(),
+      });
       if (existingEmailUser) {
         return res.status(409).json({
           success: false,
           message: "An account with this email already exists",
           details: {
             email_taken: true,
-            username_taken: false
-          }
+            username_taken: false,
+          },
         });
       }
 
       // Auto-generate username if not provided
-      if (!username || username.trim() === '') {
+      if (!username || username.trim() === "") {
         username = await this.generateUniqueUsername(full_name, email);
       } else {
         // Only check for username conflicts if username was provided by user
-        const existingUsernameUser = await User.findOne({ username: username.trim() });
+        const existingUsernameUser = await User.findOne({
+          username: username.trim(),
+        });
         if (existingUsernameUser) {
           return res.status(409).json({
             success: false,
             message: "This username is already taken",
             details: {
               email_taken: false,
-              username_taken: true
-            }
+              username_taken: true,
+            },
           });
         }
       }
@@ -917,17 +1024,20 @@ class AuthController {
 
       // Generate student ID for student roles
       let studentId = null;
-      const role = req.body.role || 'student'; // Default to student role
-      
-      if (role === 'student' || role === 'corporate-student') {
+      const role = req.body.role || "student"; // Default to student role
+
+      if (role === "student" || role === "corporate-student") {
         try {
           studentId = await User.generateStudentId();
         } catch (error) {
-          console.error('Error generating student ID:', error);
+          console.error("Error generating student ID:", error);
           return res.status(500).json({
             success: false,
             message: "Error generating student enrollment ID",
-            error: process.env.NODE_ENV === "development" ? error.message : undefined,
+            error:
+              process.env.NODE_ENV === "development"
+                ? error.message
+                : undefined,
           });
         }
       }
@@ -966,15 +1076,20 @@ class AuthController {
       await newUser.save();
 
       // Log registration activity
-      await newUser.logActivity("register", null, {
-        registration_method: "email",
-        referral_source: req.body.referral_source || "direct",
-      }, {
-        ip_address: deviceInfo.ip_address,
-        user_agent: req.headers["user-agent"],
-        device_type: deviceInfo.device_type,
-        geolocation: locationInfo,
-      });
+      await newUser.logActivity(
+        "register",
+        null,
+        {
+          registration_method: "email",
+          referral_source: req.body.referral_source || "direct",
+        },
+        {
+          ip_address: deviceInfo.ip_address,
+          user_agent: req.headers["user-agent"],
+          device_type: deviceInfo.device_type,
+          geolocation: locationInfo,
+        },
+      );
 
       // Send verification email with OTP
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -1021,7 +1136,8 @@ class AuthController {
       res.status(500).json({
         success: false,
         message: "Internal server error during registration",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -1048,13 +1164,13 @@ class AuthController {
         logger.error("Database error during login - user lookup", {
           error: dbError.message,
           email: email.toLowerCase(),
-          stack: dbError.stack
+          stack: dbError.stack,
         });
-        
+
         return res.status(500).json({
           success: false,
           message: "Internal server error during login",
-          error: "Database connection issue. Please try again in a moment."
+          error: "Database connection issue. Please try again in a moment.",
         });
       }
 
@@ -1075,8 +1191,8 @@ class AuthController {
             locked_until: lockStatus.lockedUntil,
             remaining_time: lockStatus.remainingTimeFormatted,
             remaining_minutes: lockStatus.remainingMinutes,
-            lockout_reason: lockStatus.lockoutReason
-          }
+            lockout_reason: lockStatus.lockoutReason,
+          },
         });
       }
 
@@ -1089,8 +1205,11 @@ class AuthController {
       const isValidPassword = await user.comparePassword(password);
       if (!isValidPassword) {
         try {
-          const attemptResult = await this.incrementFailedAttempts(user, 'login');
-          
+          const attemptResult = await this.incrementFailedAttempts(
+            user,
+            "login",
+          );
+
           if (attemptResult.shouldReturnError) {
             if (attemptResult.isLocked) {
               return res.status(423).json({
@@ -1100,8 +1219,8 @@ class AuthController {
                   locked_until: attemptResult.lockInfo.lockedUntil,
                   remaining_time: attemptResult.lockInfo.remainingTimeFormatted,
                   remaining_minutes: attemptResult.lockInfo.remainingMinutes,
-                  lockout_reason: attemptResult.lockInfo.lockoutReason
-                }
+                  lockout_reason: attemptResult.lockInfo.lockoutReason,
+                },
               });
             } else {
               return res.status(401).json({
@@ -1110,21 +1229,27 @@ class AuthController {
                 attempts_info: {
                   failed_attempts: attemptResult.attempts,
                   remaining_attempts: attemptResult.remainingAttempts,
-                  warning: attemptResult.remainingAttempts <= 1 ? "Account will be locked after next failed attempt" : null
-                }
+                  warning:
+                    attemptResult.remainingAttempts <= 1
+                      ? "Account will be locked after next failed attempt"
+                      : null,
+                },
               });
             }
           }
         } catch (dbError) {
-          logger.error("Database error during login - failed attempt handling", {
-            error: dbError.message,
-            userId: user._id,
-            stack: dbError.stack
-          });
-          
+          logger.error(
+            "Database error during login - failed attempt handling",
+            {
+              error: dbError.message,
+              userId: user._id,
+              stack: dbError.stack,
+            },
+          );
+
           return res.status(401).json({
             success: false,
-            message: "Invalid credentials"
+            message: "Invalid credentials",
           });
         }
       }
@@ -1137,15 +1262,18 @@ class AuthController {
         // For MFA-enabled users, return a temporary response indicating MFA is required
         return res.status(200).json({
           success: true,
-          message: "Password verified. Please provide your two-factor authentication code.",
+          message:
+            "Password verified. Please provide your two-factor authentication code.",
           requires_mfa: true,
           mfa_method: user.two_factor_method,
           data: {
             user_id: user._id.toString(),
             temp_session: true,
-            phone_hint: user.two_factor_method === 'sms' && user.two_factor_phone ? 
-              `***-***-${user.two_factor_phone.slice(-4)}` : null
-          }
+            phone_hint:
+              user.two_factor_method === "sms" && user.two_factor_phone
+                ? `***-***-${user.two_factor_phone.slice(-4)}`
+                : null,
+          },
         });
       }
 
@@ -1174,12 +1302,12 @@ class AuthController {
       const lastLogin = user.last_login;
       const now = new Date();
       const daysDiff = Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24));
-      
+
       if (daysDiff === 1) {
         user.statistics.learning.current_streak += 1;
         user.statistics.learning.longest_streak = Math.max(
           user.statistics.learning.longest_streak,
-          user.statistics.learning.current_streak
+          user.statistics.learning.current_streak,
         );
       } else if (daysDiff > 1) {
         user.statistics.learning.current_streak = 1;
@@ -1190,22 +1318,27 @@ class AuthController {
       } catch (dbError) {
         logger.error("Database error during login - user statistics save", {
           error: dbError.message,
-          userId: user._id
+          userId: user._id,
         });
         // Continue with login process even if statistics save fails
       }
 
       // Log login activity
-      await user.logActivity("login", null, {
-        login_method: "email_password",
-        session_id: sessionId,
-        remember_me,
-      }, {
-        ip_address: deviceInfo.ip_address,
-        user_agent: req.headers["user-agent"],
-        device_type: deviceInfo.device_type,
-        geolocation: locationInfo,
-      });
+      await user.logActivity(
+        "login",
+        null,
+        {
+          login_method: "email_password",
+          session_id: sessionId,
+          remember_me,
+        },
+        {
+          ip_address: deviceInfo.ip_address,
+          user_agent: req.headers["user-agent"],
+          device_type: deviceInfo.device_type,
+          geolocation: locationInfo,
+        },
+      );
 
       // Generate JWT token
       const tokenExpiry = remember_me ? "30d" : "24h";
@@ -1232,18 +1365,27 @@ class AuthController {
         await this.sendLoginNotification(user, deviceInfo, locationInfo);
       }
 
-      return this.completeLogin(user, deviceInfo, locationInfo, sessionId, token, remember_me, res);
+      return this.completeLogin(
+        user,
+        deviceInfo,
+        locationInfo,
+        sessionId,
+        token,
+        remember_me,
+        res,
+      );
     } catch (error) {
       logger.error("Login error:", {
         error: error.message,
         stack: error.stack,
-        email: req.body?.email
+        email: req.body?.email,
       });
 
       res.status(500).json({
         success: false,
         message: "Internal server error during login",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -1258,7 +1400,7 @@ class AuthController {
       if (!verified) {
         return res.status(400).json({
           success: false,
-          message: "MFA verification required"
+          message: "MFA verification required",
         });
       }
 
@@ -1266,7 +1408,7 @@ class AuthController {
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: "User not found"
+          message: "User not found",
         });
       }
 
@@ -1296,18 +1438,27 @@ class AuthController {
       // Generate JWT token
       const token = this.generateJWT(user);
 
-      return this.completeLogin(user, deviceInfo, locationInfo, sessionId, token, false, res);
+      return this.completeLogin(
+        user,
+        deviceInfo,
+        locationInfo,
+        sessionId,
+        token,
+        false,
+        res,
+      );
     } catch (error) {
       logger.error("Complete MFA login error:", {
         error: error.message,
         stack: error.stack,
-        userId: req.body?.user_id
+        userId: req.body?.user_id,
       });
 
       res.status(500).json({
         success: false,
         message: "Internal server error completing login",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -1315,7 +1466,15 @@ class AuthController {
   /**
    * Complete login process (shared between regular and MFA login)
    */
-  completeLogin(user, deviceInfo, locationInfo, sessionId, token, remember_me, res) {
+  completeLogin(
+    user,
+    deviceInfo,
+    locationInfo,
+    sessionId,
+    token,
+    remember_me,
+    res,
+  ) {
     // Track real-time login
     this.activeUsers.set(user._id.toString(), {
       user_id: user._id,
@@ -1382,7 +1541,7 @@ class AuthController {
       });
 
       // Remove from active users if no other sessions
-      const activeSessions = user.sessions.filter(s => s.is_active);
+      const activeSessions = user.sessions.filter((s) => s.is_active);
       if (activeSessions.length === 0) {
         this.activeUsers.delete(user._id.toString());
         await user.setOffline();
@@ -1397,7 +1556,8 @@ class AuthController {
       res.status(500).json({
         success: false,
         message: "Internal server error during logout",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -1410,65 +1570,77 @@ class AuthController {
   async logoutAllDevices(req, res) {
     try {
       const user = req.user;
-      
+
       // Get count of active sessions before invalidation
-      const activeSessionCount = user.sessions ? user.sessions.filter(s => s.is_active).length : 0;
-      
+      const activeSessionCount = user.sessions
+        ? user.sessions.filter((s) => s.is_active).length
+        : 0;
+
       // Invalidate all sessions for this user
       await user.invalidateAllSessions();
-      
+
       // Remove from active users tracking
       this.activeUsers.delete(user._id.toString());
-      
+
       // Clear all sessions from our session store for this user
       for (const [sessionId, sessionData] of this.sessionStore.entries()) {
         if (sessionData.user_id.toString() === user._id.toString()) {
           this.sessionStore.delete(sessionId);
         }
       }
-      
+
       // Revoke all refresh tokens for this user
       try {
         await jwtUtils.revokeAllUserTokens(user._id.toString());
       } catch (tokenError) {
         logger.warn("Failed to revoke all refresh tokens", {
           error: tokenError.message,
-          userId: user._id
+          userId: user._id,
         });
       }
-      
+
       // Log the logout all devices activity
-      await user.logActivity("logout_all_devices", null, {
-        logout_time: new Date(),
-        sessions_terminated: activeSessionCount,
-        security_action: true
-      }, {
-        ip_address: req.ip,
-        user_agent: req.headers["user-agent"],
-        device_type: this.extractDeviceInfo(req).device_type,
-        geolocation: this.extractLocationInfo(req),
-        security_event: true
-      });
-      
+      await user.logActivity(
+        "logout_all_devices",
+        null,
+        {
+          logout_time: new Date(),
+          sessions_terminated: activeSessionCount,
+          security_action: true,
+        },
+        {
+          ip_address: req.ip,
+          user_agent: req.headers["user-agent"],
+          device_type: this.extractDeviceInfo(req).device_type,
+          geolocation: this.extractLocationInfo(req),
+          security_event: true,
+        },
+      );
+
       // Send security notification email
       try {
         const deviceInfo = this.extractDeviceInfo(req);
         const locationInfo = this.extractLocationInfo(req);
-        
-        await this.sendLogoutAllDevicesNotification(user, deviceInfo, locationInfo, activeSessionCount);
+
+        await this.sendLogoutAllDevicesNotification(
+          user,
+          deviceInfo,
+          locationInfo,
+          activeSessionCount,
+        );
       } catch (emailError) {
         logger.warn("Failed to send logout all devices notification email", {
           error: emailError.message,
           userId: user._id,
-          email: user.email
+          email: user.email,
         });
         // Don't fail the logout if email fails
       }
-      
+
       logger.info("All sessions invalidated by user request", {
         userId: user._id,
         email: user.email,
-        sessionCount: activeSessionCount
+        sessionCount: activeSessionCount,
       });
 
       res.status(200).json({
@@ -1481,21 +1653,22 @@ class AuthController {
             "Change your password if you suspect unauthorized access",
             "Review your recent login activity",
             "Enable two-factor authentication for added security",
-            "Use strong, unique passwords for all accounts"
-          ]
-        }
+            "Use strong, unique passwords for all accounts",
+          ],
+        },
       });
     } catch (error) {
       logger.error("Logout all devices error:", {
         error: error.message,
         stack: error.stack,
-        userId: req.user?.id
+        userId: req.user?.id,
       });
-      
+
       res.status(500).json({
         success: false,
         message: "Internal server error during logout from all devices",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -1504,7 +1677,7 @@ class AuthController {
   async getProfile(req, res) {
     try {
       const user = req.user;
-      
+
       // Update last seen
       await user.updateLastSeen();
 
@@ -1564,7 +1737,7 @@ class AuthController {
         },
         analytics: {
           recent_activity: user.activity_log.slice(-10),
-          active_sessions: user.sessions.filter(s => s.is_active).length,
+          active_sessions: user.sessions.filter((s) => s.is_active).length,
           total_sessions: user.sessions.length,
           devices_count: user.devices.length,
           login_frequency: this.calculateLoginFrequency(user),
@@ -1582,7 +1755,8 @@ class AuthController {
       res.status(500).json({
         success: false,
         message: "Internal server error retrieving profile",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -1591,55 +1765,78 @@ class AuthController {
   async calculateRealUserStatistics(userId) {
     try {
       // Import models dynamically to avoid circular dependencies
-      const { default: Enrollment } = await import('../models/enrollment-model.js');
-      const { default: Certificate } = await import('../models/certificate-model.js');
-      const { default: Progress } = await import('../models/progress-model.js');
-      const { default: Course } = await import('../models/course-model.js');
+      const { default: Enrollment } = await import(
+        "../models/enrollment-model.js"
+      );
+      const { default: Certificate } = await import(
+        "../models/certificate-model.js"
+      );
+      const { default: Progress } = await import("../models/progress-model.js");
+      const { default: Course } = await import("../models/course-model.js");
 
       // Parallel queries for better performance
-      const [
-        enrollments,
-        certificates,
-        progressRecords,
-        user
-      ] = await Promise.all([
-        Enrollment.find({ student: userId }).populate('course', 'title category pricing'),
-        Certificate.find({ student: userId }),
-        Progress.find({ student: userId }),
-        User.findById(userId)
-      ]);
+      const [enrollments, certificates, progressRecords, user] =
+        await Promise.all([
+          Enrollment.find({ student: userId }).populate(
+            "course",
+            "title category pricing",
+          ),
+          Certificate.find({ student: userId }),
+          Progress.find({ student: userId }),
+          User.findById(userId),
+        ]);
 
       // Calculate learning statistics
       const learning = {
         total_courses_enrolled: enrollments.length,
-        total_courses_completed: enrollments.filter(e => e.status === 'completed').length,
-        total_learning_time: progressRecords.reduce((total, progress) => 
-          total + (progress.meta?.totalTimeSpent || 0), 0),
+        total_courses_completed: enrollments.filter(
+          (e) => e.status === "completed",
+        ).length,
+        total_learning_time: progressRecords.reduce(
+          (total, progress) => total + (progress.meta?.totalTimeSpent || 0),
+          0,
+        ),
         current_streak: await this.calculateCurrentStreak(userId),
         longest_streak: await this.calculateLongestStreak(userId),
-        certificates_earned: certificates.filter(c => c.status === 'active').length,
+        certificates_earned: certificates.filter((c) => c.status === "active")
+          .length,
         skill_points: this.calculateSkillPoints(progressRecords, certificates),
-        achievements_unlocked: this.calculateAchievements(enrollments, certificates, progressRecords),
-        courses_in_progress: enrollments.filter(e => e.status === 'active').length,
-        completion_rate: enrollments.length > 0 ? 
-          Math.round((enrollments.filter(e => e.status === 'completed').length / enrollments.length) * 100) : 0,
+        achievements_unlocked: this.calculateAchievements(
+          enrollments,
+          certificates,
+          progressRecords,
+        ),
+        courses_in_progress: enrollments.filter((e) => e.status === "active")
+          .length,
+        completion_rate:
+          enrollments.length > 0
+            ? Math.round(
+                (enrollments.filter((e) => e.status === "completed").length /
+                  enrollments.length) *
+                  100,
+              )
+            : 0,
         average_score: this.calculateAverageScore(progressRecords),
-        favorite_categories: await this.getFavoriteCategories(enrollments)
+        favorite_categories: await this.getFavoriteCategories(enrollments),
       };
 
       // Calculate engagement statistics
       const engagement = {
         total_logins: user.statistics?.engagement?.total_logins || 0,
-        total_session_time: user.statistics?.engagement?.total_session_time || 0,
-        avg_session_duration: user.statistics?.engagement?.avg_session_duration || 0,
+        total_session_time:
+          user.statistics?.engagement?.total_session_time || 0,
+        avg_session_duration:
+          user.statistics?.engagement?.avg_session_duration || 0,
         last_active_date: user.last_seen,
-        consecutive_active_days: await this.calculateConsecutiveActiveDays(userId),
+        consecutive_active_days:
+          await this.calculateConsecutiveActiveDays(userId),
         total_page_views: user.statistics?.engagement?.total_page_views || 0,
-        feature_usage_count: user.statistics?.engagement?.feature_usage_count || new Map(),
+        feature_usage_count:
+          user.statistics?.engagement?.feature_usage_count || new Map(),
         study_hours_this_week: await this.getStudyHoursThisWeek(userId),
         study_hours_this_month: await this.getStudyHoursThisMonth(userId),
         most_active_day: await this.getMostActiveDay(userId),
-        preferred_study_time: await this.getPreferredStudyTime(userId)
+        preferred_study_time: await this.getPreferredStudyTime(userId),
       };
 
       // Calculate social statistics
@@ -1649,27 +1846,40 @@ class AuthController {
         content_shared: 0, // TODO: Implement when sharing system is added
         followers_count: 0, // TODO: Implement when social features are added
         following_count: 0, // TODO: Implement when social features are added
-        community_reputation: this.calculateCommunityReputation(certificates, progressRecords),
+        community_reputation: this.calculateCommunityReputation(
+          certificates,
+          progressRecords,
+        ),
         peer_interactions: 0, // TODO: Implement when peer system is added
         mentor_sessions: 0, // TODO: Implement when mentoring system is added
       };
 
       // Calculate financial statistics
       const financial = {
-        total_spent: enrollments.reduce((total, enrollment) => 
-          total + (enrollment.pricing_snapshot?.final_price || 0), 0),
-        total_courses_purchased: enrollments.filter(e => 
-          e.pricing_snapshot?.final_price > 0).length,
+        total_spent: enrollments.reduce(
+          (total, enrollment) =>
+            total + (enrollment.pricing_snapshot?.final_price || 0),
+          0,
+        ),
+        total_courses_purchased: enrollments.filter(
+          (e) => e.pricing_snapshot?.final_price > 0,
+        ).length,
         subscription_months: this.calculateSubscriptionMonths(user),
         refunds_requested: 0, // TODO: Implement when refund system is added
-        lifetime_value: enrollments.reduce((total, enrollment) => 
-          total + (enrollment.pricing_snapshot?.final_price || 0), 0),
+        lifetime_value: enrollments.reduce(
+          (total, enrollment) =>
+            total + (enrollment.pricing_snapshot?.final_price || 0),
+          0,
+        ),
         average_course_price: this.calculateAverageCoursePrice(enrollments),
-        savings_from_discounts: enrollments.reduce((total, enrollment) => 
-          total + (enrollment.pricing_snapshot?.discount_applied || 0), 0),
+        savings_from_discounts: enrollments.reduce(
+          (total, enrollment) =>
+            total + (enrollment.pricing_snapshot?.discount_applied || 0),
+          0,
+        ),
         most_expensive_course: this.getMostExpensiveCourse(enrollments),
         payment_methods_used: this.getPaymentMethodsUsed(enrollments),
-        currency_preference: user.preferences?.currency || 'USD'
+        currency_preference: user.preferences?.currency || "USD",
       };
 
       return {
@@ -1677,11 +1887,10 @@ class AuthController {
         engagement,
         social,
         financial,
-        last_updated: new Date()
+        last_updated: new Date(),
       };
-
     } catch (error) {
-      console.error('Error calculating real user statistics:', error);
+      console.error("Error calculating real user statistics:", error);
       // Return default statistics if calculation fails
       return {
         learning: {
@@ -1719,7 +1928,7 @@ class AuthController {
           lifetime_value: 0,
         },
         last_updated: new Date(),
-        error: 'Failed to calculate statistics'
+        error: "Failed to calculate statistics",
       };
     }
   }
@@ -1741,13 +1950,22 @@ class AuthController {
 
       // Fields that are not allowed to be updated via this endpoint
       const restrictedFields = [
-        "password", "email", "email_verified", "phone_verified",
-        "account_type", "subscription_status", "is_banned", "role",
-        "statistics", "activity_log", "sessions", "devices"
+        "password",
+        "email",
+        "email_verified",
+        "phone_verified",
+        "account_type",
+        "subscription_status",
+        "is_banned",
+        "role",
+        "statistics",
+        "activity_log",
+        "sessions",
+        "devices",
       ];
 
       // Remove restricted fields
-      restrictedFields.forEach(field => delete updateData[field]);
+      restrictedFields.forEach((field) => delete updateData[field]);
 
       // Handle nested updates
       if (updateData.meta) {
@@ -1761,7 +1979,7 @@ class AuthController {
       }
 
       // Update user fields
-      Object.keys(updateData).forEach(key => {
+      Object.keys(updateData).forEach((key) => {
         if (updateData[key] !== undefined) {
           user[key] = updateData[key];
         }
@@ -1796,7 +2014,8 @@ class AuthController {
       res.status(500).json({
         success: false,
         message: "Internal server error updating profile",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -1805,7 +2024,7 @@ class AuthController {
   async getActiveUsers(req, res) {
     try {
       const activeUsers = await User.findOnlineUsers();
-      
+
       res.status(200).json({
         success: true,
         message: "Active users retrieved successfully",
@@ -1824,7 +2043,8 @@ class AuthController {
       res.status(500).json({
         success: false,
         message: "Internal server error retrieving active users",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -1837,7 +2057,10 @@ class AuthController {
 
       // Check if user is requesting their own analytics or has admin privileges
       const targetUserId = user_id || requestingUser._id;
-      if (targetUserId !== requestingUser._id.toString() && requestingUser.account_type !== "admin") {
+      if (
+        targetUserId !== requestingUser._id.toString() &&
+        requestingUser.account_type !== "admin"
+      ) {
         return res.status(403).json({
           success: false,
           message: "Unauthorized to view analytics for other users",
@@ -1855,7 +2078,9 @@ class AuthController {
       const analytics = {
         profile: {
           profile_completion: user.profile_completion,
-          account_age_days: Math.floor((Date.now() - user.created_at) / (1000 * 60 * 60 * 24)),
+          account_age_days: Math.floor(
+            (Date.now() - user.created_at) / (1000 * 60 * 60 * 24),
+          ),
           verification_status: {
             email: user.email_verified,
             phone: user.phone_verified,
@@ -1867,7 +2092,8 @@ class AuthController {
           total_session_time: user.statistics.engagement.total_session_time,
           avg_session_duration: user.statistics.engagement.avg_session_duration,
           last_active: user.statistics.engagement.last_active_date,
-          consecutive_active_days: user.statistics.engagement.consecutive_active_days,
+          consecutive_active_days:
+            user.statistics.engagement.consecutive_active_days,
           login_frequency: this.calculateLoginFrequency(user),
           engagement_score: this.calculateEngagementScore(user),
         },
@@ -1875,7 +2101,9 @@ class AuthController {
         social: user.statistics.social,
         devices: {
           total_devices: user.devices.length,
-          active_devices: user.devices.filter(d => d.last_seen > Date.now() - 7 * 24 * 60 * 60 * 1000).length,
+          active_devices: user.devices.filter(
+            (d) => d.last_seen > Date.now() - 7 * 24 * 60 * 60 * 1000,
+          ).length,
           device_breakdown: this.getDeviceBreakdown(user.devices),
         },
         recent_activity: user.activity_log.slice(-50),
@@ -1896,7 +2124,8 @@ class AuthController {
       res.status(500).json({
         success: false,
         message: "Internal server error retrieving analytics",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -1905,7 +2134,7 @@ class AuthController {
   async requestPasswordReset(req, res) {
     try {
       const { email } = req.body;
-      
+
       const user = await User.findOne({ email: email.toLowerCase() });
       if (!user) {
         // Don't reveal if email exists or not for security
@@ -1939,7 +2168,8 @@ class AuthController {
       res.status(500).json({
         success: false,
         message: "Internal server error processing password reset request",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -1948,7 +2178,7 @@ class AuthController {
   async getSystemAnalytics(req, res) {
     try {
       const user = req.user;
-      
+
       if (user.account_type !== "admin") {
         return res.status(403).json({
           success: false,
@@ -1957,7 +2187,7 @@ class AuthController {
       }
 
       const { timeframe = "30d" } = req.query;
-      
+
       const systemAnalytics = await User.getUserAnalytics(timeframe);
       const realtimeStats = {
         active_users_now: this.activeUsers.size,
@@ -1984,7 +2214,8 @@ class AuthController {
       res.status(500).json({
         success: false,
         message: "Internal server error retrieving system analytics",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -2000,20 +2231,20 @@ class AuthController {
   calculateLockoutDuration(attempts) {
     // Progressive lockout strategy
     const lockoutLevels = {
-      3: 1 * 60 * 1000,      // 1 minute for 3 attempts
-      4: 5 * 60 * 1000,      // 5 minutes for 4 attempts
-      5: 15 * 60 * 1000,     // 15 minutes for 5 attempts
-      6: 30 * 60 * 1000,     // 30 minutes for 6 attempts
-      7: 60 * 60 * 1000,     // 1 hour for 7 attempts
+      3: 1 * 60 * 1000, // 1 minute for 3 attempts
+      4: 5 * 60 * 1000, // 5 minutes for 4 attempts
+      5: 15 * 60 * 1000, // 15 minutes for 5 attempts
+      6: 30 * 60 * 1000, // 30 minutes for 6 attempts
+      7: 60 * 60 * 1000, // 1 hour for 7 attempts
       8: 2 * 60 * 60 * 1000, // 2 hours for 8 attempts
       9: 4 * 60 * 60 * 1000, // 4 hours for 9 attempts
     };
-    
+
     // For 10+ attempts, use 24 hours
     if (attempts >= 10) {
       return 24 * 60 * 60 * 1000; // 24 hours
     }
-    
+
     return lockoutLevels[attempts] || 0;
   }
 
@@ -2029,13 +2260,13 @@ class AuthController {
 
     const now = Date.now();
     const isLocked = user.account_locked_until > now;
-    
+
     if (!isLocked) {
       // Account was locked but lockout period has expired
-      return { 
-        isLocked: false, 
+      return {
+        isLocked: false,
         wasLocked: true,
-        needsReset: true 
+        needsReset: true,
       };
     }
 
@@ -2048,7 +2279,7 @@ class AuthController {
       remainingMinutes,
       remainingTimeFormatted: this.formatRemainingTime(remainingTime),
       lockedUntil: user.account_locked_until,
-      lockoutReason: user.lockout_reason || 'multiple_failed_attempts'
+      lockoutReason: user.lockout_reason || "multiple_failed_attempts",
     };
   }
 
@@ -2059,10 +2290,10 @@ class AuthController {
    * @param {string} attemptType - Type of failed attempt ('login', 'temp_password', 'password_change')
    * @returns {Object} - Result of the attempt increment
    */
-  async incrementFailedAttempts(user, attemptType = 'login') {
+  async incrementFailedAttempts(user, attemptType = "login") {
     try {
       const lockStatus = this.isAccountLocked(user);
-      
+
       // If account was locked but lockout period expired, reset counters
       if (lockStatus.needsReset) {
         await this.resetLockoutFields(user);
@@ -2077,12 +2308,15 @@ class AuthController {
         return {
           isLocked: true,
           lockInfo: lockStatus,
-          shouldReturnError: true
+          shouldReturnError: true,
         };
       }
 
       // Determine which counter to increment
-      const attemptField = attemptType === 'password_change' ? 'password_change_attempts' : 'failed_login_attempts';
+      const attemptField =
+        attemptType === "password_change"
+          ? "password_change_attempts"
+          : "failed_login_attempts";
       const currentAttempts = (user[attemptField] || 0) + 1;
 
       // Calculate if this increment should trigger a lockout
@@ -2092,23 +2326,23 @@ class AuthController {
       // Prepare update object
       const updateData = {
         [attemptField]: currentAttempts,
-        last_failed_attempt: new Date()
+        last_failed_attempt: new Date(),
       };
 
       if (shouldLock) {
         updateData.account_locked_until = Date.now() + lockoutDuration;
-        updateData.lockout_reason = attemptType + '_attempts';
+        updateData.lockout_reason = attemptType + "_attempts";
       }
 
       // Use atomic update to prevent race conditions
       const updatedUser = await User.findByIdAndUpdate(
         user._id,
         { $set: updateData },
-        { new: true }
+        { new: true },
       );
 
       if (!updatedUser) {
-        throw new Error('Failed to update user attempt counter');
+        throw new Error("Failed to update user attempt counter");
       }
 
       // Update local user object
@@ -2118,9 +2352,11 @@ class AuthController {
         isLocked: shouldLock,
         attempts: currentAttempts,
         lockoutDuration: shouldLock ? lockoutDuration : 0,
-        lockoutDurationMinutes: shouldLock ? Math.ceil(lockoutDuration / (60 * 1000)) : 0,
+        lockoutDurationMinutes: shouldLock
+          ? Math.ceil(lockoutDuration / (60 * 1000))
+          : 0,
         remainingAttempts: Math.max(0, 3 - currentAttempts),
-        shouldReturnError: shouldLock
+        shouldReturnError: shouldLock,
       };
 
       if (shouldLock) {
@@ -2129,7 +2365,7 @@ class AuthController {
           remainingTime: lockoutDuration,
           remainingMinutes: result.lockoutDurationMinutes,
           remainingTimeFormatted: this.formatRemainingTime(lockoutDuration),
-          lockoutReason: updateData.lockout_reason
+          lockoutReason: updateData.lockout_reason,
         };
 
         logger.warn(`Account locked due to ${attemptType} attempts`, {
@@ -2137,17 +2373,17 @@ class AuthController {
           email: user.email,
           attempts: currentAttempts,
           lockoutDurationMinutes: result.lockoutDurationMinutes,
-          lockoutReason: updateData.lockout_reason
+          lockoutReason: updateData.lockout_reason,
         });
       }
 
       return result;
     } catch (error) {
-      logger.error('Error incrementing failed attempts:', {
+      logger.error("Error incrementing failed attempts:", {
         error: error.message,
         userId: user._id,
         attemptType,
-        stack: error.stack
+        stack: error.stack,
       });
       throw error;
     }
@@ -2164,23 +2400,23 @@ class AuthController {
         password_change_attempts: 0,
         account_locked_until: undefined,
         lockout_reason: undefined,
-        last_failed_attempt: undefined
+        last_failed_attempt: undefined,
       };
 
       const updatedUser = await User.findByIdAndUpdate(
         user._id,
-        { 
-          $set: { 
+        {
+          $set: {
             failed_login_attempts: 0,
-            password_change_attempts: 0
+            password_change_attempts: 0,
           },
           $unset: {
             account_locked_until: 1,
             lockout_reason: 1,
-            last_failed_attempt: 1
-          }
+            last_failed_attempt: 1,
+          },
         },
-        { new: true }
+        { new: true },
       );
 
       if (updatedUser) {
@@ -2190,10 +2426,10 @@ class AuthController {
 
       return updatedUser;
     } catch (error) {
-      logger.error('Error resetting lockout fields:', {
+      logger.error("Error resetting lockout fields:", {
         error: error.message,
         userId: user._id,
-        stack: error.stack
+        stack: error.stack,
       });
       throw error;
     }
@@ -2216,26 +2452,28 @@ class AuthController {
 
       // Find all locked accounts
       const lockedUsers = await User.find({
-        account_locked_until: { $exists: true, $ne: null, $gt: Date.now() }
-      }).select('full_name email failed_login_attempts password_change_attempts account_locked_until lockout_reason created_at last_login');
+        account_locked_until: { $exists: true, $ne: null, $gt: Date.now() },
+      }).select(
+        "full_name email failed_login_attempts password_change_attempts account_locked_until lockout_reason created_at last_login",
+      );
 
       // Calculate remaining lockout time for each user
-      const lockedAccountsWithDetails = lockedUsers.map(user => {
+      const lockedAccountsWithDetails = lockedUsers.map((user) => {
         const remainingTime = user.account_locked_until - Date.now();
         const remainingMinutes = Math.ceil(remainingTime / (1000 * 60));
-        
+
         return {
           id: user._id,
           full_name: user.full_name,
           email: user.email,
           failed_login_attempts: user.failed_login_attempts || 0,
           password_change_attempts: user.password_change_attempts || 0,
-          lockout_reason: user.lockout_reason || 'unknown',
+          lockout_reason: user.lockout_reason || "unknown",
           locked_until: user.account_locked_until,
           remaining_minutes: remainingMinutes,
           remaining_time_formatted: this.formatRemainingTime(remainingTime),
           created_at: user.created_at,
-          last_login: user.last_login
+          last_login: user.last_login,
         };
       });
 
@@ -2244,15 +2482,16 @@ class AuthController {
         message: `Found ${lockedAccountsWithDetails.length} locked accounts`,
         data: {
           total_locked: lockedAccountsWithDetails.length,
-          accounts: lockedAccountsWithDetails
-        }
+          accounts: lockedAccountsWithDetails,
+        },
       });
     } catch (error) {
       logger.error("Get locked accounts error:", error);
       res.status(500).json({
         success: false,
         message: "Server error retrieving locked accounts",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -2285,14 +2524,17 @@ class AuthController {
       }
 
       // Check if account is actually locked
-      if (!user.account_locked_until || user.account_locked_until <= Date.now()) {
+      if (
+        !user.account_locked_until ||
+        user.account_locked_until <= Date.now()
+      ) {
         return res.status(400).json({
           success: false,
           message: "Account is not currently locked",
           data: {
             user_email: user.email,
-            current_status: "unlocked"
-          }
+            current_status: "unlocked",
+          },
         });
       }
 
@@ -2301,7 +2543,7 @@ class AuthController {
         locked_until: user.account_locked_until,
         failed_login_attempts: user.failed_login_attempts,
         password_change_attempts: user.password_change_attempts,
-        lockout_reason: user.lockout_reason
+        lockout_reason: user.lockout_reason,
       };
 
       // Unlock the account using atomic operation
@@ -2309,22 +2551,20 @@ class AuthController {
         $unset: {
           account_locked_until: 1,
           lockout_reason: 1,
-          last_failed_attempt: 1
-        }
+          last_failed_attempt: 1,
+        },
       };
 
       if (resetAttempts) {
         updateFields.$set = {
           failed_login_attempts: 0,
-          password_change_attempts: 0
+          password_change_attempts: 0,
         };
       }
 
-      const updatedUser = await User.findByIdAndUpdate(
-        user._id,
-        updateFields,
-        { new: true }
-      );
+      const updatedUser = await User.findByIdAndUpdate(user._id, updateFields, {
+        new: true,
+      });
 
       if (!updatedUser) {
         return res.status(404).json({
@@ -2347,16 +2587,18 @@ class AuthController {
 
       // Log the unlock activity (using valid enum value)
       try {
-        await user.logActivity('admin_action', null, {
-          action_type: 'account_unlocked',
+        await user.logActivity("admin_action", null, {
+          action_type: "account_unlocked",
           unlocked_at: new Date(),
           unlocked_by_admin: req.user.email,
           previous_state: previousState,
-          attempts_reset: resetAttempts
+          attempts_reset: resetAttempts,
         });
       } catch (logError) {
         // Continue even if logging fails
-        logger.warn("Failed to log unlock activity", { error: logError.message });
+        logger.warn("Failed to log unlock activity", {
+          error: logError.message,
+        });
       }
 
       logger.info("Account unlocked by admin", {
@@ -2364,7 +2606,7 @@ class AuthController {
         unlockedUserEmail: user.email,
         adminUserId: req.user.id,
         adminEmail: req.user.email,
-        previousState
+        previousState,
       });
 
       res.status(200).json({
@@ -2376,17 +2618,18 @@ class AuthController {
             email: user.email,
             full_name: user.full_name,
             unlocked_at: new Date(),
-            attempts_reset: resetAttempts
+            attempts_reset: resetAttempts,
           },
-          previous_state: previousState
-        }
+          previous_state: previousState,
+        },
       });
     } catch (error) {
       logger.error("Unlock account error:", error);
       res.status(500).json({
         success: false,
         message: "Server error unlocking account",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -2410,7 +2653,7 @@ class AuthController {
 
       // Find all locked accounts
       const lockedUsers = await User.find({
-        account_locked_until: { $exists: true, $ne: null, $gt: Date.now() }
+        account_locked_until: { $exists: true, $ne: null, $gt: Date.now() },
       });
 
       if (lockedUsers.length === 0) {
@@ -2419,8 +2662,8 @@ class AuthController {
           message: "No locked accounts found",
           data: {
             unlocked_count: 0,
-            accounts: []
-          }
+            accounts: [],
+          },
         });
       }
 
@@ -2428,22 +2671,22 @@ class AuthController {
       const unlockedAccounts = [];
 
       // Unlock all accounts using atomic operation
-      const lockoutQuery = { 
-        account_locked_until: { $exists: true, $ne: null, $gt: Date.now() } 
+      const lockoutQuery = {
+        account_locked_until: { $exists: true, $ne: null, $gt: Date.now() },
       };
 
       const updateQuery = {
-        $unset: { 
+        $unset: {
           account_locked_until: 1,
           lockout_reason: 1,
-          last_failed_attempt: 1
-        }
+          last_failed_attempt: 1,
+        },
       };
 
       if (resetAttempts) {
         updateQuery.$set = {
           failed_login_attempts: 0,
-          password_change_attempts: 0
+          password_change_attempts: 0,
         };
       }
 
@@ -2458,22 +2701,24 @@ class AuthController {
           was_locked_until: user.account_locked_until,
           lockout_reason: user.lockout_reason,
           failed_login_attempts: user.failed_login_attempts || 0,
-          password_change_attempts: user.password_change_attempts || 0
+          password_change_attempts: user.password_change_attempts || 0,
         });
 
         // Log unlock activity for each user
         // Log bulk unlock activity (using valid enum value)
         try {
-          await user.logActivity('admin_action', null, {
-            action_type: 'account_unlocked_bulk',
+          await user.logActivity("admin_action", null, {
+            action_type: "account_unlocked_bulk",
             unlocked_at: new Date(),
             unlocked_by_admin: req.user.email,
             bulk_unlock: true,
-            attempts_reset: resetAttempts
+            attempts_reset: resetAttempts,
           });
         } catch (logError) {
           // Continue even if logging fails
-          logger.warn("Failed to log bulk unlock activity", { error: logError.message });
+          logger.warn("Failed to log bulk unlock activity", {
+            error: logError.message,
+          });
         }
       }
 
@@ -2481,7 +2726,7 @@ class AuthController {
         adminUserId: req.user.id,
         adminEmail: req.user.email,
         unlockedCount: result.modifiedCount,
-        attemptReset: resetAttempts
+        attemptReset: resetAttempts,
       });
 
       res.status(200).json({
@@ -2490,15 +2735,16 @@ class AuthController {
         data: {
           unlocked_count: result.modifiedCount,
           attempts_reset: resetAttempts,
-          accounts: unlockedAccounts
-        }
+          accounts: unlockedAccounts,
+        },
       });
     } catch (error) {
       logger.error("Unlock all accounts error:", error);
       res.status(500).json({
         success: false,
         message: "Server error unlocking accounts",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -2528,29 +2774,29 @@ class AuthController {
         lockedLast24h,
         lockedLastWeek,
         lockoutReasons,
-        attemptStats
+        attemptStats,
       ] = await Promise.all([
         // Currently locked accounts
         User.countDocuments({
-          account_locked_until: { $gt: now }
+          account_locked_until: { $gt: now },
         }),
-        
+
         // Accounts locked in last 24 hours
         User.countDocuments({
-          account_locked_until: { $gte: oneDayAgo }
+          account_locked_until: { $gte: oneDayAgo },
         }),
-        
+
         // Accounts locked in last week
         User.countDocuments({
-          account_locked_until: { $gte: oneWeekAgo }
+          account_locked_until: { $gte: oneWeekAgo },
         }),
-        
+
         // Lockout reasons breakdown
         User.aggregate([
           { $match: { lockout_reason: { $exists: true, $ne: null } } },
-          { $group: { _id: "$lockout_reason", count: { $sum: 1 } } }
+          { $group: { _id: "$lockout_reason", count: { $sum: 1 } } },
         ]),
-        
+
         // Failed attempt statistics
         User.aggregate([
           {
@@ -2558,17 +2804,23 @@ class AuthController {
               _id: null,
               avg_failed_login_attempts: { $avg: "$failed_login_attempts" },
               max_failed_login_attempts: { $max: "$failed_login_attempts" },
-              avg_password_change_attempts: { $avg: "$password_change_attempts" },
-              max_password_change_attempts: { $max: "$password_change_attempts" },
+              avg_password_change_attempts: {
+                $avg: "$password_change_attempts",
+              },
+              max_password_change_attempts: {
+                $max: "$password_change_attempts",
+              },
               total_users_with_failed_logins: {
-                $sum: { $cond: [{ $gt: ["$failed_login_attempts", 0] }, 1, 0] }
+                $sum: { $cond: [{ $gt: ["$failed_login_attempts", 0] }, 1, 0] },
               },
               total_users_with_failed_password_changes: {
-                $sum: { $cond: [{ $gt: ["$password_change_attempts", 0] }, 1, 0] }
-              }
-            }
-          }
-        ])
+                $sum: {
+                  $cond: [{ $gt: ["$password_change_attempts", 0] }, 1, 0],
+                },
+              },
+            },
+          },
+        ]),
       ]);
 
       const stats = attemptStats[0] || {};
@@ -2580,38 +2832,43 @@ class AuthController {
           current_status: {
             currently_locked: currentlyLocked,
             locked_last_24h: lockedLast24h,
-            locked_last_week: lockedLastWeek
+            locked_last_week: lockedLastWeek,
           },
           lockout_reasons: lockoutReasons.reduce((acc, item) => {
             acc[item._id] = item.count;
             return acc;
           }, {}),
           attempt_statistics: {
-            avg_failed_login_attempts: Math.round((stats.avg_failed_login_attempts || 0) * 100) / 100,
+            avg_failed_login_attempts:
+              Math.round((stats.avg_failed_login_attempts || 0) * 100) / 100,
             max_failed_login_attempts: stats.max_failed_login_attempts || 0,
             users_with_failed_logins: stats.total_users_with_failed_logins || 0,
-            avg_password_change_attempts: Math.round((stats.avg_password_change_attempts || 0) * 100) / 100,
-            max_password_change_attempts: stats.max_password_change_attempts || 0,
-            users_with_failed_password_changes: stats.total_users_with_failed_password_changes || 0
+            avg_password_change_attempts:
+              Math.round((stats.avg_password_change_attempts || 0) * 100) / 100,
+            max_password_change_attempts:
+              stats.max_password_change_attempts || 0,
+            users_with_failed_password_changes:
+              stats.total_users_with_failed_password_changes || 0,
           },
           lockout_levels: {
             level_1: "3 attempts = 1 minute",
-            level_2: "4 attempts = 5 minutes", 
+            level_2: "4 attempts = 5 minutes",
             level_3: "5 attempts = 15 minutes",
             level_4: "6 attempts = 30 minutes",
             level_5: "7 attempts = 1 hour",
             level_6: "8 attempts = 2 hours",
             level_7: "9 attempts = 4 hours",
-            level_8: "10+ attempts = 24 hours"
-          }
-        }
+            level_8: "10+ attempts = 24 hours",
+          },
+        },
       });
     } catch (error) {
       logger.error("Get lockout stats error:", error);
       res.status(500).json({
         success: false,
         message: "Server error retrieving lockout statistics",
-        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
   }
@@ -2623,10 +2880,10 @@ class AuthController {
    */
   formatRemainingTime(timeMs) {
     if (timeMs <= 0) return "Expired";
-    
+
     const minutes = Math.floor(timeMs / (1000 * 60));
     const seconds = Math.floor((timeMs % (1000 * 60)) / 1000);
-    
+
     if (minutes > 0) {
       return `${minutes}m ${seconds}s`;
     } else {
@@ -2641,35 +2898,33 @@ class AuthController {
    */
   hasBasicAdminAccess(user) {
     if (!user) return false;
-    
+
     // Check various admin role formats
-    const adminRoles = [
-      'admin', 'administrator'
-    ];
-    
+    const adminRoles = ["admin", "administrator"];
+
     // Check primary role field
     if (user.role && adminRoles.includes(user.role.toLowerCase())) {
       return true;
     }
-    
+
     // Check admin_role field
     if (user.admin_role && adminRoles.includes(user.admin_role.toLowerCase())) {
       return true;
     }
-    
+
     // Check if role is an array and contains admin roles
     if (Array.isArray(user.role)) {
-      return user.role.some(role => adminRoles.includes(role.toLowerCase()));
+      return user.role.some((role) => adminRoles.includes(role.toLowerCase()));
     }
-    
+
     // Check permissions array if exists
     if (user.permissions && Array.isArray(user.permissions)) {
-      const adminPermissions = ['admin', 'user_management'];
-      return user.permissions.some(permission => 
-        adminPermissions.includes(permission.toLowerCase())
+      const adminPermissions = ["admin", "user_management"];
+      return user.permissions.some((permission) =>
+        adminPermissions.includes(permission.toLowerCase()),
       );
     }
-    
+
     return false;
   }
 
@@ -2680,41 +2935,51 @@ class AuthController {
    */
   hasSuperAdminAccess(user) {
     if (!user) return false;
-    
+
     // Check various super admin role formats
     const superAdminRoles = [
-      'super_admin', 'superadmin', 'super-admin', 'root', 
-      'system_admin', 'master_admin', 'owner'
+      "super_admin",
+      "superadmin",
+      "super-admin",
+      "root",
+      "system_admin",
+      "master_admin",
+      "owner",
     ];
-    
+
     // Check primary role field
     if (user.role && superAdminRoles.includes(user.role.toLowerCase())) {
       return true;
     }
-    
+
     // Check admin_role field
-    if (user.admin_role && superAdminRoles.includes(user.admin_role.toLowerCase())) {
+    if (
+      user.admin_role &&
+      superAdminRoles.includes(user.admin_role.toLowerCase())
+    ) {
       return true;
     }
-    
+
     // Check if role is an array and contains super admin roles
     if (Array.isArray(user.role)) {
-      return user.role.some(role => superAdminRoles.includes(role.toLowerCase()));
-    }
-    
-    // Check permissions array if exists
-    if (user.permissions && Array.isArray(user.permissions)) {
-      const superAdminPermissions = ['super_admin', 'system_admin', 'root'];
-      return user.permissions.some(permission => 
-        superAdminPermissions.includes(permission.toLowerCase())
+      return user.role.some((role) =>
+        superAdminRoles.includes(role.toLowerCase()),
       );
     }
-    
+
+    // Check permissions array if exists
+    if (user.permissions && Array.isArray(user.permissions)) {
+      const superAdminPermissions = ["super_admin", "system_admin", "root"];
+      return user.permissions.some((permission) =>
+        superAdminPermissions.includes(permission.toLowerCase()),
+      );
+    }
+
     // Check for super admin boolean flags
     if (user.is_super_admin === true || user.isSuperAdmin === true) {
       return true;
     }
-    
+
     return false;
   }
 
@@ -2726,17 +2991,17 @@ class AuthController {
    */
   hasAdminAccess(user) {
     if (!user) return false;
-    
+
     // Super admin automatically has admin access
     if (this.hasSuperAdminAccess(user)) {
       return true;
     }
-    
+
     // Check for basic admin access
     if (this.hasBasicAdminAccess(user)) {
       return true;
     }
-    
+
     return false;
   }
 
@@ -2745,20 +3010,26 @@ class AuthController {
   extractDeviceInfo(req) {
     const ua = UAParser(req.headers["user-agent"]);
     const ip = req.ip || req.connection.remoteAddress;
-    
+
     // Enhanced device detection
-    const deviceVendor = ua.device.vendor || (ua.os.name === 'iOS' ? 'Apple' : (ua.os.name === 'Android' ? 'Google' : ''));
-    const deviceModel = ua.device.model || '';
-    
+    const deviceVendor =
+      ua.device.vendor ||
+      (ua.os.name === "iOS"
+        ? "Apple"
+        : ua.os.name === "Android"
+          ? "Google"
+          : "");
+    const deviceModel = ua.device.model || "";
+
     // Build a meaningful device name
-    let deviceName = 'Unknown Device';
+    let deviceName = "Unknown Device";
     if (deviceVendor && deviceModel) {
       deviceName = `${deviceVendor} ${deviceModel}`;
     } else if (ua.os.name && ua.browser.name) {
       // For desktop browsers, create a meaningful name
-      if (ua.device.type === 'mobile') {
+      if (ua.device.type === "mobile") {
         deviceName = `Mobile ${ua.browser.name}`;
-      } else if (ua.device.type === 'tablet') {
+      } else if (ua.device.type === "tablet") {
         deviceName = `Tablet ${ua.browser.name}`;
       } else {
         deviceName = `${ua.os.name} Computer`;
@@ -2766,31 +3037,38 @@ class AuthController {
     } else if (ua.browser.name) {
       deviceName = `${ua.browser.name} Browser`;
     }
-    
+
     // Enhanced browser info
-    const browserInfo = ua.browser.name ? 
-      `${ua.browser.name} ${ua.browser.version || ''}`.trim() : 
-      'Unknown Browser';
-    
+    const browserInfo = ua.browser.name
+      ? `${ua.browser.name} ${ua.browser.version || ""}`.trim()
+      : "Unknown Browser";
+
     // Enhanced OS info
-    const osInfo = ua.os.name ? 
-      `${ua.os.name} ${ua.os.version || ''}`.trim() : 
-      'Unknown OS';
-    
+    const osInfo = ua.os.name
+      ? `${ua.os.name} ${ua.os.version || ""}`.trim()
+      : "Unknown OS";
+
     // Better device type detection
-    let deviceType = ua.device.type || 'desktop';
+    let deviceType = ua.device.type || "desktop";
     if (!ua.device.type) {
       // Fallback detection based on user agent
-      const userAgent = req.headers["user-agent"]?.toLowerCase() || '';
-      if (userAgent.includes('mobile') || userAgent.includes('iphone') || userAgent.includes('android')) {
-        deviceType = 'mobile';
-      } else if (userAgent.includes('tablet') || userAgent.includes('ipad')) {
-        deviceType = 'tablet';
+      const userAgent = req.headers["user-agent"]?.toLowerCase() || "";
+      if (
+        userAgent.includes("mobile") ||
+        userAgent.includes("iphone") ||
+        userAgent.includes("android")
+      ) {
+        deviceType = "mobile";
+      } else if (userAgent.includes("tablet") || userAgent.includes("ipad")) {
+        deviceType = "tablet";
       }
     }
-    
+
     return {
-      device_id: crypto.createHash("md5").update(req.headers["user-agent"] + ip).digest("hex"),
+      device_id: crypto
+        .createHash("md5")
+        .update(req.headers["user-agent"] + ip)
+        .digest("hex"),
       device_name: deviceName,
       device_type: deviceType,
       operating_system: osInfo,
@@ -2804,66 +3082,84 @@ class AuthController {
 
   extractLocationInfo(req) {
     // Enhanced IP address extraction with better IPv6 handling
-    let ip = req.ip || 
-             req.connection.remoteAddress || 
-             req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-             req.headers['x-real-ip'] ||
-             req.headers['x-client-ip'] ||
-             req.connection.socket?.remoteAddress ||
-             'unknown';
-    
+    let ip =
+      req.ip ||
+      req.connection.remoteAddress ||
+      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+      req.headers["x-real-ip"] ||
+      req.headers["x-client-ip"] ||
+      req.connection.socket?.remoteAddress ||
+      "unknown";
+
     // Handle IPv6 mapped IPv4 addresses (::ffff:x.x.x.x)
-    if (ip.startsWith('::ffff:')) {
+    if (ip.startsWith("::ffff:")) {
       ip = ip.substring(7);
     }
-    
+
     // Handle IPv6 loopback
-    if (ip === '::1') {
-      ip = '127.0.0.1';
+    if (ip === "::1") {
+      ip = "127.0.0.1";
     }
-    
+
     // Skip geolocation for localhost/private IPs but provide better fallback
-    const isLocalhost = ip === '127.0.0.1' || ip === 'localhost';
-    const isPrivateIP = ip.startsWith('192.168.') || 
-                       ip.startsWith('10.') || 
-                       (ip.startsWith('172.') && parseInt(ip.split('.')[1]) >= 16 && parseInt(ip.split('.')[1]) <= 31);
-    const isUnknown = ip === 'unknown' || !ip;
-    
+    const isLocalhost = ip === "127.0.0.1" || ip === "localhost";
+    const isPrivateIP =
+      ip.startsWith("192.168.") ||
+      ip.startsWith("10.") ||
+      (ip.startsWith("172.") &&
+        parseInt(ip.split(".")[1]) >= 16 &&
+        parseInt(ip.split(".")[1]) <= 31);
+    const isUnknown = ip === "unknown" || !ip;
+
     if (isLocalhost || isPrivateIP || isUnknown) {
       // Better handling for development/local environments
       return {
-        country: isLocalhost ? "Local Development" : (isPrivateIP ? "Private Network" : "Unknown"),
-        region: isLocalhost ? "Localhost" : (isPrivateIP ? "Local Network" : "Unknown"),
-        city: isLocalhost ? "Development Environment" : (isPrivateIP ? "Local Network" : "Unknown"),
+        country: isLocalhost
+          ? "Local Development"
+          : isPrivateIP
+            ? "Private Network"
+            : "Unknown",
+        region: isLocalhost
+          ? "Localhost"
+          : isPrivateIP
+            ? "Local Network"
+            : "Unknown",
+        city: isLocalhost
+          ? "Development Environment"
+          : isPrivateIP
+            ? "Local Network"
+            : "Unknown",
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
         coordinates: null,
       };
     }
-    
+
     // Use GeoIP lookup for public IPs
     try {
-    const geo = geoip.lookup(ip);
-    
+      const geo = geoip.lookup(ip);
+
       if (geo) {
-    return {
+        return {
           country: geo.country || "Unknown",
-          region: geo.region || "Unknown", 
+          region: geo.region || "Unknown",
           city: geo.city || "Unknown",
           timezone: geo.timezone || "UTC",
-          coordinates: geo.ll ? {
-        latitude: geo.ll[0],
-        longitude: geo.ll[1],
-      } : null,
+          coordinates: geo.ll
+            ? {
+                latitude: geo.ll[0],
+                longitude: geo.ll[1],
+              }
+            : null,
         };
       }
     } catch (error) {
-      logger.warn('GeoIP lookup failed', { ip, error: error.message });
+      logger.warn("GeoIP lookup failed", { ip, error: error.message });
     }
-    
+
     // Fallback for when GeoIP lookup fails
     return {
       country: "Unknown",
-      region: "Unknown", 
+      region: "Unknown",
       city: "Unknown",
       timezone: "UTC",
       coordinates: null,
@@ -2872,62 +3168,66 @@ class AuthController {
 
   generateJWT(user, expiresIn = "24h") {
     // Handle both user object and userId string
-    const userData = typeof user === 'string' ? { _id: user } : user;
-    
+    const userData = typeof user === "string" ? { _id: user } : user;
+
     // Determine the role - use admin_role if available, otherwise use role
-    const userRole = userData.admin_role || userData.role || 'student';
-    
+    const userRole = userData.admin_role || userData.role || "student";
+
     return jwt.sign(
-      { 
+      {
         userId: userData._id || userData.id,
         id: userData._id || userData.id,
         email: userData.email,
         role: userRole,
-        type: "access" 
+        type: "access",
       },
       ENV_VARS.JWT_SECRET_KEY,
-      { expiresIn }
+      { expiresIn },
     );
   }
 
   isNewDevice(user, deviceInfo) {
-    return !user.devices.some(device => device.device_id === deviceInfo.device_id);
+    return !user.devices.some(
+      (device) => device.device_id === deviceInfo.device_id,
+    );
   }
 
   calculateEngagementScore(user) {
     const stats = user.statistics.engagement;
     const learningStats = user.statistics.learning;
     const socialStats = user.statistics.social;
-    
+
     let score = 0;
-    
+
     // Base engagement (40% weight)
     score += Math.min(stats.total_logins * 0.5, 100) * 0.4;
-    
+
     // Learning engagement (30% weight)
     score += Math.min(learningStats.current_streak * 2, 100) * 0.3;
-    
+
     // Social engagement (20% weight)
     score += Math.min(socialStats.community_reputation * 0.1, 100) * 0.2;
-    
+
     // Profile completion (10% weight)
     score += (user.profile_completion || 0) * 0.1;
-    
+
     return Math.round(score);
   }
 
   calculateLoginFrequency(user) {
     const stats = user.statistics.engagement;
-    const accountAgeDays = Math.floor((Date.now() - user.created_at) / (1000 * 60 * 60 * 24));
-    
+    const accountAgeDays = Math.floor(
+      (Date.now() - user.created_at) / (1000 * 60 * 60 * 24),
+    );
+
     if (accountAgeDays === 0) return 0;
-    
+
     return Math.round((stats.total_logins / accountAgeDays) * 100) / 100;
   }
 
   getDeviceBreakdown(devices) {
     const breakdown = {};
-    devices.forEach(device => {
+    devices.forEach((device) => {
       breakdown[device.device_type] = (breakdown[device.device_type] || 0) + 1;
     });
     return breakdown;
@@ -2936,61 +3236,73 @@ class AuthController {
   async sendVerificationEmail(email, otp) {
     try {
       // Use the existing emailService for verification emails
-      const emailService = (await import('../services/emailService.js')).default;
-      
+      const emailService = (await import("../services/emailService.js"))
+        .default;
+
       // Find user to get their name
       const user = await User.findOne({ email: email.toLowerCase() });
-      const userName = user ? user.full_name : 'User';
-      
+      const userName = user ? user.full_name : "User";
+
       await emailService.sendOTPVerificationEmail(email, userName, otp);
-      
-      console.log('Verification email sent successfully to:', email, 'with OTP:', otp);
+
+      console.log(
+        "Verification email sent successfully to:",
+        email,
+        "with OTP:",
+        otp,
+      );
     } catch (error) {
-      console.log('Verification email failed, but continuing:', error.message);
+      console.log("Verification email failed, but continuing:", error.message);
       throw error; // Re-throw so calling code can handle it
     }
   }
 
   async sendPasswordResetEmail(email, token) {
     // This method is deprecated - use emailService.sendPasswordResetEmail instead
-    console.log('Password reset email would be sent to:', email, 'with token:', token);
+    console.log(
+      "Password reset email would be sent to:",
+      email,
+      "with token:",
+      token,
+    );
   }
 
   async sendLoginNotification(user, deviceInfo, locationInfo) {
     try {
       // Use the existing emailService for login notifications
-      const emailService = (await import('../services/emailService.js')).default;
-      
+      const emailService = (await import("../services/emailService.js"))
+        .default;
+
       const loginDetails = {
-        'Device': deviceInfo.device_name || 'Unknown Device',
-        'Browser': deviceInfo.browser || 'Unknown Browser', 
-        'Operating System': deviceInfo.operating_system || 'Unknown OS',
-        'Location': `${locationInfo.city || 'Unknown'}, ${locationInfo.country || 'Unknown'}`,
-        'IP Address': deviceInfo.ip_address || 'Unknown',
-        'Login Time': new Date().toLocaleString('en-US', { 
-          timeZone: user.preferences?.timezone || 'UTC',
-          dateStyle: 'full',
-          timeStyle: 'medium'
-        })
+        Device: deviceInfo.device_name || "Unknown Device",
+        Browser: deviceInfo.browser || "Unknown Browser",
+        "Operating System": deviceInfo.operating_system || "Unknown OS",
+        Location: `${locationInfo.city || "Unknown"}, ${locationInfo.country || "Unknown"}`,
+        "IP Address": deviceInfo.ip_address || "Unknown",
+        "Login Time": new Date().toLocaleString("en-US", {
+          timeZone: user.preferences?.timezone || "UTC",
+          dateStyle: "full",
+          timeStyle: "medium",
+        }),
       };
 
       await emailService.sendNotificationEmail(
         user.email,
-        '🔐 New Login Detected - Medh Learning Platform',
+        "🔐 New Login Detected - Medh Learning Platform",
         `Hello ${user.full_name}, we detected a new login to your Medh Learning Platform account. If this was you, you can safely ignore this email. If you don't recognize this activity, please secure your account immediately.`,
         {
           user_name: user.full_name,
           email: user.email,
           details: loginDetails,
-          actionUrl: `${process.env.FRONTEND_URL || 'https://app.medh.co'}/security`,
-          actionText: 'Review Account Security',
-          currentYear: new Date().getFullYear()
-        }
+          actionUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/security`,
+          actionText: "Review Account Security",
+          currentYear: new Date().getFullYear(),
+        },
       );
-      
-      console.log('Login notification sent successfully to:', user.email);
+
+      console.log("Login notification sent successfully to:", user.email);
     } catch (error) {
-      console.log('Login notification failed, but continuing:', error.message);
+      console.log("Login notification failed, but continuing:", error.message);
     }
   }
 
@@ -3008,7 +3320,7 @@ class AuthController {
   cleanupInactiveSessions() {
     const now = Date.now();
     const fiveMinutesAgo = now - 5 * 60 * 1000;
-    
+
     for (const [sessionId, sessionData] of this.sessionStore.entries()) {
       if (sessionData.last_activity < fiveMinutesAgo) {
         this.sessionStore.delete(sessionId);
@@ -3019,7 +3331,7 @@ class AuthController {
   getActiveUsersInLastMinutes(minutes) {
     const cutoff = Date.now() - minutes * 60 * 1000;
     return Array.from(this.activeUsers.values()).filter(
-      user => user.login_time >= cutoff
+      (user) => user.login_time >= cutoff,
     ).length;
   }
 
@@ -3046,11 +3358,11 @@ class AuthController {
   calculateAvgSessionDuration() {
     const sessions = Array.from(this.sessionStore.values());
     if (sessions.length === 0) return 0;
-    
+
     const totalDuration = sessions.reduce((sum, session) => {
       return sum + (Date.now() - session.created_at);
     }, 0);
-    
+
     return Math.round(totalDuration / sessions.length / 1000 / 60); // minutes
   }
 
@@ -3074,7 +3386,7 @@ class AuthController {
     const daysAgo = parseInt(timeframe);
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysAgo);
-    
+
     return await User.aggregate([
       { $match: { created_at: { $gte: startDate } } },
       {
@@ -3082,12 +3394,12 @@ class AuthController {
           _id: {
             $dateToString: {
               format: "%Y-%m-%d",
-              date: "$created_at"
-            }
+              date: "$created_at",
+            },
           },
           registrations: { $sum: 1 },
           avg_engagement: { $avg: "$statistics.engagement.total_logins" },
-        }
+        },
       },
       { $sort: { _id: 1 } },
     ]);
@@ -3107,7 +3419,7 @@ class AuthController {
     const daysAgo = parseInt(timeframe);
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysAgo);
-    
+
     return await User.aggregate([
       { $match: { created_at: { $gte: startDate } } },
       {
@@ -3115,11 +3427,11 @@ class AuthController {
           _id: {
             $dateToString: {
               format: "%Y-%m-%d",
-              date: "$created_at"
-            }
+              date: "$created_at",
+            },
           },
           new_users: { $sum: 1 },
-        }
+        },
       },
       { $sort: { _id: 1 } },
     ]);
@@ -3129,7 +3441,7 @@ class AuthController {
     const daysAgo = parseInt(timeframe);
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysAgo);
-    
+
     return await User.aggregate([
       { $match: { created_at: { $gte: startDate } } },
       { $unwind: "$devices" },
@@ -3139,13 +3451,13 @@ class AuthController {
             date: {
               $dateToString: {
                 format: "%Y-%m-%d",
-                date: "$created_at"
-              }
+                date: "$created_at",
+              },
             },
-            device_type: "$devices.device_type"
+            device_type: "$devices.device_type",
           },
           count: { $sum: 1 },
-        }
+        },
       },
       { $sort: { "_id.date": 1 } },
     ]);
@@ -3155,7 +3467,7 @@ class AuthController {
     const daysAgo = parseInt(timeframe);
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - daysAgo);
-    
+
     return await User.aggregate([
       { $match: { created_at: { $gte: startDate } } },
       {
@@ -3164,75 +3476,79 @@ class AuthController {
             date: {
               $dateToString: {
                 format: "%Y-%m-%d",
-                date: "$created_at"
-              }
+                date: "$created_at",
+              },
             },
-            country: "$country"
+            country: "$country",
           },
-          count: { $sum: 1 }
-        }
-      }
+          count: { $sum: 1 },
+        },
+      },
     ]);
   }
 
   // Statistics Helper Methods
   async calculateCurrentStreak(userId) {
     try {
-      const { default: Progress } = await import('../models/progress-model.js');
-      
+      const { default: Progress } = await import("../models/progress-model.js");
+
       // Get user's progress records sorted by last accessed date
       const progressRecords = await Progress.find({ student: userId })
         .sort({ lastAccessed: -1 })
         .limit(30); // Last 30 days
-      
+
       if (progressRecords.length === 0) return 0;
-      
+
       let streak = 0;
       const today = new Date();
-      
+
       for (let i = 0; i < 30; i++) {
         const checkDate = new Date(today);
         checkDate.setDate(today.getDate() - i);
-        
-        const hasActivityOnDate = progressRecords.some(record => {
+
+        const hasActivityOnDate = progressRecords.some((record) => {
           const recordDate = new Date(record.lastAccessed);
           return recordDate.toDateString() === checkDate.toDateString();
         });
-        
+
         if (hasActivityOnDate) {
           streak++;
-        } else if (i > 0) { // Don't break on first day (today) if no activity
+        } else if (i > 0) {
+          // Don't break on first day (today) if no activity
           break;
         }
       }
-      
+
       return streak;
     } catch (error) {
-      console.error('Error calculating current streak:', error);
+      console.error("Error calculating current streak:", error);
       return 0;
     }
   }
 
   async calculateLongestStreak(userId) {
     try {
-      const { default: Progress } = await import('../models/progress-model.js');
-      
-      const progressRecords = await Progress.find({ student: userId })
-        .sort({ lastAccessed: 1 });
-      
+      const { default: Progress } = await import("../models/progress-model.js");
+
+      const progressRecords = await Progress.find({ student: userId }).sort({
+        lastAccessed: 1,
+      });
+
       if (progressRecords.length === 0) return 0;
-      
+
       let longestStreak = 0;
       let currentStreak = 0;
       let lastDate = null;
-      
-      progressRecords.forEach(record => {
+
+      progressRecords.forEach((record) => {
         const recordDate = new Date(record.lastAccessed);
         recordDate.setHours(0, 0, 0, 0);
-        
+
         if (lastDate) {
-          const dayDiff = Math.floor((recordDate - lastDate) / (1000 * 60 * 60 * 24));
-          
+          const dayDiff = Math.floor(
+            (recordDate - lastDate) / (1000 * 60 * 60 * 24),
+          );
+
           if (dayDiff === 1) {
             currentStreak++;
           } else if (dayDiff > 1) {
@@ -3242,104 +3558,114 @@ class AuthController {
         } else {
           currentStreak = 1;
         }
-        
+
         lastDate = recordDate;
       });
-      
+
       return Math.max(longestStreak, currentStreak);
     } catch (error) {
-      console.error('Error calculating longest streak:', error);
+      console.error("Error calculating longest streak:", error);
       return 0;
     }
   }
 
   calculateSkillPoints(progressRecords, certificates) {
     let skillPoints = 0;
-    
+
     // Points from completed lessons
-    progressRecords.forEach(progress => {
+    progressRecords.forEach((progress) => {
       skillPoints += progress.meta?.completedLessons * 10 || 0;
       skillPoints += progress.meta?.completedQuizzes * 25 || 0;
       skillPoints += progress.meta?.completedAssignments * 50 || 0;
     });
-    
+
     // Bonus points from certificates
-    certificates.forEach(cert => {
-      if (cert.status === 'active') {
+    certificates.forEach((cert) => {
+      if (cert.status === "active") {
         const gradePoints = {
-          'A+': 100, 'A': 90, 'A-': 85,
-          'B+': 80, 'B': 75, 'B-': 70,
-          'C+': 65, 'C': 60, 'C-': 55,
-          'D': 50, 'F': 0
+          "A+": 100,
+          A: 90,
+          "A-": 85,
+          "B+": 80,
+          B: 75,
+          "B-": 70,
+          "C+": 65,
+          C: 60,
+          "C-": 55,
+          D: 50,
+          F: 0,
         };
         skillPoints += gradePoints[cert.grade] || 0;
       }
     });
-    
+
     return skillPoints;
   }
 
   calculateAchievements(enrollments, certificates, progressRecords) {
     let achievements = 0;
-    
+
     // First course enrollment
     if (enrollments.length >= 1) achievements++;
-    
+
     // First course completion
-    if (enrollments.some(e => e.status === 'completed')) achievements++;
-    
+    if (enrollments.some((e) => e.status === "completed")) achievements++;
+
     // First certificate
-    if (certificates.some(c => c.status === 'active')) achievements++;
-    
+    if (certificates.some((c) => c.status === "active")) achievements++;
+
     // Milestone achievements
     if (enrollments.length >= 5) achievements++; // Course Explorer
     if (enrollments.length >= 10) achievements++; // Learning Enthusiast
     if (certificates.length >= 3) achievements++; // Certificate Collector
     if (certificates.length >= 5) achievements++; // Expert Learner
-    
+
     // Streak achievements
-    const totalLearningTime = progressRecords.reduce((total, progress) => 
-      total + (progress.meta?.totalTimeSpent || 0), 0);
-    
+    const totalLearningTime = progressRecords.reduce(
+      (total, progress) => total + (progress.meta?.totalTimeSpent || 0),
+      0,
+    );
+
     if (totalLearningTime >= 100) achievements++; // 100 hours of learning
     if (totalLearningTime >= 500) achievements++; // 500 hours of learning
-    
+
     return achievements;
   }
 
   calculateAverageScore(progressRecords) {
     let totalScore = 0;
     let scoreCount = 0;
-    
-    progressRecords.forEach(progress => {
+
+    progressRecords.forEach((progress) => {
       const avgQuizScore = progress.meta?.averageQuizScore || 0;
       const avgAssignmentScore = progress.meta?.averageAssignmentScore || 0;
-      
+
       if (avgQuizScore > 0) {
         totalScore += avgQuizScore;
         scoreCount++;
       }
-      
+
       if (avgAssignmentScore > 0) {
         totalScore += avgAssignmentScore;
         scoreCount++;
       }
     });
-    
+
     return scoreCount > 0 ? Math.round(totalScore / scoreCount) : 0;
   }
 
   async getFavoriteCategories(enrollments) {
     const categories = {};
-    
-    enrollments.forEach(enrollment => {
+
+    enrollments.forEach((enrollment) => {
       if (enrollment.course?.category) {
-        categories[enrollment.course.category] = (categories[enrollment.course.category] || 0) + 1;
+        categories[enrollment.course.category] =
+          (categories[enrollment.course.category] || 0) + 1;
       }
     });
-    
+
     return Object.entries(categories)
-      .sort(([,a], [,b]) => b - a)
+      .sort(([, a], [, b]) => b - a)
       .slice(0, 3)
       .map(([category, count]) => ({ category, count }));
   }
@@ -3348,73 +3674,77 @@ class AuthController {
     try {
       const user = await User.findById(userId);
       if (!user || !user.activity_log) return 0;
-      
+
       const today = new Date();
       let consecutiveDays = 0;
-      
+
       for (let i = 0; i < 30; i++) {
         const checkDate = new Date(today);
         checkDate.setDate(today.getDate() - i);
-        
-        const hasActivityOnDate = user.activity_log.some(activity => {
+
+        const hasActivityOnDate = user.activity_log.some((activity) => {
           const activityDate = new Date(activity.timestamp);
           return activityDate.toDateString() === checkDate.toDateString();
         });
-        
+
         if (hasActivityOnDate) {
           consecutiveDays++;
         } else if (i > 0) {
           break;
         }
       }
-      
+
       return consecutiveDays;
     } catch (error) {
-      console.error('Error calculating consecutive active days:', error);
+      console.error("Error calculating consecutive active days:", error);
       return 0;
     }
   }
 
   async getStudyHoursThisWeek(userId) {
     try {
-      const { default: Progress } = await import('../models/progress-model.js');
-      
+      const { default: Progress } = await import("../models/progress-model.js");
+
       const oneWeekAgo = new Date();
       oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      
+
       const progressRecords = await Progress.find({
         student: userId,
-        lastAccessed: { $gte: oneWeekAgo }
+        lastAccessed: { $gte: oneWeekAgo },
       });
-      
-      const totalMinutes = progressRecords.reduce((total, progress) => 
-        total + (progress.meta?.totalTimeSpent || 0), 0);
-      
-      return Math.round(totalMinutes / 60 * 100) / 100; // Convert to hours with 2 decimal places
+
+      const totalMinutes = progressRecords.reduce(
+        (total, progress) => total + (progress.meta?.totalTimeSpent || 0),
+        0,
+      );
+
+      return Math.round((totalMinutes / 60) * 100) / 100; // Convert to hours with 2 decimal places
     } catch (error) {
-      console.error('Error calculating study hours this week:', error);
+      console.error("Error calculating study hours this week:", error);
       return 0;
     }
   }
 
   async getStudyHoursThisMonth(userId) {
     try {
-      const { default: Progress } = await import('../models/progress-model.js');
-      
+      const { default: Progress } = await import("../models/progress-model.js");
+
       const oneMonthAgo = new Date();
       oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-      
+
       const progressRecords = await Progress.find({
         student: userId,
-        lastAccessed: { $gte: oneMonthAgo }
+        lastAccessed: { $gte: oneMonthAgo },
       });
-      
-      const totalMinutes = progressRecords.reduce((total, progress) => 
-        total + (progress.meta?.totalTimeSpent || 0), 0);
-      
-      return Math.round(totalMinutes / 60 * 100) / 100;
+
+      const totalMinutes = progressRecords.reduce(
+        (total, progress) => total + (progress.meta?.totalTimeSpent || 0),
+        0,
+      );
+
+      return Math.round((totalMinutes / 60) * 100) / 100;
     } catch (error) {
-      console.error('Error calculating study hours this month:', error);
+      console.error("Error calculating study hours this month:", error);
       return 0;
     }
   }
@@ -3422,120 +3752,142 @@ class AuthController {
   async getMostActiveDay(userId) {
     try {
       const user = await User.findById(userId);
-      if (!user || !user.activity_log) return 'N/A';
-      
+      if (!user || !user.activity_log) return "N/A";
+
       const dayActivity = {};
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      
-      user.activity_log.forEach(activity => {
+      const dayNames = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ];
+
+      user.activity_log.forEach((activity) => {
         const day = new Date(activity.timestamp).getDay();
         const dayName = dayNames[day];
         dayActivity[dayName] = (dayActivity[dayName] || 0) + 1;
       });
-      
-      const mostActiveDay = Object.entries(dayActivity)
-        .sort(([,a], [,b]) => b - a)[0];
-      
-      return mostActiveDay ? mostActiveDay[0] : 'N/A';
+
+      const mostActiveDay = Object.entries(dayActivity).sort(
+        ([, a], [, b]) => b - a,
+      )[0];
+
+      return mostActiveDay ? mostActiveDay[0] : "N/A";
     } catch (error) {
-      console.error('Error calculating most active day:', error);
-      return 'N/A';
+      console.error("Error calculating most active day:", error);
+      return "N/A";
     }
   }
 
   async getPreferredStudyTime(userId) {
     try {
-      const { default: Progress } = await import('../models/progress-model.js');
-      
+      const { default: Progress } = await import("../models/progress-model.js");
+
       const progressRecords = await Progress.find({ student: userId });
       const hourActivity = {};
-      
-      progressRecords.forEach(progress => {
+
+      progressRecords.forEach((progress) => {
         const hour = new Date(progress.lastAccessed).getHours();
         hourActivity[hour] = (hourActivity[hour] || 0) + 1;
       });
-      
-      const mostActiveHour = Object.entries(hourActivity)
-        .sort(([,a], [,b]) => b - a)[0];
-      
+
+      const mostActiveHour = Object.entries(hourActivity).sort(
+        ([, a], [, b]) => b - a,
+      )[0];
+
       if (mostActiveHour) {
         const hour = parseInt(mostActiveHour[0]);
         if (hour < 12) return `${hour === 0 ? 12 : hour} AM`;
         return `${hour === 12 ? 12 : hour - 12} PM`;
       }
-      
-      return 'N/A';
+
+      return "N/A";
     } catch (error) {
-      console.error('Error calculating preferred study time:', error);
-      return 'N/A';
+      console.error("Error calculating preferred study time:", error);
+      return "N/A";
     }
   }
 
   calculateCommunityReputation(certificates, progressRecords) {
     let reputation = 0;
-    
+
     // Base reputation from certificates
-    certificates.forEach(cert => {
-      if (cert.status === 'active') {
+    certificates.forEach((cert) => {
+      if (cert.status === "active") {
         reputation += cert.finalScore || 0;
       }
     });
-    
+
     // Bonus reputation from consistent learning
-    const totalLearningTime = progressRecords.reduce((total, progress) => 
-      total + (progress.meta?.totalTimeSpent || 0), 0);
-    
+    const totalLearningTime = progressRecords.reduce(
+      (total, progress) => total + (progress.meta?.totalTimeSpent || 0),
+      0,
+    );
+
     reputation += Math.floor(totalLearningTime / 60); // 1 point per hour
-    
+
     return Math.round(reputation);
   }
 
   calculateSubscriptionMonths(user) {
     if (!user.subscription_start || !user.subscription_end) return 0;
-    
+
     const start = new Date(user.subscription_start);
     const end = new Date(user.subscription_end);
-    const monthsDiff = (end.getFullYear() - start.getFullYear()) * 12 + 
-                      (end.getMonth() - start.getMonth());
-    
+    const monthsDiff =
+      (end.getFullYear() - start.getFullYear()) * 12 +
+      (end.getMonth() - start.getMonth());
+
     return Math.max(0, monthsDiff);
   }
 
   calculateAverageCoursePrice(enrollments) {
-    const paidEnrollments = enrollments.filter(e => e.pricing_snapshot?.final_price > 0);
-    
+    const paidEnrollments = enrollments.filter(
+      (e) => e.pricing_snapshot?.final_price > 0,
+    );
+
     if (paidEnrollments.length === 0) return 0;
-    
-    const totalPrice = paidEnrollments.reduce((total, enrollment) => 
-      total + enrollment.pricing_snapshot.final_price, 0);
-    
-    return Math.round(totalPrice / paidEnrollments.length * 100) / 100;
+
+    const totalPrice = paidEnrollments.reduce(
+      (total, enrollment) => total + enrollment.pricing_snapshot.final_price,
+      0,
+    );
+
+    return Math.round((totalPrice / paidEnrollments.length) * 100) / 100;
   }
 
   getMostExpensiveCourse(enrollments) {
-    const paidEnrollments = enrollments.filter(e => e.pricing_snapshot?.final_price > 0);
-    
+    const paidEnrollments = enrollments.filter(
+      (e) => e.pricing_snapshot?.final_price > 0,
+    );
+
     if (paidEnrollments.length === 0) return null;
-    
-    const mostExpensive = paidEnrollments.reduce((max, enrollment) => 
-      enrollment.pricing_snapshot.final_price > max.pricing_snapshot.final_price ? enrollment : max);
-    
+
+    const mostExpensive = paidEnrollments.reduce((max, enrollment) =>
+      enrollment.pricing_snapshot.final_price > max.pricing_snapshot.final_price
+        ? enrollment
+        : max,
+    );
+
     return {
-      course_title: mostExpensive.course?.title || 'Unknown Course',
+      course_title: mostExpensive.course?.title || "Unknown Course",
       price: mostExpensive.pricing_snapshot.final_price,
-      currency: mostExpensive.pricing_snapshot.currency
+      currency: mostExpensive.pricing_snapshot.currency,
     };
   }
 
   getPaymentMethodsUsed(enrollments) {
     const methods = new Set();
-    
-    enrollments.forEach(enrollment => {
+
+    enrollments.forEach((enrollment) => {
       if (enrollment.payment_info?.payment_method) {
         methods.add(enrollment.payment_info.payment_method);
       }
     });
-    
+
     return Array.from(methods);
   }
 
@@ -3559,10 +3911,10 @@ class AuthController {
         });
       }
 
-      const user = await User.findOne({ 
+      const user = await User.findOne({
         email: email.toLowerCase(),
         email_verification_token: otp,
-        email_verification_expires: { $gt: Date.now() }
+        email_verification_expires: { $gt: Date.now() },
       });
 
       if (!user) {
@@ -3580,7 +3932,13 @@ class AuthController {
       res.status(200).json({
         success: true,
         message: "Email verified successfully",
-        data: { user: { id: user._id, email: user.email, email_verified: user.email_verified } }
+        data: {
+          user: {
+            id: user._id,
+            email: user.email,
+            email_verified: user.email_verified,
+          },
+        },
       });
     } catch (error) {
       logger.error("Email verification error:", error);
@@ -3708,13 +4066,13 @@ class AuthController {
       // Generate new access token
       const newAccessToken = this.generateJWT(user);
       const newRefreshToken = jwt.sign(
-        { 
+        {
           id: user._id,
           type: "refresh",
-          token: require('crypto').randomBytes(40).toString('hex')
+          token: require("crypto").randomBytes(40).toString("hex"),
         },
         ENV_VARS.JWT_SECRET_KEY,
-        { expiresIn: "7d" }
+        { expiresIn: "7d" },
       );
 
       res.status(200).json({
@@ -3743,7 +4101,7 @@ class AuthController {
       // Build query
       const query = {};
       if (role) query.role = role;
-      if (status) query.is_active = status === 'active';
+      if (status) query.is_active = status === "active";
 
       if (search) {
         query.$or = [
@@ -3761,15 +4119,32 @@ class AuthController {
         .limit(parseInt(limit))
         .sort({ created_at: -1 });
 
+      // Normalize user_image to always be an object
+      const normalizedUsers = users.map((user) => {
+        const u = user.toObject();
+        if (u.user_image && typeof u.user_image === "string") {
+          u.user_image = { url: u.user_image };
+        }
+        // Optionally, ensure upload_date exists
+        if (
+          u.user_image &&
+          typeof u.user_image === "object" &&
+          !u.user_image.upload_date
+        ) {
+          u.user_image.upload_date = null;
+        }
+        return u;
+      });
+
       const total = await User.countDocuments(query);
 
       res.status(200).json({
         success: true,
-        count: users.length,
+        count: normalizedUsers.length,
         total,
         totalPages: Math.ceil(total / parseInt(limit)),
         currentPage: parseInt(page),
-        data: users,
+        data: normalizedUsers,
       });
     } catch (error) {
       logger.error("Get all users error:", error);
@@ -3788,10 +4163,27 @@ class AuthController {
         .select("-password")
         .sort({ created_at: -1 });
 
+      // Normalize user_image to always be an object
+      const normalizedStudents = students.map((student) => {
+        const s = student.toObject();
+        if (s.user_image && typeof s.user_image === "string") {
+          s.user_image = { url: s.user_image };
+        }
+        // Optionally, ensure upload_date exists
+        if (
+          s.user_image &&
+          typeof s.user_image === "object" &&
+          !s.user_image.upload_date
+        ) {
+          s.user_image.upload_date = null;
+        }
+        return s;
+      });
+
       res.status(200).json({
         success: true,
-        count: students.length,
-        data: students,
+        count: normalizedStudents.length,
+        data: normalizedStudents,
       });
     } catch (error) {
       logger.error("Get all students error:", error);
@@ -3815,9 +4207,26 @@ class AuthController {
         });
       }
 
+      // Normalize user_image to always be an object
+      const normalizedUser = user.toObject();
+      if (
+        normalizedUser.user_image &&
+        typeof normalizedUser.user_image === "string"
+      ) {
+        normalizedUser.user_image = { url: normalizedUser.user_image };
+      }
+      // Optionally, ensure upload_date exists
+      if (
+        normalizedUser.user_image &&
+        typeof normalizedUser.user_image === "object" &&
+        !normalizedUser.user_image.upload_date
+      ) {
+        normalizedUser.user_image.upload_date = null;
+      }
+
       res.status(200).json({
         success: true,
-        data: user,
+        data: normalizedUser,
       });
     } catch (error) {
       logger.error("Get user by ID error:", error);
@@ -3839,9 +4248,9 @@ class AuthController {
       delete updates.email_verification_token;
       delete updates.resetPasswordToken;
 
-      const user = await User.findByIdAndUpdate(id, updates, { 
-        new: true, 
-        runValidators: true 
+      const user = await User.findByIdAndUpdate(id, updates, {
+        new: true,
+        runValidators: true,
       }).select("-password");
 
       if (!user) {
@@ -3851,10 +4260,27 @@ class AuthController {
         });
       }
 
+      // Normalize user_image to always be an object
+      const normalizedUser = user.toObject();
+      if (
+        normalizedUser.user_image &&
+        typeof normalizedUser.user_image === "string"
+      ) {
+        normalizedUser.user_image = { url: normalizedUser.user_image };
+      }
+      // Optionally, ensure upload_date exists
+      if (
+        normalizedUser.user_image &&
+        typeof normalizedUser.user_image === "object" &&
+        !normalizedUser.user_image.upload_date
+      ) {
+        normalizedUser.user_image.upload_date = null;
+      }
+
       res.status(200).json({
         success: true,
         message: "User updated successfully",
-        data: user,
+        data: normalizedUser,
       });
     } catch (error) {
       logger.error("Update user error:", error);
@@ -3877,9 +4303,9 @@ class AuthController {
       delete updates.resetPasswordToken;
 
       const user = await User.findOneAndUpdate(
-        { email: email.toLowerCase() }, 
-        updates, 
-        { new: true, runValidators: true }
+        { email: email.toLowerCase() },
+        updates,
+        { new: true, runValidators: true },
       ).select("-password");
 
       if (!user) {
@@ -3889,10 +4315,27 @@ class AuthController {
         });
       }
 
+      // Normalize user_image to always be an object
+      const normalizedUser = user.toObject();
+      if (
+        normalizedUser.user_image &&
+        typeof normalizedUser.user_image === "string"
+      ) {
+        normalizedUser.user_image = { url: normalizedUser.user_image };
+      }
+      // Optionally, ensure upload_date exists
+      if (
+        normalizedUser.user_image &&
+        typeof normalizedUser.user_image === "object" &&
+        !normalizedUser.user_image.upload_date
+      ) {
+        normalizedUser.user_image.upload_date = null;
+      }
+
       res.status(200).json({
         success: true,
         message: "User updated successfully",
-        data: user,
+        data: normalizedUser,
       });
     } catch (error) {
       logger.error("Update user by email error:", error);
@@ -3949,15 +4392,17 @@ class AuthController {
 
       const result = {
         success: true,
-        data: {}
+        data: {},
       };
 
       if (email) {
-        const existingEmailUser = await User.findOne({ email: email.toLowerCase() });
+        const existingEmailUser = await User.findOne({
+          email: email.toLowerCase(),
+        });
         result.data.email = {
           value: email.toLowerCase(),
           available: !existingEmailUser,
-          taken: !!existingEmailUser
+          taken: !!existingEmailUser,
         };
       }
 
@@ -3966,7 +4411,7 @@ class AuthController {
         result.data.username = {
           value: username,
           available: !existingUsernameUser,
-          taken: !!existingUsernameUser
+          taken: !!existingUsernameUser,
         };
       }
 
@@ -3992,28 +4437,31 @@ class AuthController {
       // Create base username from full name
       let baseUsername = fullName
         .toLowerCase()
-        .replace(/[^a-z0-9]/g, '') // Remove special characters
+        .replace(/[^a-z0-9]/g, "") // Remove special characters
         .substring(0, 15); // Limit length
 
       // If base username is too short, use part of email
       if (baseUsername.length < 3) {
-        const emailPart = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+        const emailPart = email
+          .split("@")[0]
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, "");
         baseUsername = emailPart.substring(0, 15);
       }
 
       // If still too short, use a default
       if (baseUsername.length < 3) {
-        baseUsername = 'user';
+        baseUsername = "user";
       }
 
       // Check if base username is available
       let username = baseUsername;
       let counter = 1;
-      
+
       while (await User.findOne({ username })) {
         username = `${baseUsername}${counter}`;
         counter++;
-        
+
         // Prevent infinite loop
         if (counter > 9999) {
           username = `${baseUsername}${Date.now()}`;
@@ -4023,7 +4471,7 @@ class AuthController {
 
       return username;
     } catch (error) {
-      console.error('Error generating unique username:', error);
+      console.error("Error generating unique username:", error);
       // Fallback to timestamp-based username
       return `user${Date.now()}`;
     }
@@ -4033,52 +4481,58 @@ class AuthController {
    * Send logout all devices notification email
    * @param {Object} user - User object
    * @param {Object} deviceInfo - Device information
-   * @param {Object} locationInfo - Location information  
+   * @param {Object} locationInfo - Location information
    * @param {number} sessionCount - Number of sessions terminated
    */
-  async sendLogoutAllDevicesNotification(user, deviceInfo, locationInfo, sessionCount) {
+  async sendLogoutAllDevicesNotification(
+    user,
+    deviceInfo,
+    locationInfo,
+    sessionCount,
+  ) {
     try {
-      const emailService = (await import('../services/emailService.js')).default;
-      
+      const emailService = (await import("../services/emailService.js"))
+        .default;
+
       const logoutDetails = {
-        'Initiated From Device': deviceInfo.device_name || 'Unknown Device',
-        'Browser': deviceInfo.browser || 'Unknown Browser', 
-        'Operating System': deviceInfo.operating_system || 'Unknown OS',
-        'Location': `${locationInfo.city || 'Unknown'}, ${locationInfo.country || 'Unknown'}`,
-        'IP Address': deviceInfo.ip_address || 'Unknown',
-        'Logout Time': new Date().toLocaleString('en-US', { 
-          timeZone: user.preferences?.timezone || 'UTC',
-          dateStyle: 'full',
-          timeStyle: 'medium'
+        "Initiated From Device": deviceInfo.device_name || "Unknown Device",
+        Browser: deviceInfo.browser || "Unknown Browser",
+        "Operating System": deviceInfo.operating_system || "Unknown OS",
+        Location: `${locationInfo.city || "Unknown"}, ${locationInfo.country || "Unknown"}`,
+        "IP Address": deviceInfo.ip_address || "Unknown",
+        "Logout Time": new Date().toLocaleString("en-US", {
+          timeZone: user.preferences?.timezone || "UTC",
+          dateStyle: "full",
+          timeStyle: "medium",
         }),
-        'Sessions Terminated': sessionCount.toString()
+        "Sessions Terminated": sessionCount.toString(),
       };
 
       await emailService.sendNotificationEmail(
         user.email,
-        '🚪 Logged Out From All Devices - Medh Learning Platform',
+        "🚪 Logged Out From All Devices - Medh Learning Platform",
         `Hello ${user.full_name}, you have been logged out from all devices on your Medh Learning Platform account. This action was initiated from one of your devices. If you did not request this, please contact support immediately.`,
         {
           user_name: user.full_name,
           email: user.email,
           details: logoutDetails,
-          actionUrl: `${process.env.FRONTEND_URL || 'https://app.medh.co'}/login`,
-          actionText: 'Login Again',
+          actionUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/login`,
+          actionText: "Login Again",
           currentYear: new Date().getFullYear(),
-          urgent: true
-        }
+          urgent: true,
+        },
       );
-      
-      logger.info('Logout all devices notification sent successfully', {
+
+      logger.info("Logout all devices notification sent successfully", {
         userId: user._id,
         email: user.email,
-        sessionCount
+        sessionCount,
       });
     } catch (error) {
-      logger.error('Failed to send logout all devices notification', {
+      logger.error("Failed to send logout all devices notification", {
         error: error.message,
         userId: user._id,
-        email: user.email
+        email: user.email,
       });
       throw error;
     }

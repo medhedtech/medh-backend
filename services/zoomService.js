@@ -70,6 +70,57 @@ class ZoomService {
   async createMeeting(meetingData) {
     try {
       const token = await this.getAccessToken();
+
+      // Default settings based on latest Zoom API and Postman workspace best practices
+      const defaultSettings = {
+        // Security settings
+        password: meetingData.settings?.password ?? "735706", // Default passcode
+        waiting_room: meetingData.settings?.waiting_room ?? false, // No waiting room
+        meeting_authentication:
+          meetingData.settings?.meeting_authentication ?? false, // No login required
+
+        // Video settings
+        host_video: meetingData.settings?.host_video ?? true,
+        participant_video: meetingData.settings?.participant_video ?? false,
+
+        // Audio settings
+        audio: meetingData.settings?.audio ?? "both", // both telephone and computer
+
+        // Advanced settings
+        join_before_host: true, // Always allow join before host
+        mute_upon_entry: meetingData.settings?.mute_upon_entry ?? true,
+        auto_recording: meetingData.settings?.auto_recording ?? "cloud", // record_meeting enabled with cloud location
+
+        // AI Companion settings (latest as per Zoom API/Postman)
+        ai_companion_auto_start: true,
+        ai_companion_meeting_summary: true,
+        ai_companion_meeting_questions: true,
+        ai_companion_meeting_chat: true,
+        ai_companion_meeting_highlights: true,
+        ai_companion_meeting_tasks: true,
+
+        // Host settings to allow AI companion without host
+        host_meeting: true,
+        alternative_hosts: meetingData.alternative_hosts || [],
+        alternative_host_join_email_reminder: true,
+
+        // Registration settings
+        registration_type: meetingData.settings?.registration_type ?? 1,
+        close_registration: meetingData.settings?.close_registration ?? false,
+        registrants_confirmation_email:
+          meetingData.settings?.registrants_confirmation_email ?? true,
+        registrants_email_notification:
+          meetingData.settings?.registrants_email_notification ?? true,
+
+        // Regional settings
+        approve_or_block_users_from_specific_regions:
+          meetingData.settings?.approve_or_block_users_from_specific_regions ??
+          true,
+
+        // Override with any custom settings passed in
+        ...meetingData.settings,
+      };
+
       const response = await axios.post(
         `${this.baseUrl}/users/me/meetings`,
         {
@@ -79,22 +130,10 @@ class ZoomService {
           duration: meetingData.duration || 30,
           timezone: meetingData.timezone || "UTC",
           agenda: meetingData.agenda,
-          settings: {
-            host_video: meetingData.settings?.host_video ?? true,
-            participant_video: meetingData.settings?.participant_video ?? true,
-            join_before_host: meetingData.settings?.join_before_host ?? false,
-            mute_upon_entry: meetingData.settings?.mute_upon_entry ?? true,
-            auto_recording: meetingData.settings?.auto_recording ?? "none",
-            waiting_room: meetingData.settings?.waiting_room ?? true,
-            registration_type: meetingData.settings?.registration_type ?? 1, // 1 for required registration
-            close_registration:
-              meetingData.settings?.close_registration ?? false,
-            registrants_confirmation_email:
-              meetingData.settings?.registrants_confirmation_email ?? true,
-            registrants_email_notification:
-              meetingData.settings?.registrants_email_notification ?? true,
-            ...meetingData.settings,
-          },
+          alternative_hosts: meetingData.alternative_hosts || [
+            "john@company.com",
+          ], // Default alternative host
+          settings: defaultSettings,
         },
         {
           headers: {
@@ -556,6 +595,63 @@ class ZoomService {
   async createClassroomMeeting(userId = "me", classroomData) {
     try {
       const token = await this.getAccessToken();
+
+      // Default settings based on user requirements (same as createMeeting)
+      const defaultSettings = {
+        // Security settings
+        password: classroomData.settings?.password ?? "735706", // Default passcode
+        waiting_room: classroomData.settings?.waiting_room ?? false, // Disabled for easier student access
+        meeting_authentication:
+          classroomData.settings?.meeting_authentication ?? false, // Disabled for students
+
+        // Video settings
+        host_video: classroomData.settings?.host_video ?? true,
+        participant_video: classroomData.settings?.participant_video ?? false,
+
+        // Audio settings
+        audio: classroomData.settings?.audio ?? "both", // both telephone and computer
+
+        // Advanced settings
+        join_before_host: true, // Always allow join before host
+        mute_upon_entry: classroomData.settings?.mute_upon_entry ?? true,
+        auto_recording: classroomData.settings?.auto_recording ?? "cloud", // record_meeting enabled with cloud location
+
+        // AI Companion settings (latest as per Zoom API/Postman)
+        ai_companion_auto_start: true,
+        ai_companion_meeting_summary: true,
+        ai_companion_meeting_questions: true,
+        ai_companion_meeting_chat: true,
+        ai_companion_meeting_highlights: true,
+        ai_companion_meeting_tasks: true,
+
+        // Host settings to allow AI companion without host
+        host_meeting: true,
+        alternative_hosts: classroomData.alternative_hosts || [],
+        alternative_host_join_email_reminder: true,
+
+        // Registration settings
+        registration_type: classroomData.settings?.registration_type ?? 1,
+        approval_type: classroomData.settings?.approval_type ?? 0, // Auto approve
+        registrants_confirmation_email: true,
+        registrants_email_notification: true,
+
+        // Regional settings
+        approve_or_block_users_from_specific_regions:
+          classroomData.settings
+            ?.approve_or_block_users_from_specific_regions ?? true,
+
+        // Classroom-specific settings
+        breakout_room: classroomData.settings?.breakout_room ?? {
+          enable: true,
+        },
+        show_share_button: classroomData.settings?.show_share_button ?? true,
+        allow_multiple_devices:
+          classroomData.settings?.allow_multiple_devices ?? true,
+
+        // Override with any custom settings passed in
+        ...classroomData.settings,
+      };
+
       // Set specific settings for a classroom environment
       const response = await axios.post(
         `${this.baseUrl}/users/${userId}/meetings`,
@@ -566,30 +662,10 @@ class ZoomService {
           duration: classroomData.duration || 60,
           timezone: classroomData.timezone || "UTC",
           agenda: classroomData.agenda,
-          settings: {
-            host_video: classroomData.settings?.host_video ?? true,
-            participant_video:
-              classroomData.settings?.participant_video ?? true,
-            join_before_host: classroomData.settings?.join_before_host ?? false,
-            mute_upon_entry: classroomData.settings?.mute_upon_entry ?? true,
-            auto_recording: classroomData.settings?.auto_recording ?? "cloud", // Default to cloud recording
-            waiting_room: classroomData.settings?.waiting_room ?? true,
-            registration_type: classroomData.settings?.registration_type ?? 1, // 1 for required registration
-            approval_type: classroomData.settings?.approval_type ?? 0, // Auto approve
-            registrants_confirmation_email: true,
-            registrants_email_notification: true,
-            meeting_authentication: true, // Only authenticated users can join
-            audio: "both",
-            // Classroom-specific settings
-            breakout_room: classroomData.settings?.breakout_room ?? {
-              enable: true,
-            },
-            show_share_button:
-              classroomData.settings?.show_share_button ?? true,
-            allow_multiple_devices:
-              classroomData.settings?.allow_multiple_devices ?? true,
-            ...classroomData.settings,
-          },
+          alternative_hosts: classroomData.alternative_hosts || [
+            "john@company.com",
+          ], // Default alternative host
+          settings: defaultSettings,
         },
         {
           headers: {
@@ -748,6 +824,217 @@ class ZoomService {
         "Error creating student user:",
         error.response?.data || error.message,
       );
+      throw error;
+    }
+  }
+
+  // Create a meeting that doesn't require authentication (for students/guests)
+  async createPublicMeeting(meetingData) {
+    try {
+      const publicMeetingData = {
+        ...meetingData,
+        settings: {
+          ...meetingData.settings,
+          meeting_authentication: false, // No authentication required
+          waiting_room: false, // No waiting room for easier access
+          join_before_host: true, // Allow joining before host
+          mute_upon_entry: true,
+          host_video: true,
+          participant_video: false,
+          auto_recording: "cloud",
+          password: meetingData.settings?.password ?? "735706",
+        },
+      };
+
+      return await this.createMeeting(publicMeetingData);
+    } catch (error) {
+      console.error("Error creating public Zoom meeting:", error);
+      throw error;
+    }
+  }
+
+  // Create a meeting that requires authentication (for instructors/staff)
+  async createAuthenticatedMeeting(meetingData) {
+    try {
+      const authenticatedMeetingData = {
+        ...meetingData,
+        settings: {
+          ...meetingData.settings,
+          meeting_authentication: true, // Require authentication
+          waiting_room: true, // Enable waiting room
+          join_before_host: false, // Host must be present
+          mute_upon_entry: true,
+          host_video: true,
+          participant_video: false,
+          auto_recording: "cloud",
+          password: meetingData.settings?.password ?? "735706",
+        },
+      };
+
+      return await this.createMeeting(authenticatedMeetingData);
+    } catch (error) {
+      console.error("Error creating authenticated Zoom meeting:", error);
+      throw error;
+    }
+  }
+
+  // Update an existing meeting to disable authentication
+  async disableMeetingAuthentication(meetingId) {
+    try {
+      const token = await this.getAccessToken();
+      const response = await axios.patch(
+        `${this.baseUrl}/meetings/${meetingId}`,
+        {
+          settings: {
+            meeting_authentication: false,
+            waiting_room: false,
+            join_before_host: true,
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error(
+        "Error disabling meeting authentication:",
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  }
+
+  // Update an existing meeting to enable authentication
+  async enableMeetingAuthentication(meetingId) {
+    try {
+      const token = await this.getAccessToken();
+      const response = await axios.patch(
+        `${this.baseUrl}/meetings/${meetingId}`,
+        {
+          settings: {
+            meeting_authentication: true,
+            waiting_room: true,
+            join_before_host: false,
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error(
+        "Error enabling meeting authentication:",
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  }
+
+  // Enable AI companion to start without host
+  async enableAICompanionWithoutHost(meetingId) {
+    try {
+      const token = await this.getAccessToken();
+      const response = await axios.patch(
+        `${this.baseUrl}/meetings/${meetingId}`,
+        {
+          settings: {
+            // AI Companion settings
+            ai_companion_auto_start: true,
+            ai_companion_meeting_summary: true,
+            ai_companion_meeting_questions: true,
+            ai_companion_meeting_chat: true,
+            ai_companion_meeting_highlights: true,
+            ai_companion_meeting_tasks: true,
+
+            // Host settings to allow AI companion without host
+            host_meeting: true,
+            join_before_host: true,
+            waiting_room: false,
+            meeting_authentication: false,
+
+            // Alternative host settings
+            alternative_host_join_email_reminder: true,
+          },
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      return response.data;
+    } catch (error) {
+      console.error(
+        "Error enabling AI companion without host:",
+        error.response?.data || error.message,
+      );
+      throw error;
+    }
+  }
+
+  // Utility method to check meeting authentication status and fix if needed
+  async checkAndFixMeetingAuthentication(meetingId, requireAuth = false) {
+    try {
+      // Get current meeting details
+      const meeting = await this.getMeeting(meetingId);
+
+      const currentAuth = meeting.settings?.meeting_authentication || false;
+      const needsUpdate = requireAuth ? !currentAuth : currentAuth;
+
+      if (needsUpdate) {
+        if (requireAuth) {
+          await this.enableMeetingAuthentication(meetingId);
+          console.log(`Enabled authentication for meeting ${meetingId}`);
+        } else {
+          await this.disableMeetingAuthentication(meetingId);
+          console.log(`Disabled authentication for meeting ${meetingId}`);
+        }
+
+        // Return updated meeting details
+        return await this.getMeeting(meetingId);
+      }
+
+      return meeting;
+    } catch (error) {
+      console.error("Error checking/fixing meeting authentication:", error);
+      throw error;
+    }
+  }
+
+  // Generate a public join link that bypasses authentication
+  async generatePublicJoinLink(meetingId, registrantId = null) {
+    try {
+      // First, ensure the meeting doesn't require authentication
+      const meeting = await this.checkAndFixMeetingAuthentication(
+        meetingId,
+        false,
+      );
+
+      // Build the join URL
+      let joinUrl = meeting.join_url;
+
+      if (registrantId) {
+        joinUrl += `?registrant_id=${registrantId}`;
+      }
+
+      return {
+        join_url: joinUrl,
+        meeting_id: meetingId,
+        registrant_id: registrantId,
+        authentication_required: false,
+        password: meeting.password,
+      };
+    } catch (error) {
+      console.error("Error generating public join link:", error);
       throw error;
     }
   }

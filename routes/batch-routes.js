@@ -21,9 +21,14 @@ import {
   getRecordedLessonsForStudent,
   addScheduledSessionToBatch,
   createZoomMeetingForSession,
+  createZoomMeetingForExistingSession,
+  fixAICompanionHostRequirement,
   getBatchesForStudent,
   getUpcomingSessionsForBatch,
   getUpcomingSessionsForStudent,
+  syncZoomRecordingsForBatch,
+  getZoomRecordingSyncStatus,
+  retryFailedZoomRecordings,
 } from "../controllers/batch-controller.js";
 
 import {
@@ -50,7 +55,10 @@ import {
   validateScheduledSession,
   validateZoomMeeting,
 } from "../middleware/validators/batch-validator.js";
-import { authenticateToken as isAuthenticated, authorize } from "../middleware/auth.js";
+import {
+  authenticateToken as isAuthenticated,
+  authorize,
+} from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -59,7 +67,7 @@ router.get(
   "/",
   isAuthenticated,
   authorize(["admin", "instructor", "super-admin"]),
-  getAllBatches
+  getAllBatches,
 );
 
 // Course related batch routes
@@ -69,14 +77,14 @@ router.post(
   authorize(["admin", "super-admin"]),
   validateCourseId,
   validateBatchCreate,
-  createBatch
+  createBatch,
 );
 
 router.get(
   "/courses/:courseId/batches",
   isAuthenticated,
   validateCourseId,
-  getBatchesForCourse
+  getBatchesForCourse,
 );
 
 // Add route to get batches by course category
@@ -84,16 +92,11 @@ router.get(
   "/courses/category/:courseCategory/batches",
   isAuthenticated,
   authorize(["admin", "instructor", "super-admin"]),
-  getBatchesByCategory
+  getBatchesByCategory,
 );
 
 // Batch specific routes
-router.get(
-  "/:batchId",
-  isAuthenticated,
-  validateBatchId,
-  getBatchDetails
-);
+router.get("/:batchId", isAuthenticated, validateBatchId, getBatchDetails);
 
 router.put(
   "/:batchId",
@@ -101,7 +104,7 @@ router.put(
   authorize(["admin", "super-admin"]),
   validateBatchId,
   validateBatchUpdate,
-  updateBatch
+  updateBatch,
 );
 
 router.delete(
@@ -109,7 +112,7 @@ router.delete(
   isAuthenticated,
   authorize(["admin", "super-admin"]),
   validateBatchId,
-  deleteBatch
+  deleteBatch,
 );
 
 // Instructor assignment route
@@ -119,7 +122,7 @@ router.put(
   authorize(["admin", "super-admin"]),
   validateBatchId,
   validateInstructorId,
-  assignInstructorToBatch
+  assignInstructorToBatch,
 );
 
 // Update batch status route
@@ -129,7 +132,7 @@ router.put(
   authorize(["admin", "super-admin"]),
   validateBatchId,
   validateBatchStatusUpdate,
-  updateBatchStatus
+  updateBatchStatus,
 );
 
 // Add route to add a recorded lesson to a batch
@@ -140,7 +143,7 @@ router.post(
   validateBatchId,
   validateScheduleSessionId,
   validateRecordedLesson,
-  addRecordedLessonToBatch
+  addRecordedLessonToBatch,
 );
 
 // Add route for recorded lesson with automatic CloudFront URL signing
@@ -151,7 +154,7 @@ router.post(
   validateBatchId,
   validateScheduleSessionId,
   validateRecordedLesson,
-  addRecordedLessonToBatchWithUpload
+  addRecordedLessonToBatchWithUpload,
 );
 
 // Add route to upload recorded lesson via base64 and add to batch
@@ -161,7 +164,7 @@ router.post(
   authorize(["admin", "instructor", "super-admin"]),
   validateBatchId,
   validateScheduleSessionId,
-  uploadAndAddRecordedLesson
+  uploadAndAddRecordedLesson,
 );
 
 // Add route to fetch recorded lessons for a scheduled session
@@ -170,7 +173,7 @@ router.get(
   isAuthenticated,
   validateBatchId,
   validateScheduleSessionId,
-  getRecordedLessonsForSession
+  getRecordedLessonsForSession,
 );
 
 // Add route to schedule a new class session
@@ -180,7 +183,7 @@ router.post(
   authorize(["admin", "instructor", "super-admin"]),
   validateBatchId,
   validateScheduledSession,
-  addScheduledSessionToBatch
+  addScheduledSessionToBatch,
 );
 
 // Add route to create Zoom meeting for a scheduled session
@@ -191,7 +194,17 @@ router.post(
   validateBatchId,
   validateScheduleSessionId,
   validateZoomMeeting,
-  createZoomMeetingForSession
+  createZoomMeetingForSession,
+);
+
+// Add route to fix AI companion host requirement for existing meetings
+router.patch(
+  "/:batchId/schedule/:sessionId/fix-ai-companion",
+  isAuthenticated,
+  authorize(["admin", "instructor", "super-admin"]),
+  validateBatchId,
+  validateScheduleSessionId,
+  fixAICompanionHostRequirement,
 );
 
 /* ========================================= */
@@ -204,7 +217,7 @@ router.get(
   isAuthenticated,
   authorize(["admin", "instructor", "super-admin"]),
   validateBatchId,
-  getBatchStudents
+  getBatchStudents,
 );
 
 // Add a student to a batch
@@ -214,7 +227,7 @@ router.post(
   authorize(["admin", "super-admin"]),
   validateBatchId,
   validateAddStudentToBatch,
-  addStudentToBatch
+  addStudentToBatch,
 );
 
 // Remove a student from a batch
@@ -224,7 +237,7 @@ router.delete(
   authorize(["admin", "super-admin"]),
   validateBatchId,
   validateStudentId,
-  removeStudentFromBatch
+  removeStudentFromBatch,
 );
 
 // Transfer a student to another batch
@@ -235,7 +248,7 @@ router.post(
   validateBatchId,
   validateStudentId,
   validateTransferStudent,
-  transferStudentToBatch
+  transferStudentToBatch,
 );
 
 // Update student status in a batch
@@ -246,7 +259,7 @@ router.put(
   validateBatchId,
   validateStudentId,
   validateUpdateStudentStatus,
-  updateStudentStatusInBatch
+  updateStudentStatusInBatch,
 );
 
 /* ========================================= */
@@ -258,7 +271,7 @@ router.get(
   "/analytics/dashboard",
   isAuthenticated,
   authorize(["admin", "super-admin"]),
-  getBatchAnalyticsDashboard
+  getBatchAnalyticsDashboard,
 );
 
 // Get batch status distribution
@@ -266,15 +279,15 @@ router.get(
   "/analytics/status-distribution",
   isAuthenticated,
   authorize(["admin", "super-admin"]),
-  getBatchStatusDistribution
+  getBatchStatusDistribution,
 );
 
 // Get instructor workload analytics
 router.get(
-  "/analytics/instructor-workload", 
+  "/analytics/instructor-workload",
   isAuthenticated,
   authorize(["admin", "super-admin"]),
-  getInstructorWorkloadAnalytics
+  getInstructorWorkloadAnalytics,
 );
 
 // Get capacity utilization analytics
@@ -282,7 +295,7 @@ router.get(
   "/analytics/capacity",
   isAuthenticated,
   authorize(["admin", "super-admin"]),
-  getCapacityAnalytics
+  getCapacityAnalytics,
 );
 
 // Get detailed instructor analysis
@@ -290,7 +303,7 @@ router.get(
   "/analytics/instructor-analysis",
   isAuthenticated,
   authorize(["admin", "super-admin"]),
-  getInstructorAnalysis
+  getInstructorAnalysis,
 );
 
 // Add route to get batches for a student by their ID
@@ -299,7 +312,7 @@ router.get(
   isAuthenticated,
   authorize(["admin", "instructor", "super-admin", "student"]),
   validateStudentId,
-  getBatchesForStudent
+  getBatchesForStudent,
 );
 
 // Add route to fetch all recorded lessons for a student
@@ -308,7 +321,7 @@ router.get(
   isAuthenticated,
   authorize(["admin", "instructor", "super-admin", "student"]),
   validateStudentId,
-  getRecordedLessonsForStudent
+  getRecordedLessonsForStudent,
 );
 
 // Add route to get upcoming sessions for a batch
@@ -317,7 +330,7 @@ router.get(
   isAuthenticated,
   authorize(["admin", "instructor", "super-admin"]),
   validateBatchId,
-  getUpcomingSessionsForBatch
+  getUpcomingSessionsForBatch,
 );
 
 // Add route to get upcoming sessions for a student across all their enrolled batches
@@ -326,7 +339,48 @@ router.get(
   isAuthenticated,
   authorize(["admin", "instructor", "super-admin", "student"]),
   validateStudentId,
-  getUpcomingSessionsForStudent
+  getUpcomingSessionsForStudent,
 );
 
-export default router; 
+/* ========================================= */
+/* ZOOM RECORDING SYNC ROUTES               */
+/* ========================================= */
+
+// Add route to manually sync Zoom recordings for a batch
+router.post(
+  "/:batchId/sync-zoom-recordings",
+  isAuthenticated,
+  authorize(["admin", "instructor", "super-admin"]),
+  validateBatchId,
+  syncZoomRecordingsForBatch,
+);
+
+// Add route to get Zoom recording sync status for a batch
+router.get(
+  "/:batchId/zoom-sync-status",
+  isAuthenticated,
+  authorize(["admin", "instructor", "super-admin"]),
+  validateBatchId,
+  getZoomRecordingSyncStatus,
+);
+
+// Add route to retry failed Zoom recording syncs
+router.post(
+  "/:batchId/retry-zoom-recordings",
+  isAuthenticated,
+  authorize(["admin", "instructor", "super-admin"]),
+  validateBatchId,
+  retryFailedZoomRecordings,
+);
+
+// Add route to create Zoom meeting for existing session
+router.post(
+  "/:batchId/schedule/:sessionId/create-zoom-meeting",
+  isAuthenticated,
+  authorize(["admin", "instructor", "super-admin"]),
+  validateBatchId,
+  validateScheduleSessionId,
+  createZoomMeetingForExistingSession,
+);
+
+export default router;

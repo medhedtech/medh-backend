@@ -1,4 +1,8 @@
-import { LiveCourse, BlendedCourse, FreeCourse } from "./models/course-types/index.js";
+import {
+  LiveCourse,
+  BlendedCourse,
+  FreeCourse,
+} from "./models/course-types/index.js";
 import Course from "./models/course-model.js";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
@@ -7,7 +11,7 @@ dotenv.config();
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI);
+    const conn = await mongoose.connect(process.env.MONGODB_URL);
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
     console.error("Database connection failed:", error);
@@ -33,7 +37,7 @@ const testCurriculumManagement = async () => {
         benefits: "Become a JavaScript expert",
         learning_objectives: ["ES6+", "Async Programming", "Performance"],
         course_requirements: ["Basic JavaScript knowledge"],
-        target_audience: ["Intermediate developers"]
+        target_audience: ["Intermediate developers"],
       },
       course_level: "Intermediate",
       no_of_Sessions: 12,
@@ -42,7 +46,7 @@ const testCurriculumManagement = async () => {
       category_type: "Live",
       class_type: "Live Courses",
       is_Certification: "Yes",
-      is_Assignments: "Yes", 
+      is_Assignments: "Yes",
       is_Projects: "Yes",
       is_Quizes: "Yes",
       course_image: "https://example.com/course-image.jpg",
@@ -51,21 +55,25 @@ const testCurriculumManagement = async () => {
         end_date: new Date("2024-05-01"),
         session_days: ["Monday", "Wednesday", "Friday"],
         session_time: "18:00",
-        timezone: "UTC"
+        timezone: "UTC",
       },
       total_sessions: 36,
       max_students: 25,
-      modules: [{
-        title: "Core JavaScript Module",
-        description: "Fundamentals of JavaScript",
-        order: 1,
-        sessions: [{
-          title: "Session 1",
-          description: "Introduction to ES6",
-          scheduled_date: new Date("2024-02-01"),
-          duration: 90
-        }]
-      }],
+      modules: [
+        {
+          title: "Core JavaScript Module",
+          description: "Fundamentals of JavaScript",
+          order: 1,
+          sessions: [
+            {
+              title: "Session 1",
+              description: "Introduction to ES6",
+              scheduled_date: new Date("2024-02-01"),
+              duration: 90,
+            },
+          ],
+        },
+      ],
       curriculum: [
         {
           weekTitle: "Week 1: JavaScript Fundamentals",
@@ -84,10 +92,10 @@ const testCurriculumManagement = async () => {
                   title: "Variable Declaration Guide",
                   url: "https://example.com/variables.pdf",
                   type: "pdf",
-                  description: "Complete reference for variable declarations"
-                }
-              ]
-            }
+                  description: "Complete reference for variable declarations",
+                },
+              ],
+            },
           ],
           liveClasses: [
             {
@@ -99,10 +107,10 @@ const testCurriculumManagement = async () => {
                 {
                   title: "Session Slides",
                   url: "https://example.com/session1-slides.pdf",
-                  type: "presentation"
-                }
-              ]
-            }
+                  type: "presentation",
+                },
+              ],
+            },
           ],
           sections: [
             {
@@ -116,13 +124,13 @@ const testCurriculumManagement = async () => {
                   content: "Detailed explanation of hoisting",
                   content_type: "video",
                   duration: 30,
-                  order: 1
-                }
-              ]
-            }
-          ]
-        }
-      ]
+                  order: 1,
+                },
+              ],
+            },
+          ],
+        },
+      ],
     };
 
     const liveCourse = await LiveCourse.create(liveCourseData);
@@ -131,7 +139,9 @@ const testCurriculumManagement = async () => {
     console.log(`Curriculum weeks: ${liveCourse.curriculum.length}`);
     console.log(`First week ID: ${liveCourse.curriculum[0].id}`);
     console.log(`First lesson ID: ${liveCourse.curriculum[0].lessons[0].id}`);
-    console.log(`First live class ID: ${liveCourse.curriculum[0].liveClasses[0].id}\n`);
+    console.log(
+      `First live class ID: ${liveCourse.curriculum[0].liveClasses[0].id}\n`,
+    );
 
     // Test 2: Test adding a new week to curriculum
     console.log("2️⃣ Adding a new week to curriculum...");
@@ -146,9 +156,9 @@ const testCurriculumManagement = async () => {
           content: "Complete guide to arrow functions",
           content_type: "video",
           duration: 40,
-          order: 1
-        }
-      ]
+          order: 1,
+        },
+      ],
     };
 
     liveCourse.curriculum.push(newWeek);
@@ -168,7 +178,7 @@ const testCurriculumManagement = async () => {
         benefits: "Build complete web applications",
         learning_objectives: ["Frontend", "Backend", "Database"],
         course_requirements: ["Basic programming knowledge"],
-        target_audience: ["Beginner to intermediate developers"]
+        target_audience: ["Beginner to intermediate developers"],
       },
       course_level: "Intermediate",
       no_of_Sessions: 20,
@@ -177,7 +187,7 @@ const testCurriculumManagement = async () => {
       class_type: "Blended Courses",
       is_Certification: "Yes",
       is_Assignments: "Yes",
-      is_Projects: "Yes", 
+      is_Projects: "Yes",
       is_Quizes: "Yes",
       course_image: "https://example.com/blended-course-image.jpg",
       course_duration: "4 months",
@@ -185,11 +195,13 @@ const testCurriculumManagement = async () => {
       doubt_session_schedule: {
         frequency: "weekly",
         preferred_days: ["Saturday"],
-        preferred_time_slots: [{
-          start_time: "10:00",
-          end_time: "12:00",
-          timezone: "UTC"
-        }]
+        preferred_time_slots: [
+          {
+            start_time: "10:00",
+            end_time: "12:00",
+            timezone: "UTC",
+          },
+        ],
       },
       curriculum: [
         {
@@ -203,11 +215,11 @@ const testCurriculumManagement = async () => {
               content: "Complete HTML5 guide",
               content_type: "video",
               duration: 60,
-              order: 1
-            }
-          ]
-        }
-      ]
+              order: 1,
+            },
+          ],
+        },
+      ],
     };
 
     const blendedCourse = await BlendedCourse.create(blendedCourseData);
@@ -215,7 +227,7 @@ const testCurriculumManagement = async () => {
     console.log(`Course ID: ${blendedCourse._id}`);
     console.log(`Curriculum weeks: ${blendedCourse.curriculum.length}\n`);
 
-    // Test 4: Create a free course  
+    // Test 4: Create a free course
     console.log("4️⃣ Creating a Free Course with Curriculum...");
     const freeCourseData = {
       course_title: "Introduction to Programming",
@@ -226,7 +238,7 @@ const testCurriculumManagement = async () => {
         benefits: "Start your programming journey",
         learning_objectives: ["Variables", "Loops", "Functions"],
         course_requirements: ["No prior experience needed"],
-        target_audience: ["Complete beginners"]
+        target_audience: ["Complete beginners"],
       },
       course_level: "Beginner",
       status: "Published",
@@ -246,8 +258,8 @@ const testCurriculumManagement = async () => {
           content: "https://example.com/intro-video.mp4",
           duration: 30,
           order: 1,
-          is_preview: true
-        }
+          is_preview: true,
+        },
       ],
       curriculum: [
         {
@@ -261,11 +273,11 @@ const testCurriculumManagement = async () => {
               content: "Introduction to programming logic",
               content_type: "text",
               duration: 20,
-              order: 1
-            }
-          ]
-        }
-      ]
+              order: 1,
+            },
+          ],
+        },
+      ],
     };
 
     const freeCourse = await FreeCourse.create(freeCourseData);
@@ -280,21 +292,21 @@ const testCurriculumManagement = async () => {
       let totalSections = 0;
       let totalLiveClasses = 0;
       let totalResources = 0;
-      
-      curriculum.forEach(week => {
+
+      curriculum.forEach((week) => {
         if (week.lessons) {
           totalLessons += week.lessons.length;
-          week.lessons.forEach(lesson => {
+          week.lessons.forEach((lesson) => {
             if (lesson.resources) totalResources += lesson.resources.length;
           });
         }
         if (week.liveClasses) totalLiveClasses += week.liveClasses.length;
         if (week.sections) {
           totalSections += week.sections.length;
-          week.sections.forEach(section => {
+          week.sections.forEach((section) => {
             if (section.lessons) {
               totalLessons += section.lessons.length;
-              section.lessons.forEach(lesson => {
+              section.lessons.forEach((lesson) => {
                 if (lesson.resources) totalResources += lesson.resources.length;
               });
             }
@@ -302,51 +314,55 @@ const testCurriculumManagement = async () => {
           });
         }
       });
-      
+
       return { totalLessons, totalSections, totalLiveClasses, totalResources };
     };
 
     const liveStats = calculateStats(liveCourse.curriculum);
     console.log("Live Course Stats:", liveStats);
-    
+
     const blendedStats = calculateStats(blendedCourse.curriculum);
     console.log("Blended Course Stats:", blendedStats);
-    
+
     const freeStats = calculateStats(freeCourse.curriculum);
     console.log("Free Course Stats:", freeStats);
     console.log("");
 
     // Test 6: Test ID consistency
     console.log("6️⃣ Testing ID assignment consistency...");
-    
+
     const testIDStructure = (course, courseName) => {
       console.log(`\n${courseName} ID Structure:`);
       course.curriculum.forEach((week, weekIndex) => {
         console.log(`  Week ${weekIndex + 1}: ${week.id}`);
-        
+
         if (week.lessons) {
           week.lessons.forEach((lesson, lessonIndex) => {
             console.log(`    Direct Lesson ${lessonIndex + 1}: ${lesson.id}`);
             if (lesson.resources) {
               lesson.resources.forEach((resource, resourceIndex) => {
-                console.log(`      Resource ${resourceIndex + 1}: ${resource.id}`);
+                console.log(
+                  `      Resource ${resourceIndex + 1}: ${resource.id}`,
+                );
               });
             }
           });
         }
-        
+
         if (week.liveClasses) {
           week.liveClasses.forEach((liveClass, classIndex) => {
             console.log(`    Live Class ${classIndex + 1}: ${liveClass.id}`);
           });
         }
-        
+
         if (week.sections) {
           week.sections.forEach((section, sectionIndex) => {
             console.log(`    Section ${sectionIndex + 1}: ${section.id}`);
             if (section.lessons) {
               section.lessons.forEach((lesson, lessonIndex) => {
-                console.log(`      Section Lesson ${lessonIndex + 1}: ${lesson.id}`);
+                console.log(
+                  `      Section Lesson ${lessonIndex + 1}: ${lesson.id}`,
+                );
               });
             }
           });
@@ -360,12 +376,17 @@ const testCurriculumManagement = async () => {
 
     console.log("\n🎉 All curriculum management tests completed successfully!");
     console.log("\n📋 Summary:");
-    console.log(`✅ Live Course created with ${liveCourse.curriculum.length} weeks`);
-    console.log(`✅ Blended Course created with ${blendedCourse.curriculum.length} weeks`);
-    console.log(`✅ Free Course created with ${freeCourse.curriculum.length} weeks`);
+    console.log(
+      `✅ Live Course created with ${liveCourse.curriculum.length} weeks`,
+    );
+    console.log(
+      `✅ Blended Course created with ${blendedCourse.curriculum.length} weeks`,
+    );
+    console.log(
+      `✅ Free Course created with ${freeCourse.curriculum.length} weeks`,
+    );
     console.log(`✅ ID assignment working correctly across all course types`);
     console.log(`✅ Curriculum structure is consistent and flexible`);
-
   } catch (error) {
     console.error("❌ Test failed:", error);
   } finally {
@@ -375,4 +396,4 @@ const testCurriculumManagement = async () => {
 };
 
 // Run the test
-testCurriculumManagement(); 
+testCurriculumManagement();
