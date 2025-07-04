@@ -1,0 +1,362 @@
+{
+  "info": {
+    "name": "Parent API Tests",
+    "description": "Comprehensive test suite for Parent API endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Parent Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response has token\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "    pm.expect(json.data.token).to.exist;",
+                  "    pm.collectionVariables.set('parent_token', json.data.token);",
+                  "    pm.globals.set('parent_token', json.data.token);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"parent@medh.co\",\n  \"password\": \"Parent@123\"\n}"
+            },
+            "url": "{{base_url}}/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Parent Dashboard",
+      "item": [
+        {
+          "name": "Get Parent Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response success is true\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "});",
+                  "pm.test(\"Parent profile exists\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data.parent).to.exist;",
+                  "    pm.expect(json.data.parent.id).to.exist;",
+                  "});",
+                  "pm.test(\"Children array exists\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data.children).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{parent_token}}"
+              }
+            ],
+            "url": "{{base_url}}/parent/dashboard/profile"
+          }
+        },
+        {
+          "name": "Get Upcoming Classes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response success is true\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "});",
+                  "pm.test(\"Classes data exists\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{parent_token}}"
+              }
+            ],
+            "url": "{{base_url}}/parent/dashboard/classes/upcoming"
+          }
+        },
+        {
+          "name": "Get Child Progress",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response success is true\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "});",
+                  "pm.test(\"Progress data exists\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{parent_token}}"
+              }
+            ],
+            "url": "{{base_url}}/parent/dashboard/progress/{{child_id}}"
+          }
+        },
+        {
+          "name": "Get Child Attendance",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response success is true\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "});",
+                  "pm.test(\"Attendance data exists\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{parent_token}}"
+              }
+            ],
+            "url": "{{base_url}}/parent/dashboard/attendance/{{child_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Parent Management",
+      "item": [
+        {
+          "name": "Get Parent Children",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response success is true\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "});",
+                  "pm.test(\"Children list is array\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data.children).to.be.an('array');",
+                  "});",
+                  "pm.test(\"Set child_id for further tests\", () => {",
+                  "    const json = pm.response.json();",
+                  "    if (json.data && json.data.children && json.data.children.length > 0) {",
+                  "        pm.collectionVariables.set('child_id', json.data.children[0].child.id);",
+                  "    } else {",
+                  "        // Set dummy child_id for testing when no children exist",
+                  "        pm.collectionVariables.set('child_id', 'dummy-child-id');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{parent_token}}"
+              }
+            ],
+            "url": "{{base_url}}/parent/children"
+          }
+        },
+        {
+          "name": "Link Parent to Child",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 or 201\", () => {",
+                  "    pm.expect([200, 201]).to.include(pm.response.code);",
+                  "});",
+                  "pm.test(\"Response success is true\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "});",
+                  "pm.test(\"Link data exists\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{parent_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"childId\": \"{{child_id}}\",\n  \"relationship\": \"parent\"\n}"
+            },
+            "url": "{{base_url}}/parent/link-child"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Parent Notifications",
+      "item": [
+        {
+          "name": "Get Parent Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response success is true\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "});",
+                  "pm.test(\"Notifications data exists\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.data).to.exist;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{parent_token}}"
+              }
+            ],
+            "url": "{{base_url}}/parent/notifications"
+          }
+        },
+        {
+          "name": "Mark Notification as Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Response success is true\", () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.success).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{parent_token}}"
+              }
+            ],
+            "url": "{{base_url}}/parent/notifications/{{notification_id}}/read"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "parent_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "child_id",
+      "value": "dummy-child-id",
+      "type": "string"
+    },
+    {
+      "key": "notification_id",
+      "value": "dummy-notification-id",
+      "type": "string"
+    }
+  ]
+}

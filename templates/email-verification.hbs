@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Verify Your Email - Medh Learning Platform</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background-color: #f9f9f9;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      padding: 20px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .header img {
+      max-width: 150px;
+      height: auto;
+    }
+    .content {
+      padding: 30px 20px;
+    }
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: #888;
+      padding: 20px;
+      border-top: 1px solid #eee;
+    }
+    .otp-box {
+      background-color: #f7f9fc;
+      border: 1px solid #e1e5ee;
+      border-radius: 4px;
+      padding: 20px;
+      margin: 20px 0;
+      font-family: monospace;
+      font-size: 24px;
+      font-weight: bold;
+      text-align: center;
+      letter-spacing: 5px;
+    }
+    .expiry-notice {
+      background-color: #f8f4ff;
+      border-left: 4px solid #9c6ade;
+      padding: 15px;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+    .help-text {
+      font-size: 14px;
+      color: #666;
+      margin-top: 25px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Medh Learning Platform</h1>
+    </div>
+    <div class="content">
+      <h2>Verify Your Email Address</h2>
+      <p>Hello {{name}},</p>
+      <p>Thank you for registering with Medh Learning Platform. To complete your registration and activate your account, please use the verification code below:</p>
+      
+      <div class="otp-box">
+        {{otp}}
+      </div>
+      
+      <div class="expiry-notice">
+        <strong>Important:</strong> This verification code will expire in <strong>{{expiryMinutes}} minutes</strong>.
+      </div>
+      
+      <p>Please enter this code in the verification page to confirm your email address and activate your account.</p>
+      
+      <p class="help-text">
+        If you didn't create an account on Medh Learning Platform, please ignore this email or contact our support team if you have concerns.
+      </p>
+      
+      <p>Thank you,<br>The Medh Learning Platform Team</p>
+    </div>
+    <div class="footer">
+      <p>&copy; {{currentYear}} Medh Learning Platform. All rights reserved.</p>
+      <p>This email was sent to {{email}}</p>
+    </div>
+  </div>
+</body>
+</html> 
