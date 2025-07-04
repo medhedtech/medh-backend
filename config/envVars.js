@@ -2,10 +2,10 @@ import dotenv from "dotenv";
 import path from "path";
 
 // Force load the .env file from the project root
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 export const ENV_VARS = {
-  MONGODB_URI: process.env.MONGO_URI,
+  MONGODB_URI: process.env.MONGODB_URL,
   JWT_SECRET_KEY: process.env.JWT_SECRET_KEY,
   PORT: process.env.PORT || 8080,
   HTTPS_PORT: process.env.HTTPS_PORT || 443,
@@ -17,7 +17,7 @@ export const ENV_VARS = {
   AWS_SECRET_KEY: process.env.IM_AWS_SECRET_KEY,
   AWS_S3_BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME || "medh-files",
   AWS_REGION: process.env.AWS_REGION || "ap-south-1",
-  
+
   // TLS Configuration
   TLS_CERT_PATH: process.env.TLS_CERT_PATH,
   USE_HTTPS: process.env.USE_HTTPS || false,
@@ -25,14 +25,16 @@ export const ENV_VARS = {
   // Sentry Configuration
   SENTRY_DSN: process.env.SENTRY_DSN,
   SENTRY_ENVIRONMENT: process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV,
-  SENTRY_TRACES_SAMPLE_RATE: parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || "0.1"),
+  SENTRY_TRACES_SAMPLE_RATE: parseFloat(
+    process.env.SENTRY_TRACES_SAMPLE_RATE || "0.1",
+  ),
 
   // Redis Configuration
-  REDIS_ENABLED: process.env.REDIS_ENABLED === 'true',
-  REDIS_HOST: process.env.REDIS_HOST || 'localhost',
+  REDIS_ENABLED: process.env.REDIS_ENABLED === "true",
+  REDIS_HOST: process.env.REDIS_HOST || "localhost",
   REDIS_PORT: process.env.REDIS_PORT || 6379,
   REDIS_PASSWORD: process.env.REDIS_PASSWORD,
-  
+
   // Email Configuration
   EMAIL_HOST: process.env.EMAIL_HOST || "email-smtp.us-east-1.amazonaws.com",
   EMAIL_PORT: process.env.EMAIL_PORT || 465,
@@ -41,11 +43,11 @@ export const ENV_VARS = {
   EMAIL_PASS: process.env.EMAIL_PASS,
   EMAIL_FROM: process.env.EMAIL_FROM || "noreply@medh.co",
   EMAIL_SERVICE: process.env.EMAIL_SERVICE || "SES", // "Gmail" or "SES"
-  
+
   // Razorpay Configuration
   RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID,
   RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET,
-  
+
   // Upload Constants (Update these values as needed)
   UPLOAD_CONSTANTS: {
     ALLOWED_MIME_TYPES: {
@@ -63,8 +65,13 @@ export const ENV_VARS = {
 
   // CloudFront Configuration
   CLOUDFRONT_KEY_PAIR_ID: process.env.CLOUDFRONT_KEY_PAIR_ID,
-  CLOUDFRONT_PRIVATE_KEY_PATH: process.env.CLOUDFRONT_PRIVATE_KEY_PATH || path.join(process.cwd(), "private_key.pem"),
-  CLOUDFRONT_DEFAULT_EXPIRES_IN: parseInt(process.env.CLOUDFRONT_DEFAULT_EXPIRES_IN || "300", 10),
+  CLOUDFRONT_PRIVATE_KEY_PATH:
+    process.env.CLOUDFRONT_PRIVATE_KEY_PATH ||
+    path.join(process.cwd(), "private_key.pem"),
+  CLOUDFRONT_DEFAULT_EXPIRES_IN: parseInt(
+    process.env.CLOUDFRONT_DEFAULT_EXPIRES_IN || "300",
+    10,
+  ),
 
   // OAuth Configuration
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,

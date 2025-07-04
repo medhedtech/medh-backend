@@ -32,7 +32,7 @@ check_env_var "IM_AWS_ACCESS_KEY" || env_check_failed=true
 check_env_var "IM_AWS_SECRET_KEY" || env_check_failed=true
 check_env_var "AWS_S3_BUCKET_NAME" || env_check_failed=true
 check_env_var "AWS_REGION" || env_check_failed=true
-check_env_var "MONGO_URI" || env_check_failed=true
+check_env_var "MONGODB_URL" || env_check_failed=true
 check_env_var "JWT_SECRET_KEY" || env_check_failed=true
 
 if [ "$env_check_failed" = true ]; then
@@ -44,7 +44,7 @@ if [ "$env_check_failed" = true ]; then
     echo "  IM_AWS_SECRET_KEY=your_secret_key"
     echo "  AWS_S3_BUCKET_NAME=medhdocuments"
     echo "  AWS_REGION=ap-south-1"
-    echo "  MONGO_URI=mongodb://..."
+    echo "  MONGODB_URL=mongodb://..."
     echo "  JWT_SECRET_KEY=your_jwt_secret"
     exit 1
 fi

@@ -5,9 +5,11 @@ This directory contains scripts to update the `course_duration` field for all co
 ## Scripts Overview
 
 ### 1. `test-blended-course-update.js` - Dry Run Analysis
+
 **Purpose**: Analyze courses that would be affected without making any changes.
 
 **Features**:
+
 - Shows how many courses have `class_type: "Blended Courses"`
 - Displays current `course_duration` distribution
 - Lists detailed information for each affected course
@@ -15,9 +17,11 @@ This directory contains scripts to update the `course_duration` field for all co
 - Displays the exact MongoDB query that would be executed
 
 ### 2. `update-blended-course-duration.js` - Actual Update
+
 **Purpose**: Performs the actual bulk update operation.
 
 **Features**:
+
 - Updates all courses with `class_type: "Blended Courses"`
 - Sets their `course_duration` to `"self paced"`
 - Updates the `meta.lastUpdated` timestamp
@@ -26,30 +30,34 @@ This directory contains scripts to update the `course_duration` field for all co
 
 ## Prerequisites
 
-1. **Environment Setup**: Ensure your `.env` file has the correct `MONGO_URI` configured
+1. **Environment Setup**: Ensure your `.env` file has the correct `MONGODB_URL` configured
 2. **Database Access**: Make sure you have write access to the MongoDB database
 3. **Backup**: Consider backing up your database before running the update script
 
 ## Usage Instructions
 
 ### Step 1: Analyze the Impact (Recommended)
+
 ```bash
 # Run the test script to see what would be changed
 node scripts/test-blended-course-update.js
 ```
 
 This will show you:
+
 - How many courses would be affected
 - Current values of `course_duration` for these courses
 - Detailed breakdown of the impact
 
 ### Step 2: Execute the Update
+
 ```bash
 # Run the actual update script
 node scripts/update-blended-course-duration.js
 ```
 
 This will:
+
 - Connect to your MongoDB database
 - Find all courses with `class_type: "Blended Courses"`
 - Update their `course_duration` to `"self paced"`
@@ -60,6 +68,7 @@ This will:
 ## Expected Output
 
 ### Test Script Output Example:
+
 ```
 🔌 Connecting to MongoDB...
 ✅ Connected to MongoDB successfully
@@ -85,6 +94,7 @@ This will:
 ```
 
 ### Update Script Output Example:
+
 ```
 🔌 Connecting to MongoDB...
 ✅ Connected to MongoDB successfully
@@ -113,19 +123,20 @@ The script performs the following MongoDB operation:
 
 ```javascript
 db.courses.updateMany(
-  { "class_type": "Blended Courses" },
+  { class_type: "Blended Courses" },
   {
     $set: {
-      "course_duration": "self paced",
-      "meta.lastUpdated": new Date()
-    }
-  }
-)
+      course_duration: "self paced",
+      "meta.lastUpdated": new Date(),
+    },
+  },
+);
 ```
 
 ## Safety Features
 
 ### Built-in Safeguards:
+
 1. **Dry Run First**: Test script allows you to see impact before making changes
 2. **Verification**: Update script verifies changes after execution
 3. **Logging**: All operations are logged for audit trail
@@ -133,7 +144,9 @@ db.courses.updateMany(
 5. **Error Handling**: Comprehensive error handling with detailed messages
 
 ### Rollback Considerations:
+
 If you need to rollback changes, you would need to:
+
 1. Identify the original `course_duration` values (check logs or database backups)
 2. Create a custom rollback script with the original values
 3. Or restore from a database backup taken before the update
@@ -143,11 +156,13 @@ If you need to rollback changes, you would need to:
 ### Common Issues:
 
 1. **MongoDB Connection Error**:
-   - Check your `MONGO_URI` in `.env` file
+
+   - Check your `MONGODB_URL` in `.env` file
    - Ensure database is accessible
    - Verify credentials
 
 2. **No Courses Found**:
+
    - Check if there are courses with `class_type: "Blended Courses"`
    - Verify the exact string format (case-sensitive)
 
@@ -156,6 +171,7 @@ If you need to rollback changes, you would need to:
    - Check if collection is locked or read-only
 
 ### Debugging:
+
 - Enable mongoose debugging by setting `MONGOOSE_DEBUG=true` in your environment
 - Check application logs for detailed error information
 - Use the test script first to diagnose issues
@@ -163,17 +179,20 @@ If you need to rollback changes, you would need to:
 ## Important Notes
 
 ⚠️ **Production Usage**:
+
 - Always run the test script first in production
 - Consider running during maintenance windows
 - Ensure you have a recent database backup
 - Test the scripts in a staging environment first
 
 📝 **Audit Trail**:
+
 - All operations are logged with timestamps
 - The `meta.lastUpdated` field tracks when courses were modified
 - Check application logs for detailed execution records
 
 🔒 **Data Integrity**:
+
 - The script only updates the specified fields
 - No other course data is modified
-- Updates are atomic and consistent 
+- Updates are atomic and consistent

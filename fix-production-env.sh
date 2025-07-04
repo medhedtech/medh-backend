@@ -31,7 +31,7 @@ NODE_ENV=production
 PORT=8080
 
 # Database Configuration
-MONGO_URI=mongodb+srv://medhupskill:Medh567upskill@medh.xmifs.mongodb.net/MedhDB
+MONGODB_URL=mongodb+srv://medhupskill:Medh567upskill@medh.xmifs.mongodb.net/MedhDB
 
 # JWT Configuration
 JWT_SECRET_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30

@@ -4,7 +4,7 @@ import { ENV_VARS } from "../config/envVars.js";
 import logger from "../utils/logger.js";
 
 /**
- * Script to update course_duration to "self paced" for all courses 
+ * Script to update course_duration to "self paced" for all courses
  * where class_type is "Blended Courses"
  */
 
@@ -12,14 +12,14 @@ const updateBlendedCourseDuration = async () => {
   try {
     // Connect to MongoDB
     console.log("🔌 Connecting to MongoDB...");
-    await mongoose.connect(ENV_VARS.MONGODB_URI || process.env.MONGO_URI);
+    await mongoose.connect(ENV_VARS.MONGODB_URI || process.env.MONGODB_URL);
     console.log("✅ Connected to MongoDB successfully");
 
     // Find courses with class_type "Blended Courses"
     console.log("\n🔍 Finding courses with class_type 'Blended Courses'...");
-    
-    const blendedCourses = await Course.find({ 
-      class_type: "Blended Courses" 
+
+    const blendedCourses = await Course.find({
+      class_type: "Blended Courses",
     }).select("_id course_title class_type course_duration");
 
     if (blendedCourses.length === 0) {
@@ -27,8 +27,10 @@ const updateBlendedCourseDuration = async () => {
       return;
     }
 
-    console.log(`📊 Found ${blendedCourses.length} courses with class_type 'Blended Courses':`);
-    
+    console.log(
+      `📊 Found ${blendedCourses.length} courses with class_type 'Blended Courses':`,
+    );
+
     // Display courses that will be updated
     blendedCourses.forEach((course, index) => {
       console.log(`${index + 1}. ${course.course_title}`);
@@ -44,13 +46,13 @@ const updateBlendedCourseDuration = async () => {
     // Perform bulk update
     const updateResult = await Course.updateMany(
       { class_type: "Blended Courses" },
-      { 
-        $set: { 
+      {
+        $set: {
           course_duration: "Self-Paced",
           // Update lastUpdated timestamp in meta
-          "meta.lastUpdated": new Date()
-        } 
-      }
+          "meta.lastUpdated": new Date(),
+        },
+      },
     );
 
     console.log("\n✅ Bulk update completed successfully!");
@@ -61,11 +63,13 @@ const updateBlendedCourseDuration = async () => {
 
     // Verify the update by fetching updated courses
     console.log("\n🔍 Verifying update...");
-    const updatedCourses = await Course.find({ 
-      class_type: "Blended Courses" 
+    const updatedCourses = await Course.find({
+      class_type: "Blended Courses",
     }).select("_id course_title class_type course_duration");
 
-    console.log(`📊 Verification - Found ${updatedCourses.length} courses after update:`);
+    console.log(
+      `📊 Verification - Found ${updatedCourses.length} courses after update:`,
+    );
     updatedCourses.forEach((course, index) => {
       console.log(`${index + 1}. ${course.course_title}`);
       console.log(`   ID: ${course._id}`);
@@ -80,27 +84,26 @@ const updateBlendedCourseDuration = async () => {
         operation: "update_blended_course_duration",
         matchedCount: updateResult.matchedCount,
         modifiedCount: updateResult.modifiedCount,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
 
     console.log("🎉 Script execution completed successfully!");
-
   } catch (error) {
     console.error("❌ Error occurred during script execution:", error);
-    
+
     if (logger && logger.error) {
       logger.error("Failed to update blended course duration", {
         operation: "update_blended_course_duration",
         error: {
           name: error.name,
           message: error.message,
-          stack: error.stack
+          stack: error.stack,
         },
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     }
-    
+
     throw error;
   } finally {
     // Ensure database connection is closed
@@ -124,4 +127,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     });
 }
 
-export default updateBlendedCourseDuration; 
+export default updateBlendedCourseDuration;

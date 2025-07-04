@@ -142,7 +142,15 @@ const batchSchema = new Schema(
         // Legacy field for recurring day-based scheduling (kept for backward compatibility)
         day: {
           type: String,
-          enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+          enum: [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+          ],
           required: false, // Made optional to support date-based scheduling
         },
         // New field for specific date-based scheduling
@@ -161,8 +169,8 @@ const batchSchema = new Schema(
           match: /^([01]\d|2[0-3]):([0-5]\d)$/,
           validate: {
             validator: function (v) {
-              const startParts = this.start_time.split(':').map(Number);
-              const endParts = v.split(':').map(Number);
+              const startParts = this.start_time.split(":").map(Number);
+              const endParts = v.split(":").map(Number);
               const startMins = startParts[0] * 60 + startParts[1];
               const endMins = endParts[0] * 60 + endParts[1];
               return endMins > startMins;
@@ -201,7 +209,42 @@ const batchSchema = new Schema(
             created_by: {
               type: mongoose.Schema.Types.ObjectId,
               ref: "User",
-              required: [true, "Creator reference is required for recorded lesson"],
+              required: [
+                true,
+                "Creator reference is required for recorded lesson",
+              ],
+            },
+            // New fields for Zoom recording metadata
+            source: {
+              type: String,
+              enum: ["manual_upload", "zoom_auto_sync", "external_link"],
+              default: "manual_upload",
+            },
+            zoom_recording_info: {
+              meeting_id: {
+                type: String,
+                trim: true,
+              },
+              file_type: {
+                type: String,
+                trim: true,
+              },
+              file_size: {
+                type: Number,
+              },
+              recording_start: {
+                type: Date,
+              },
+              recording_end: {
+                type: Date,
+              },
+              download_url: {
+                type: String,
+                trim: true,
+              },
+              sync_date: {
+                type: Date,
+              },
             },
           },
         ],
@@ -220,6 +263,22 @@ const batchSchema = new Schema(
             trim: true,
           },
           password: {
+            type: String,
+            trim: true,
+          },
+          // New fields for recording sync
+          recording_synced: {
+            type: Boolean,
+            default: false,
+          },
+          last_sync_date: {
+            type: Date,
+          },
+          sync_attempts: {
+            type: Number,
+            default: 0,
+          },
+          last_sync_error: {
             type: String,
             trim: true,
           },
@@ -247,32 +306,36 @@ const batchSchema = new Schema(
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 // Add custom validation for schedule items
-batchSchema.path('schedule').validate(function(scheduleArray) {
+batchSchema.path("schedule").validate(function (scheduleArray) {
   if (!scheduleArray || scheduleArray.length === 0) {
     return true; // Let other validators handle empty schedule
   }
-  
+
   for (let i = 0; i < scheduleArray.length; i++) {
     const scheduleItem = scheduleArray[i];
-    const hasDay = scheduleItem.day && scheduleItem.day.trim() !== '';
+    const hasDay = scheduleItem.day && scheduleItem.day.trim() !== "";
     const hasDate = scheduleItem.date;
-    
+
     // Either day or date must be provided, but not both
     if (!hasDay && !hasDate) {
-      throw new Error(`Schedule item ${i + 1}: Either 'day' or 'date' must be provided`);
+      throw new Error(
+        `Schedule item ${i + 1}: Either 'day' or 'date' must be provided`,
+      );
     }
-    
+
     if (hasDay && hasDate) {
-      throw new Error(`Schedule item ${i + 1}: Cannot have both 'day' and 'date' fields. Use either day-based or date-based scheduling`);
+      throw new Error(
+        `Schedule item ${i + 1}: Cannot have both 'day' and 'date' fields. Use either day-based or date-based scheduling`,
+      );
     }
   }
-  
+
   return true;
-}, 'Schedule validation failed');
+}, "Schedule validation failed");
 
 /* ------------------------------ */
 /* Schemas                        */
@@ -614,8 +677,8 @@ const bonusModuleSchema = new Schema({
 });
 
 /* ------------------------------ */
-  /* Price Schema                   */
-  /* ------------------------------ */
+/* Price Schema                   */
+/* ------------------------------ */
 const priceSchema = new Schema({
   currency: {
     type: String,
@@ -705,32 +768,33 @@ const courseSchema = new Schema(
       type: Schema.Types.Mixed, // Allow both string and object for backward compatibility
       required: [true, "Course description is required"],
       validate: {
-        validator: function(v) {
+        validator: function (v) {
           // Allow strings for backward compatibility
-          if (typeof v === 'string') {
+          if (typeof v === "string") {
             return v.trim().length > 0;
           }
           // Validate object structure if it's an object
-          if (typeof v === 'object' && v !== null) {
+          if (typeof v === "object" && v !== null) {
             return v.program_overview && v.benefits;
           }
           return false;
         },
-        message: "Course description must be a non-empty string or object with program_overview and benefits"
+        message:
+          "Course description must be a non-empty string or object with program_overview and benefits",
       },
-      set: function(v) {
+      set: function (v) {
         // If it's a string, convert to object structure
-        if (typeof v === 'string' && v.trim()) {
+        if (typeof v === "string" && v.trim()) {
           return {
             program_overview: v.trim(),
             benefits: v.trim(),
             learning_objectives: [],
             course_requirements: [],
-            target_audience: []
+            target_audience: [],
           };
         }
         return v;
-      }
+      },
     },
     course_level: {
       type: String,
@@ -837,15 +901,15 @@ const courseSchema = new Schema(
       required: [true, "Course image URL is required"],
       trim: true,
       validate: {
-        validator: function(v) {
+        validator: function (v) {
           // Allow empty during creation if course_image_base64 is provided
           if (!v && this.isNew && this.course_image_base64) {
             return true;
           }
           return v && v.length > 0;
         },
-        message: "Course image URL is required"
-      }
+        message: "Course image URL is required",
+      },
     },
     course_grade: {
       type: String,
@@ -1005,7 +1069,7 @@ const courseSchema = new Schema(
     },
     scheduledPublishTimezone: {
       type: String,
-      default: 'UTC',
+      default: "UTC",
       trim: true,
     },
   },
@@ -1245,60 +1309,68 @@ courseSchema.statics.searchCourses = async function (options = {}) {
   };
 };
 
-courseSchema.statics.createBatch = async function(courseId, batchData, adminId) {
+courseSchema.statics.createBatch = async function (
+  courseId,
+  batchData,
+  adminId,
+) {
   // Check if course exists
   const course = await this.findById(courseId);
   if (!course) {
-    throw new Error('Course not found');
+    throw new Error("Course not found");
   }
-  
+
   // Generate a unique batch code if not provided
   if (!batchData.batch_code) {
     const coursePrefix = course.course_title
-      .split(' ')
-      .map(word => word[0])
-      .join('')
+      .split(" ")
+      .map((word) => word[0])
+      .join("")
       .toUpperCase();
     const timestamp = Date.now().toString().slice(-6);
     batchData.batch_code = `${coursePrefix}-${timestamp}`;
   }
-  
+
   // Create a new batch with the provided data
   const newBatch = new Batch({
     ...batchData,
     course: courseId,
-    created_by: adminId
+    created_by: adminId,
   });
-  
+
   return await newBatch.save();
 };
 
-courseSchema.statics.assignInstructorToBatch = async function(batchId, instructorId, adminId) {
+courseSchema.statics.assignInstructorToBatch = async function (
+  batchId,
+  instructorId,
+  adminId,
+) {
   // Find the batch
   const batch = await Batch.findById(batchId);
   if (!batch) {
-    throw new Error('Batch not found');
+    throw new Error("Batch not found");
   }
-  
+
   // Check if instructor exists and has instructor role
-  const instructor = await mongoose.model('User').findOne({
+  const instructor = await mongoose.model("User").findOne({
     _id: instructorId,
-    role: { $in: ['instructor'] },
-    is_active: true
+    role: { $in: ["instructor"] },
+    is_active: true,
   });
   if (!instructor) {
-    throw new Error('Instructor not found');
+    throw new Error("Instructor not found");
   }
-  
+
   // Update the batch with the instructor
   batch.assigned_instructor = instructorId;
   batch.updated_by = adminId;
-  
+
   return await batch.save();
 };
 
-courseSchema.statics.getBatchesForCourse = async function(courseId) {
-  return await Batch.find({ course: courseId }).populate('assigned_instructor');
+courseSchema.statics.getBatchesForCourse = async function (courseId) {
+  return await Batch.find({ course: courseId }).populate("assigned_instructor");
 };
 
 const Course = mongoose.model("Course", courseSchema);

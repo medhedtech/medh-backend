@@ -1,7 +1,9 @@
 # Email Setup Troubleshooting Guide
 
 ## Current Issue
+
 You're getting this error when creating an instructor:
+
 ```
 "Invalid login: 535-5.7.8 Username and Password not accepted. For more information, go to 535 5.7.8 https://support.google.com/mail/?p=BadCredentials"
 ```
@@ -21,6 +23,7 @@ The issue is likely one of the following:
 ### Option 1: Fix Gmail Configuration (Recommended for Development)
 
 1. **Check your current environment variables**:
+
    ```bash
    # Check if variables are set
    echo $EMAIL_USER
@@ -28,6 +31,7 @@ The issue is likely one of the following:
    ```
 
 2. **Set up Gmail App Password**:
+
    - Go to [Google Account Settings](https://myaccount.google.com/)
    - Navigate to **Security** → **2-Step Verification** (enable if not already)
    - Go to **Security** → **App passwords**
@@ -46,6 +50,7 @@ The issue is likely one of the following:
 ### Option 2: Switch to AWS SES (Recommended for Production)
 
 1. **Set up AWS SES**:
+
    - Go to AWS Console → Simple Email Service
    - Verify your domain or email address
    - Create SMTP credentials
@@ -66,11 +71,13 @@ The issue is likely one of the following:
 ## Testing Your Email Configuration
 
 1. **Test email service directly**:
+
    ```bash
    node test-email-queue.js
    ```
 
 2. **Check email service logs**:
+
    ```bash
    # Look for email configuration errors in logs
    tail -f logs/app.log | grep -i email
@@ -96,7 +103,7 @@ Create a `.env` file in your project root with these variables:
 
 ```bash
 # Database
-MONGO_URI=your-mongodb-connection-string
+MONGODB_URL=your-mongodb-connection-string
 JWT_SECRET_KEY=your-jwt-secret
 
 # Email Configuration (Choose one option)
@@ -130,10 +137,12 @@ NODE_ENV=development
 ## Verification Steps
 
 1. **Check email service initialization**:
+
    - Look for "Email server is ready to send messages" in logs
    - If you see authentication errors, check credentials
 
 2. **Monitor email queue**:
+
    - Check Redis for queued emails: `redis-cli KEYS "*email*"`
    - Monitor failed emails in `logs/failed-emails/` directory
 
@@ -170,4 +179,4 @@ If you need to create instructors immediately while fixing email:
 - Set up proper domain verification
 - Configure SPF, DKIM, and DMARC records
 - Monitor email delivery rates and bounces
-- Use email templates for better formatting 
+- Use email templates for better formatting

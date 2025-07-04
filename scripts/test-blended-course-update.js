@@ -11,14 +11,14 @@ const testBlendedCourseUpdate = async () => {
   try {
     // Connect to MongoDB
     console.log("🔌 Connecting to MongoDB...");
-    await mongoose.connect(ENV_VARS.MONGODB_URI || process.env.MONGO_URI);
+    await mongoose.connect(ENV_VARS.MONGODB_URI || process.env.MONGODB_URL);
     console.log("✅ Connected to MongoDB successfully");
 
     // Find courses with class_type "Blended Courses"
     console.log("\n🔍 Analyzing courses with class_type 'Blended Courses'...");
-    
-    const blendedCourses = await Course.find({ 
-      class_type: "Blended Courses" 
+
+    const blendedCourses = await Course.find({
+      class_type: "Blended Courses",
     }).select("_id course_title class_type course_duration createdAt");
 
     if (blendedCourses.length === 0) {
@@ -27,7 +27,9 @@ const testBlendedCourseUpdate = async () => {
     }
 
     console.log(`📊 Analysis Results:`);
-    console.log(`   Total courses with class_type 'Blended Courses': ${blendedCourses.length}`);
+    console.log(
+      `   Total courses with class_type 'Blended Courses': ${blendedCourses.length}`,
+    );
     console.log("");
 
     // Group by current course_duration values
@@ -51,25 +53,33 @@ const testBlendedCourseUpdate = async () => {
     blendedCourses.forEach((course, index) => {
       console.log(`${index + 1}. ${course.course_title}`);
       console.log(`   ID: ${course._id}`);
-      console.log(`   Current course_duration: "${course.course_duration || 'null/undefined'}"`);
+      console.log(
+        `   Current course_duration: "${course.course_duration || "null/undefined"}"`,
+      );
       console.log(`   class_type: "${course.class_type}"`);
-      console.log(`   Created: ${course.createdAt ? course.createdAt.toLocaleDateString() : 'N/A'}`);
+      console.log(
+        `   Created: ${course.createdAt ? course.createdAt.toLocaleDateString() : "N/A"}`,
+      );
       console.log("");
     });
 
     // Show what would be changed
-    const coursesToUpdate = blendedCourses.filter(course => course.course_duration !== "self paced");
-    
+    const coursesToUpdate = blendedCourses.filter(
+      (course) => course.course_duration !== "self paced",
+    );
+
     console.log("🔄 Impact Analysis:");
     console.log(`   Courses that will be updated: ${coursesToUpdate.length}`);
-    console.log(`   Courses already with "self paced": ${blendedCourses.length - coursesToUpdate.length}`);
+    console.log(
+      `   Courses already with "self paced": ${blendedCourses.length - coursesToUpdate.length}`,
+    );
     console.log("");
 
     if (coursesToUpdate.length > 0) {
       console.log("📝 Courses that would be updated:");
       coursesToUpdate.forEach((course, index) => {
         console.log(`${index + 1}. ${course.course_title}`);
-        console.log(`   FROM: "${course.course_duration || 'null/undefined'}"`);
+        console.log(`   FROM: "${course.course_duration || "null/undefined"}"`);
         console.log(`   TO: "self paced"`);
         console.log("");
       });
@@ -88,9 +98,12 @@ const testBlendedCourseUpdate = async () => {
     console.log(`)`);
     console.log("");
 
-    console.log("ℹ️  This was a DRY RUN - no changes were made to the database.");
-    console.log("🚀 To execute the actual update, run: node scripts/update-blended-course-duration.js");
-
+    console.log(
+      "ℹ️  This was a DRY RUN - no changes were made to the database.",
+    );
+    console.log(
+      "🚀 To execute the actual update, run: node scripts/update-blended-course-duration.js",
+    );
   } catch (error) {
     console.error("❌ Error occurred during test:", error);
     throw error;
@@ -116,4 +129,4 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     });
 }
 
-export default testBlendedCourseUpdate; 
+export default testBlendedCourseUpdate;

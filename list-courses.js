@@ -8,7 +8,7 @@ import { ENV_VARS } from "./config/envVars.js";
 // Connect to MongoDB
 const connectDB = async () => {
   try {
-    await mongoose.connect(ENV_VARS.MONGO_URI);
+    await mongoose.connect(ENV_VARS.MONGODB_URL);
     console.log("MongoDB connected!");
 
     // Get Course model
