@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Session Feedback</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .feedback-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.2rem;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 1rem;
+        }
+
+        .demo-selector {
+            position: relative;
+        }
+
+        .demo-selector select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 1rem;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .demo-selector select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .rating-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .rating-group {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+
+        .rating-group:hover {
+            border-color: #667eea;
+        }
+
+        .rating-group h3 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+
+        .star-rating {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+
+        .star {
+            font-size: 2rem;
+            color: #ddd;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .star:hover,
+        .star.active {
+            color: #ffd700;
+            transform: scale(1.1);
+        }
+
+        .quality-options {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .quality-option {
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .quality-option input[type="radio"] {
+            display: none;
+        }
+
+        .quality-option label {
+            display: block;
+            padding: 12px 20px;
+            text-align: center;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            background: white;
+        }
+
+        .quality-option input[type="radio"]:checked + label {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .quality-option label:hover {
+            border-color: #667eea;
+            transform: translateY(-1px);
+        }
+
+        .excellent { background: linear-gradient(135deg, #4CAF50, #45a049) !important; }
+        .good { background: linear-gradient(135deg, #2196F3, #1976D2) !important; }
+        .average { background: linear-gradient(135deg, #FF9800, #F57C00) !important; }
+        .poor { background: linear-gradient(135deg, #f44336, #d32f2f) !important; }
+
+        .quality-option input[type="radio"]:checked + label.excellent,
+        .quality-option input[type="radio"]:checked + label.good,
+        .quality-option input[type="radio"]:checked + label.average,
+        .quality-option input[type="radio"]:checked + label.poor {
+            color: white;
+        }
+
+        .textarea-group textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            resize: vertical;
+            min-height: 120px;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .textarea-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .recommendation-section {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .recommendation-section h3 {
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+        }
+
+        .recommendation-options {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .recommendation-option {
+            flex: 1;
+            max-width: 200px;
+        }
+
+        .recommendation-option input[type="radio"] {
+            display: none;
+        }
+
+        .recommendation-option label {
+            display: block;
+            padding: 15px 25px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
+        }
+
+        .recommendation-option input[type="radio"]:checked + label {
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            transform: scale(1.05);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .follow-up-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 15px;
+            margin-top: 20px;
+        }
+
+        .follow-up-section h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.2rem;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: #667eea;
+        }
+
+        .checkbox-item label {
+            margin: 0;
+            font-weight: 500;
+            color: #333;
+            cursor: pointer;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .success-message {
+            display: none;
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-top: 20px;
+            font-weight: 600;
+        }
+
+        .error-message {
+            display: none;
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-top: 20px;
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .feedback-container {
+                padding: 20px;
+                margin: 10px;
+            }
+
+            .header h1 {
+                font-size: 1.8rem;
+            }
+
+            .quality-options {
+                flex-direction: column;
+            }
+
+            .recommendation-options {
+                flex-direction: column;
+            }
+
+            .star {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="feedback-container">
+        <div class="header">
+            <h1>Demo Session Feedback</h1>
+            <p>Help us improve by sharing your experience</p>
+        </div>
+
+        <form id="feedbackForm">
+            <!-- Demo Selection -->
+            <div class="form-group">
+                <label for="demoSelect">Which demo session would you like to provide feedback for?</label>
+                <div class="demo-selector">
+                    <select id="demoSelect" name="demoBookingId" required>
+                        <option value="">Select a demo session</option>
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                </div>
+            </div>
+
+            <!-- Overall Rating -->
+            <div class="form-group">
+                <div class="rating-group">
+                    <h3>Overall Rating</h3>
+                    <div class="star-rating" data-rating="overallRating">
+                        <span class="star" data-value="1">★</span>
+                        <span class="star" data-value="2">★</span>
+                        <span class="star" data-value="3">★</span>
+                        <span class="star" data-value="4">★</span>
+                        <span class="star" data-value="5">★</span>
+                    </div>
+                    <input type="hidden" name="overallRating" required>
+                </div>
+            </div>
+
+            <!-- Content Quality -->
+            <div class="form-group">
+                <div class="rating-group">
+                    <h3>How would you rate the content quality?</h3>
+                    <div class="quality-options">
+                        <div class="quality-option">
+                            <input type="radio" id="content-excellent" name="contentQuality" value="excellent">
+                            <label for="content-excellent" class="excellent">Excellent</label>
+                        </div>
+                        <div class="quality-option">
+                            <input type="radio" id="content-good" name="contentQuality" value="good">
+                            <label for="content-good" class="good">Good</label>
+                        </div>
+                        <div class="quality-option">
+                            <input type="radio" id="content-average" name="contentQuality" value="average">
+                            <label for="content-average" class="average">Average</label>
+                        </div>
+                        <div class="quality-option">
+                            <input type="radio" id="content-poor" name="contentQuality" value="poor">
+                            <label for="content-poor" class="poor">Poor</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Instructor Performance -->
+            <div class="form-group">
+                <div class="rating-group">
+                    <h3>How was the instructor's performance?</h3>
+                    <div class="quality-options">
+                        <div class="quality-option">
+                            <input type="radio" id="instructor-excellent" name="instructorPerformance" value="excellent">
+                            <label for="instructor-excellent" class="excellent">Excellent</label>
+                        </div>
+                        <div class="quality-option">
+                            <input type="radio" id="instructor-good" name="instructorPerformance" value="good">
+                            <label for="instructor-good" class="good">Good</label>
+                        </div>
+                        <div class="quality-option">
+                            <input type="radio" id="instructor-average" name="instructorPerformance" value="average">
+                            <label for="instructor-average" class="average">Average</label>
+                        </div>
+                        <div class="quality-option">
+                            <input type="radio" id="instructor-poor" name="instructorPerformance" value="poor">
+                            <label for="instructor-poor" class="poor">Poor</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Additional Comments -->
+            <div class="form-group">
+                <label for="additionalComments">Additional Comments</label>
+                <div class="textarea-group">
+                    <textarea 
+                        id="additionalComments" 
+                        name="additionalComments" 
+                        placeholder="Share your thoughts, suggestions, or any specific feedback about the demo session..."
+                        maxlength="2000">
+                    </textarea>
+                </div>
+            </div>
+
+            <!-- Recommendation -->
+            <div class="form-group">
+                <div class="recommendation-section">
+                    <h3>Would you recommend this demo to others?</h3>
+                    <div class="recommendation-options">
+                        <div class="recommendation-option">
+                            <input type="radio" id="recommend-yes" name="wouldRecommend" value="true">
+                            <label for="recommend-yes">Yes</label>
+                        </div>
+                        <div class="recommendation-option">
+                            <input type="radio" id="recommend-no" name="wouldRecommend" value="false">
+                            <label for="recommend-no">No</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Follow-up Interest -->
+            <div class="form-group">
+                <div class="follow-up-section">
+                    <h3>Follow-up Interest</h3>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="enrollment-interest" name="enrollmentInterest">
+                            <label for="enrollment-interest">I'm interested in enrolling in the full course</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="consultation-request" name="consultationRequest">
+                            <label for="consultation-request">I'd like a one-on-one consultation</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="more-info-request" name="moreInfoRequest">
+                            <label for="more-info-request">Please send me more information</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="submit-btn" id="submitBtn">
+                <span class="btn-text">Submit Feedback</span>
+                <div class="loading">
+                    <div class="spinner"></div>
+                </div>
+            </button>
+        </form>
+
+        <div class="success-message" id="successMessage">
+            ✅ Thank you for your feedback! Your input helps us improve our demo sessions.
+        </div>
+
+        <div class="error-message" id="errorMessage">
+            ❌ There was an error submitting your feedback. Please try again.
+        </div>
+    </div>
+
+    <script>
+        // API Configuration
+        const API_BASE_URL = '/api';
+        let authToken = localStorage.getItem('authToken'); // Assume token is stored
+
+        // DOM Elements
+        const form = document.getElementById('feedbackForm');
+        const demoSelect = document.getElementById('demoSelect');
+        const submitBtn = document.getElementById('submitBtn');
+        const successMessage = document.getElementById('successMessage');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // Initialize the form
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAvailableDemos();
+            setupStarRatings();
+            setupFormSubmission();
+        });
+
+        // Load available demos for feedback
+        async function loadAvailableDemos() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/demo-feedback/available-demos`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    populateDemoOptions(data.data.availableDemos);
+                } else {
+                    console.error('Failed to load available demos');
+                }
+            } catch (error) {
+                console.error('Error loading demos:', error);
+            }
+        }
+
+        // Populate demo select options
+        function populateDemoOptions(demos) {
+            demoSelect.innerHTML = '<option value="">Select a demo session</option>';
+            
+            demos.forEach(demo => {
+                const option = document.createElement('option');
+                option.value = demo.id;
+                
+                const date = new Date(demo.scheduledDateTime).toLocaleDateString();
+                const time = new Date(demo.scheduledDateTime).toLocaleTimeString();
+                const instructor = demo.instructor ? demo.instructor.full_name : 'Unknown';
+                
+                option.textContent = `${demo.courseInterest || demo.demoType} - ${date} ${time} (${instructor})`;
+                demoSelect.appendChild(option);
+            });
+
+            if (demos.length === 0) {
+                const option = document.createElement('option');
+                option.textContent = 'No completed demos available for feedback';
+                option.disabled = true;
+                demoSelect.appendChild(option);
+            }
+        }
+
+        // Setup star rating functionality
+        function setupStarRatings() {
+            const starRatings = document.querySelectorAll('.star-rating');
+            
+            starRatings.forEach(rating => {
+                const stars = rating.querySelectorAll('.star');
+                const hiddenInput = rating.parentElement.querySelector('input[type="hidden"]');
+                
+                stars.forEach((star, index) => {
+                    star.addEventListener('click', () => {
+                        const value = index + 1;
+                        hiddenInput.value = value;
+                        
+                        // Update star display
+                        stars.forEach((s, i) => {
+                            s.classList.toggle('active', i < value);
+                        });
+                    });
+                    
+                    star.addEventListener('mouseenter', () => {
+                        stars.forEach((s, i) => {
+                            s.style.color = i <= index ? '#ffd700' : '#ddd';
+                        });
+                    });
+                });
+                
+                rating.addEventListener('mouseleave', () => {
+                    const currentValue = parseInt(hiddenInput.value) || 0;
+                    stars.forEach((s, i) => {
+                        s.style.color = i < currentValue ? '#ffd700' : '#ddd';
+                    });
+                });
+            });
+        }
+
+        // Setup form submission
+        function setupFormSubmission() {
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                if (!validateForm()) {
+                    return;
+                }
+                
+                setLoading(true);
+                hideMessages();
+                
+                try {
+                    const formData = new FormData(form);
+                    const feedbackData = {
+                        demoBookingId: formData.get('demoBookingId'),
+                        overallRating: parseInt(formData.get('overallRating')),
+                        contentQuality: formData.get('contentQuality'),
+                        instructorPerformance: formData.get('instructorPerformance'),
+                        wouldRecommend: formData.get('wouldRecommend') === 'true',
+                        additionalComments: formData.get('additionalComments'),
+                        followUpInterest: {
+                            enrollmentInterest: formData.has('enrollmentInterest'),
+                            consultationRequest: formData.has('consultationRequest'),
+                            moreInfoRequest: formData.has('moreInfoRequest')
+                        },
+                        feedbackSource: 'website_form'
+                    };
+                    
+                    const response = await fetch(`${API_BASE_URL}/demo-feedback`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${authToken}`
+                        },
+                        body: JSON.stringify(feedbackData)
+                    });
+                    
+                    if (response.ok) {
+                        showSuccess();
+                        form.reset();
+                        resetStarRatings();
+                    } else {
+                        const errorData = await response.json();
+                        showError(errorData.message || 'Failed to submit feedback');
+                    }
+                } catch (error) {
+                    console.error('Error submitting feedback:', error);
+                    showError('Network error. Please check your connection and try again.');
+                } finally {
+                    setLoading(false);
+                }
+            });
+        }
+
+        // Form validation
+        function validateForm() {
+            const requiredFields = [
+                'demoBookingId',
+                'overallRating',
+                'contentQuality',
+                'instructorPerformance',
+                'wouldRecommend'
+            ];
+            
+            for (const field of requiredFields) {
+                const element = form.querySelector(`[name="${field}"]`);
+                if (!element || !element.value) {
+                    alert(`Please fill in the ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}`);
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+
+        // UI Helper Functions
+        function setLoading(loading) {
+            const btnText = submitBtn.querySelector('.btn-text');
+            const loadingSpinner = submitBtn.querySelector('.loading');
+            
+            if (loading) {
+                btnText.style.opacity = '0';
+                loadingSpinner.style.display = 'block';
+                submitBtn.disabled = true;
+            } else {
+                btnText.style.opacity = '1';
+                loadingSpinner.style.display = 'none';
+                submitBtn.disabled = false;
+            }
+        }
+
+        function showSuccess() {
+            successMessage.style.display = 'block';
+            setTimeout(() => {
+                successMessage.style.display = 'none';
+            }, 5000);
+        }
+
+        function showError(message) {
+            errorMessage.textContent = `❌ ${message}`;
+            errorMessage.style.display = 'block';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+            }, 5000);
+        }
+
+        function hideMessages() {
+            successMessage.style.display = 'none';
+            errorMessage.style.display = 'none';
+        }
+
+        function resetStarRatings() {
+            const stars = document.querySelectorAll('.star');
+            stars.forEach(star => {
+                star.classList.remove('active');
+                star.style.color = '#ddd';
+            });
+            
+            const hiddenInputs = document.querySelectorAll('input[type="hidden"]');
+            hiddenInputs.forEach(input => input.value = '');
+        }
+
+        // Demo authentication check
+        if (!authToken) {
+            console.warn('No auth token found. Please implement authentication.');
+            // In a real app, redirect to login or show auth form
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,2 @@
+REDIS_ENABLED=true
+# Email Configuration for Medh Platform

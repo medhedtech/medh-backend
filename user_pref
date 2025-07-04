@@ -1,0 +1,56 @@
+# User Preferences for MEDH Backend
+
+## Project Structure
+- Backend: Node.js with Express and MongoDB
+- Database: MongoDB with Mongoose ODM
+- Authentication: JWT-based auth with role-based access control
+
+## Key Files
+- Models:
+  - models/course-model.js: Main course schema definition
+  - models/enrolled-courses-model.js: User course enrollment model
+- Controllers:
+  - controllers/course-controller.js: Course management logic
+- Routes:
+  - routes/courseRoutes.js: API endpoints for courses
+- Middleware:
+  - middleware/auth-middleware.js: Authentication and authorization
+  - middleware/validation-middleware.js: Request validation
+- Utils:
+  - utils/validation-helpers.js: Reusable validation functions
+
+## API Structure
+- Routes follow RESTful conventions
+- Endpoints use consistent JSON response format with success flag
+- Error responses follow standard format with detailed messages
+- Authentication uses Bearer token in Authorization header
+- Pagination follows standard page/limit query parameter pattern
+
+## Code Style Preferences
+- Use async/await for asynchronous code
+- Implement proper error handling with try/catch
+- Use destructuring for cleaner parameter handling
+- Include JSDoc comments for functions and routes
+- Use lean queries for better MongoDB performance
+- Implement consistent input validation
+- Maintain backwards compatibility for API responses
+
+## Security Practices
+- Validate all user inputs
+- Implement proper authentication and authorization
+- Rate limit public and admin endpoints
+- Sanitize data before storage
+- Use proper indexing for performance and security
+
+## Database Design
+- Use Mongoose schema validation
+- Implement proper indexing strategy
+- Use references for related data
+- Maintain proper data normalization
+- Include timestamps for auditing
+
+## Future Improvements
+- Add caching layer for frequent queries
+- Implement full text search capabilities
+- Add comprehensive logging and monitoring
+- Implement advanced filtering options 

@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logged Out From All Devices - Medh Learning Platform</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+    }
+    .email-wrapper {
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 650px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+      color: white;
+      padding: 40px 30px;
+      text-align: center;
+      position: relative;
+    }
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><defs><radialGradient id="a" cx=".66" cy=".30" r=".7"><stop offset="0" stop-color="%23ffffff" stop-opacity=".2"/><stop offset=".5" stop-color="%23ffffff" stop-opacity=".05"/><stop offset="1" stop-color="%23ffffff" stop-opacity="0"/></radialGradient></defs><rect width="100" height="20" fill="url(%23a)"/></svg>');
+      opacity: 0.3;
+    }
+    .header-content {
+      position: relative;
+      z-index: 1;
+    }
+    .logo {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      letter-spacing: -0.5px;
+    }
+    .header-subtitle {
+      font-size: 16px;
+      opacity: 0.9;
+      font-weight: 300;
+    }
+    .security-icon {
+      display: inline-block;
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      margin: 20px 0;
+      line-height: 80px;
+      font-size: 36px;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .alert-section {
+      background: linear-gradient(135deg, #ffd93d, #ff8c42);
+      color: #2d3748;
+      padding: 25px;
+      border-radius: 12px;
+      margin: 25px 0;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .alert-section::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><defs><radialGradient id="b" cx=".66" cy=".30" r=".7"><stop offset="0" stop-color="%23ffffff" stop-opacity=".15"/><stop offset=".5" stop-color="%23ffffff" stop-opacity=".05"/><stop offset="1" stop-color="%23ffffff" stop-opacity="0"/></radialGradient></defs><rect width="100" height="20" fill="url(%23b)"/></svg>');
+    }
+    .alert-content {
+      position: relative;
+      z-index: 1;
+    }
+    .alert-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .alert-message {
+      font-size: 16px;
+      line-height: 1.5;
+      opacity: 0.9;
+    }
+    .greeting {
+      font-size: 20px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 20px;
+    }
+    .main-message {
+      font-size: 16px;
+      line-height: 1.7;
+      color: #4a5568;
+      margin-bottom: 30px;
+    }
+    .logout-details {
+      background: linear-gradient(135deg, #fff5f5, #fed7d7);
+      border: 1px solid #feb2b2;
+      border-radius: 12px;
+      padding: 25px;
+      margin: 25px 0;
+      position: relative;
+    }
+    .details-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      font-weight: 600;
+      color: #2d3748;
+      font-size: 18px;
+    }
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .detail-item {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 4px solid #ff6b6b;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    .detail-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #718096;
+      margin-bottom: 5px;
+    }
+    .detail-value {
+      font-size: 15px;
+      font-weight: 600;
+      color: #2d3748;
+      word-break: break-all;
+    }
+    .device-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .security-section {
+      background: linear-gradient(135deg, #f0fff4, #c6f6d5);
+      border: 1px solid #68d391;
+      border-radius: 12px;
+      padding: 25px;
+      margin: 25px 0;
+    }
+    .security-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #22543d;
+      margin-bottom: 15px;
+    }
+    .security-tips {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .security-tips li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 12px;
+      color: #2d3748;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .security-tips li::before {
+      content: '✅';
+      font-size: 16px;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 15px;
+      margin: 30px 0;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.3s ease;
+      text-align: center;
+      flex: 1;
+      justify-content: center;
+      min-width: 160px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+      color: white;
+      box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+    }
+    .btn-secondary {
+      background: white;
+      color: #ff6b6b;
+      border: 2px solid #ff6b6b;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(255, 107, 107, 0.4);
+    }
+    .sessions-count {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 25px;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 10px 0;
+    }
+    .timestamp {
+      background: #ff6b6b;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      display: inline-block;
+    }
+    .warning-box {
+      background: linear-gradient(135deg, #fff5f5, #fed7d7);
+      border: 2px solid #feb2b2;
+      border-radius: 12px;
+      padding: 20px;
+      margin: 25px 0;
+      text-align: center;
+    }
+    .warning-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #c53030;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .warning-message {
+      color: #2d3748;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .footer {
+      background: #f8fafc;
+      padding: 30px;
+      text-align: center;
+      border-top: 1px solid #e2e8f0;
+    }
+    .footer-content {
+      font-size: 13px;
+      color: #718096;
+      line-height: 1.6;
+    }
+    .footer-links {
+      margin: 15px 0;
+    }
+    .footer-links a {
+      color: #ff6b6b;
+      text-decoration: none;
+      margin: 0 10px;
+      font-weight: 500;
+    }
+    .unsubscribe {
+      font-size: 11px;
+      color: #a0aec0;
+      margin-top: 15px;
+    }
+    
+    @media (max-width: 600px) {
+      .email-wrapper {
+        padding: 20px 10px;
+      }
+      .container {
+        border-radius: 8px;
+      }
+      .header, .content {
+        padding: 30px 20px;
+      }
+      .details-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+      }
+      .action-buttons {
+        flex-direction: column;
+      }
+      .btn {
+        min-width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-wrapper">
+    <div class="container">
+      <div class="header">
+        <div class="header-content">
+          <div class="logo">🚪 Medh Learning Platform</div>
+          <div class="header-subtitle">Security Action Completed</div>
+          <div class="security-icon">🔐</div>
+        </div>
+      </div>
+      
+      <div class="content">
+        <div class="alert-section">
+          <div class="alert-content">
+            <div class="alert-title">
+              <span>🚪</span>
+              Logged Out From All Devices
+            </div>
+            <div class="alert-message">
+              You have been successfully logged out from all devices. This security action helps protect your account.
+            </div>
+          </div>
+        </div>
+
+        <div class="greeting">Hello {{user_name}},</div>
+        
+        <div class="main-message">
+          You have been <strong>logged out from all devices</strong> on your Medh Learning Platform account. This security action was initiated from one of your devices. If you requested this action, no further steps are needed. If you didn't initiate this, please contact our support team immediately.
+        </div>
+
+        <div class="sessions-count">
+          <span>📊</span>
+          {{details.Sessions_Terminated}} sessions terminated
+        </div>
+
+        <div class="logout-details">
+          <div class="details-header">
+            <span>🔍</span>
+            Action Details
+          </div>
+          
+          <div class="details-grid">
+            <div class="detail-item">
+              <div class="detail-label">🕒 Logout Time</div>
+              <div class="detail-value">
+                <div class="timestamp">{{details.Logout_Time}}</div>
+              </div>
+            </div>
+            
+            <div class="detail-item">
+              <div class="detail-label">📍 Location</div>
+              <div class="detail-value device-info">
+                <span>🌍</span>
+                {{details.Location}}
+              </div>
+            </div>
+            
+            <div class="detail-item">
+              <div class="detail-label">💻 Initiated From Device</div>
+              <div class="detail-value device-info">
+                <span>📱</span>
+                {{details.Initiated_From_Device}}
+              </div>
+            </div>
+            
+            <div class="detail-item">
+              <div class="detail-label">🌐 Browser</div>
+              <div class="detail-value device-info">
+                <span>🔍</span>
+                {{details.Browser}}
+              </div>
+            </div>
+            
+            <div class="detail-item">
+              <div class="detail-label">⚙️ Operating System</div>
+              <div class="detail-value device-info">
+                <span>💽</span>
+                {{details.Operating_System}}
+              </div>
+            </div>
+            
+            <div class="detail-item">
+              <div class="detail-label">🌐 IP Address</div>
+              <div class="detail-value">
+                <code style="background: #f1f5f9; padding: 4px 8px; border-radius: 4px; font-size: 13px;">{{details.IP_Address}}</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {{#if urgent}}
+        <div class="warning-box">
+          <div class="warning-title">
+            <span>⚠️</span>
+            Important Security Notice
+          </div>
+          <div class="warning-message">
+            If you did not initiate this action, your account may have been compromised. Please change your password immediately and contact our support team.
+          </div>
+        </div>
+        {{/if}}
+
+        <div class="action-buttons">
+          <a href="{{actionUrl}}" class="btn btn-primary">
+            <span>🔑</span>
+            Login Again
+          </a>
+          <a href="{{supportUrl}}" class="btn btn-secondary">
+            <span>💬</span>
+            Contact Support
+          </a>
+        </div>
+
+        <div class="security-section">
+          <div class="security-title">
+            <span>🛡️</span>
+            What This Means
+          </div>
+          <ul class="security-tips">
+            <li>All your active sessions have been terminated</li>
+            <li>You'll need to log in again on all devices</li>
+            <li>Your account data and courses remain secure</li>
+            <li>This is a security best practice for protecting your account</li>
+            <li>You can now log in again safely from any device</li>
+            <li>Consider enabling two-factor authentication for added security</li>
+          </ul>
+        </div>
+
+        {{#if security_recommendations}}
+        <div class="logout-details">
+          <div class="details-header">
+            <span>🔐</span>
+            Security Recommendations
+          </div>
+          <div style="padding: 15px; background: white; border-radius: 8px;">
+            {{#each security_recommendations}}
+            <div style="margin-bottom: 10px; padding: 10px; background: #f8fafc; border-left: 4px solid #ff6b6b; border-radius: 4px;">
+              <strong>{{@index}}</strong>. {{this}}
+            </div>
+            {{/each}}
+          </div>
+        </div>
+        {{/if}}
+
+        <p style="margin-top: 30px; padding: 20px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #ff6b6b;">
+          <strong>💡 Pro Tip:</strong> Regularly logging out from all devices is a good security practice, especially if you use shared computers or suspect any unauthorized access.
+        </p>
+
+        <div style="margin-top: 30px; text-align: center; color: #718096;">
+          <p>This email was automatically generated for your security.</p>
+          <p style="font-weight: 600;">Need help? Contact our support team at <a href="mailto:care@medh.co" style="color: #ff6b6b;">care@medh.co</a></p>
+        </div>
+      </div>
+      
+      <div class="footer">
+        <div class="footer-content">
+          <div style="font-weight: 600; margin-bottom: 10px;">Medh Learning Platform</div>
+          <div>Your security is our top priority</div>
+          
+          <div class="footer-links">
+            <a href="{{helpUrl}}">Help Center</a>
+            <a href="{{securityUrl}}">Security Guide</a>
+            <a href="{{loginUrl}}">Login</a>
+            <a href="{{contactUrl}}">Contact Support</a>
+          </div>
+          
+          <div>© {{currentYear}} Medh Learning Platform. All rights reserved.</div>
+          <div style="margin-top: 10px;">This email was sent to <strong>{{email}}</strong></div>
+          
+          <div class="unsubscribe">
+            You're receiving this email because security notifications are mandatory for account protection.<br>
+            You cannot unsubscribe from security alerts, but you can manage other email preferences in your account settings.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html> 

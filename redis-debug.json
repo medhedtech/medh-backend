@@ -1,0 +1,6 @@
+{
+  "REDIS_ENABLED": "true",
+  "REDIS_HOST": "api.medh.co",
+  "REDIS_PORT": "6379",
+  "REDIS_PASSWORD_SET": true
+}
