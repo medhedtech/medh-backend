@@ -1,1 +1,0 @@
-{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"},{"v":{"$numberInt":"2"},"key":{"razorpayOrderId":{"$numberInt":"1"}},"name":"razorpayOrderId_1","background":true,"unique":true}],"uuid":"026079d3a3d745d8a382ac38b5d5a2a8","collectionName":"orders","type":"collection"}
