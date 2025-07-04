@@ -1,2 +1,0 @@
-# Ignore GitHub Actions workflow file causing issues
-.github/workflows/node.js.yml 
