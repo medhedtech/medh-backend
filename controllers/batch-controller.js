@@ -1728,17 +1728,52 @@ export const getRecordedLessonsForStudent = async (req, res) => {
       }
 
       if (uniqueObjects.length > 0) {
+        // Helper function to parse GMT timestamp from filename
+        const parseGMTTimestamp = (filename) => {
+          const gmtMatch = filename.match(/GMT(\d{8})-(\d{6})/);
+          if (!gmtMatch) return null;
+
+          const dateStr = gmtMatch[1]; // YYYYMMDD
+          const timeStr = gmtMatch[2]; // HHMMSS
+
+          // Parse date and time
+          const year = parseInt(dateStr.substring(0, 4));
+          const month = parseInt(dateStr.substring(4, 6)) - 1; // Month is 0-indexed
+          const day = parseInt(dateStr.substring(6, 8));
+          const hour = parseInt(timeStr.substring(0, 2));
+          const minute = parseInt(timeStr.substring(2, 4));
+          const second = parseInt(timeStr.substring(4, 6));
+
+          const date = new Date(year, month, day, hour, minute, second);
+
+          return {
+            date,
+            formattedDate: date.toLocaleDateString("en-US", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            }),
+            formattedTime: date.toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            }),
+            description: `Session recording from ${date.toLocaleDateString(
+              "en-US",
+              {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              },
+            )}`,
+          };
+        };
+
         // Process each video file found
         for (const object of uniqueObjects) {
           // Extract folder structure for better organization
           const keyParts = object.Key.split("/");
           const fileName = keyParts[keyParts.length - 1];
-
-          // Determine the folder path relative to videos/
-          let folderPath = "root";
-          if (keyParts.length > 2) {
-            folderPath = keyParts.slice(1, -1).join("/"); // Remove 'videos/' and filename
-          }
 
           // Extract file info
           const fileUrl = `https://${ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME}.s3.${ENV_VARS.AWS_REGION}.amazonaws.com/${object.Key}`;
@@ -1754,43 +1789,34 @@ export const getRecordedLessonsForStudent = async (req, res) => {
             // Fallback to original URL if signing fails
           }
 
-          // Extract GMT timestamp from filename for better date handling
-          let extractedDate = null;
-          let sessionNumber = null;
-
-          const gmtMatch = fileName.match(/GMT(\d{8})-(\d{6})/);
-          if (gmtMatch) {
-            const dateStr = gmtMatch[1]; // YYYYMMDD
-            const timeStr = gmtMatch[2]; // HHMMSS
-
-            // Parse date and time
-            const year = parseInt(dateStr.substring(0, 4));
-            const month = parseInt(dateStr.substring(4, 6)) - 1; // Month is 0-indexed
-            const day = parseInt(dateStr.substring(6, 8));
-            const hour = parseInt(timeStr.substring(0, 2));
-            const minute = parseInt(timeStr.substring(2, 4));
-            const second = parseInt(timeStr.substring(4, 6));
-
-            extractedDate = new Date(year, month, day, hour, minute, second);
-
-            // Generate session number based on chronological order (will be sorted later)
-            sessionNumber = `Session ${s3VideosData.length + 1}`;
-          }
+          // Parse GMT timestamp and create session info
+          const timestampInfo = parseGMTTimestamp(fileName);
 
           s3VideosData.push({
             id: object.Key.replace(/[^a-zA-Z0-9]/g, "_"), // Create a unique ID from the key
             title: fileName,
-            displayTitle: extractedDate
+            displayTitle: timestampInfo
               ? `Session ${s3VideosData.length + 1}`
               : fileName,
-            folderPath: folderPath, // Show which folder/subfolder the video is in
             fullPath: object.Key,
             url: signedUrl,
             originalUrl: fileUrl,
             fileSize: object.Size,
             lastModified: object.LastModified,
-            extractedDate: extractedDate,
-            sessionNumber: sessionNumber,
+            // Session metadata
+            session: timestampInfo
+              ? {
+                  number: s3VideosData.length + 1,
+                  date: timestampInfo.date,
+                  formattedDate: timestampInfo.formattedDate,
+                  formattedTime: timestampInfo.formattedTime,
+                  description: timestampInfo.description,
+                  duration: "90 min", // Default duration
+                  status: "Available",
+                  level: "Intermediate",
+                  rating: 5,
+                }
+              : null,
             source: "your_previous_sessions",
             student: {
               id: studentId,
@@ -1801,37 +1827,15 @@ export const getRecordedLessonsForStudent = async (req, res) => {
 
         // Sort by GMT timestamp in filename (newest first)
         s3VideosData.sort((a, b) => {
-          // Extract GMT timestamp from filename
-          const getGMTTimestamp = (filename) => {
-            const gmtMatch = filename.match(/GMT(\d{8})-(\d{6})/);
-            if (gmtMatch) {
-              const dateStr = gmtMatch[1]; // YYYYMMDD
-              const timeStr = gmtMatch[2]; // HHMMSS
-
-              // Parse date and time
-              const year = parseInt(dateStr.substring(0, 4));
-              const month = parseInt(dateStr.substring(4, 6)) - 1; // Month is 0-indexed
-              const day = parseInt(dateStr.substring(6, 8));
-              const hour = parseInt(timeStr.substring(0, 2));
-              const minute = parseInt(timeStr.substring(2, 4));
-              const second = parseInt(timeStr.substring(4, 6));
-
-              return new Date(year, month, day, hour, minute, second);
-            }
-            // Fallback to lastModified if no GMT timestamp found
-            return new Date(a.lastModified);
-          };
-
-          const dateA = getGMTTimestamp(a.title);
-          const dateB = getGMTTimestamp(b.title);
-
+          const dateA = a.session?.date || new Date(a.lastModified);
+          const dateB = b.session?.date || new Date(b.lastModified);
           return dateB - dateA; // Newest first
         });
 
         // Update session numbers after sorting to reflect chronological order
         s3VideosData.forEach((video, index) => {
-          if (video.extractedDate) {
-            video.sessionNumber = `Session ${index + 1}`;
+          if (video.session) {
+            video.session.number = index + 1;
             video.displayTitle = `Session ${index + 1}`;
           }
         });
@@ -1840,15 +1844,6 @@ export const getRecordedLessonsForStudent = async (req, res) => {
       console.log(
         `Found ${s3VideosData.length} video files for student ${studentId} in S3`,
       );
-
-      // Log folder distribution for debugging
-      if (s3VideosData.length > 0) {
-        const folderDistribution = s3VideosData.reduce((acc, video) => {
-          acc[video.folderPath] = (acc[video.folderPath] || 0) + 1;
-          return acc;
-        }, {});
-        console.log("Video distribution by folder:", folderDistribution);
-      }
     } catch (s3Error) {
       console.error("Error listing S3 objects for student:", s3Error);
       s3Available = false;
@@ -1958,15 +1953,17 @@ export const getRecordedLessonsForStudent = async (req, res) => {
       }, 0);
 
     const responseData = {
-      your_previous_sessions: {
+      personal_sessions: {
         count: s3VideosData.length,
         videos: s3VideosData,
-        description: "Videos uploaded directly to your personal folder",
+        description: "Personal Sessions • by " + student.full_name,
+        type: "personal",
       },
       scheduled_sessions: {
         count: databaseVideosData.length,
         sessions: databaseVideosData,
         description: "Videos from your scheduled batch sessions",
+        type: "scheduled",
       },
     };
 
