@@ -641,18 +641,23 @@ export const getDashboardStats = async (req, res) => {
         },
         upcomingClasses: {
           total: upcomingClasses,
+          changes: {},
         },
         completionRate: {
           total: completionRate,
+          changes: {},
         },
         studentSatisfaction: {
           total: studentSatisfaction,
+          changes: {},
         },
         instructorRating: {
           total: instructorRating,
+          changes: {},
         },
         supportTickets: {
           total: supportTickets,
+          changes: {},
         },
       },
     };
@@ -682,7 +687,7 @@ export const getUsers = async (req, res) => {
       role = "",
       status = "",
       sortBy = "createdAt",
-      sortOrder = "desc"
+      sortOrder = "desc",
     } = req.query;
 
     // Build search query
@@ -692,7 +697,7 @@ export const getUsers = async (req, res) => {
         { email: { $regex: search, $options: "i" } },
         { "personalInfo.firstName": { $regex: search, $options: "i" } },
         { "personalInfo.lastName": { $regex: search, $options: "i" } },
-        { "personalInfo.phone": { $regex: search, $options: "i" } }
+        { "personalInfo.phone": { $regex: search, $options: "i" } },
       ];
     }
     if (role) searchQuery.role = role;
@@ -709,7 +714,7 @@ export const getUsers = async (req, res) => {
         .sort(sortQuery)
         .skip((page - 1) * limit)
         .limit(parseInt(limit)),
-      User.countDocuments(searchQuery)
+      User.countDocuments(searchQuery),
     ]);
 
     // Get user statistics
@@ -719,10 +724,14 @@ export const getUsers = async (req, res) => {
           _id: "$role",
           count: { $sum: 1 },
           active: { $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] } },
-          inactive: { $sum: { $cond: [{ $eq: ["$status", "inactive"] }, 1, 0] } },
-          suspended: { $sum: { $cond: [{ $eq: ["$status", "suspended"] }, 1, 0] } }
-        }
-      }
+          inactive: {
+            $sum: { $cond: [{ $eq: ["$status", "inactive"] }, 1, 0] },
+          },
+          suspended: {
+            $sum: { $cond: [{ $eq: ["$status", "suspended"] }, 1, 0] },
+          },
+        },
+      },
     ]);
 
     res.status(200).json({
@@ -733,17 +742,17 @@ export const getUsers = async (req, res) => {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalUsers / limit),
           totalUsers,
-          limit: parseInt(limit)
+          limit: parseInt(limit),
         },
-        stats: userStats
-      }
+        stats: userStats,
+      },
     });
   } catch (error) {
     console.error("Error fetching users:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching users",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -756,11 +765,11 @@ export const getUsers = async (req, res) => {
 export const getUserById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid user ID format"
+        message: "Invalid user ID format",
       });
     }
 
@@ -772,19 +781,22 @@ export const getUserById = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found"
+        message: "User not found",
       });
     }
 
     // Get user activity stats
-    const [enrollmentCount, completedCourses, totalProgress] = await Promise.all([
-      Enrollment.countDocuments({ student_id: id }),
-      EnhancedProgress.countDocuments({ userId: id, status: "completed" }),
-      EnhancedProgress.aggregate([
-        { $match: { userId: mongoose.Types.ObjectId(id) } },
-        { $group: { _id: null, avgProgress: { $avg: "$progressPercentage" } } }
-      ])
-    ]);
+    const [enrollmentCount, completedCourses, totalProgress] =
+      await Promise.all([
+        Enrollment.countDocuments({ student_id: id }),
+        EnhancedProgress.countDocuments({ userId: id, status: "completed" }),
+        EnhancedProgress.aggregate([
+          { $match: { userId: mongoose.Types.ObjectId(id) } },
+          {
+            $group: { _id: null, avgProgress: { $avg: "$progressPercentage" } },
+          },
+        ]),
+      ]);
 
     res.status(200).json({
       success: true,
@@ -793,16 +805,16 @@ export const getUserById = async (req, res) => {
         stats: {
           enrollmentCount,
           completedCourses,
-          averageProgress: totalProgress[0]?.avgProgress || 0
-        }
-      }
+          averageProgress: totalProgress[0]?.avgProgress || 0,
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching user:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching user",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -820,41 +832,41 @@ export const updateUserStatus = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid user ID format"
+        message: "Invalid user ID format",
       });
     }
 
     if (!status || !["active", "inactive", "suspended"].includes(status)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid status. Must be active, inactive, or suspended"
+        message: "Invalid status. Must be active, inactive, or suspended",
       });
     }
 
     const user = await User.findByIdAndUpdate(
       id,
       { status, updatedAt: new Date() },
-      { new: true, select: "-password -refreshTokens -mfa.backupCodes" }
+      { new: true, select: "-password -refreshTokens -mfa.backupCodes" },
     );
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found"
+        message: "User not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "User status updated successfully",
-      data: user
+      data: user,
     });
   } catch (error) {
     console.error("Error updating user status:", error);
     res.status(500).json({
       success: false,
       message: "Server error while updating user status",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -871,38 +883,38 @@ export const deleteUser = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid user ID format"
+        message: "Invalid user ID format",
       });
     }
 
     const user = await User.findByIdAndUpdate(
       id,
-      { 
+      {
         status: "deleted",
         deletedAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       },
-      { new: true, select: "-password -refreshTokens -mfa.backupCodes" }
+      { new: true, select: "-password -refreshTokens -mfa.backupCodes" },
     );
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found"
+        message: "User not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "User deleted successfully",
-      data: user
+      data: user,
     });
   } catch (error) {
     console.error("Error deleting user:", error);
     res.status(500).json({
       success: false,
       message: "Server error while deleting user",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -922,7 +934,7 @@ export const getCourses = async (req, res) => {
       status = "",
       courseType = "",
       sortBy = "createdAt",
-      sortOrder = "desc"
+      sortOrder = "desc",
     } = req.query;
 
     // Build search query
@@ -931,7 +943,7 @@ export const getCourses = async (req, res) => {
       searchQuery.$or = [
         { title: { $regex: search, $options: "i" } },
         { description: { $regex: search, $options: "i" } },
-        { instructor: { $regex: search, $options: "i" } }
+        { instructor: { $regex: search, $options: "i" } },
       ];
     }
     if (category) searchQuery.category = category;
@@ -949,7 +961,7 @@ export const getCourses = async (req, res) => {
         .sort(sortQuery)
         .skip((page - 1) * limit)
         .limit(parseInt(limit)),
-      Course.countDocuments(searchQuery)
+      Course.countDocuments(searchQuery),
     ]);
 
     // Get course statistics
@@ -959,9 +971,9 @@ export const getCourses = async (req, res) => {
           _id: "$status",
           count: { $sum: 1 },
           totalRevenue: { $sum: "$price" },
-          avgPrice: { $avg: "$price" }
-        }
-      }
+          avgPrice: { $avg: "$price" },
+        },
+      },
     ]);
 
     // Get enrollment statistics for these courses
@@ -970,9 +982,11 @@ export const getCourses = async (req, res) => {
         $group: {
           _id: "$course_id",
           enrollmentCount: { $sum: 1 },
-          activeEnrollments: { $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] } }
-        }
-      }
+          activeEnrollments: {
+            $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] },
+          },
+        },
+      },
     ]);
 
     res.status(200).json({
@@ -983,20 +997,20 @@ export const getCourses = async (req, res) => {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalCourses / limit),
           totalCourses,
-          limit: parseInt(limit)
+          limit: parseInt(limit),
         },
         stats: {
           courseStats,
-          enrollmentStats
-        }
-      }
+          enrollmentStats,
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching courses:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching courses",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1016,7 +1030,7 @@ export const getBatches = async (req, res) => {
       instructorId = "",
       courseId = "",
       sortBy = "createdAt",
-      sortOrder = "desc"
+      sortOrder = "desc",
     } = req.query;
 
     // Build search query
@@ -1024,7 +1038,7 @@ export const getBatches = async (req, res) => {
     if (search) {
       searchQuery.$or = [
         { name: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } }
+        { description: { $regex: search, $options: "i" } },
       ];
     }
     if (status) searchQuery.status = status;
@@ -1039,11 +1053,14 @@ export const getBatches = async (req, res) => {
     const [batches, totalBatches] = await Promise.all([
       Batch.find(searchQuery)
         .populate("course", "title")
-        .populate("instructor", "personalInfo.firstName personalInfo.lastName email")
+        .populate(
+          "instructor",
+          "personalInfo.firstName personalInfo.lastName email",
+        )
         .sort(sortQuery)
         .skip((page - 1) * limit)
         .limit(parseInt(limit)),
-      Batch.countDocuments(searchQuery)
+      Batch.countDocuments(searchQuery),
     ]);
 
     // Get batch statistics
@@ -1053,9 +1070,9 @@ export const getBatches = async (req, res) => {
           _id: "$status",
           count: { $sum: 1 },
           totalCapacity: { $sum: "$capacity" },
-          avgCapacity: { $avg: "$capacity" }
-        }
-      }
+          avgCapacity: { $avg: "$capacity" },
+        },
+      },
     ]);
 
     // Get enrollment statistics for batches
@@ -1064,9 +1081,11 @@ export const getBatches = async (req, res) => {
         $group: {
           _id: "$batch_id",
           enrollmentCount: { $sum: 1 },
-          activeEnrollments: { $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] } }
-        }
-      }
+          activeEnrollments: {
+            $sum: { $cond: [{ $eq: ["$status", "active"] }, 1, 0] },
+          },
+        },
+      },
     ]);
 
     res.status(200).json({
@@ -1077,20 +1096,20 @@ export const getBatches = async (req, res) => {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalBatches / limit),
           totalBatches,
-          limit: parseInt(limit)
+          limit: parseInt(limit),
         },
         stats: {
           batchStats,
-          enrollmentStats
-        }
-      }
+          enrollmentStats,
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching batches:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching batches",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1110,7 +1129,7 @@ export const getEnrollments = async (req, res) => {
       courseId = "",
       batchId = "",
       sortBy = "enrollment_date",
-      sortOrder = "desc"
+      sortOrder = "desc",
     } = req.query;
 
     // Build search query
@@ -1126,13 +1145,16 @@ export const getEnrollments = async (req, res) => {
     // Execute queries with population
     const [enrollments, totalEnrollments] = await Promise.all([
       Enrollment.find(searchQuery)
-        .populate("student_id", "personalInfo.firstName personalInfo.lastName email")
+        .populate(
+          "student_id",
+          "personalInfo.firstName personalInfo.lastName email",
+        )
         .populate("course_id", "title")
         .populate("batch_id", "name")
         .sort(sortQuery)
         .skip((page - 1) * limit)
         .limit(parseInt(limit)),
-      Enrollment.countDocuments(searchQuery)
+      Enrollment.countDocuments(searchQuery),
     ]);
 
     // Get enrollment statistics
@@ -1141,9 +1163,17 @@ export const getEnrollments = async (req, res) => {
         $group: {
           _id: "$status",
           count: { $sum: 1 },
-          totalRevenue: { $sum: { $reduce: { input: "$payments.amount", initialValue: 0, in: { $add: ["$$value", "$$this"] } } } }
-        }
-      }
+          totalRevenue: {
+            $sum: {
+              $reduce: {
+                input: "$payments.amount",
+                initialValue: 0,
+                in: { $add: ["$$value", "$$this"] },
+              },
+            },
+          },
+        },
+      },
     ]);
 
     // Get monthly enrollment trends
@@ -1152,14 +1182,22 @@ export const getEnrollments = async (req, res) => {
         $group: {
           _id: {
             year: { $year: "$enrollment_date" },
-            month: { $month: "$enrollment_date" }
+            month: { $month: "$enrollment_date" },
           },
           count: { $sum: 1 },
-          revenue: { $sum: { $reduce: { input: "$payments.amount", initialValue: 0, in: { $add: ["$$value", "$$this"] } } } }
-        }
+          revenue: {
+            $sum: {
+              $reduce: {
+                input: "$payments.amount",
+                initialValue: 0,
+                in: { $add: ["$$value", "$$this"] },
+              },
+            },
+          },
+        },
       },
       { $sort: { "_id.year": -1, "_id.month": -1 } },
-      { $limit: 12 }
+      { $limit: 12 },
     ]);
 
     res.status(200).json({
@@ -1170,20 +1208,20 @@ export const getEnrollments = async (req, res) => {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalEnrollments / limit),
           totalEnrollments,
-          limit: parseInt(limit)
+          limit: parseInt(limit),
         },
         stats: {
           enrollmentStats,
-          monthlyTrends
-        }
-      }
+          monthlyTrends,
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching enrollments:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching enrollments",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1204,7 +1242,7 @@ export const getPayments = async (req, res) => {
       dateFrom = "",
       dateTo = "",
       sortBy = "createdAt",
-      sortOrder = "desc"
+      sortOrder = "desc",
     } = req.query;
 
     // Build search query
@@ -1224,12 +1262,15 @@ export const getPayments = async (req, res) => {
     // Execute queries
     const [payments, totalPayments] = await Promise.all([
       Order.find(searchQuery)
-        .populate("student_id", "personalInfo.firstName personalInfo.lastName email")
+        .populate(
+          "student_id",
+          "personalInfo.firstName personalInfo.lastName email",
+        )
         .populate("course_id", "title")
         .sort(sortQuery)
         .skip((page - 1) * limit)
         .limit(parseInt(limit)),
-      Order.countDocuments(searchQuery)
+      Order.countDocuments(searchQuery),
     ]);
 
     // Get payment statistics
@@ -1239,9 +1280,9 @@ export const getPayments = async (req, res) => {
           _id: "$status",
           count: { $sum: 1 },
           totalAmount: { $sum: "$amount" },
-          avgAmount: { $avg: "$amount" }
-        }
-      }
+          avgAmount: { $avg: "$amount" },
+        },
+      },
     ]);
 
     // Get payment method statistics
@@ -1250,9 +1291,9 @@ export const getPayments = async (req, res) => {
         $group: {
           _id: "$paymentMethod",
           count: { $sum: 1 },
-          totalAmount: { $sum: "$amount" }
-        }
-      }
+          totalAmount: { $sum: "$amount" },
+        },
+      },
     ]);
 
     // Get daily revenue trends for last 30 days
@@ -1260,21 +1301,21 @@ export const getPayments = async (req, res) => {
       {
         $match: {
           status: "paid",
-          createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
-        }
+          createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+        },
       },
       {
         $group: {
           _id: {
             year: { $year: "$createdAt" },
             month: { $month: "$createdAt" },
-            day: { $dayOfMonth: "$createdAt" }
+            day: { $dayOfMonth: "$createdAt" },
           },
           revenue: { $sum: "$amount" },
-          count: { $sum: 1 }
-        }
+          count: { $sum: 1 },
+        },
       },
-      { $sort: { "_id.year": -1, "_id.month": -1, "_id.day": -1 } }
+      { $sort: { "_id.year": -1, "_id.month": -1, "_id.day": -1 } },
     ]);
 
     res.status(200).json({
@@ -1285,21 +1326,21 @@ export const getPayments = async (req, res) => {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalPayments / limit),
           totalPayments,
-          limit: parseInt(limit)
+          limit: parseInt(limit),
         },
         stats: {
           paymentStats,
           paymentMethodStats,
-          dailyRevenue
-        }
-      }
+          dailyRevenue,
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching payments:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching payments",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1318,7 +1359,7 @@ export const getAnnouncements = async (req, res) => {
       status = "",
       priority = "",
       sortBy = "createdAt",
-      sortOrder = "desc"
+      sortOrder = "desc",
     } = req.query;
 
     // Build search query
@@ -1326,7 +1367,7 @@ export const getAnnouncements = async (req, res) => {
     if (search) {
       searchQuery.$or = [
         { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } }
+        { description: { $regex: search, $options: "i" } },
       ];
     }
     if (status) searchQuery.status = status;
@@ -1339,11 +1380,14 @@ export const getAnnouncements = async (req, res) => {
     // Execute queries
     const [announcements, totalAnnouncements] = await Promise.all([
       Announcement.find(searchQuery)
-        .populate("createdBy", "personalInfo.firstName personalInfo.lastName email")
+        .populate(
+          "createdBy",
+          "personalInfo.firstName personalInfo.lastName email",
+        )
         .sort(sortQuery)
         .skip((page - 1) * limit)
         .limit(parseInt(limit)),
-      Announcement.countDocuments(searchQuery)
+      Announcement.countDocuments(searchQuery),
     ]);
 
     // Get announcement statistics
@@ -1351,9 +1395,9 @@ export const getAnnouncements = async (req, res) => {
       {
         $group: {
           _id: "$status",
-          count: { $sum: 1 }
-        }
-      }
+          count: { $sum: 1 },
+        },
+      },
     ]);
 
     res.status(200).json({
@@ -1364,17 +1408,17 @@ export const getAnnouncements = async (req, res) => {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalAnnouncements / limit),
           totalAnnouncements,
-          limit: parseInt(limit)
+          limit: parseInt(limit),
         },
-        stats: announcementStats
-      }
+        stats: announcementStats,
+      },
     });
   } catch (error) {
     console.error("Error fetching announcements:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching announcements",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1393,7 +1437,7 @@ export const getBlogs = async (req, res) => {
       status = "",
       category = "",
       sortBy = "createdAt",
-      sortOrder = "desc"
+      sortOrder = "desc",
     } = req.query;
 
     // Build search query
@@ -1402,7 +1446,7 @@ export const getBlogs = async (req, res) => {
       searchQuery.$or = [
         { title: { $regex: search, $options: "i" } },
         { content: { $regex: search, $options: "i" } },
-        { metaDescription: { $regex: search, $options: "i" } }
+        { metaDescription: { $regex: search, $options: "i" } },
       ];
     }
     if (status) searchQuery.status = status;
@@ -1415,11 +1459,14 @@ export const getBlogs = async (req, res) => {
     // Execute queries
     const [blogs, totalBlogs] = await Promise.all([
       Blog.find(searchQuery)
-        .populate("author", "personalInfo.firstName personalInfo.lastName email")
+        .populate(
+          "author",
+          "personalInfo.firstName personalInfo.lastName email",
+        )
         .sort(sortQuery)
         .skip((page - 1) * limit)
         .limit(parseInt(limit)),
-      Blog.countDocuments(searchQuery)
+      Blog.countDocuments(searchQuery),
     ]);
 
     // Get blog statistics
@@ -1429,9 +1476,9 @@ export const getBlogs = async (req, res) => {
           _id: "$status",
           count: { $sum: 1 },
           totalViews: { $sum: "$views" },
-          avgViews: { $avg: "$views" }
-        }
-      }
+          avgViews: { $avg: "$views" },
+        },
+      },
     ]);
 
     res.status(200).json({
@@ -1442,17 +1489,17 @@ export const getBlogs = async (req, res) => {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalBlogs / limit),
           totalBlogs,
-          limit: parseInt(limit)
+          limit: parseInt(limit),
         },
-        stats: blogStats
-      }
+        stats: blogStats,
+      },
     });
   } catch (error) {
     console.error("Error fetching blogs:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching blogs",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1472,7 +1519,7 @@ export const getSupportTickets = async (req, res) => {
       priority = "",
       type = "",
       sortBy = "createdAt",
-      sortOrder = "desc"
+      sortOrder = "desc",
     } = req.query;
 
     // Build search query
@@ -1480,7 +1527,7 @@ export const getSupportTickets = async (req, res) => {
     if (search) {
       searchQuery.$or = [
         { subject: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } }
+        { description: { $regex: search, $options: "i" } },
       ];
     }
     if (status) searchQuery.status = status;
@@ -1491,20 +1538,27 @@ export const getSupportTickets = async (req, res) => {
     sortQuery[sortBy] = sortOrder === "desc" ? -1 : 1;
 
     // Get complaints and feedback data
-    const [complaints, feedback, totalComplaints, totalFeedback] = await Promise.all([
-      Complaint.find(searchQuery)
-        .populate("user", "personalInfo.firstName personalInfo.lastName email")
-        .sort(sortQuery)
-        .skip((page - 1) * limit)
-        .limit(parseInt(limit)),
-      Feedback.find(searchQuery)
-        .populate("student", "personalInfo.firstName personalInfo.lastName email")
-        .sort(sortQuery)
-        .skip((page - 1) * limit)
-        .limit(parseInt(limit)),
-      Complaint.countDocuments(searchQuery),
-      Feedback.countDocuments(searchQuery)
-    ]);
+    const [complaints, feedback, totalComplaints, totalFeedback] =
+      await Promise.all([
+        Complaint.find(searchQuery)
+          .populate(
+            "user",
+            "personalInfo.firstName personalInfo.lastName email",
+          )
+          .sort(sortQuery)
+          .skip((page - 1) * limit)
+          .limit(parseInt(limit)),
+        Feedback.find(searchQuery)
+          .populate(
+            "student",
+            "personalInfo.firstName personalInfo.lastName email",
+          )
+          .sort(sortQuery)
+          .skip((page - 1) * limit)
+          .limit(parseInt(limit)),
+        Complaint.countDocuments(searchQuery),
+        Feedback.countDocuments(searchQuery),
+      ]);
 
     // Get support statistics
     const [complaintStats, feedbackStats] = await Promise.all([
@@ -1512,19 +1566,19 @@ export const getSupportTickets = async (req, res) => {
         {
           $group: {
             _id: "$status",
-            count: { $sum: 1 }
-          }
-        }
+            count: { $sum: 1 },
+          },
+        },
       ]),
       Feedback.aggregate([
         {
           $group: {
             _id: "$rating",
             count: { $sum: 1 },
-            avgRating: { $avg: "$rating" }
-          }
-        }
-      ])
+            avgRating: { $avg: "$rating" },
+          },
+        },
+      ]),
     ]);
 
     res.status(200).json({
@@ -1532,7 +1586,7 @@ export const getSupportTickets = async (req, res) => {
       data: {
         tickets: {
           complaints,
-          feedback
+          feedback,
         },
         pagination: {
           currentPage: parseInt(page),
@@ -1540,20 +1594,20 @@ export const getSupportTickets = async (req, res) => {
           totalTickets: totalComplaints + totalFeedback,
           totalComplaints,
           totalFeedback,
-          limit: parseInt(limit)
+          limit: parseInt(limit),
         },
         stats: {
           complaintStats,
-          feedbackStats
-        }
-      }
+          feedbackStats,
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching support tickets:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching support tickets",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1572,7 +1626,7 @@ export const getAssessments = async (req, res) => {
       courseId = "",
       type = "",
       sortBy = "createdAt",
-      sortOrder = "desc"
+      sortOrder = "desc",
     } = req.query;
 
     // Build search query
@@ -1580,7 +1634,7 @@ export const getAssessments = async (req, res) => {
     if (search) {
       searchQuery.$or = [
         { title: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } }
+        { description: { $regex: search, $options: "i" } },
       ];
     }
     if (courseId) searchQuery.course = courseId;
@@ -1591,21 +1645,25 @@ export const getAssessments = async (req, res) => {
     sortQuery[sortBy] = sortOrder === "desc" ? -1 : 1;
 
     // Get quiz responses and assignments
-    const [quizResponses, assignments, totalQuizzes, totalAssignments] = await Promise.all([
-      QuizResponse.find()
-        .populate("student", "personalInfo.firstName personalInfo.lastName email")
-        .populate("quiz", "title course")
-        .sort(sortQuery)
-        .skip((page - 1) * limit)
-        .limit(parseInt(limit)),
-      Assignment.find(searchQuery)
-        .populate("course", "title")
-        .sort(sortQuery)
-        .skip((page - 1) * limit)
-        .limit(parseInt(limit)),
-      QuizResponse.countDocuments(),
-      Assignment.countDocuments(searchQuery)
-    ]);
+    const [quizResponses, assignments, totalQuizzes, totalAssignments] =
+      await Promise.all([
+        QuizResponse.find()
+          .populate(
+            "student",
+            "personalInfo.firstName personalInfo.lastName email",
+          )
+          .populate("quiz", "title course")
+          .sort(sortQuery)
+          .skip((page - 1) * limit)
+          .limit(parseInt(limit)),
+        Assignment.find(searchQuery)
+          .populate("course", "title")
+          .sort(sortQuery)
+          .skip((page - 1) * limit)
+          .limit(parseInt(limit)),
+        QuizResponse.countDocuments(),
+        Assignment.countDocuments(searchQuery),
+      ]);
 
     // Get progress statistics
     const [progressStats, completionStats] = await Promise.all([
@@ -1614,9 +1672,9 @@ export const getAssessments = async (req, res) => {
           $group: {
             _id: "$status",
             count: { $sum: 1 },
-            avgProgress: { $avg: "$progressPercentage" }
-          }
-        }
+            avgProgress: { $avg: "$progressPercentage" },
+          },
+        },
       ]),
       QuizResponse.aggregate([
         {
@@ -1624,10 +1682,12 @@ export const getAssessments = async (req, res) => {
             _id: null,
             totalAttempts: { $sum: 1 },
             avgScore: { $avg: "$score" },
-            passedAttempts: { $sum: { $cond: [{ $gte: ["$score", 60] }, 1, 0] } }
-          }
-        }
-      ])
+            passedAttempts: {
+              $sum: { $cond: [{ $gte: ["$score", 60] }, 1, 0] },
+            },
+          },
+        },
+      ]),
     ]);
 
     res.status(200).json({
@@ -1635,7 +1695,7 @@ export const getAssessments = async (req, res) => {
       data: {
         assessments: {
           quizResponses,
-          assignments
+          assignments,
         },
         pagination: {
           currentPage: parseInt(page),
@@ -1643,20 +1703,20 @@ export const getAssessments = async (req, res) => {
           totalAssessments: totalQuizzes + totalAssignments,
           totalQuizzes,
           totalAssignments,
-          limit: parseInt(limit)
+          limit: parseInt(limit),
         },
         stats: {
           progressStats,
-          completionStats: completionStats[0] || {}
-        }
-      }
+          completionStats: completionStats[0] || {},
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching assessments:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching assessments",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1674,24 +1734,26 @@ export const getSystemStats = async (req, res) => {
       totalCourses,
       totalEnrollments,
       totalOrders,
-      activeConnections
+      activeConnections,
     ] = await Promise.all([
       User.countDocuments(),
       Course.countDocuments(),
       Enrollment.countDocuments(),
       Order.countDocuments(),
-      mongoose.connection.db.stats()
+      mongoose.connection.db.stats(),
     ]);
 
     // Get recent activity
     const recentActivity = await Promise.all([
-      User.find({}, null, { sort: { createdAt: -1 }, limit: 5 })
-        .select("personalInfo.firstName personalInfo.lastName email role createdAt"),
-      Course.find({}, null, { sort: { createdAt: -1 }, limit: 5 })
-        .select("title status createdAt"),
+      User.find({}, null, { sort: { createdAt: -1 }, limit: 5 }).select(
+        "personalInfo.firstName personalInfo.lastName email role createdAt",
+      ),
+      Course.find({}, null, { sort: { createdAt: -1 }, limit: 5 }).select(
+        "title status createdAt",
+      ),
       Enrollment.find({}, null, { sort: { enrollment_date: -1 }, limit: 5 })
         .populate("student_id", "personalInfo.firstName personalInfo.lastName")
-        .populate("course_id", "title")
+        .populate("course_id", "title"),
     ]);
 
     // System health metrics
@@ -1702,9 +1764,9 @@ export const getSystemStats = async (req, res) => {
         connected: mongoose.connection.readyState === 1,
         collections: activeConnections.collections || 0,
         dataSize: activeConnections.dataSize || 0,
-        indexSize: activeConnections.indexSize || 0
+        indexSize: activeConnections.indexSize || 0,
       },
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
     res.status(200).json({
@@ -1714,22 +1776,22 @@ export const getSystemStats = async (req, res) => {
           users: totalUsers,
           courses: totalCourses,
           enrollments: totalEnrollments,
-          orders: totalOrders
+          orders: totalOrders,
         },
         recentActivity: {
           newUsers: recentActivity[0],
           newCourses: recentActivity[1],
-          newEnrollments: recentActivity[2]
+          newEnrollments: recentActivity[2],
         },
-        systemHealth
-      }
+        systemHealth,
+      },
     });
   } catch (error) {
     console.error("Error fetching system stats:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching system statistics",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1747,7 +1809,7 @@ export const getCorporateTraining = async (req, res) => {
       search = "",
       status = "",
       sortBy = "createdAt",
-      sortOrder = "desc"
+      sortOrder = "desc",
     } = req.query;
 
     // Build search query
@@ -1756,7 +1818,7 @@ export const getCorporateTraining = async (req, res) => {
       searchQuery.$or = [
         { "company.name": { $regex: search, $options: "i" } },
         { "company.email": { $regex: search, $options: "i" } },
-        { title: { $regex: search, $options: "i" } }
+        { title: { $regex: search, $options: "i" } },
       ];
     }
     if (status) searchQuery.status = status;
@@ -1768,11 +1830,13 @@ export const getCorporateTraining = async (req, res) => {
     // Get corporate users and their training data
     const [corporateUsers, totalCorporateUsers] = await Promise.all([
       User.find({ role: { $in: ["corporate", "corporate-admin"] } })
-        .select("personalInfo.firstName personalInfo.lastName email company role status createdAt")
+        .select(
+          "personalInfo.firstName personalInfo.lastName email company role status createdAt",
+        )
         .sort(sortQuery)
         .skip((page - 1) * limit)
         .limit(parseInt(limit)),
-      User.countDocuments({ role: { $in: ["corporate", "corporate-admin"] } })
+      User.countDocuments({ role: { $in: ["corporate", "corporate-admin"] } }),
     ]);
 
     // Get corporate training statistics
@@ -1781,9 +1845,9 @@ export const getCorporateTraining = async (req, res) => {
       {
         $group: {
           _id: "$status",
-          count: { $sum: 1 }
-        }
-      }
+          count: { $sum: 1 },
+        },
+      },
     ]);
 
     // Get corporate enrollment statistics
@@ -1793,18 +1857,28 @@ export const getCorporateTraining = async (req, res) => {
           from: "users",
           localField: "student_id",
           foreignField: "_id",
-          as: "student"
-        }
+          as: "student",
+        },
       },
       { $unwind: "$student" },
-      { $match: { "student.role": { $in: ["corporate-student", "corporate"] } } },
+      {
+        $match: { "student.role": { $in: ["corporate-student", "corporate"] } },
+      },
       {
         $group: {
           _id: "$status",
           count: { $sum: 1 },
-          totalRevenue: { $sum: { $reduce: { input: "$payments.amount", initialValue: 0, in: { $add: ["$$value", "$$this"] } } } }
-        }
-      }
+          totalRevenue: {
+            $sum: {
+              $reduce: {
+                input: "$payments.amount",
+                initialValue: 0,
+                in: { $add: ["$$value", "$$this"] },
+              },
+            },
+          },
+        },
+      },
     ]);
 
     res.status(200).json({
@@ -1815,20 +1889,226 @@ export const getCorporateTraining = async (req, res) => {
           currentPage: parseInt(page),
           totalPages: Math.ceil(totalCorporateUsers / limit),
           totalCorporateUsers,
-          limit: parseInt(limit)
+          limit: parseInt(limit),
         },
         stats: {
           corporateStats,
-          corporateEnrollmentStats
-        }
-      }
+          corporateEnrollmentStats,
+        },
+      },
     });
   } catch (error) {
     console.error("Error fetching corporate training data:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching corporate training data",
-      error: error.message
+      error: error.message,
     });
+  }
+};
+
+// --- SUPER ADMIN MODEL REGISTRY & DYNAMIC ENDPOINTS ---
+import fs from "fs";
+import path from "path";
+
+// Model registry: map model names to imported models
+const modelRegistry = {
+  user: User,
+  course: Course,
+  batch: Batch,
+  enrollment: Enrollment,
+  order: Order,
+  announcement: Announcement,
+  blog: Blog,
+  complaint: Complaint,
+  feedback: Feedback,
+  quizresponse: QuizResponse,
+  assignment: Assignment,
+  attendance: Attendace,
+  onlinemeeting: OnlineMeeting,
+  category: Category,
+  // Add more as needed
+};
+
+// Helper: get model by name (case-insensitive)
+function getModel(modelName) {
+  return modelRegistry[modelName.toLowerCase()];
+}
+
+// Helper: get default population fields for each model
+const defaultPopulate = {
+  user: [],
+  course: ["category"],
+  batch: ["course", "assigned_instructor"],
+  enrollment: ["student_id", "course_id", "batch_id"],
+  order: ["student_id", "course_id"],
+  announcement: ["createdBy"],
+  blog: ["author"],
+  complaint: ["user"],
+  feedback: ["student"],
+  quizresponse: ["student", "quiz"],
+  assignment: ["course"],
+  attendance: ["batch_id", "instructor_id"],
+  onlinemeeting: ["category"],
+  category: [],
+};
+
+// --- DYNAMIC SUPER ADMIN ENDPOINTS ---
+
+/**
+ * List all records for a model (with population, pagination, filtering)
+ * @route GET /api/v1/admin/model/:modelName
+ */
+export const listModel = async (req, res) => {
+  try {
+    const { modelName } = req.params;
+    const Model = getModel(modelName);
+    if (!Model)
+      return res
+        .status(400)
+        .json({ success: false, message: `Unknown model: ${modelName}` });
+
+    // Pagination, filtering, sorting
+    const {
+      page = 1,
+      limit = 20,
+      search = "",
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      ...filters
+    } = req.query;
+    const skip = (page - 1) * limit;
+    const sortQuery = {};
+    sortQuery[sortBy] = sortOrder === "desc" ? -1 : 1;
+
+    // Build search/filter query (simple: search on string fields)
+    const query = { ...filters };
+    if (search) {
+      // Try to search on common fields
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { title: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    let q = Model.find(query).sort(sortQuery).skip(skip).limit(parseInt(limit));
+    // Populate refs
+    (defaultPopulate[modelName.toLowerCase()] || []).forEach((field) => {
+      q = q.populate(field);
+    });
+    const [data, total] = await Promise.all([
+      q.lean(),
+      Model.countDocuments(query),
+    ]);
+    res.json({
+      success: true,
+      data,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / limit),
+        total,
+        limit: parseInt(limit),
+      },
+      message: `Fetched ${data.length} ${modelName}(s)`,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Get a single record by ID (with population)
+ * @route GET /api/v1/admin/model/:modelName/:id
+ */
+export const getModelById = async (req, res) => {
+  try {
+    const { modelName, id } = req.params;
+    const Model = getModel(modelName);
+    if (!Model)
+      return res
+        .status(400)
+        .json({ success: false, message: `Unknown model: ${modelName}` });
+    let q = Model.findById(id);
+    (defaultPopulate[modelName.toLowerCase()] || []).forEach((field) => {
+      q = q.populate(field);
+    });
+    const data = await q.lean();
+    if (!data)
+      return res
+        .status(404)
+        .json({ success: false, message: `${modelName} not found` });
+    res.json({ success: true, data, message: `Fetched ${modelName}` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Create a new record
+ * @route POST /api/v1/admin/model/:modelName
+ */
+export const createModel = async (req, res) => {
+  try {
+    const { modelName } = req.params;
+    const Model = getModel(modelName);
+    if (!Model)
+      return res
+        .status(400)
+        .json({ success: false, message: `Unknown model: ${modelName}` });
+    const doc = new Model(req.body);
+    await doc.save();
+    res
+      .status(201)
+      .json({ success: true, data: doc, message: `Created ${modelName}` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Update a record by ID
+ * @route PUT /api/v1/admin/model/:modelName/:id
+ */
+export const updateModel = async (req, res) => {
+  try {
+    const { modelName, id } = req.params;
+    const Model = getModel(modelName);
+    if (!Model)
+      return res
+        .status(400)
+        .json({ success: false, message: `Unknown model: ${modelName}` });
+    const updated = await Model.findByIdAndUpdate(id, req.body, { new: true });
+    if (!updated)
+      return res
+        .status(404)
+        .json({ success: false, message: `${modelName} not found` });
+    res.json({ success: true, data: updated, message: `Updated ${modelName}` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Delete a record by ID
+ * @route DELETE /api/v1/admin/model/:modelName/:id
+ */
+export const deleteModel = async (req, res) => {
+  try {
+    const { modelName, id } = req.params;
+    const Model = getModel(modelName);
+    if (!Model)
+      return res
+        .status(400)
+        .json({ success: false, message: `Unknown model: ${modelName}` });
+    const deleted = await Model.findByIdAndDelete(id);
+    if (!deleted)
+      return res
+        .status(404)
+        .json({ success: false, message: `${modelName} not found` });
+    res.json({ success: true, data: deleted, message: `Deleted ${modelName}` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
