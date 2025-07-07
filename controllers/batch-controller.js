@@ -1754,15 +1754,43 @@ export const getRecordedLessonsForStudent = async (req, res) => {
             // Fallback to original URL if signing fails
           }
 
+          // Extract GMT timestamp from filename for better date handling
+          let extractedDate = null;
+          let sessionNumber = null;
+
+          const gmtMatch = fileName.match(/GMT(\d{8})-(\d{6})/);
+          if (gmtMatch) {
+            const dateStr = gmtMatch[1]; // YYYYMMDD
+            const timeStr = gmtMatch[2]; // HHMMSS
+
+            // Parse date and time
+            const year = parseInt(dateStr.substring(0, 4));
+            const month = parseInt(dateStr.substring(4, 6)) - 1; // Month is 0-indexed
+            const day = parseInt(dateStr.substring(6, 8));
+            const hour = parseInt(timeStr.substring(0, 2));
+            const minute = parseInt(timeStr.substring(2, 4));
+            const second = parseInt(timeStr.substring(4, 6));
+
+            extractedDate = new Date(year, month, day, hour, minute, second);
+
+            // Generate session number based on chronological order (will be sorted later)
+            sessionNumber = `Session ${s3VideosData.length + 1}`;
+          }
+
           s3VideosData.push({
             id: object.Key.replace(/[^a-zA-Z0-9]/g, "_"), // Create a unique ID from the key
             title: fileName,
+            displayTitle: extractedDate
+              ? `Session ${s3VideosData.length + 1}`
+              : fileName,
             folderPath: folderPath, // Show which folder/subfolder the video is in
             fullPath: object.Key,
             url: signedUrl,
             originalUrl: fileUrl,
             fileSize: object.Size,
             lastModified: object.LastModified,
+            extractedDate: extractedDate,
+            sessionNumber: sessionNumber,
             source: "your_previous_sessions",
             student: {
               id: studentId,
@@ -1771,10 +1799,42 @@ export const getRecordedLessonsForStudent = async (req, res) => {
           });
         }
 
-        // Sort by last modified date (newest first)
-        s3VideosData.sort(
-          (a, b) => new Date(b.lastModified) - new Date(a.lastModified),
-        );
+        // Sort by GMT timestamp in filename (newest first)
+        s3VideosData.sort((a, b) => {
+          // Extract GMT timestamp from filename
+          const getGMTTimestamp = (filename) => {
+            const gmtMatch = filename.match(/GMT(\d{8})-(\d{6})/);
+            if (gmtMatch) {
+              const dateStr = gmtMatch[1]; // YYYYMMDD
+              const timeStr = gmtMatch[2]; // HHMMSS
+
+              // Parse date and time
+              const year = parseInt(dateStr.substring(0, 4));
+              const month = parseInt(dateStr.substring(4, 6)) - 1; // Month is 0-indexed
+              const day = parseInt(dateStr.substring(6, 8));
+              const hour = parseInt(timeStr.substring(0, 2));
+              const minute = parseInt(timeStr.substring(2, 4));
+              const second = parseInt(timeStr.substring(4, 6));
+
+              return new Date(year, month, day, hour, minute, second);
+            }
+            // Fallback to lastModified if no GMT timestamp found
+            return new Date(a.lastModified);
+          };
+
+          const dateA = getGMTTimestamp(a.title);
+          const dateB = getGMTTimestamp(b.title);
+
+          return dateB - dateA; // Newest first
+        });
+
+        // Update session numbers after sorting to reflect chronological order
+        s3VideosData.forEach((video, index) => {
+          if (video.extractedDate) {
+            video.sessionNumber = `Session ${index + 1}`;
+            video.displayTitle = `Session ${index + 1}`;
+          }
+        });
       }
 
       console.log(

@@ -130,7 +130,8 @@ export const createEnrolledCourse = async (req, res, next) => {
     // Setup EMI if applicable
     if (is_emi && emi_config) {
       await newEnrolledCourse.setupEmiSchedule({
-        totalAmount: emi_config.totalAmount || enrollmentData.payment_details.amount,
+        totalAmount:
+          emi_config.totalAmount || enrollmentData.payment_details.amount,
         downPayment: emi_config.downPayment || 0,
         numberOfInstallments: emi_config.numberOfInstallments,
         startDate: emi_config.startDate || new Date(),
@@ -350,23 +351,24 @@ export const getEnrolledCourseByStudentId = async (req, res, next) => {
 
     const enrollments = await EnrolledCourse.find(query)
       .populate({
-        path: "student_id", 
-        select: "full_name email role profile_image"
+        path: "student_id",
+        select: "full_name email role profile_image",
       })
       .populate({
         path: "course_id",
         populate: {
           path: "assigned_instructor",
-          select: 'full_name email role domain phone_numbers',
-          match: { role: { $in: ['instructor'] } }
+          select: "full_name email role domain phone_numbers",
+          match: { role: { $in: ["instructor"] } },
         },
       })
       .sort({ enrollment_date: -1 });
 
     if (!enrollments.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No enrollments found for this student",
+      return res.status(200).json({
+        success: true,
+        message: "Student not enrolled yet",
+        data: [],
       });
     }
 
@@ -818,17 +820,17 @@ export const getAllStudentsWithEnrolledCourses = async (req, res, next) => {
           match: { role: "student" },
           model: "User",
           select:
-            "full_name email phone_numbers role role_description status facebook_link instagram_link linkedin_link user_image meta age_group"
+            "full_name email phone_numbers role role_description status facebook_link instagram_link linkedin_link user_image meta age_group",
         },
         {
           path: "course_id",
           model: "Course",
           select: "course_title description thumbnail assigned_instructor",
           populate: {
-            path: 'assigned_instructor',
-            select: 'full_name email role domain phone_numbers',
-            match: { role: { $in: ['instructor'] } }
-          }
+            path: "assigned_instructor",
+            select: "full_name email role domain phone_numbers",
+            match: { role: { $in: ["instructor"] } },
+          },
         },
       ],
     };
@@ -909,7 +911,7 @@ export const saveCourse = async (req, res, next) => {
     const existingSavedCourse = await EnrolledCourse.findOne({
       student_id,
       course_id,
-      enrollmentType: "saved"
+      enrollmentType: "saved",
     });
 
     if (existingSavedCourse) {
@@ -923,7 +925,7 @@ export const saveCourse = async (req, res, next) => {
     const existingEnrollment = await EnrolledCourse.findOne({
       student_id,
       course_id,
-      enrollmentType: { $ne: "saved" }
+      enrollmentType: { $ne: "saved" },
     });
 
     if (existingEnrollment) {
@@ -941,13 +943,13 @@ export const saveCourse = async (req, res, next) => {
       status: "active",
       savedDetails: {
         savedAt: new Date(),
-        notes: notes || ""
+        notes: notes || "",
       },
       metadata: {
         deviceInfo: req.headers["user-agent"],
         ipAddress: req.ip,
-        saveSource: req.headers.referer || "direct"
-      }
+        saveSource: req.headers.referer || "direct",
+      },
     };
 
     // Create new saved course record
@@ -971,14 +973,15 @@ export const getSavedCourses = async (req, res, next) => {
 
     const savedCourses = await EnrolledCourse.find({
       student_id,
-      enrollmentType: "saved"
+      enrollmentType: "saved",
     })
-    .populate({
-      path: "course_id",
-      select: "course_title course_category course_image course_duration prices status"
-    })
-    .sort({ "savedDetails.savedAt": -1 })
-    .lean();
+      .populate({
+        path: "course_id",
+        select:
+          "course_title course_category course_image course_duration prices status",
+      })
+      .sort({ "savedDetails.savedAt": -1 })
+      .lean();
 
     res.status(200).json({
       success: true,
@@ -1000,7 +1003,7 @@ export const removeSavedCourse = async (req, res, next) => {
     const deletedCourse = await EnrolledCourse.findOneAndDelete({
       student_id,
       course_id,
-      enrollmentType: "saved"
+      enrollmentType: "saved",
     });
 
     if (!deletedCourse) {
@@ -1037,7 +1040,7 @@ export const convertSavedCourseToEnrollment = async (req, res, next) => {
     const savedCourse = await EnrolledCourse.findOne({
       student_id,
       course_id,
-      enrollmentType: "saved"
+      enrollmentType: "saved",
     });
 
     if (!savedCourse) {
@@ -1052,7 +1055,7 @@ export const convertSavedCourseToEnrollment = async (req, res, next) => {
       student_id,
       course_id,
       enrollmentType: { $ne: "saved" },
-      status: "active"
+      status: "active",
     });
 
     if (existingEnrollment) {
@@ -1083,11 +1086,13 @@ export const convertSavedCourseToEnrollment = async (req, res, next) => {
     await savedCourse.convertToEnrollment(enrollmentData);
 
     // Get the updated enrollment with populated course data
-    const updatedEnrollment = await EnrolledCourse.findById(savedCourse._id)
-      .populate({
-        path: "course_id",
-        select: "course_title course_category course_image course_duration prices status"
-      });
+    const updatedEnrollment = await EnrolledCourse.findById(
+      savedCourse._id,
+    ).populate({
+      path: "course_id",
+      select:
+        "course_title course_category course_image course_duration prices status",
+    });
 
     res.status(200).json({
       success: true,
@@ -1123,7 +1128,7 @@ export const checkAndUpdateEmiStatus = async (req, res, next) => {
       try {
         const previousStatus = enrollment.accessStatus;
         await enrollment.checkAndUpdateAccess();
-        
+
         results.updated++;
         if (enrollment.accessStatus === "restricted") {
           results.restricted++;
@@ -1195,7 +1200,7 @@ export const getEmiAnalytics = async (req, res, next) => {
     let paidInstallments = 0;
     let onTimePayments = 0;
 
-    enrollments.forEach(enrollment => {
+    enrollments.forEach((enrollment) => {
       const emi = enrollment.emiDetails;
       if (!emi) return;
 
@@ -1214,7 +1219,7 @@ export const getEmiAnalytics = async (req, res, next) => {
       analytics.totalRevenue += emi.totalAmount;
       analytics.missedPaymentsCount += emi.missedPayments;
 
-      emi.schedule.forEach(installment => {
+      emi.schedule.forEach((installment) => {
         totalInstallments++;
         analytics.installmentAnalytics.total++;
 
@@ -1241,8 +1246,10 @@ export const getEmiAnalytics = async (req, res, next) => {
 
     // Calculate averages and percentages
     if (totalInstallments > 0) {
-      analytics.averageInstallmentAmount = analytics.totalRevenue / totalInstallments;
-      analytics.onTimePaymentsPercentage = (onTimePayments / paidInstallments) * 100;
+      analytics.averageInstallmentAmount =
+        analytics.totalRevenue / totalInstallments;
+      analytics.onTimePaymentsPercentage =
+        (onTimePayments / paidInstallments) * 100;
     }
 
     res.status(200).json({
@@ -1281,22 +1288,23 @@ export const getCompletedCoursesByStudentId = async (req, res, next) => {
     const completedEnrollments = await EnrolledCourse.find({
       student_id,
       status: "completed",
-      is_completed: true
+      is_completed: true,
     })
-    .populate({
-      path: "course_id",
-      select: "course_title course_description assigned_instructor curriculum meta course_duration course_tag",
-      populate: {
-        path: "assigned_instructor",
-        select: "full_name email",
-        match: { role: { $in: ['instructor'] } }
-      }
-    })
-    .populate("certificate_id")
-    .sort({ completed_on: -1 })
-    .skip((page - 1) * limit)
-    .limit(parseInt(limit))
-    .lean();
+      .populate({
+        path: "course_id",
+        select:
+          "course_title course_description assigned_instructor curriculum meta course_duration course_tag",
+        populate: {
+          path: "assigned_instructor",
+          select: "full_name email",
+          match: { role: { $in: ["instructor"] } },
+        },
+      })
+      .populate("certificate_id")
+      .sort({ completed_on: -1 })
+      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .lean();
 
     if (!completedEnrollments.length) {
       return res.status(404).json({
@@ -1309,7 +1317,7 @@ export const getCompletedCoursesByStudentId = async (req, res, next) => {
     const formattedCourses = await Promise.all(
       completedEnrollments.map(async (enrollment) => {
         const course = enrollment.course_id;
-        
+
         // Calculate course duration in weeks
         let durationInWeeks = 0;
         if (course.curriculum && course.curriculum.length) {
@@ -1330,12 +1338,13 @@ export const getCompletedCoursesByStudentId = async (req, res, next) => {
           // Extract topics from curriculum week titles
           keyTopics = course.curriculum
             .slice(0, 3)
-            .map(week => week.weekTitle || week.title)
-            .filter(title => title);
+            .map((week) => week.weekTitle || week.title)
+            .filter((title) => title);
         }
 
         // Get instructor name
-        const instructorName = course.assigned_instructor?.full_name || "Instructor";
+        const instructorName =
+          course.assigned_instructor?.full_name || "Instructor";
 
         // Get rating from course meta
         const rating = course.meta?.ratings?.average || 0;
@@ -1354,19 +1363,19 @@ export const getCompletedCoursesByStudentId = async (req, res, next) => {
           status: "Completed",
           actions: {
             review: true,
-            certificate: hasCertificate
+            certificate: hasCertificate,
           },
           enrollmentId: enrollment._id,
-          progress: enrollment.progress || 100
+          progress: enrollment.progress || 100,
         };
-      })
+      }),
     );
 
     // Get total count for pagination
     const totalCompleted = await EnrolledCourse.countDocuments({
       student_id,
       status: "completed",
-      is_completed: true
+      is_completed: true,
     });
 
     const totalPages = Math.ceil(totalCompleted / limit);
@@ -1381,9 +1390,9 @@ export const getCompletedCoursesByStudentId = async (req, res, next) => {
           totalPages,
           totalCourses: totalCompleted,
           hasNextPage: page < totalPages,
-          hasPrevPage: page > 1
-        }
-      }
+          hasPrevPage: page > 1,
+        },
+      },
     });
   } catch (error) {
     errorHandler(error, req, res, next);
@@ -1394,14 +1403,14 @@ export const getCompletedCoursesByStudentId = async (req, res, next) => {
 export const getAllResourcesByStudentId = async (req, res, next) => {
   try {
     const { student_id } = req.params;
-    const { 
-      page = 1, 
-      limit = 20, 
-      resourceType, 
-      courseId, 
+    const {
+      page = 1,
+      limit = 20,
+      resourceType,
+      courseId,
       search,
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
+      sortBy = "createdAt",
+      sortOrder = "desc",
     } = req.query;
 
     // Validate student_id
@@ -1424,7 +1433,7 @@ export const getAllResourcesByStudentId = async (req, res, next) => {
     // Build query for enrolled courses
     const enrollmentQuery = {
       student_id,
-      status: { $in: ["active", "completed"] }
+      status: { $in: ["active", "completed"] },
     };
 
     // If specific course is requested
@@ -1436,12 +1445,13 @@ export const getAllResourcesByStudentId = async (req, res, next) => {
     const enrolledCourses = await EnrolledCourse.find(enrollmentQuery)
       .populate({
         path: "course_id",
-        select: "course_title curriculum resource_pdfs bonus_modules course_image assigned_instructor",
+        select:
+          "course_title curriculum resource_pdfs bonus_modules course_image assigned_instructor",
         populate: {
           path: "assigned_instructor",
           select: "full_name email",
-          match: { role: { $in: ['instructor'] } }
-        }
+          match: { role: { $in: ["instructor"] } },
+        },
       })
       .lean();
 
@@ -1455,7 +1465,7 @@ export const getAllResourcesByStudentId = async (req, res, next) => {
     // Extract all resources from all courses
     const allResources = [];
 
-    enrolledCourses.forEach(enrollment => {
+    enrolledCourses.forEach((enrollment) => {
       const course = enrollment.course_id;
       if (!course) return;
 
@@ -1466,30 +1476,31 @@ export const getAllResourcesByStudentId = async (req, res, next) => {
           if (week.lessons && week.lessons.length) {
             week.lessons.forEach((lesson, lessonIndex) => {
               // Skip video lessons
-              if (lesson.lessonType === 'video') return;
-              
+              if (lesson.lessonType === "video") return;
+
               if (lesson.resources && lesson.resources.length) {
                 lesson.resources.forEach((resource, resourceIndex) => {
                   allResources.push({
                     id: resource.id || `${lesson.id}_resource_${resourceIndex}`,
                     title: resource.title,
-                    description: resource.description || '',
+                    description: resource.description || "",
                     url: resource.url,
                     type: resource.type,
                     source: {
-                      type: 'lesson',
+                      type: "lesson",
                       courseId: course._id,
                       courseTitle: course.course_title,
                       courseThumbnail: course.course_image,
-                      instructor: course.assigned_instructor?.full_name || 'Instructor',
+                      instructor:
+                        course.assigned_instructor?.full_name || "Instructor",
                       weekTitle: week.weekTitle,
                       weekNumber: weekIndex + 1,
                       lessonTitle: lesson.title,
                       lessonType: lesson.lessonType,
-                      lessonId: lesson.id
+                      lessonId: lesson.id,
                     },
                     enrollmentId: enrollment._id,
-                    addedDate: enrollment.enrollment_date
+                    addedDate: enrollment.enrollment_date,
                   });
                 });
               }
@@ -1503,24 +1514,26 @@ export const getAllResourcesByStudentId = async (req, res, next) => {
               if (section.resources && section.resources.length) {
                 section.resources.forEach((resource, resourceIndex) => {
                   allResources.push({
-                    id: resource.id || `${section.id}_resource_${resourceIndex}`,
+                    id:
+                      resource.id || `${section.id}_resource_${resourceIndex}`,
                     title: resource.title,
-                    description: resource.description || '',
+                    description: resource.description || "",
                     url: resource.fileUrl || resource.url,
                     type: resource.type,
                     source: {
-                      type: 'section',
+                      type: "section",
                       courseId: course._id,
                       courseTitle: course.course_title,
                       courseThumbnail: course.course_image,
-                      instructor: course.assigned_instructor?.full_name || 'Instructor',
+                      instructor:
+                        course.assigned_instructor?.full_name || "Instructor",
                       weekTitle: week.weekTitle,
                       weekNumber: weekIndex + 1,
                       sectionTitle: section.title,
-                      sectionId: section.id
+                      sectionId: section.id,
                     },
                     enrollmentId: enrollment._id,
-                    addedDate: enrollment.enrollment_date
+                    addedDate: enrollment.enrollment_date,
                   });
                 });
               }
@@ -1529,32 +1542,36 @@ export const getAllResourcesByStudentId = async (req, res, next) => {
               if (section.lessons && section.lessons.length) {
                 section.lessons.forEach((lesson, lessonIndex) => {
                   // Skip video lessons
-                  if (lesson.lessonType === 'video') return;
-                  
+                  if (lesson.lessonType === "video") return;
+
                   if (lesson.resources && lesson.resources.length) {
                     lesson.resources.forEach((resource, resourceIndex) => {
                       allResources.push({
-                        id: resource.id || `${lesson.id}_resource_${resourceIndex}`,
+                        id:
+                          resource.id ||
+                          `${lesson.id}_resource_${resourceIndex}`,
                         title: resource.title,
-                        description: resource.description || '',
+                        description: resource.description || "",
                         url: resource.url,
                         type: resource.type,
                         source: {
-                          type: 'lesson',
+                          type: "lesson",
                           courseId: course._id,
                           courseTitle: course.course_title,
                           courseThumbnail: course.course_image,
-                          instructor: course.assigned_instructor?.full_name || 'Instructor',
+                          instructor:
+                            course.assigned_instructor?.full_name ||
+                            "Instructor",
                           weekTitle: week.weekTitle,
                           weekNumber: weekIndex + 1,
                           sectionTitle: section.title,
                           sectionId: section.id,
                           lessonTitle: lesson.title,
                           lessonType: lesson.lessonType,
-                          lessonId: lesson.id
+                          lessonId: lesson.id,
                         },
                         enrollmentId: enrollment._id,
-                        addedDate: enrollment.enrollment_date
+                        addedDate: enrollment.enrollment_date,
                       });
                     });
                   }
@@ -1571,22 +1588,23 @@ export const getAllResourcesByStudentId = async (req, res, next) => {
                   allResources.push({
                     id: `${liveClass.id || `live_${classIndex}`}_material_${materialIndex}`,
                     title: material.title,
-                    description: material.description || '',
+                    description: material.description || "",
                     url: material.url,
                     type: material.type,
                     source: {
-                      type: 'live_class',
+                      type: "live_class",
                       courseId: course._id,
                       courseTitle: course.course_title,
                       courseThumbnail: course.course_image,
-                      instructor: course.assigned_instructor?.full_name || 'Instructor',
+                      instructor:
+                        course.assigned_instructor?.full_name || "Instructor",
                       weekTitle: week.weekTitle,
                       weekNumber: weekIndex + 1,
                       liveClassTitle: liveClass.title,
-                      scheduledDate: liveClass.scheduledDate
+                      scheduledDate: liveClass.scheduledDate,
                     },
                     enrollmentId: enrollment._id,
-                    addedDate: enrollment.enrollment_date
+                    addedDate: enrollment.enrollment_date,
                   });
                 });
               }
@@ -1601,20 +1619,20 @@ export const getAllResourcesByStudentId = async (req, res, next) => {
           allResources.push({
             id: `course_pdf_${pdfIndex}`,
             title: pdf.title,
-            description: pdf.description || '',
+            description: pdf.description || "",
             url: pdf.url,
-            type: 'pdf',
+            type: "pdf",
             size_mb: pdf.size_mb,
             pages: pdf.pages,
             source: {
-              type: 'course_resource',
+              type: "course_resource",
               courseId: course._id,
               courseTitle: course.course_title,
               courseThumbnail: course.course_image,
-              instructor: course.assigned_instructor?.full_name || 'Instructor'
+              instructor: course.assigned_instructor?.full_name || "Instructor",
             },
             enrollmentId: enrollment._id,
-            addedDate: pdf.upload_date || enrollment.enrollment_date
+            addedDate: pdf.upload_date || enrollment.enrollment_date,
           });
         });
       }
@@ -1625,25 +1643,26 @@ export const getAllResourcesByStudentId = async (req, res, next) => {
           if (module.resources && module.resources.length) {
             module.resources.forEach((resource, resourceIndex) => {
               // Skip video resources from bonus modules
-              if (resource.type === 'video') return;
-              
+              if (resource.type === "video") return;
+
               allResources.push({
                 id: `bonus_${moduleIndex}_resource_${resourceIndex}`,
                 title: resource.title,
-                description: resource.description || '',
+                description: resource.description || "",
                 url: resource.url,
                 type: resource.type,
                 size_mb: resource.size_mb,
                 source: {
-                  type: 'bonus_module',
+                  type: "bonus_module",
                   courseId: course._id,
                   courseTitle: course.course_title,
                   courseThumbnail: course.course_image,
-                  instructor: course.assigned_instructor?.full_name || 'Instructor',
-                  moduleTitle: module.title
+                  instructor:
+                    course.assigned_instructor?.full_name || "Instructor",
+                  moduleTitle: module.title,
                 },
                 enrollmentId: enrollment._id,
-                addedDate: enrollment.enrollment_date
+                addedDate: enrollment.enrollment_date,
               });
             });
           }
@@ -1656,46 +1675,47 @@ export const getAllResourcesByStudentId = async (req, res, next) => {
 
     // Filter by resource type
     if (resourceType) {
-      filteredResources = filteredResources.filter(resource => 
-        resource.type === resourceType
+      filteredResources = filteredResources.filter(
+        (resource) => resource.type === resourceType,
       );
     }
 
     // Filter by search term
     if (search) {
       const searchLower = search.toLowerCase();
-      filteredResources = filteredResources.filter(resource =>
-        resource.title.toLowerCase().includes(searchLower) ||
-        resource.description.toLowerCase().includes(searchLower) ||
-        resource.source.courseTitle.toLowerCase().includes(searchLower)
+      filteredResources = filteredResources.filter(
+        (resource) =>
+          resource.title.toLowerCase().includes(searchLower) ||
+          resource.description.toLowerCase().includes(searchLower) ||
+          resource.source.courseTitle.toLowerCase().includes(searchLower),
       );
     }
 
     // Sort resources
     filteredResources.sort((a, b) => {
       let aValue, bValue;
-      
+
       switch (sortBy) {
-        case 'title':
+        case "title":
           aValue = a.title.toLowerCase();
           bValue = b.title.toLowerCase();
           break;
-        case 'type':
+        case "type":
           aValue = a.type;
           bValue = b.type;
           break;
-        case 'course':
+        case "course":
           aValue = a.source.courseTitle.toLowerCase();
           bValue = b.source.courseTitle.toLowerCase();
           break;
-        case 'createdAt':
+        case "createdAt":
         default:
           aValue = new Date(a.addedDate);
           bValue = new Date(b.addedDate);
           break;
       }
 
-      if (sortOrder === 'desc') {
+      if (sortOrder === "desc") {
         return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
       } else {
         return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
@@ -1713,20 +1733,23 @@ export const getAllResourcesByStudentId = async (req, res, next) => {
       total: totalResources,
       byType: {},
       byCourse: {},
-      bySource: {}
+      bySource: {},
     };
 
-    filteredResources.forEach(resource => {
+    filteredResources.forEach((resource) => {
       // Count by type
-      resourceStats.byType[resource.type] = (resourceStats.byType[resource.type] || 0) + 1;
-      
+      resourceStats.byType[resource.type] =
+        (resourceStats.byType[resource.type] || 0) + 1;
+
       // Count by course
       const courseTitle = resource.source.courseTitle;
-      resourceStats.byCourse[courseTitle] = (resourceStats.byCourse[courseTitle] || 0) + 1;
-      
+      resourceStats.byCourse[courseTitle] =
+        (resourceStats.byCourse[courseTitle] || 0) + 1;
+
       // Count by source type
       const sourceType = resource.source.type;
-      resourceStats.bySource[sourceType] = (resourceStats.bySource[sourceType] || 0) + 1;
+      resourceStats.bySource[sourceType] =
+        (resourceStats.bySource[sourceType] || 0) + 1;
     });
 
     const totalPages = Math.ceil(totalResources / limit);
@@ -1743,19 +1766,18 @@ export const getAllResourcesByStudentId = async (req, res, next) => {
           totalResources,
           resourcesPerPage: parseInt(limit),
           hasNextPage: page < totalPages,
-          hasPrevPage: page > 1
+          hasPrevPage: page > 1,
         },
         filters: {
           appliedResourceType: resourceType || null,
           appliedCourseId: courseId || null,
           appliedSearch: search || null,
           sortBy,
-          sortOrder
-        }
-      }
+          sortOrder,
+        },
+      },
     });
   } catch (error) {
     errorHandler(error, req, res, next);
   }
 };
-

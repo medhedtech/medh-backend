@@ -5,12 +5,6 @@ node_modules/
 !.env.example
 .vercel
 
-# Sensitive files
-private_key.pem
-public_key.pem
-*.pem
-*.key
-
 # AWS credentials
 aws-credentials.txt
 aws-config.txt

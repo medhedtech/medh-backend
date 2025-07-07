@@ -1,4 +1,4 @@
-import express from 'express';
+import express from "express";
 import {
   getProfile,
   updateProfile,
@@ -9,8 +9,8 @@ import {
   getComprehensiveProfile,
   updateComprehensiveProfile,
   getEnhancedProgressAnalytics,
-  syncEnrollmentProgress
-} from '../controllers/profileController.js';
+  syncEnrollmentProgress,
+} from "../controllers/profileController.js";
 import {
   createProgress,
   getUserProgress,
@@ -31,38 +31,49 @@ import {
   restoreProgress,
   getProgressStats,
   validateProgressData,
-  getProgressRecommendations
-} from '../controllers/enhanced-progress.controller.js';
-import { authenticate, authorize } from '../middleware/auth.js';
-import { validateRequest } from '../middleware/validation.js';
-import { rateLimit } from '../middleware/rateLimit.js';
-import { body, query, param } from 'express-validator';
+  getProgressRecommendations,
+} from "../controllers/enhanced-progress.controller.js";
+import {
+  authenticateToken as authenticate,
+  authorize,
+} from "../middleware/auth.js";
+import { validateRequest } from "../middleware/validation.js";
+import { getRateLimiter } from "../middleware/rateLimit.js";
+import { body, query, param } from "express-validator";
 
 const router = express.Router();
 
 // Rate limiting for profile and progress endpoints
-const profileRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // 50 requests per window
-  message: 'Too many profile requests, please try again later.'
-});
-
-const progressRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per window
-  message: 'Too many progress requests, please try again later.'
-});
+const profileRateLimit = getRateLimiter("API");
+const progressRateLimit = getRateLimiter("API");
 
 // Validation schemas
 const userIdValidation = [
-  param('userId').isMongoId().withMessage('Valid user ID is required')
+  param("userId").isMongoId().withMessage("Valid user ID is required"),
 ];
 
 const progressAnalyticsValidation = [
-  param('userId').isMongoId().withMessage('Valid user ID is required'),
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('timeframe').optional().isIn(['week', 'month', 'quarter', 'year', 'all']).withMessage('Invalid timeframe'),
-  query('contentType').optional().isIn(['lesson', 'quiz', 'assignment', 'project', 'exam', 'module', 'course']).withMessage('Invalid content type')
+  param("userId").isMongoId().withMessage("Valid user ID is required"),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("timeframe")
+    .optional()
+    .isIn(["week", "month", "quarter", "year", "all"])
+    .withMessage("Invalid timeframe"),
+  query("contentType")
+    .optional()
+    .isIn([
+      "lesson",
+      "quiz",
+      "assignment",
+      "project",
+      "exam",
+      "module",
+      "course",
+    ])
+    .withMessage("Invalid content type"),
 ];
 
 // ========================================
@@ -74,12 +85,13 @@ const progressAnalyticsValidation = [
  * @desc    Get complete user profile
  * @access  Private (User can view own profile, admins can view any profile)
  */
-router.get('/:userId',
+router.get(
+  "/:userId",
   profileRateLimit,
   authenticate,
   userIdValidation,
   validateRequest,
-  getProfile
+  getProfile,
 );
 
 /**
@@ -87,12 +99,13 @@ router.get('/:userId',
  * @desc    Update user profile
  * @access  Private (User can update own profile, admins can update any profile)
  */
-router.put('/:userId',
+router.put(
+  "/:userId",
   profileRateLimit,
   authenticate,
   userIdValidation,
   validateRequest,
-  updateProfile
+  updateProfile,
 );
 
 /**
@@ -100,11 +113,12 @@ router.put('/:userId',
  * @desc    Delete user profile (soft delete)
  * @access  Private (User can delete own profile, admins can delete any profile)
  */
-router.delete('/:userId',
+router.delete(
+  "/:userId",
   authenticate,
   userIdValidation,
   validateRequest,
-  deleteProfile
+  deleteProfile,
 );
 
 /**
@@ -112,12 +126,13 @@ router.delete('/:userId',
  * @desc    Restore soft-deleted profile
  * @access  Private (Admin only)
  */
-router.post('/:userId/restore',
+router.post(
+  "/:userId/restore",
   authenticate,
-  authorize(['admin', 'super-admin']),
+  authorize(["admin", "super-admin"]),
   userIdValidation,
   validateRequest,
-  restoreProfile
+  restoreProfile,
 );
 
 /**
@@ -125,12 +140,13 @@ router.post('/:userId/restore',
  * @desc    Get profile statistics and analytics
  * @access  Private (User can view own stats, admins can view any stats)
  */
-router.get('/:userId/stats',
+router.get(
+  "/:userId/stats",
   profileRateLimit,
   authenticate,
   userIdValidation,
   validateRequest,
-  getProfileStats
+  getProfileStats,
 );
 
 /**
@@ -138,11 +154,12 @@ router.get('/:userId/stats',
  * @desc    Update user preferences
  * @access  Private (User can update own preferences)
  */
-router.put('/:userId/preferences',
+router.put(
+  "/:userId/preferences",
   authenticate,
   userIdValidation,
   validateRequest,
-  updatePreferences
+  updatePreferences,
 );
 
 // ========================================
@@ -154,10 +171,11 @@ router.put('/:userId/preferences',
  * @desc    Get comprehensive user profile with all related data
  * @access  Private
  */
-router.get('/me/comprehensive',
+router.get(
+  "/me/comprehensive",
   profileRateLimit,
   authenticate,
-  getComprehensiveProfile
+  getComprehensiveProfile,
 );
 
 /**
@@ -165,10 +183,11 @@ router.get('/me/comprehensive',
  * @desc    Update comprehensive user profile (excluding email)
  * @access  Private
  */
-router.put('/me/comprehensive',
+router.put(
+  "/me/comprehensive",
   profileRateLimit,
   authenticate,
-  updateComprehensiveProfile
+  updateComprehensiveProfile,
 );
 
 // ========================================
@@ -180,12 +199,13 @@ router.put('/me/comprehensive',
  * @desc    Get user's enhanced progress analytics
  * @access  Private (User can view own progress, admins can view any)
  */
-router.get('/:userId/enhanced-progress',
+router.get(
+  "/:userId/enhanced-progress",
   progressRateLimit,
   authenticate,
   progressAnalyticsValidation,
   validateRequest,
-  getEnhancedProgressAnalytics
+  getEnhancedProgressAnalytics,
 );
 
 /**
@@ -193,11 +213,12 @@ router.get('/:userId/enhanced-progress',
  * @desc    Sync enrollment progress with enhanced progress tracking
  * @access  Private (User can sync own progress, admins can sync any)
  */
-router.post('/:userId/sync-progress',
+router.post(
+  "/:userId/sync-progress",
   authenticate,
   userIdValidation,
   validateRequest,
-  syncEnrollmentProgress
+  syncEnrollmentProgress,
 );
 
 /**
@@ -205,19 +226,26 @@ router.post('/:userId/sync-progress',
  * @desc    Get enhanced progress summary for a user
  * @access  Private (User can view own summary, admins can view any)
  */
-router.get('/:userId/progress-summary',
+router.get(
+  "/:userId/progress-summary",
   progressRateLimit,
   authenticate,
   userIdValidation,
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('timeframe').optional().isIn(['week', 'month', 'quarter', 'year', 'all']).withMessage('Invalid timeframe'),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("timeframe")
+    .optional()
+    .isIn(["week", "month", "quarter", "year", "all"])
+    .withMessage("Invalid timeframe"),
   validateRequest,
   (req, res, next) => {
     // Middleware to set userId for getProgressSummary
     req.params.userId = req.params.userId;
     next();
   },
-  getProgressSummary
+  getProgressSummary,
 );
 
 /**
@@ -225,18 +253,37 @@ router.get('/:userId/progress-summary',
  * @desc    Get enhanced progress history for a user
  * @access  Private (User can view own history, admins can view any)
  */
-router.get('/:userId/progress-history',
+router.get(
+  "/:userId/progress-history",
   progressRateLimit,
   authenticate,
   userIdValidation,
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('contentId').optional().isMongoId().withMessage('Valid content ID required'),
-  query('startDate').optional().isISO8601().withMessage('Valid start date required'),
-  query('endDate').optional().isISO8601().withMessage('Valid end date required'),
-  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("contentId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid content ID required"),
+  query("startDate")
+    .optional()
+    .isISO8601()
+    .withMessage("Valid start date required"),
+  query("endDate")
+    .optional()
+    .isISO8601()
+    .withMessage("Valid end date required"),
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Page must be a positive integer"),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage("Limit must be between 1 and 100"),
   validateRequest,
-  getProgressHistory
+  getProgressHistory,
 );
 
 /**
@@ -244,14 +291,26 @@ router.get('/:userId/progress-history',
  * @desc    Get AI-powered insights from user's progress
  * @access  Private (User can view own insights, admins can view any)
  */
-router.get('/:userId/progress-insights',
+router.get(
+  "/:userId/progress-insights",
   progressRateLimit,
   authenticate,
   userIdValidation,
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('analysisType').optional().isIn(['learning_patterns', 'performance_trends', 'engagement_analysis', 'all']).withMessage('Invalid analysis type'),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("analysisType")
+    .optional()
+    .isIn([
+      "learning_patterns",
+      "performance_trends",
+      "engagement_analysis",
+      "all",
+    ])
+    .withMessage("Invalid analysis type"),
   validateRequest,
-  getProgressInsights
+  getProgressInsights,
 );
 
 /**
@@ -259,14 +318,21 @@ router.get('/:userId/progress-insights',
  * @desc    Get personalized learning recommendations
  * @access  Private (User can view own recommendations, admins can view any)
  */
-router.get('/:userId/progress-recommendations',
+router.get(
+  "/:userId/progress-recommendations",
   progressRateLimit,
   authenticate,
   userIdValidation,
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('limit').optional().isInt({ min: 1, max: 20 }).withMessage('Limit must be between 1 and 20'),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 20 })
+    .withMessage("Limit must be between 1 and 20"),
   validateRequest,
-  getProgressRecommendations
+  getProgressRecommendations,
 );
 
 /**
@@ -274,15 +340,27 @@ router.get('/:userId/progress-recommendations',
  * @desc    Export user's progress data
  * @access  Private (User can export own data, admins can export any)
  */
-router.post('/:userId/export-progress',
+router.post(
+  "/:userId/export-progress",
   authenticate,
   userIdValidation,
-  body('format').isIn(['json', 'csv', 'xlsx', 'pdf']).withMessage('Invalid export format'),
-  body('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  body('includeMetadata').optional().isBoolean().withMessage('Include metadata must be boolean'),
-  body('dateRange').optional().isObject().withMessage('Date range must be an object'),
+  body("format")
+    .isIn(["json", "csv", "xlsx", "pdf"])
+    .withMessage("Invalid export format"),
+  body("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  body("includeMetadata")
+    .optional()
+    .isBoolean()
+    .withMessage("Include metadata must be boolean"),
+  body("dateRange")
+    .optional()
+    .isObject()
+    .withMessage("Date range must be an object"),
   validateRequest,
-  exportProgressData
+  exportProgressData,
 );
 
 /**
@@ -290,14 +368,29 @@ router.post('/:userId/export-progress',
  * @desc    Reset progress for a user (specific course or all)
  * @access  Private (User can reset own progress, admins can reset any)
  */
-router.post('/:userId/reset-progress',
+router.post(
+  "/:userId/reset-progress",
   authenticate,
   userIdValidation,
-  body('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  body('contentType').optional().isIn(['lesson', 'quiz', 'assignment', 'project', 'exam', 'module', 'course']).withMessage('Invalid content type'),
-  body('confirmReset').isBoolean().withMessage('Reset confirmation required'),
+  body("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  body("contentType")
+    .optional()
+    .isIn([
+      "lesson",
+      "quiz",
+      "assignment",
+      "project",
+      "exam",
+      "module",
+      "course",
+    ])
+    .withMessage("Invalid content type"),
+  body("confirmReset").isBoolean().withMessage("Reset confirmation required"),
   validateRequest,
-  resetProgress
+  resetProgress,
 );
 
 // ========================================
@@ -309,27 +402,43 @@ router.post('/:userId/reset-progress',
  * @desc    Create new progress entry for user
  * @access  Private
  */
-router.post('/:userId/progress',
+router.post(
+  "/:userId/progress",
   progressRateLimit,
   authenticate,
   userIdValidation,
-  body('courseId').isMongoId().withMessage('Valid course ID is required'),
-  body('contentType').isIn(['lesson', 'quiz', 'assignment', 'project', 'exam', 'module', 'course']).withMessage('Invalid content type'),
-  body('contentId').isMongoId().withMessage('Valid content ID is required'),
-  body('progressPercentage').isFloat({ min: 0, max: 100 }).withMessage('Progress percentage must be between 0 and 100'),
+  body("courseId").isMongoId().withMessage("Valid course ID is required"),
+  body("contentType")
+    .isIn([
+      "lesson",
+      "quiz",
+      "assignment",
+      "project",
+      "exam",
+      "module",
+      "course",
+    ])
+    .withMessage("Invalid content type"),
+  body("contentId").isMongoId().withMessage("Valid content ID is required"),
+  body("progressPercentage")
+    .isFloat({ min: 0, max: 100 })
+    .withMessage("Progress percentage must be between 0 and 100"),
   validateRequest,
   (req, res, next) => {
     // Ensure userId matches the authenticated user or user has admin privileges
-    if (req.params.userId !== req.user.id && !['admin', 'super-admin', 'instructor'].includes(req.user.role)) {
+    if (
+      req.params.userId !== req.user.id &&
+      !["admin", "super-admin", "instructor"].includes(req.user.role)
+    ) {
       return res.status(403).json({
         success: false,
-        message: "Unauthorized to create progress for this user"
+        message: "Unauthorized to create progress for this user",
       });
     }
     req.body.userId = req.params.userId;
     next();
   },
-  createProgress
+  createProgress,
 );
 
 /**
@@ -337,17 +446,41 @@ router.post('/:userId/progress',
  * @desc    Get all progress entries for user
  * @access  Private
  */
-router.get('/:userId/progress',
+router.get(
+  "/:userId/progress",
   progressRateLimit,
   authenticate,
   userIdValidation,
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('contentType').optional().isIn(['lesson', 'quiz', 'assignment', 'project', 'exam', 'module', 'course']).withMessage('Invalid content type'),
-  query('status').optional().isIn(['not_started', 'in_progress', 'completed', 'paused', 'failed']).withMessage('Invalid status'),
-  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("contentType")
+    .optional()
+    .isIn([
+      "lesson",
+      "quiz",
+      "assignment",
+      "project",
+      "exam",
+      "module",
+      "course",
+    ])
+    .withMessage("Invalid content type"),
+  query("status")
+    .optional()
+    .isIn(["not_started", "in_progress", "completed", "paused", "failed"])
+    .withMessage("Invalid status"),
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Page must be a positive integer"),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage("Limit must be between 1 and 100"),
   validateRequest,
-  getUserProgress
+  getUserProgress,
 );
 
 /**
@@ -355,14 +488,27 @@ router.get('/:userId/progress',
  * @desc    Get progress leaderboard
  * @access  Private
  */
-router.get('/leaderboard',
+router.get(
+  "/leaderboard",
   authenticate,
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('timeframe').optional().isIn(['week', 'month', 'quarter', 'year', 'all']).withMessage('Invalid timeframe'),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
-  query('includeAnonymous').optional().isBoolean().withMessage('Include anonymous must be boolean'),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("timeframe")
+    .optional()
+    .isIn(["week", "month", "quarter", "year", "all"])
+    .withMessage("Invalid timeframe"),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage("Limit must be between 1 and 100"),
+  query("includeAnonymous")
+    .optional()
+    .isBoolean()
+    .withMessage("Include anonymous must be boolean"),
   validateRequest,
-  getProgressLeaderboard
+  getProgressLeaderboard,
 );
 
 // ========================================
@@ -374,14 +520,24 @@ router.get('/leaderboard',
  * @desc    Get comprehensive progress statistics for admin dashboard
  * @access  Private (Admin/Instructor only)
  */
-router.get('/admin/progress-stats',
+router.get(
+  "/admin/progress-stats",
   authenticate,
-  authorize(['admin', 'super-admin', 'instructor']),
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('timeframe').optional().isIn(['week', 'month', 'quarter', 'year', 'all']).withMessage('Invalid timeframe'),
-  query('groupBy').optional().isIn(['day', 'week', 'month', 'course', 'user']).withMessage('Invalid groupBy parameter'),
+  authorize(["admin", "super-admin", "instructor"]),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("timeframe")
+    .optional()
+    .isIn(["week", "month", "quarter", "year", "all"])
+    .withMessage("Invalid timeframe"),
+  query("groupBy")
+    .optional()
+    .isIn(["day", "week", "month", "course", "user"])
+    .withMessage("Invalid groupBy parameter"),
   validateRequest,
-  getProgressStats
+  getProgressStats,
 );
 
 /**
@@ -389,15 +545,25 @@ router.get('/admin/progress-stats',
  * @desc    Validate and fix progress data inconsistencies
  * @access  Private (Admin only)
  */
-router.post('/admin/validate-progress',
+router.post(
+  "/admin/validate-progress",
   authenticate,
-  authorize(['admin', 'super-admin']),
-  body('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  body('userId').optional().isMongoId().withMessage('Valid user ID required'),
-  body('autoFix').optional().isBoolean().withMessage('Auto fix must be boolean'),
-  body('reportOnly').optional().isBoolean().withMessage('Report only must be boolean'),
+  authorize(["admin", "super-admin"]),
+  body("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  body("userId").optional().isMongoId().withMessage("Valid user ID required"),
+  body("autoFix")
+    .optional()
+    .isBoolean()
+    .withMessage("Auto fix must be boolean"),
+  body("reportOnly")
+    .optional()
+    .isBoolean()
+    .withMessage("Report only must be boolean"),
   validateRequest,
-  validateProgressData
+  validateProgressData,
 );
 
 /**
@@ -405,37 +571,50 @@ router.post('/admin/validate-progress',
  * @desc    Bulk sync enrollment data with enhanced progress for all users
  * @access  Private (Admin only)
  */
-router.post('/admin/bulk-sync',
+router.post(
+  "/admin/bulk-sync",
   authenticate,
-  authorize(['admin', 'super-admin']),
-  body('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  body('batchSize').optional().isInt({ min: 1, max: 1000 }).withMessage('Batch size must be between 1 and 1000'),
+  authorize(["admin", "super-admin"]),
+  body("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  body("batchSize")
+    .optional()
+    .isInt({ min: 1, max: 1000 })
+    .withMessage("Batch size must be between 1 and 1000"),
   validateRequest,
   async (req, res) => {
     try {
       const { courseId, batchSize = 100 } = req.body;
-      
+
       // Get all users with enrollments
-      const Enrollment = (await import('../models/enrollment-model.js')).default;
+      const Enrollment = (await import("../models/enrollment-model.js"))
+        .default;
       const query = courseId ? { course: courseId } : {};
-      
-      const enrollments = await Enrollment.find(query).select('student course');
-      const uniqueUsers = [...new Set(enrollments.map(e => e.student.toString()))];
-      
+
+      const enrollments = await Enrollment.find(query).select("student course");
+      const uniqueUsers = [
+        ...new Set(enrollments.map((e) => e.student.toString())),
+      ];
+
       let processedUsers = 0;
       let errors = [];
-      
+
       // Process users in batches
       for (let i = 0; i < uniqueUsers.length; i += batchSize) {
         const batch = uniqueUsers.slice(i, i + batchSize);
-        
+
         const syncPromises = batch.map(async (userId) => {
           try {
             // Call the sync function for each user
-            const syncResult = await syncEnrollmentProgress({ 
-              params: { userId }, 
-              user: req.user 
-            }, null);
+            const syncResult = await syncEnrollmentProgress(
+              {
+                params: { userId },
+                user: req.user,
+              },
+              null,
+            );
             processedUsers++;
             return { userId, success: true };
           } catch (error) {
@@ -443,10 +622,10 @@ router.post('/admin/bulk-sync',
             return { userId, success: false, error: error.message };
           }
         });
-        
+
         await Promise.allSettled(syncPromises);
       }
-      
+
       res.status(200).json({
         success: true,
         message: `Bulk sync completed. Processed ${processedUsers} users.`,
@@ -455,18 +634,18 @@ router.post('/admin/bulk-sync',
           processed_users: processedUsers,
           error_count: errors.length,
           errors: errors.slice(0, 10), // Return first 10 errors
-          batch_size: batchSize
-        }
+          batch_size: batchSize,
+        },
       });
-      
     } catch (error) {
       res.status(500).json({
         success: false,
-        message: 'Error during bulk sync operation',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        message: "Error during bulk sync operation",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
       });
     }
-  }
+  },
 );
 
 // ========================================
@@ -478,27 +657,27 @@ router.post('/admin/bulk-sync',
  * @desc    Health check for profile and enhanced progress integration
  * @access  Public
  */
-router.get('/health', (req, res) => {
+router.get("/health", (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Profile and Enhanced Progress Integration Service is operational',
+    message: "Profile and Enhanced Progress Integration Service is operational",
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
+    version: "1.0.0",
     features: {
       profile_management: true,
       enhanced_progress_tracking: true,
       progress_analytics: true,
       enrollment_sync: true,
       bulk_operations: true,
-      admin_tools: true
+      admin_tools: true,
     },
     endpoints: {
       profile_routes: 8,
       progress_routes: 12,
       admin_routes: 3,
-      integration_routes: 6
-    }
+      integration_routes: 6,
+    },
   });
 });
 
-export default router; 
+export default router;

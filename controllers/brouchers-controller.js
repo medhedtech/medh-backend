@@ -2,8 +2,19 @@ import emailService from "../services/emailService.js";
 
 import Broucher from "../models/broucker-model.js";
 import Course from "../models/course-model.js";
-import { BlendedCourse, LiveCourse, FreeCourse } from "../models/course-types/index.js";
+import {
+  BlendedCourse,
+  LiveCourse,
+  FreeCourse,
+} from "../models/course-types/index.js";
 import { validateObjectId } from "../utils/validation-helpers.js";
+import {
+  uploadBase64FileOptimized,
+  uploadBase64FileChunked,
+  UploadError,
+} from "../utils/uploadFile.js";
+import { getBucketForMimeType } from "../utils/s3BucketManager.js";
+import { ENV_VARS } from "../config/envVars.js";
 
 // Nodemailer Transporter Setup with AWS SES
 // Email service is imported and ready to use
@@ -16,7 +27,10 @@ import { validateObjectId } from "../utils/validation-helpers.js";
  * @param {string} searchField - Field to search by (default: 'course_title')
  * @returns {Object|null} - Found course with source information
  */
-const findCourseAcrossTypes = async (searchTerm, searchField = 'course_title') => {
+const findCourseAcrossTypes = async (
+  searchTerm,
+  searchField = "course_title",
+) => {
   if (!searchTerm) return null;
 
   // Create search filter
@@ -27,7 +41,7 @@ const findCourseAcrossTypes = async (searchTerm, searchField = 'course_title') =
     const [blendedCourse, liveCourse, freeCourse] = await Promise.all([
       BlendedCourse.findOne(searchFilter).lean(),
       LiveCourse.findOne(searchFilter).lean(),
-      FreeCourse.findOne(searchFilter).lean()
+      FreeCourse.findOne(searchFilter).lean(),
     ]);
 
     // Check which new model returned a course
@@ -36,25 +50,25 @@ const findCourseAcrossTypes = async (searchTerm, searchField = 'course_title') =
         ...blendedCourse,
         course_type: "blended",
         _source: "new_model",
-        _model: "BlendedCourse"
+        _model: "BlendedCourse",
       };
     }
-    
+
     if (liveCourse) {
       return {
         ...liveCourse,
         course_type: "live",
         _source: "new_model",
-        _model: "LiveCourse"
+        _model: "LiveCourse",
       };
     }
-    
+
     if (freeCourse) {
       return {
         ...freeCourse,
         course_type: "free",
         _source: "new_model",
-        _model: "FreeCourse"
+        _model: "FreeCourse",
       };
     }
 
@@ -65,14 +79,14 @@ const findCourseAcrossTypes = async (searchTerm, searchField = 'course_title') =
         ...legacyCourse,
         course_type: determineCourseTypeFromLegacy(legacyCourse),
         _source: "legacy_model",
-        _model: "Course"
+        _model: "Course",
       };
     }
 
     return null;
   } catch (error) {
-    console.error('Error searching across course types:', error);
-    throw new Error('Failed to search for course');
+    console.error("Error searching across course types:", error);
+    throw new Error("Failed to search for course");
   }
 };
 
@@ -89,7 +103,7 @@ const findCourseByIdAcrossTypes = async (courseId) => {
     const [blendedCourse, liveCourse, freeCourse] = await Promise.all([
       BlendedCourse.findById(courseId).lean(),
       LiveCourse.findById(courseId).lean(),
-      FreeCourse.findById(courseId).lean()
+      FreeCourse.findById(courseId).lean(),
     ]);
 
     // Check which new model returned a course
@@ -98,25 +112,25 @@ const findCourseByIdAcrossTypes = async (courseId) => {
         ...blendedCourse,
         course_type: "blended",
         _source: "new_model",
-        _model: "BlendedCourse"
+        _model: "BlendedCourse",
       };
     }
-    
+
     if (liveCourse) {
       return {
         ...liveCourse,
         course_type: "live",
         _source: "new_model",
-        _model: "LiveCourse"
+        _model: "LiveCourse",
       };
     }
-    
+
     if (freeCourse) {
       return {
         ...freeCourse,
         course_type: "free",
         _source: "new_model",
-        _model: "FreeCourse"
+        _model: "FreeCourse",
       };
     }
 
@@ -127,14 +141,14 @@ const findCourseByIdAcrossTypes = async (courseId) => {
         ...legacyCourse,
         course_type: determineCourseTypeFromLegacy(legacyCourse),
         _source: "legacy_model",
-        _model: "Course"
+        _model: "Course",
       };
     }
 
     return null;
   } catch (error) {
-    console.error('Error searching course by ID across types:', error);
-    throw new Error('Failed to find course by ID');
+    console.error("Error searching course by ID across types:", error);
+    throw new Error("Failed to find course by ID");
   }
 };
 
@@ -145,23 +159,27 @@ const findCourseByIdAcrossTypes = async (courseId) => {
  */
 const determineCourseTypeFromLegacy = (course) => {
   if (!course) return "free";
-  
+
   const classType = (course.class_type || "").toLowerCase();
   const categoryType = (course.category_type || "").toLowerCase();
-  
+
   // Determine type based on various indicators
   if (classType.includes("live") || categoryType.includes("live")) {
     return "live";
   }
-  
+
   if (classType.includes("blend") || categoryType.includes("blend")) {
     return "blended";
   }
-  
-  if (course.isFree || classType.includes("self") || classType.includes("record")) {
+
+  if (
+    course.isFree ||
+    classType.includes("self") ||
+    classType.includes("record")
+  ) {
     return "free";
   }
-  
+
   return "free"; // Default fallback
 };
 
@@ -172,12 +190,12 @@ const determineCourseTypeFromLegacy = (course) => {
  */
 const getBrochuresFromCourse = (course) => {
   if (!course) return [];
-  
+
   // New course types use 'brochures' field
   if (course.brochures && Array.isArray(course.brochures)) {
     return course.brochures;
   }
-  
+
   // Legacy courses might use 'brochures' field as well
   // Some legacy courses might have it in different format
   return [];
@@ -191,7 +209,9 @@ const sendEmail = async (mailOptions) => {
       mailOptions.from = process.env.EMAIL_FROM || "noreply@medh.co";
     }
 
-    const info = await emailService.sendEmail(mailOptions, { priority: "normal" });
+    const info = await emailService.sendEmail(mailOptions, {
+      priority: "normal",
+    });
     console.log("Email sent successfully:", info.messageId);
     return true;
   } catch (error) {
@@ -274,7 +294,7 @@ const createBrouchers = async (req, res) => {
       from: process.env.EMAIL_FROM || "noreply@medh.co",
       to: email,
       subject: `Brochure for ${course_title}`,
-      text: `Hello ${full_name},\n\nThank you for your interest in our course "${course_title}". Please find the brochure attached.\n\nCourse Details:\nTitle: ${course.course_title}\nCategory: ${course.course_category}\nType: ${course.course_type || 'Standard'}\nDuration: ${course.course_duration || course.estimated_duration || 'Not specified'}\nFee: ${course.course_fee ? '$' + course.course_fee : (course.prices && course.prices.length > 0 ? 'Multiple pricing options available' : 'Contact for pricing')}\nSource: ${course._source || 'legacy'}\n\nBest regards,\nTeam Medh`,
+      text: `Hello ${full_name},\n\nThank you for your interest in our course "${course_title}". Please find the brochure attached.\n\nCourse Details:\nTitle: ${course.course_title}\nCategory: ${course.course_category}\nType: ${course.course_type || "Standard"}\nDuration: ${course.course_duration || course.estimated_duration || "Not specified"}\nFee: ${course.course_fee ? "$" + course.course_fee : course.prices && course.prices.length > 0 ? "Multiple pricing options available" : "Contact for pricing"}\nSource: ${course._source || "legacy"}\n\nBest regards,\nTeam Medh`,
       attachments: attachments,
     };
 
@@ -288,7 +308,7 @@ const createBrouchers = async (req, res) => {
         ...newBroucher.toObject(),
         course_type: course.course_type,
         course_source: course._source,
-        course_model: course._model
+        course_model: course._model,
       },
     });
   } catch (error) {
@@ -444,7 +464,8 @@ const updateBroucher = async (req, res) => {
       courseData = {
         course: course._id,
         course_title,
-        selected_brochure: brochures && brochures.length > 0 ? brochures[0] : null,
+        selected_brochure:
+          brochures && brochures.length > 0 ? brochures[0] : null,
       };
     }
 
@@ -614,7 +635,7 @@ const downloadBrochure = async (req, res) => {
             <li><strong>Category:</strong> ${course.course_category || "Not specified"}</li>
             <li><strong>Type:</strong> ${course.course_type || "Standard"}</li>
             <li><strong>Duration:</strong> ${course.course_duration || course.estimated_duration || "Not specified"}</li>
-            <li><strong>Fee:</strong> ${course.course_fee ? '$' + course.course_fee : (course.prices && course.prices.length > 0 ? 'Multiple pricing options available' : 'Contact for pricing')}</li>
+            <li><strong>Fee:</strong> ${course.course_fee ? "$" + course.course_fee : course.prices && course.prices.length > 0 ? "Multiple pricing options available" : "Contact for pricing"}</li>
           </ul>
         </div>
         
@@ -730,6 +751,176 @@ const getBroucherAnalytics = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Upload brochure file with real filename
+ * @route   POST /api/v1/broucher/upload
+ * @access  Private
+ */
+const uploadBrochure = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No brochure file uploaded",
+      });
+    }
+
+    // Validate file type (only PDFs for brochures)
+    if (req.file.mimetype !== "application/pdf") {
+      return res.status(400).json({
+        success: false,
+        message: "Only PDF files are allowed for brochures",
+      });
+    }
+
+    // Validate file size (max 50MB for brochures)
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (req.file.size > maxSize) {
+      return res.status(400).json({
+        success: false,
+        message: "Brochure file size must be less than 50MB",
+      });
+    }
+
+    // Generate key with original filename
+    const timestamp = Date.now();
+    const randomStr = Math.random().toString(36).substring(2, 8);
+    const originalFilename = req.file.originalname;
+
+    // Clean the original filename (remove special characters, spaces, etc.)
+    const cleanFilename = originalFilename
+      .replace(/[^a-zA-Z0-9.-]/g, "_")
+      .replace(/_{2,}/g, "_")
+      .replace(/^_|_$/g, "");
+
+    // Ensure the filename has the correct extension
+    const filenameWithoutExt = cleanFilename.replace(/\.[^/.]+$/, "");
+    const key = `brochures/${timestamp}-${randomStr}-${filenameWithoutExt}.pdf`;
+
+    // Determine the appropriate bucket (documents bucket for PDFs)
+    const bucketName = getBucketForMimeType("application/pdf");
+
+    const uploadParams = {
+      key,
+      file: req.file.buffer,
+      contentType: req.file.mimetype,
+      fileSize: req.file.size,
+      originalFilename: originalFilename,
+    };
+
+    // Use the uploadFile function from utils
+    const { uploadFile } = await import("../utils/uploadFile.js");
+    const result = await uploadFile(uploadParams);
+
+    res.status(200).json({
+      success: true,
+      message: "Brochure uploaded successfully with real filename",
+      data: {
+        ...result.data,
+        brochureType: "PDF",
+        uploadMethod: "file",
+      },
+    });
+  } catch (error) {
+    console.error("Error uploading brochure:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error uploading brochure",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * @desc    Upload brochure via base64 with real filename
+ * @route   POST /api/v1/broucher/upload/base64
+ * @access  Private
+ */
+const uploadBrochureBase64 = async (req, res) => {
+  try {
+    const { base64String, originalFilename, fileName } = req.body;
+
+    // Validate required fields
+    if (!base64String) {
+      return res.status(400).json({
+        success: false,
+        message: "Base64 string is required",
+      });
+    }
+
+    // Support both 'originalFilename' and 'fileName' field names
+    const finalOriginalFilename = originalFilename || fileName;
+
+    // Validate file type (only PDFs for brochures)
+    const mimeType = "application/pdf";
+
+    // Parse base64 data
+    let base64Data;
+    if (base64String.startsWith("data:application/pdf;base64,")) {
+      base64Data = base64String.replace("data:application/pdf;base64,", "");
+    } else if (base64String.startsWith("data:")) {
+      return res.status(400).json({
+        success: false,
+        message: "Only PDF files are allowed for brochures",
+      });
+    } else {
+      // Assume it's raw base64 PDF data
+      base64Data = base64String;
+    }
+
+    // Quick size estimation (base64 is ~33% larger than binary)
+    const estimatedSize = (base64Data.length * 3) / 4;
+    const maxSize = 50 * 1024 * 1024; // 50MB
+
+    if (estimatedSize > maxSize) {
+      return res.status(400).json({
+        success: false,
+        message: "Brochure file size must be less than 50MB",
+      });
+    }
+
+    // Choose processing method based on file size
+    const folder = "brochures";
+    const CHUNKED_THRESHOLD = 25 * 1024 * 1024; // 25MB threshold for chunked processing
+
+    let result;
+    if (estimatedSize > CHUNKED_THRESHOLD) {
+      // Use chunked processing for large files
+      result = await uploadBase64FileChunked(
+        base64Data,
+        mimeType,
+        folder,
+        finalOriginalFilename,
+      );
+    } else {
+      // Use optimized processing for smaller files
+      result = await uploadBase64FileOptimized(
+        base64Data,
+        mimeType,
+        folder,
+        finalOriginalFilename,
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Brochure uploaded successfully with real filename",
+      data: {
+        ...result.data,
+        brochureType: "PDF",
+        uploadMethod: "base64",
+      },
+    });
+  } catch (error) {
+    console.error("Error uploading brochure via base64:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error uploading brochure",
+      error: error.message,
+    });
+  }
+};
+
 export {
   createBrouchers,
   getAllBrouchers,
@@ -738,4 +929,6 @@ export {
   deleteBroucher,
   downloadBrochure,
   getBroucherAnalytics,
+  uploadBrochure,
+  uploadBrochureBase64,
 };

@@ -53,7 +53,7 @@ import zoomRoutes from "./zoom.js";
 import enhancedPaymentRoutes from "./enhanced-payment-routes.js";
 import aiRoutes from "./aiRoutes.js";
 import announcementRoutes from "./announcementRoutes.js";
-import profileRoutes from "./profileRoutes.js";
+import profileEnhancedRoutes from "./profile-enhanced.routes.js";
 import universalFormRoutes from "./universalFormRoutes.js";
 import formSchemaRoutes from "./form-schema-routes.js";
 import demoBookingRoutes from "./demo-bookingRoutes.js";
@@ -68,6 +68,11 @@ import programCoordinatorRoutes from "./programCoordinatorRoutes.js";
 import studentProgressRoutes from "./studentProgressRoutes.js";
 import courseMaterialRoutes from "./courseMaterialRoutes.js";
 import demoCertificateRoutes from "./demoCertificateRoutes.js";
+import parentCategoryRoutes from "./parent-category-routes.js";
+import gradeRoutes from "./grade-routes.js";
+import certificateMasterRoutes from "./certificate-master-routes.js";
+import masterDataRoutes from "./master-data-routes.js";
+import adminDashboardStatsRoutes from "./adminDashboardStats.js";
 
 const router = express.Router();
 
@@ -282,7 +287,7 @@ const moduleRoutes = [
   },
   {
     path: "/profile",
-    route: profileRoutes,
+    route: profileEnhancedRoutes,
   },
   {
     path: "/forms",
@@ -327,7 +332,27 @@ const moduleRoutes = [
   {
     path: "/demo-certificates",
     route: demoCertificateRoutes,
-  }
+  },
+  {
+    path: "/parent-categories",
+    route: parentCategoryRoutes,
+  },
+  {
+    path: "/grades",
+    route: gradeRoutes,
+  },
+  {
+    path: "/certificate-masters",
+    route: certificateMasterRoutes,
+  },
+  {
+    path: "/master-data",
+    route: masterDataRoutes,
+  },
+  {
+    path: "/admin",
+    route: adminDashboardStatsRoutes,
+  },
 ];
 
 moduleRoutes.forEach((route) => {
@@ -454,34 +479,38 @@ router.post("/system/reset-metrics", (req, res) => {
 router.get("/auth-test", async (req, res) => {
   try {
     const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
-    
+    const token = authHeader && authHeader.split(" ")[1];
+
     const authStatus = {
       hasAuthHeader: !!authHeader,
       hasToken: !!token,
-      tokenPrefix: token ? token.substr(0, 20) + '...' : null,
+      tokenPrefix: token ? token.substr(0, 20) + "..." : null,
       tokenLength: token ? token.length : 0,
       timestamp: new Date().toISOString(),
       environment: ENV_VARS.NODE_ENV,
       jwtSecretExists: !!ENV_VARS.JWT_SECRET_KEY,
-      redisEnabled: ENV_VARS.REDIS_ENABLED
+      redisEnabled: ENV_VARS.REDIS_ENABLED,
     };
 
     // Try to verify token if present
     if (token) {
       try {
-        const { verifyAccessToken } = await import('../utils/jwt.js');
+        const { verifyAccessToken } = await import("../utils/jwt.js");
         const decoded = verifyAccessToken(token);
         authStatus.tokenValid = !!decoded;
-        authStatus.tokenData = decoded ? {
-          id: decoded.id,
-          email: decoded.email,
-          role: decoded.role,
-          type: decoded.type,
-          exp: decoded.exp,
-          iat: decoded.iat
-        } : null;
-        authStatus.tokenExpired = decoded ? (decoded.exp * 1000 < Date.now()) : null;
+        authStatus.tokenData = decoded
+          ? {
+              id: decoded.id,
+              email: decoded.email,
+              role: decoded.role,
+              type: decoded.type,
+              exp: decoded.exp,
+              iat: decoded.iat,
+            }
+          : null;
+        authStatus.tokenExpired = decoded
+          ? decoded.exp * 1000 < Date.now()
+          : null;
       } catch (error) {
         authStatus.tokenVerificationError = error.message;
       }
@@ -489,19 +518,22 @@ router.get("/auth-test", async (req, res) => {
 
     logger.info("Auth Test Request", {
       ip: req.ip,
-      userAgent: req.headers['user-agent'],
-      authStatus
+      userAgent: req.headers["user-agent"],
+      authStatus,
     });
 
     return res.status(200).json({
       message: "Authentication test completed",
-      status: authStatus
+      status: authStatus,
     });
   } catch (error) {
     logger.error("Auth test failed", { error: error.message });
     return res.status(500).json({
       message: "Auth test failed",
-      error: ENV_VARS.NODE_ENV === "production" ? "Internal server error" : error.message
+      error:
+        ENV_VARS.NODE_ENV === "production"
+          ? "Internal server error"
+          : error.message,
     });
   }
 });
