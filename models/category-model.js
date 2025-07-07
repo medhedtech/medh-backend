@@ -12,6 +12,12 @@ const categorySchema = new mongoose.Schema(
       type: String,
       // required: true,
     },
+    class_type: {
+      type: String,
+      enum: ["live", "blended", "free"],
+      default: "live",
+      required: [true, "Class type is required"],
+    },
     courses: [
       {
         type: mongoose.Schema.Types.ObjectId,

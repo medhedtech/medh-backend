@@ -61,6 +61,13 @@ export const ENV_VARS = {
     MAX_FILE_SIZE: 10 * 1024 * 1024 * 1024, // 10 GB
     BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME || "medh-filess", // Using environment variable or fallback
     MAX_FILES: 10, // Placeholder for maximum number of files in multi-upload
+    // Updated bucket configuration: only videos in medh-filess, rest in medhdocuments
+    BUCKETS: {
+      IMAGES: process.env.AWS_S3_IMAGES_BUCKET || "medhdocuments",
+      DOCUMENTS: process.env.AWS_S3_DOCUMENTS_BUCKET || "medhdocuments",
+      VIDEOS: process.env.AWS_S3_VIDEOS_BUCKET || "medh-filess",
+      DEFAULT: process.env.AWS_S3_DOCUMENTS_BUCKET || "medhdocuments", // Default to documents bucket
+    },
   },
 
   // CloudFront Configuration

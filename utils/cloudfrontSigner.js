@@ -6,11 +6,18 @@ import ENV_VARS from "../config/env.js";
 
 // Load private key once during module initialization
 let privateKey = "";
+let hasLoggedWarning = false; // Track if we've already logged the warning
+
 try {
-  const keyPath = ENV_VARS.CLOUDFRONT_PRIVATE_KEY_PATH || path.join(process.cwd(), "private_key.pem");
+  const keyPath =
+    ENV_VARS.CLOUDFRONT_PRIVATE_KEY_PATH ||
+    path.join(process.cwd(), "private_key.pem");
   privateKey = fs.readFileSync(keyPath, "utf8");
 } catch (error) {
-  console.error("[cloudfrontSigner] Unable to read CloudFront private key:", error.message);
+  console.error(
+    "[cloudfrontSigner] Unable to read CloudFront private key:",
+    error.message,
+  );
   // Leave privateKey empty – calling code should handle signing errors
 }
 
@@ -22,7 +29,10 @@ try {
  * @returns {string} signed URL
  * @throws {Error} if signing fails or required env vars are missing.
  */
-export const generateSignedUrl = (url, expiresInSeconds = ENV_VARS.CLOUDFRONT_DEFAULT_EXPIRES_IN) => {
+export const generateSignedUrl = (
+  url,
+  expiresInSeconds = ENV_VARS.CLOUDFRONT_DEFAULT_EXPIRES_IN,
+) => {
   if (!url) {
     throw new Error("URL is required to generate signed CloudFront URL");
   }
@@ -30,7 +40,13 @@ export const generateSignedUrl = (url, expiresInSeconds = ENV_VARS.CLOUDFRONT_DE
     throw new Error("CLOUDFRONT_KEY_PAIR_ID environment variable is not set");
   }
   if (!privateKey) {
-    throw new Error("CloudFront private key not loaded. Check CLOUDFRONT_PRIVATE_KEY_PATH");
+    if (!hasLoggedWarning) {
+      console.warn(
+        "[cloudfrontSigner] CloudFront private key not loaded. Using unsigned URLs as fallback.",
+      );
+      hasLoggedWarning = true;
+    }
+    return url; // Return unsigned URL as fallback
   }
 
   const expiresAt = new Date(Date.now() + expiresInSeconds * 1000);
@@ -41,4 +57,11 @@ export const generateSignedUrl = (url, expiresInSeconds = ENV_VARS.CLOUDFRONT_DE
     privateKey,
     dateLessThan: expiresAt,
   });
-}; 
+};
+
+/**
+ * Reset the warning flag (useful for testing)
+ */
+export const resetCloudFrontWarning = () => {
+  hasLoggedWarning = false;
+};

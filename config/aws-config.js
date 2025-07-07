@@ -5,6 +5,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
+  CopyObjectCommand,
 } from "@aws-sdk/client-s3";
 import { SESClient, GetSendQuotaCommand } from "@aws-sdk/client-ses";
 import { SNSClient, ListTopicsCommand } from "@aws-sdk/client-sns";
@@ -18,28 +19,28 @@ import { ENV_VARS } from "./envVars.js";
 // Validate required AWS environment variables
 function validateAWSConfig() {
   const issues = [];
-  
+
   if (!ENV_VARS.AWS_ACCESS_KEY) {
     issues.push("IM_AWS_ACCESS_KEY environment variable is missing");
   }
-  
+
   if (!ENV_VARS.AWS_SECRET_KEY) {
     issues.push("IM_AWS_SECRET_KEY environment variable is missing");
   }
-  
+
   if (!ENV_VARS.AWS_REGION) {
     issues.push("AWS_REGION environment variable is missing");
   }
-  
+
   if (!ENV_VARS.AWS_S3_BUCKET_NAME) {
     issues.push("AWS_S3_BUCKET_NAME environment variable is missing");
   }
-  
+
   if (issues.length > 0) {
     logger.error("AWS Configuration Issues:", issues);
-    throw new Error(`AWS Configuration Error: ${issues.join(', ')}`);
+    throw new Error(`AWS Configuration Error: ${issues.join(", ")}`);
   }
-  
+
   logger.info("AWS configuration validation passed");
   return true;
 }
@@ -59,11 +60,13 @@ const awsConfig = {
 // Log AWS configuration (without sensitive data)
 logger.info("AWS Configuration:", {
   region: awsConfig.region,
-  accessKeyId: awsConfig.credentials.accessKeyId ? 
-    `${awsConfig.credentials.accessKeyId.substring(0, 10)}...` : 'NOT SET',
-  secretAccessKey: awsConfig.credentials.secretAccessKey ? 
-    `${awsConfig.credentials.secretAccessKey.substring(0, 10)}...` : 'NOT SET',
-  bucketName: ENV_VARS.AWS_S3_BUCKET_NAME
+  accessKeyId: awsConfig.credentials.accessKeyId
+    ? `${awsConfig.credentials.accessKeyId.substring(0, 10)}...`
+    : "NOT SET",
+  secretAccessKey: awsConfig.credentials.secretAccessKey
+    ? `${awsConfig.credentials.secretAccessKey.substring(0, 10)}...`
+    : "NOT SET",
+  bucketName: ENV_VARS.AWS_S3_BUCKET_NAME,
 });
 
 // Create client instances
@@ -86,18 +89,18 @@ const testAWSConnection = async () => {
     return true;
   } catch (error) {
     logger.error("AWS connection error:", error);
-    
+
     // Provide specific error messages for common issues
-    if (error.name === 'UnrecognizedClientException') {
+    if (error.name === "UnrecognizedClientException") {
       logger.error("Invalid AWS Access Key ID");
-    } else if (error.name === 'SignatureDoesNotMatch') {
+    } else if (error.name === "SignatureDoesNotMatch") {
       logger.error("Invalid AWS Secret Access Key");
-    } else if (error.name === 'InvalidUserID.NotFound') {
+    } else if (error.name === "InvalidUserID.NotFound") {
       logger.error("AWS Access Key ID does not exist");
-    } else if (error.name === 'UnknownEndpoint') {
+    } else if (error.name === "UnknownEndpoint") {
       logger.error("Invalid AWS region specified");
     }
-    
+
     return false;
   }
 };
@@ -126,6 +129,42 @@ const deleteS3Object = async (params) => {
   return await s3Client.send(new DeleteObjectCommand(params));
 };
 
+// Helper function to copy S3 objects between buckets
+const copyS3Object = async (
+  sourceBucket,
+  sourceKey,
+  destinationBucket,
+  destinationKey,
+) => {
+  try {
+    const copyParams = {
+      Bucket: destinationBucket,
+      Key: destinationKey,
+      CopySource: `${sourceBucket}/${sourceKey}`,
+    };
+
+    const command = new CopyObjectCommand(copyParams);
+    await s3Client.send(command);
+
+    logger.info(
+      `Successfully copied ${sourceBucket}/${sourceKey} to ${destinationBucket}/${destinationKey}`,
+    );
+
+    return {
+      success: true,
+      sourceUrl: `https://${sourceBucket}.s3.${ENV_VARS.AWS_REGION}.amazonaws.com/${sourceKey}`,
+      destinationUrl: `https://${destinationBucket}.s3.${ENV_VARS.AWS_REGION}.amazonaws.com/${destinationKey}`,
+      sourceBucket,
+      sourceKey,
+      destinationBucket,
+      destinationKey,
+    };
+  } catch (error) {
+    logger.error(`Failed to copy S3 object: ${error.message}`);
+    throw error;
+  }
+};
+
 export {
   s3Client,
   snsClient,
@@ -134,4 +173,5 @@ export {
   getPresignedUrl,
   getPresignedPost,
   deleteS3Object,
+  copyS3Object,
 };

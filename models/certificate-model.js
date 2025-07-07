@@ -158,5 +158,7 @@ certificateSchema.statics.verifyCertificate = async function (
 };
 
 // Prevent model overwrite error during development
-const Certificate = mongoose.models.Certificate || mongoose.model("Certificate", certificateSchema);
+const Certificate =
+  mongoose.models.Certificate ||
+  mongoose.model("Certificate", certificateSchema);
 export default Certificate;
