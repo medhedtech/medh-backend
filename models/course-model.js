@@ -746,6 +746,12 @@ const courseSchema = new Schema(
       trim: true,
       index: true,
     },
+    // Add category ref for population
+    category: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
+    },
     course_subcategory: {
       type: String,
       trim: true,
