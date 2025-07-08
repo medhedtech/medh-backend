@@ -5,7 +5,11 @@ import path from "path";
 import ENV_VARS from "../config/env.js";
 import Bookmark from "../models/bookmark-model.js";
 import Course from "../models/course-model.js";
-import { BlendedCourse, LiveCourse, FreeCourse } from "../models/course-types/index.js";
+import {
+  BlendedCourse,
+  LiveCourse,
+  FreeCourse,
+} from "../models/course-types/index.js";
 import EnrolledCourse from "../models/enrolled-courses-model.js";
 import Enrollment from "../models/enrollment-model.js";
 import Note from "../models/note-model.js";
@@ -49,7 +53,7 @@ const _deleteS3Object = deleteS3Object;
 const fullyDecodeURIComponent = (str) => {
   try {
     if (!str) return str;
-    
+
     // Handle string or other types
     const inputStr = String(str);
     let decoded = inputStr;
@@ -64,12 +68,12 @@ const fullyDecodeURIComponent = (str) => {
 
     // Special handling for %25 (which is the encoded form of %)
     // This handles double-encoding scenarios
-    if (decoded.includes('%25')) {
-      decoded = decoded.replace(/%25/g, '%');
+    if (decoded.includes("%25")) {
+      decoded = decoded.replace(/%25/g, "%");
     }
 
     // Then recursively decode URL encoding
-    let prevDecoded = '';
+    let prevDecoded = "";
     while (decoded !== prevDecoded) {
       prevDecoded = decoded;
       try {
@@ -80,107 +84,114 @@ const fullyDecodeURIComponent = (str) => {
         break;
       }
     }
-    
+
     console.log(`Decoded "${inputStr}" to "${decoded}"`);
     return decoded;
   } catch (e) {
     console.warn("Decoding error:", e);
-    return str || '';
+    return str || "";
   }
 };
 
 // Format course duration to remove "0 months" if present
 const formatCourseDuration = (duration) => {
   if (!duration) return duration;
-  
+
   // Check for "0 months" pattern
   const zeroMonthsPattern = /^0 months\s+(.+)$/;
   const match = duration.match(zeroMonthsPattern);
-  
+
   if (match) {
     return match[1]; // Return just the part after "0 months "
   }
-  
+
   return duration;
 };
 
 // Process course or courses array to apply consistent formatting
 const processCoursesResponse = (coursesData) => {
   if (!coursesData) return coursesData;
-  
+
   // Function to categorize and format a single course
   const processSingleCourse = (course) => {
     // Create a new object to avoid mutating the original
     const processedCourse = { ...course };
-    
+
     // Format course duration if exists
     if (course.course_duration) {
-      processedCourse.course_duration = formatCourseDuration(course.course_duration);
+      processedCourse.course_duration = formatCourseDuration(
+        course.course_duration,
+      );
     }
-    
+
     // Properly categorize the course type based on class_type
     if (course.class_type) {
       // Normalize class type for consistent processing
       const classType = course.class_type.toLowerCase();
-      
+
       // Add delivery_format field for frontend consistency
-      if (classType.includes('live')) {
-        processedCourse.delivery_format = 'Live';
-      } else if (classType.includes('blend')) {
-        processedCourse.delivery_format = 'Blended';
-      } else if (classType.includes('self') || classType.includes('recorded')) {
-        processedCourse.delivery_format = 'Self-Paced';
+      if (classType.includes("live")) {
+        processedCourse.delivery_format = "Live";
+      } else if (classType.includes("blend")) {
+        processedCourse.delivery_format = "Blended";
+      } else if (classType.includes("self") || classType.includes("recorded")) {
+        processedCourse.delivery_format = "Self-Paced";
       } else {
         processedCourse.delivery_format = course.class_type; // Keep original if no match
       }
-      
+
       // Add delivery_type for additional categorization if needed
       processedCourse.delivery_type = processedCourse.delivery_format;
     }
-    
+
     return processedCourse;
   };
-  
+
   // Handle array of courses
   if (Array.isArray(coursesData)) {
     return coursesData.map(processSingleCourse);
   }
-  
+
   // Handle single course object
   return processSingleCourse(coursesData);
 };
 
 // Group courses by class type (live and blended)
 const groupCoursesByClassType = (coursesData) => {
-  if (!coursesData || !coursesData.data || !coursesData.data.courses || !Array.isArray(coursesData.data.courses)) {
+  if (
+    !coursesData ||
+    !coursesData.data ||
+    !coursesData.data.courses ||
+    !Array.isArray(coursesData.data.courses)
+  ) {
     return coursesData;
   }
-  
+
   // Create a copy of the response structure
   const result = {
     ...coursesData,
     data: {
       ...coursesData.data,
       live: [],
-      blended: []
-    }
+      blended: [],
+    },
   };
-  
+
   // Categorize courses by class_type
-  coursesData.data.courses.forEach(course => {
+  coursesData.data.courses.forEach((course) => {
     // Check various fields that might indicate live vs blended course type
-    const isLiveCourse = 
-      course.category_type === 'Live' || 
-      (course.class_type && course.class_type.toLowerCase().includes('live')) ||
-      (course.delivery_format === 'Live');
-    
+    const isLiveCourse =
+      course.category_type === "Live" ||
+      (course.class_type && course.class_type.toLowerCase().includes("live")) ||
+      course.delivery_format === "Live";
+
     if (isLiveCourse) {
       result.data.live.push(course);
     } else {
       result.data.blended.push(course);
     }
   });
-  
+
   // Keep original courses array for backward compatibility
   return result;
 };
@@ -205,17 +216,17 @@ const assignCurriculumIds = (curriculum) => {
     if (week.lessons && week.lessons.length) {
       week.lessons.forEach((lesson, lessonIndex) => {
         lesson.id = `lesson_w${weekIndex + 1}_${lessonIndex + 1}`;
-        
+
         // Ensure lesson has lessonType (default to 'text' if not specified)
         if (!lesson.lessonType) {
-          lesson.lessonType = lesson.video_url ? 'video' : 'text';
+          lesson.lessonType = lesson.video_url ? "video" : "text";
         }
-        
+
         // Validate video lesson fields
-        if (lesson.lessonType === 'video' && !lesson.video_url) {
-          lesson.video_url = '';
+        if (lesson.lessonType === "video" && !lesson.video_url) {
+          lesson.video_url = "";
         }
-        
+
         if (lesson.resources && lesson.resources.length) {
           lesson.resources.forEach((resource, resourceIndex) => {
             resource.id = `resource_${lesson.id}_${resourceIndex + 1}`;
@@ -240,17 +251,17 @@ const assignCurriculumIds = (curriculum) => {
         if (section.lessons && section.lessons.length) {
           section.lessons.forEach((lesson, lessonIndex) => {
             lesson.id = `lesson_${weekIndex + 1}_${sectionIndex + 1}_${lessonIndex + 1}`;
-            
+
             // Ensure lesson has lessonType (default to 'text' if not specified)
             if (!lesson.lessonType) {
-              lesson.lessonType = lesson.video_url ? 'video' : 'text';
+              lesson.lessonType = lesson.video_url ? "video" : "text";
             }
-            
+
             // Validate video lesson fields
-            if (lesson.lessonType === 'video' && !lesson.video_url) {
-              lesson.video_url = '';
+            if (lesson.lessonType === "video" && !lesson.video_url) {
+              lesson.video_url = "";
             }
-            
+
             if (lesson.resources && lesson.resources.length) {
               lesson.resources.forEach((resource, resourceIndex) => {
                 resource.id = `resource_${lesson.id}_${resourceIndex + 1}`;
@@ -314,7 +325,7 @@ const uploadCourseImage = async (req, res) => {
     // Handle both raw base64 strings and data URIs
     let mimeType;
     let base64Data;
-    
+
     if (base64String.startsWith("data:")) {
       // It's already a data URI, extract MIME type
       const mimeTypeMatch = base64String.match(/^data:(.*?);base64,(.*)$/);
@@ -341,7 +352,11 @@ const uploadCourseImage = async (req, res) => {
     }
 
     // Upload the image
-    const result = await uploadBase64FileOptimized(base64Data, mimeType, "images");
+    const result = await uploadBase64FileOptimized(
+      base64Data,
+      mimeType,
+      "images",
+    );
 
     // If course ID is provided, update the course with the new image
     if (course) {
@@ -507,13 +522,15 @@ const createCourse = async (req, res) => {
     if (req.body.course_image_base64 && !req.body.course_image) {
       try {
         const { course_image_base64 } = req.body;
-        
+
         // Handle both raw base64 strings and data URIs
         let mimeType;
         let base64Data;
-        
+
         if (course_image_base64.startsWith("data:")) {
-          const mimeTypeMatch = course_image_base64.match(/^data:(.*?);base64,(.*)$/);
+          const mimeTypeMatch = course_image_base64.match(
+            /^data:(.*?);base64,(.*)$/,
+          );
           if (!mimeTypeMatch) {
             return res.status(400).json({
               success: false,
@@ -536,9 +553,13 @@ const createCourse = async (req, res) => {
         }
 
         // Upload the image
-        const uploadResult = await uploadBase64FileOptimized(base64Data, mimeType, "images");
+        const uploadResult = await uploadBase64FileOptimized(
+          base64Data,
+          mimeType,
+          "images",
+        );
         req.body.course_image = uploadResult.data.url;
-        
+
         // Remove the base64 data from the request body
         delete req.body.course_image_base64;
       } catch (uploadError) {
@@ -553,6 +574,28 @@ const createCourse = async (req, res) => {
 
     // Extract course data from request body
     const courseData = req.body;
+
+    // --- Sanitize and validate preview_video field (create) ---
+    if (courseData.preview_video) {
+      const allowedFields = [
+        "title",
+        "url",
+        "thumbnail",
+        "duration",
+        "description",
+      ];
+      const sanitized = {};
+      for (const key of allowedFields) {
+        if (courseData.preview_video[key])
+          sanitized[key] = courseData.preview_video[key];
+      }
+      // If url is missing, remove preview_video
+      if (!sanitized.url) {
+        delete courseData.preview_video;
+      } else {
+        courseData.preview_video = sanitized;
+      }
+    }
 
     // If curriculum data is provided as JSON string, parse it
     if (courseData.curriculum && typeof courseData.curriculum === "string") {
@@ -571,6 +614,9 @@ const createCourse = async (req, res) => {
     if (courseData.curriculum && Array.isArray(courseData.curriculum)) {
       assignCurriculumIds(courseData.curriculum);
     }
+
+    // Allow preview_video to be set directly from the request body (optional)
+    // No special handling needed; schema will validate
 
     // Create new course with embedded lessons
     const course = new Course(courseData);
@@ -617,104 +663,126 @@ const getAllCourses = async (req, res) => {
         assigned_instructor: 1,
       },
     )
-    .populate({
-      path: 'assigned_instructor',
-      select: 'full_name email role domain',
-      match: { role: { $in: ['instructor'] } }
-    })
-    .lean();
+      .populate({
+        path: "assigned_instructor",
+        select: "full_name email role domain",
+        match: { role: { $in: ["instructor"] } },
+      })
+      .lean();
 
     // Get courses from new course-types models
     const [blendedCourses, liveCourses, freeCourses] = await Promise.all([
-      BlendedCourse.find({}, {
-        course_title: 1,
-        course_category: 1,
-        course_tag: 1,
-        course_image: 1,
-        course_fee: 1,
-        isFree: 1,
-        status: 1,
-        category_type: 1,
-        class_type: 1,
-        createdAt: 1,
-        prices: 1,
-        course_duration: 1,
-        assigned_instructor: 1,
-      })
-      .populate({
-        path: 'assigned_instructor',
-        select: 'full_name email role domain',
-        match: { role: { $in: ['instructor'] } }
-      })
-      .lean(),
-      LiveCourse.find({}, {
-        course_title: 1,
-        course_category: 1,
-        course_tag: 1,
-        course_image: 1,
-        course_fee: 1,
-        isFree: 1,
-        status: 1,
-        category_type: 1,
-        class_type: 1,
-        createdAt: 1,
-        prices: 1,
-        course_duration: 1,
-        assigned_instructor: 1,
-      })
-      .populate({
-        path: 'assigned_instructor',
-        select: 'full_name email role domain',
-        match: { role: { $in: ['instructor'] } }
-      })
-      .lean(),
-      FreeCourse.find({}, {
-        course_title: 1,
-        course_category: 1,
-        course_tag: 1,
-        course_image: 1,
-        course_fee: 1,
-        isFree: 1,
-        status: 1,
-        category_type: 1,
-        class_type: 1,
-        createdAt: 1,
-        prices: 1,
-        course_duration: 1,
-        assigned_instructor: 1,
-      })
-      .populate({
-        path: 'assigned_instructor',
-        select: 'full_name email role domain',
-        match: { role: { $in: ['instructor'] } }
-      })
-      .lean()
+      BlendedCourse.find(
+        {},
+        {
+          course_title: 1,
+          course_category: 1,
+          course_tag: 1,
+          course_image: 1,
+          course_fee: 1,
+          isFree: 1,
+          status: 1,
+          category_type: 1,
+          class_type: 1,
+          createdAt: 1,
+          prices: 1,
+          course_duration: 1,
+          assigned_instructor: 1,
+        },
+      )
+        .populate({
+          path: "assigned_instructor",
+          select: "full_name email role domain",
+          match: { role: { $in: ["instructor"] } },
+        })
+        .lean(),
+      LiveCourse.find(
+        {},
+        {
+          course_title: 1,
+          course_category: 1,
+          course_tag: 1,
+          course_image: 1,
+          course_fee: 1,
+          isFree: 1,
+          status: 1,
+          category_type: 1,
+          class_type: 1,
+          createdAt: 1,
+          prices: 1,
+          course_duration: 1,
+          assigned_instructor: 1,
+        },
+      )
+        .populate({
+          path: "assigned_instructor",
+          select: "full_name email role domain",
+          match: { role: { $in: ["instructor"] } },
+        })
+        .lean(),
+      FreeCourse.find(
+        {},
+        {
+          course_title: 1,
+          course_category: 1,
+          course_tag: 1,
+          course_image: 1,
+          course_fee: 1,
+          isFree: 1,
+          status: 1,
+          category_type: 1,
+          class_type: 1,
+          createdAt: 1,
+          prices: 1,
+          course_duration: 1,
+          assigned_instructor: 1,
+        },
+      )
+        .populate({
+          path: "assigned_instructor",
+          select: "full_name email role domain",
+          match: { role: { $in: ["instructor"] } },
+        })
+        .lean(),
     ]);
 
     // Combine all courses and mark course types
     const newTypeCourses = [
-      ...blendedCourses.map(c => ({ ...c, course_type: "blended", _source: "new_model" })),
-      ...liveCourses.map(c => ({ ...c, course_type: "live", _source: "new_model" })),
-      ...freeCourses.map(c => ({ ...c, course_type: "free", _source: "new_model" }))
+      ...blendedCourses.map((c) => ({
+        ...c,
+        course_type: "blended",
+        _source: "new_model",
+      })),
+      ...liveCourses.map((c) => ({
+        ...c,
+        course_type: "live",
+        _source: "new_model",
+      })),
+      ...freeCourses.map((c) => ({
+        ...c,
+        course_type: "free",
+        _source: "new_model",
+      })),
     ];
 
-    const legacyCoursesMarked = legacyCourses.map(c => ({ ...c, _source: "legacy_model" }));
+    const legacyCoursesMarked = legacyCourses.map((c) => ({
+      ...c,
+      _source: "legacy_model",
+    }));
     const allCourses = [...legacyCoursesMarked, ...newTypeCourses];
-    
+
     // Format course durations
     const processedCourses = processCoursesResponse(allCourses);
-    
-    res
-      .status(200)
-      .json({ 
-        success: true, 
-        count: processedCourses.length, 
-        data: processedCourses,
-        sources: {
-          legacy_model: legacyCoursesMarked.length,
-          new_model: newTypeCourses.length
-        }
-      });
+
+    res.status(200).json({
+      success: true,
+      count: processedCourses.length,
+      data: processedCourses,
+      sources: {
+        legacy_model: legacyCoursesMarked.length,
+        new_model: newTypeCourses.length,
+      },
+    });
   } catch (error) {
     console.error("Error fetching all courses:", error);
     res.status(500).json({
@@ -785,13 +853,13 @@ const getAllCoursesWithLimits = async (req, res) => {
     // Handle currency logic with fallback to USD
     if (currency) {
       requestedCurrency = fullyDecodeURIComponent(currency).toUpperCase();
-      
+
       // First, check if any courses exist with the requested currency
       const coursesWithRequestedCurrency = await Course.countDocuments({
         "prices.currency": requestedCurrency,
-        status: "Published" // Only check published courses
+        status: "Published", // Only check published courses
       });
-      
+
       if (coursesWithRequestedCurrency === 0) {
         // No courses found with requested currency, fallback to USD
         shouldFallbackToUSD = true;
@@ -842,9 +910,9 @@ const getAllCoursesWithLimits = async (req, res) => {
 
     const handleArrayOrStringFilter = (field, value) => {
       if (!value) return;
-      
+
       console.log(`Processing ${field} filter with value:`, value);
-      
+
       if (Array.isArray(value)) {
         const decodedValues = value.map((item) =>
           fullyDecodeURIComponent(item),
@@ -856,7 +924,7 @@ const getAllCoursesWithLimits = async (req, res) => {
       } else if (typeof value === "string") {
         const decodedValue = fullyDecodeURIComponent(value);
         console.log(`Decoded ${field} string value:`, decodedValue);
-        
+
         // Check for various delimiter patterns
         if (
           decodedValue.includes(",") ||
@@ -868,7 +936,7 @@ const getAllCoursesWithLimits = async (req, res) => {
             .map((v) => v.trim())
             .filter(Boolean);
           console.log(`Split ${field} values:`, values);
-          
+
           // Use exact matching for categories
           if (field === "course_category") {
             filter[field] = { $in: values };
@@ -891,48 +959,57 @@ const getAllCoursesWithLimits = async (req, res) => {
     handleArrayOrStringFilter("course_category", course_category);
     handleArrayOrStringFilter("category_type", category_type);
     handleArrayOrStringFilter("course_tag", course_tag);
-    
+
     // Special handling for class_type to better match Live and Blended courses
     if (class_type) {
       console.log(`Processing class_type filter with value:`, class_type);
-      
+
       const decodedClassType = fullyDecodeURIComponent(class_type);
       console.log(`Decoded class_type value:`, decodedClassType);
-      
-      if (decodedClassType.includes(",") || decodedClassType.includes("|") || decodedClassType.includes(";")) {
+
+      if (
+        decodedClassType.includes(",") ||
+        decodedClassType.includes("|") ||
+        decodedClassType.includes(";")
+      ) {
         // Handle multiple class types
-        const classTypeValues = decodedClassType.split(/[,|;]/).map(v => v.trim()).filter(Boolean);
+        const classTypeValues = decodedClassType
+          .split(/[,|;]/)
+          .map((v) => v.trim())
+          .filter(Boolean);
         console.log(`Split class_type values:`, classTypeValues);
-        
+
         // Create a more flexible match for class types
-        const regexPatterns = classTypeValues.map(type => {
+        const regexPatterns = classTypeValues.map((type) => {
           // Create case-insensitive patterns that match anywhere in the string
           const baseType = type.toLowerCase();
-          
-          if (baseType.includes('live')) {
-            return createSafeRegex('live', 'i');
-          } else if (baseType.includes('blend')) {
-            return createSafeRegex('blend', 'i');
-          } else if (baseType.includes('self') || baseType.includes('record')) {
-            return createSafeRegex('self|record', 'i');
+
+          if (baseType.includes("live")) {
+            return createSafeRegex("live", "i");
+          } else if (baseType.includes("blend")) {
+            return createSafeRegex("blend", "i");
+          } else if (baseType.includes("self") || baseType.includes("record")) {
+            return createSafeRegex("self|record", "i");
           } else {
-            return createSafeRegex(type, 'i');
+            return createSafeRegex(type, "i");
           }
         });
-        
+
         filter.class_type = { $in: regexPatterns };
       } else {
         // Handle single class type with flexible matching
         const baseType = decodedClassType.toLowerCase();
-        
-        if (baseType.includes('live')) {
-          filter.class_type = { $regex: createSafeRegex('live', 'i') };
-        } else if (baseType.includes('blend')) {
-          filter.class_type = { $regex: createSafeRegex('blend', 'i') };
-        } else if (baseType.includes('self') || baseType.includes('record')) {
-          filter.class_type = { $regex: createSafeRegex('self|record', 'i') };
+
+        if (baseType.includes("live")) {
+          filter.class_type = { $regex: createSafeRegex("live", "i") };
+        } else if (baseType.includes("blend")) {
+          filter.class_type = { $regex: createSafeRegex("blend", "i") };
+        } else if (baseType.includes("self") || baseType.includes("record")) {
+          filter.class_type = { $regex: createSafeRegex("self|record", "i") };
         } else {
-          filter.class_type = { $regex: createSafeRegex(decodedClassType, 'i') };
+          filter.class_type = {
+            $regex: createSafeRegex(decodedClassType, "i"),
+          };
         }
       }
     } else {
@@ -945,7 +1022,7 @@ const getAllCoursesWithLimits = async (req, res) => {
       if (decodedStatus.includes(",")) {
         // If multiple statuses are provided, use $in with exact string values
         filter.status = {
-          $in: decodedStatus.split(",").map(s => s.trim())
+          $in: decodedStatus.split(",").map((s) => s.trim()),
         };
       } else {
         // For single status, use exact string match
@@ -972,7 +1049,6 @@ const getAllCoursesWithLimits = async (req, res) => {
     if (has_quizzes === "Yes" || has_quizzes === "No") {
       filter.is_Quizes = has_quizzes;
     }
-
 
     if (exclude_ids && exclude_ids.length > 0) {
       const excludeIdsArray = Array.isArray(exclude_ids)
@@ -1003,13 +1079,18 @@ const getAllCoursesWithLimits = async (req, res) => {
 
     console.log("Final filter object:", JSON.stringify(filter, null, 2));
     if (shouldFallbackToUSD) {
-      console.log(`Currency fallback: Requested ${requestedCurrency} not found, showing USD prices instead`);
+      console.log(
+        `Currency fallback: Requested ${requestedCurrency} not found, showing USD prices instead`,
+      );
     }
 
     // Add detailed logging for course_category
     if (course_category) {
       console.log("Original course_category parameter:", course_category);
-      console.log("Processed course_category filter:", JSON.stringify(filter.course_category, null, 2));
+      console.log(
+        "Processed course_category filter:",
+        JSON.stringify(filter.course_category, null, 2),
+      );
     }
 
     const sortOptions = {};
@@ -1067,8 +1148,8 @@ const getAllCoursesWithLimits = async (req, res) => {
           pipeline: [
             {
               $match: {
-                role: { $in: ["instructor"] }
-              }
+                role: { $in: ["instructor"] },
+              },
             },
             {
               $project: {
@@ -1076,11 +1157,11 @@ const getAllCoursesWithLimits = async (req, res) => {
                 email: 1,
                 role: 1,
                 domain: 1,
-                phone_numbers: 1
-              }
-            }
-          ]
-        }
+                phone_numbers: 1,
+              },
+            },
+          ],
+        },
       },
       {
         $addFields: {
@@ -1131,33 +1212,58 @@ const getAllCoursesWithLimits = async (req, res) => {
                       "Unknown",
                       {
                         $cond: [
-                          { $regexMatch: { input: { $toLower: "$class_type" }, regex: "live" } },
+                          {
+                            $regexMatch: {
+                              input: { $toLower: "$class_type" },
+                              regex: "live",
+                            },
+                          },
                           "Live",
                           {
                             $cond: [
-                              { $regexMatch: { input: { $toLower: "$class_type" }, regex: "blend" } },
+                              {
+                                $regexMatch: {
+                                  input: { $toLower: "$class_type" },
+                                  regex: "blend",
+                                },
+                              },
                               "Blended",
                               {
                                 $cond: [
-                                  { 
+                                  {
                                     $or: [
-                                      { $regexMatch: { input: { $toLower: "$class_type" }, regex: "self" } },
-                                      { $regexMatch: { input: { $toLower: "$class_type" }, regex: "record" } }
-                                    ]
+                                      {
+                                        $regexMatch: {
+                                          input: { $toLower: "$class_type" },
+                                          regex: "self",
+                                        },
+                                      },
+                                      {
+                                        $regexMatch: {
+                                          input: { $toLower: "$class_type" },
+                                          regex: "record",
+                                        },
+                                      },
+                                    ],
                                   },
                                   "Self-Paced",
-                                  "$class_type"
-                                ]
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ]
-                  }
-                }
+                                  "$class_type",
+                                ],
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                },
               },
-              { $group: { _id: "$computed_delivery_format", count: { $sum: 1 } } },
+              {
+                $group: {
+                  _id: "$computed_delivery_format",
+                  count: { $sum: 1 },
+                },
+              },
               { $sort: { count: -1 } },
             ],
             priceRanges: [
@@ -1176,8 +1282,10 @@ const getAllCoursesWithLimits = async (req, res) => {
 
     // Post-process results to filter prices by currency
     let processedCourses = courses;
-    const effectiveCurrency = shouldFallbackToUSD ? "USD" : (requestedCurrency || null);
-    
+    const effectiveCurrency = shouldFallbackToUSD
+      ? "USD"
+      : requestedCurrency || null;
+
     if (effectiveCurrency) {
       processedCourses = courses.map((course) => {
         if (course.prices) {
@@ -1213,12 +1321,12 @@ const getAllCoursesWithLimits = async (req, res) => {
       response.data.currency_fallback = {
         requested: requestedCurrency,
         used: "USD",
-        message: `No courses found with ${requestedCurrency} pricing. Showing USD prices instead.`
+        message: `No courses found with ${requestedCurrency} pricing. Showing USD prices instead.`,
       };
     }
 
     // Group courses by class type if requested
-    if (req.query.group_by_class_type === 'true') {
+    if (req.query.group_by_class_type === "true") {
       res.status(200).json(groupCoursesByClassType(response));
     } else {
       res.status(200).json(response);
@@ -1253,39 +1361,43 @@ const getCourseById = async (req, res) => {
     let course = null;
     let source = "legacy_model";
 
-    // First, try to find in legacy Course model
+    // First, try to find in legacy Course model (ensure preview_video is selected)
     course = await Course.findById(id)
+      .select("preview_video assigned_instructor course_title course_category course_tag course_image course_fee isFree status category_type class_type createdAt prices course_duration curriculum meta no_of_Sessions course_description course_grade brochures final_evaluation")
       .populate({
-        path: 'assigned_instructor',
-        select: 'full_name email role domain phone_numbers',
-        match: { role: { $in: ['instructor'] } }
+        path: "assigned_instructor",
+        select: "full_name email role domain phone_numbers",
+        match: { role: { $in: ["instructor"] } },
       })
       .lean();
 
-    // If not found in legacy, search in new course-types models
+    // If not found in legacy, search in new course-types models (ensure preview_video is selected)
     if (!course) {
       const [blendedCourse, liveCourse, freeCourse] = await Promise.all([
         BlendedCourse.findById(id)
+          .select("preview_video assigned_instructor course_title course_category course_tag course_image course_fee isFree status category_type class_type createdAt prices course_duration curriculum meta no_of_Sessions course_description course_grade brochures final_evaluation")
           .populate({
-            path: 'assigned_instructor',
-            select: 'full_name email role domain phone_numbers',
-            match: { role: { $in: ['instructor'] } }
+            path: "assigned_instructor",
+            select: "full_name email role domain phone_numbers",
+            match: { role: { $in: ["instructor"] } },
           })
           .lean(),
         LiveCourse.findById(id)
+          .select("preview_video assigned_instructor course_title course_category course_tag course_image course_fee isFree status category_type class_type createdAt prices course_duration curriculum meta no_of_Sessions course_description course_grade brochures final_evaluation")
           .populate({
-            path: 'assigned_instructor',
-            select: 'full_name email role domain phone_numbers',
-            match: { role: { $in: ['instructor'] } }
+            path: "assigned_instructor",
+            select: "full_name email role domain phone_numbers",
+            match: { role: { $in: ["instructor"] } },
           })
           .lean(),
         FreeCourse.findById(id)
+          .select("preview_video assigned_instructor course_title course_category course_tag course_image course_fee isFree status category_type class_type createdAt prices course_duration curriculum meta no_of_Sessions course_description course_grade brochures final_evaluation")
           .populate({
-            path: 'assigned_instructor',
-            select: 'full_name email role domain phone_numbers',
-            match: { role: { $in: ['instructor'] } }
+            path: "assigned_instructor",
+            select: "full_name email role domain phone_numbers",
+            match: { role: { $in: ["instructor"] } },
           })
-          .lean()
+          .lean(),
       ]);
 
       // Check which model returned the course
@@ -1312,12 +1424,28 @@ const getCourseById = async (req, res) => {
     let processedCourse = course;
     if (currency && course.prices && course.prices.length > 0) {
       const upperCaseCurrency = currency.toUpperCase();
-      processedCourse = { 
+      processedCourse = {
         ...course,
         prices: course.prices.filter(
-          (price) => price.currency === upperCaseCurrency
-        )
+          (price) => price.currency === upperCaseCurrency,
+        ),
       };
+    }
+
+    // Ensure preview_video field is always present (null if missing)
+    if (typeof processedCourse.preview_video === "undefined") {
+      processedCourse.preview_video = null;
+    }
+
+    // Always return a signed URL for preview_video if url exists
+    if (processedCourse.preview_video && processedCourse.preview_video.url) {
+      try {
+        processedCourse.preview_video.signedUrl = generateSignedUrl(processedCourse.preview_video.url);
+      } catch (err) {
+        processedCourse.preview_video.signedUrl = null;
+      }
+    } else if (processedCourse.preview_video) {
+      processedCourse.preview_video.signedUrl = null;
     }
 
     // Apply formatting to course duration
@@ -1360,13 +1488,15 @@ const updateCourse = async (req, res) => {
     if (courseData.course_image_base64 && !courseData.course_image) {
       try {
         const { course_image_base64 } = courseData;
-        
+
         // Handle both raw base64 strings and data URIs
         let mimeType;
         let base64Data;
-        
+
         if (course_image_base64.startsWith("data:")) {
-          const mimeTypeMatch = course_image_base64.match(/^data:(.*?);base64,(.*)$/);
+          const mimeTypeMatch = course_image_base64.match(
+            /^data:(.*?);base64,(.*)$/,
+          );
           if (!mimeTypeMatch) {
             return res.status(400).json({
               success: false,
@@ -1389,9 +1519,13 @@ const updateCourse = async (req, res) => {
         }
 
         // Upload the image
-        const uploadResult = await uploadBase64FileOptimized(base64Data, mimeType, "images");
+        const uploadResult = await uploadBase64FileOptimized(
+          base64Data,
+          mimeType,
+          "images",
+        );
         courseData.course_image = uploadResult.data.url;
-        
+
         // Remove the base64 data from the course data
         delete courseData.course_image_base64;
       } catch (uploadError) {
@@ -1420,6 +1554,28 @@ const updateCourse = async (req, res) => {
     // Reassign IDs if curriculum structure changed
     if (courseData.curriculum && Array.isArray(courseData.curriculum)) {
       assignCurriculumIds(courseData.curriculum);
+    }
+
+    // --- Sanitize and validate preview_video field (update) ---
+    if (courseData.preview_video) {
+      const allowedFields = [
+        "title",
+        "url",
+        "thumbnail",
+        "duration",
+        "description",
+      ];
+      const sanitized = {};
+      for (const key of allowedFields) {
+        if (courseData.preview_video[key])
+          sanitized[key] = courseData.preview_video[key];
+      }
+      // If url is missing, remove preview_video
+      if (!sanitized.url) {
+        delete courseData.preview_video;
+      } else {
+        courseData.preview_video = sanitized;
+      }
     }
 
     const updatedCourse = await Course.findByIdAndUpdate(
@@ -1480,7 +1636,7 @@ const deleteCourse = async (req, res) => {
       const [blendedResult, liveResult, freeResult] = await Promise.all([
         BlendedCourse.findByIdAndDelete(id),
         LiveCourse.findByIdAndDelete(id),
-        FreeCourse.findByIdAndDelete(id)
+        FreeCourse.findByIdAndDelete(id),
       ]);
 
       // Check which model contained the course
@@ -1497,27 +1653,27 @@ const deleteCourse = async (req, res) => {
     }
 
     if (!deletedCourse) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Course not found" 
+        message: "Course not found",
       });
     }
 
-    res.status(200).json({ 
+    res.status(200).json({
       success: true,
       message: "Course deleted successfully",
       deletedCourse: {
         id: deletedCourse._id,
         title: deletedCourse.course_title,
-        source: source
-      }
+        source: source,
+      },
     });
   } catch (error) {
     console.error("Error deleting course:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Error deleting course", 
-      error: error.message 
+      message: "Error deleting course",
+      error: error.message,
     });
   }
 };
@@ -3296,13 +3452,15 @@ const getAllRelatedCourses = async (req, res) => {
     if (category) query.course_category = category;
     if (courseId) query._id = { $ne: new mongoose.Types.ObjectId(courseId) };
     const relatedCourses = await Course.find(query)
-      .select("course_title course_category course_image course_fee course_duration")
+      .select(
+        "course_title course_category course_image course_fee course_duration",
+      )
       .limit(parseInt(limit))
       .lean();
-    
+
     // Format course durations
     const processedCourses = processCoursesResponse(relatedCourses);
-    
+
     res.status(200).json({ success: true, data: processedCourses });
   } catch (error) {
     console.error("Error fetching related courses:", error);
@@ -3329,10 +3487,10 @@ const getNewCoursesWithLimits = async (req, res) => {
         "course_title course_category course_image course_fee course_duration",
       )
       .lean();
-    
+
     // Format course durations
     const processedCourses = processCoursesResponse(newCourses);
-    
+
     res.status(200).json({ success: true, data: processedCourses });
   } catch (error) {
     console.error("Error fetching new courses:", error);
@@ -3976,6 +4134,7 @@ const getCoursesWithFields = async (req, res) => {
           "prices",
           "slug",
         ],
+        previewVideo: "preview_video", // Add this line
       };
 
       // Check if a predefined field set was requested
@@ -4162,7 +4321,14 @@ const getCoursesWithFields = async (req, res) => {
     ]);
 
     // Execute queries for new course-types models (with same filters)
-    const [blendedResults, liveResults, freeResults, blendedCount, liveCount, freeCount] = await Promise.all([
+    const [
+      blendedResults,
+      liveResults,
+      freeResults,
+      blendedCount,
+      liveCount,
+      freeCount,
+    ] = await Promise.all([
       BlendedCourse.find(queryFilters, requestedFields)
         .sort(sortOptions)
         .skip(skip)
@@ -4183,15 +4349,27 @@ const getCoursesWithFields = async (req, res) => {
         .catch(() => []),
       BlendedCourse.countDocuments(queryFilters).catch(() => 0),
       LiveCourse.countDocuments(queryFilters).catch(() => 0),
-      FreeCourse.countDocuments(queryFilters).catch(() => 0)
+      FreeCourse.countDocuments(queryFilters).catch(() => 0),
     ]);
 
     // Combine results
     const queryResults = [
-      ...legacyResults.map(r => ({ ...r, _source: "legacy_model" })),
-      ...blendedResults.map(r => ({ ...r, course_type: "blended", _source: "new_model" })),
-      ...liveResults.map(r => ({ ...r, course_type: "live", _source: "new_model" })),
-      ...freeResults.map(r => ({ ...r, course_type: "free", _source: "new_model" }))
+      ...legacyResults.map((r) => ({ ...r, _source: "legacy_model" })),
+      ...blendedResults.map((r) => ({
+        ...r,
+        course_type: "blended",
+        _source: "new_model",
+      })),
+      ...liveResults.map((r) => ({
+        ...r,
+        course_type: "live",
+        _source: "new_model",
+      })),
+      ...freeResults.map((r) => ({
+        ...r,
+        course_type: "free",
+        _source: "new_model",
+      })),
     ];
 
     // Calculate total count
@@ -4274,8 +4452,8 @@ const getCoursesWithFields = async (req, res) => {
       },
       sources: {
         legacy_model: legacyCount,
-        new_model: blendedCount + liveCount + freeCount
-      }
+        new_model: blendedCount + liveCount + freeCount,
+      },
     });
   } catch (error) {
     console.error("Error in getCoursesWithFields:", error);
@@ -4495,7 +4673,17 @@ export const getCourseMaterial = catchAsync(async (req, res) => {
 const addVideoLessonToCourse = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const { weekId, sectionId, title, description, video_url, duration, video_thumbnail, order, isPreview = false } = req.body;
+    const {
+      weekId,
+      sectionId,
+      title,
+      description,
+      video_url,
+      duration,
+      video_thumbnail,
+      order,
+      isPreview = false,
+    } = req.body;
 
     if (!weekId || !title || !video_url) {
       return res.status(400).json({
@@ -4513,7 +4701,7 @@ const addVideoLessonToCourse = async (req, res) => {
     }
 
     // Find the week
-    const week = course.curriculum.find(w => w.id === weekId);
+    const week = course.curriculum.find((w) => w.id === weekId);
     if (!week) {
       return res.status(404).json({
         success: false,
@@ -4523,12 +4711,12 @@ const addVideoLessonToCourse = async (req, res) => {
 
     // Create the video lesson object
     const videoLesson = {
-      lessonType: 'video',
+      lessonType: "video",
       title,
-      description: description || '',
+      description: description || "",
       video_url,
-      duration: duration || '',
-      video_thumbnail: video_thumbnail || '',
+      duration: duration || "",
+      video_thumbnail: video_thumbnail || "",
       order: order || (sectionId ? 1 : (week.lessons?.length || 0) + 1),
       isPreview,
       resources: [],
@@ -4538,14 +4726,14 @@ const addVideoLessonToCourse = async (req, res) => {
 
     if (sectionId) {
       // Add to specific section
-      const section = week.sections?.find(s => s.id === sectionId);
+      const section = week.sections?.find((s) => s.id === sectionId);
       if (!section) {
         return res.status(404).json({
           success: false,
           message: "Section not found",
         });
       }
-      
+
       if (!section.lessons) section.lessons = [];
       section.lessons.push(videoLesson);
     } else {
@@ -4564,7 +4752,10 @@ const addVideoLessonToCourse = async (req, res) => {
     try {
       signedUrl = generateSignedUrl(video_url);
     } catch (signError) {
-      console.error("Error signing video URL in addVideoLessonToCourse:", signError);
+      console.error(
+        "Error signing video URL in addVideoLessonToCourse:",
+        signError,
+      );
     }
 
     res.status(201).json({
@@ -4593,7 +4784,15 @@ const addVideoLessonToCourse = async (req, res) => {
 const updateVideoLesson = async (req, res) => {
   try {
     const { courseId, lessonId } = req.params;
-    const { title, description, video_url, duration, video_thumbnail, order, isPreview } = req.body;
+    const {
+      title,
+      description,
+      video_url,
+      duration,
+      video_thumbnail,
+      order,
+      isPreview,
+    } = req.body;
 
     const course = await Course.findById(courseId);
     if (!course) {
@@ -4610,16 +4809,17 @@ const updateVideoLesson = async (req, res) => {
     for (const week of course.curriculum) {
       // Check direct lessons
       if (week.lessons) {
-        const lesson = week.lessons.find(l => l.id === lessonId);
+        const lesson = week.lessons.find((l) => l.id === lessonId);
         if (lesson) {
           if (title !== undefined) lesson.title = title;
           if (description !== undefined) lesson.description = description;
           if (video_url !== undefined) lesson.video_url = video_url;
           if (duration !== undefined) lesson.duration = duration;
-          if (video_thumbnail !== undefined) lesson.video_thumbnail = video_thumbnail;
+          if (video_thumbnail !== undefined)
+            lesson.video_thumbnail = video_thumbnail;
           if (order !== undefined) lesson.order = order;
           if (isPreview !== undefined) lesson.isPreview = isPreview;
-          lesson.lessonType = 'video';
+          lesson.lessonType = "video";
           lesson.updatedAt = new Date();
           lessonFound = true;
           updatedLesson = lesson;
@@ -4631,16 +4831,17 @@ const updateVideoLesson = async (req, res) => {
       if (!lessonFound && week.sections) {
         for (const section of week.sections) {
           if (section.lessons) {
-            const lesson = section.lessons.find(l => l.id === lessonId);
+            const lesson = section.lessons.find((l) => l.id === lessonId);
             if (lesson) {
               if (title !== undefined) lesson.title = title;
               if (description !== undefined) lesson.description = description;
               if (video_url !== undefined) lesson.video_url = video_url;
               if (duration !== undefined) lesson.duration = duration;
-              if (video_thumbnail !== undefined) lesson.video_thumbnail = video_thumbnail;
+              if (video_thumbnail !== undefined)
+                lesson.video_thumbnail = video_thumbnail;
               if (order !== undefined) lesson.order = order;
               if (isPreview !== undefined) lesson.isPreview = isPreview;
-              lesson.lessonType = 'video';
+              lesson.lessonType = "video";
               lesson.updatedAt = new Date();
               lessonFound = true;
               updatedLesson = lesson;
@@ -4699,7 +4900,7 @@ const deleteVideoLesson = async (req, res) => {
     for (const week of course.curriculum) {
       // Check direct lessons
       if (week.lessons) {
-        const lessonIndex = week.lessons.findIndex(l => l.id === lessonId);
+        const lessonIndex = week.lessons.findIndex((l) => l.id === lessonId);
         if (lessonIndex !== -1) {
           week.lessons.splice(lessonIndex, 1);
           lessonFound = true;
@@ -4711,7 +4912,9 @@ const deleteVideoLesson = async (req, res) => {
       if (!lessonFound && week.sections) {
         for (const section of week.sections) {
           if (section.lessons) {
-            const lessonIndex = section.lessons.findIndex(l => l.id === lessonId);
+            const lessonIndex = section.lessons.findIndex(
+              (l) => l.id === lessonId,
+            );
             if (lessonIndex !== -1) {
               section.lessons.splice(lessonIndex, 1);
               lessonFound = true;
@@ -4770,46 +4973,46 @@ const getCoursesByCategory = async (req, res) => {
       status,
       class_type,
       category_type,
-      search
+      search,
     } = req.query;
 
     // Build filter object
     const filter = {};
-    
+
     // Add category filter only if category parameter is provided
-    if (category && category.trim() !== '') {
+    if (category && category.trim() !== "") {
       const decodedCategory = fullyDecodeURIComponent(category);
       filter.course_category = { $regex: createSafeRegex(decodedCategory) };
     }
 
     // Add additional filters if provided
-    if (status && status !== 'all') {
+    if (status && status !== "all") {
       filter.status = status;
     }
 
-    if (class_type && class_type !== 'all') {
+    if (class_type && class_type !== "all") {
       filter.class_type = { $regex: createSafeRegex(class_type) };
     }
 
-    if (category_type && category_type !== 'all') {
+    if (category_type && category_type !== "all") {
       filter.category_type = category_type;
     }
 
     // Add text search if provided
-    if (search && search.trim() !== '') {
+    if (search && search.trim() !== "") {
       const searchRegex = createSafeRegex(search.trim());
       filter.$or = [
         { course_title: { $regex: searchRegex } },
         { course_tag: { $regex: searchRegex } },
         { "course_description.program_overview": { $regex: searchRegex } },
-        { "course_description.benefits": { $regex: searchRegex } }
+        { "course_description.benefits": { $regex: searchRegex } },
       ];
     }
 
     // Build sort object
     const sortOrder = sort_order === "asc" ? 1 : -1;
     const sortObj = {};
-    
+
     // Validate sort field - only allow sorting by returned fields
     const validSortFields = ["course_title", "course_category"];
     if (validSortFields.includes(sort_by)) {
@@ -4823,53 +5026,69 @@ const getCoursesByCategory = async (req, res) => {
       course_category: 1,
       course_subcategory: 1,
       course_title: 1,
-      course_tag: 1
+      course_tag: 1,
     };
 
     // Execute queries in parallel for better performance - get ALL courses without pagination
-    const [legacyCourses, blendedCourses, liveCourses, freeCourses] = await Promise.all([
-      // Legacy Course model
-      Course.find(filter, projection).sort(sortObj).lean(),
-      
-      // New course-types models
-      BlendedCourse.find(filter, projection).sort(sortObj).lean(),
-      LiveCourse.find(filter, projection).sort(sortObj).lean(),
-      FreeCourse.find(filter, projection).sort(sortObj).lean()
-    ]);
+    const [legacyCourses, blendedCourses, liveCourses, freeCourses] =
+      await Promise.all([
+        // Legacy Course model
+        Course.find(filter, projection).sort(sortObj).lean(),
+
+        // New course-types models
+        BlendedCourse.find(filter, projection).sort(sortObj).lean(),
+        LiveCourse.find(filter, projection).sort(sortObj).lean(),
+        FreeCourse.find(filter, projection).sort(sortObj).lean(),
+      ]);
 
     // Combine all courses and mark course types
     const newTypeCourses = [
-      ...blendedCourses.map(c => ({ ...c, course_type: "blended", _source: "new_model" })),
-      ...liveCourses.map(c => ({ ...c, course_type: "live", _source: "new_model" })),
-      ...freeCourses.map(c => ({ ...c, course_type: "free", _source: "new_model" }))
+      ...blendedCourses.map((c) => ({
+        ...c,
+        course_type: "blended",
+        _source: "new_model",
+      })),
+      ...liveCourses.map((c) => ({
+        ...c,
+        course_type: "live",
+        _source: "new_model",
+      })),
+      ...freeCourses.map((c) => ({
+        ...c,
+        course_type: "free",
+        _source: "new_model",
+      })),
     ];
 
-    const legacyCoursesMarked = legacyCourses.map(c => ({ ...c, _source: "legacy_model" }));
+    const legacyCoursesMarked = legacyCourses.map((c) => ({
+      ...c,
+      _source: "legacy_model",
+    }));
     const allCourses = [...legacyCoursesMarked, ...newTypeCourses];
-    
+
     // Group courses by category
     const coursesByCategory = {};
-    
-    allCourses.forEach(course => {
-      const categoryName = course.course_category || 'Uncategorized';
-      
+
+    allCourses.forEach((course) => {
+      const categoryName = course.course_category || "Uncategorized";
+
       if (!coursesByCategory[categoryName]) {
         coursesByCategory[categoryName] = [];
       }
-      
+
       coursesByCategory[categoryName].push({
         _id: course._id,
         course_category: course.course_category,
         course_subcategory: course.course_subcategory,
         course_title: course.course_title,
-        course_tag: course.course_tag
+        course_tag: course.course_tag,
       });
     });
 
     // Sort courses within each category by title
-    Object.keys(coursesByCategory).forEach(categoryName => {
+    Object.keys(coursesByCategory).forEach((categoryName) => {
       coursesByCategory[categoryName].sort((a, b) => {
-        if (sort_order === 'desc') {
+        if (sort_order === "desc") {
           return b.course_title.localeCompare(a.course_title);
         }
         return a.course_title.localeCompare(b.course_title);
@@ -4879,7 +5098,7 @@ const getCoursesByCategory = async (req, res) => {
     // Sort categories alphabetically
     const sortedCategories = Object.keys(coursesByCategory).sort();
     const sortedCoursesByCategory = {};
-    sortedCategories.forEach(categoryName => {
+    sortedCategories.forEach((categoryName) => {
       sortedCoursesByCategory[categoryName] = coursesByCategory[categoryName];
     });
 
@@ -4887,10 +5106,11 @@ const getCoursesByCategory = async (req, res) => {
     const totalCategories = Object.keys(coursesByCategory).length;
 
     // Response with courses grouped by category
-    const responseMessage = category && category.trim() !== '' 
-      ? `Courses retrieved successfully for category: ${category}`
-      : 'All courses retrieved successfully, grouped by category';
-    
+    const responseMessage =
+      category && category.trim() !== ""
+        ? `Courses retrieved successfully for category: ${category}`
+        : "All courses retrieved successfully, grouped by category";
+
     res.status(200).json({
       success: true,
       message: responseMessage,
@@ -4899,33 +5119,34 @@ const getCoursesByCategory = async (req, res) => {
         summary: {
           totalCourses,
           totalCategories,
-          categoriesWithCounts: Object.keys(sortedCoursesByCategory).map(categoryName => ({
-            category: categoryName,
-            courseCount: sortedCoursesByCategory[categoryName].length
-          }))
+          categoriesWithCounts: Object.keys(sortedCoursesByCategory).map(
+            (categoryName) => ({
+              category: categoryName,
+              courseCount: sortedCoursesByCategory[categoryName].length,
+            }),
+          ),
         },
         filters: {
-          category: category && category.trim() !== '' ? category : 'all',
-          status: status || 'all',
-          class_type: class_type || 'all',
-          category_type: category_type || 'all',
-          search: search || null
+          category: category && category.trim() !== "" ? category : "all",
+          status: status || "all",
+          class_type: class_type || "all",
+          category_type: category_type || "all",
+          search: search || null,
         },
         sorting: {
           sort_by,
-          sort_order
+          sort_order,
         },
         sources: {
           legacy_model: legacyCoursesMarked.length,
-          new_model: newTypeCourses.length
-        }
-      }
+          new_model: newTypeCourses.length,
+        },
+      },
     });
-
   } catch (error) {
     console.error("Error fetching courses by category:", error);
     logger.error("Error fetching courses by category:", error);
-    
+
     res.status(500).json({
       success: false,
       message: "Error fetching courses by category",
@@ -4953,7 +5174,7 @@ const getCoursesByCategoryName = async (req, res) => {
       page = 1,
       limit = 10,
       sort_by = "createdAt",
-      sort_order = "desc"
+      sort_order = "desc",
     } = req.query;
 
     // Decode the category name from URL encoding
@@ -4962,7 +5183,7 @@ const getCoursesByCategoryName = async (req, res) => {
     // Build filter object
     const filter = {
       status: { $regex: status, $options: "i" },
-      course_category: { $regex: createSafeRegex(decodedCategoryName) }
+      course_category: { $regex: createSafeRegex(decodedCategoryName) },
     };
 
     // Build sort object
@@ -4997,7 +5218,8 @@ const getCoursesByCategoryName = async (req, res) => {
       createdAt: 1,
       updatedAt: 1,
       slug: 1,
-      meta: 1
+      meta: 1,
+      preview_video: 1,
     };
 
     if (include_curriculum === "true") {
@@ -5010,54 +5232,70 @@ const getCoursesByCategoryName = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     // Execute queries in parallel for all course models
-    const [legacyCourses, blendedCourses, liveCourses, freeCourses] = await Promise.all([
-      // Legacy Course model
-      Course.find(filter, baseProjection)
-        .populate({
-          path: 'assigned_instructor',
-          select: 'full_name email role domain',
-          match: { role: { $in: ['instructor'] } }
-        })
-        .sort(sortObj)
-        .lean(),
-      
-      // New course-types models
-      BlendedCourse.find(filter, baseProjection)
-        .populate({
-          path: 'assigned_instructor',
-          select: 'full_name email role domain',
-          match: { role: { $in: ['instructor'] } }
-        })
-        .sort(sortObj)
-        .lean(),
-      
-      LiveCourse.find(filter, baseProjection)
-        .populate({
-          path: 'assigned_instructor',
-          select: 'full_name email role domain',
-          match: { role: { $in: ['instructor'] } }
-        })
-        .sort(sortObj)
-        .lean(),
-      
-      FreeCourse.find(filter, baseProjection)
-        .populate({
-          path: 'assigned_instructor',
-          select: 'full_name email role domain',
-          match: { role: { $in: ['instructor'] } }
-        })
-        .sort(sortObj)
-        .lean()
-    ]);
+    const [legacyCourses, blendedCourses, liveCourses, freeCourses] =
+      await Promise.all([
+        // Legacy Course model
+        Course.find(filter, baseProjection)
+          .populate({
+            path: "assigned_instructor",
+            select: "full_name email role domain",
+            match: { role: { $in: ["instructor"] } },
+          })
+          .sort(sortObj)
+          .lean(),
+
+        // New course-types models
+        BlendedCourse.find(filter, baseProjection)
+          .populate({
+            path: "assigned_instructor",
+            select: "full_name email role domain",
+            match: { role: { $in: ["instructor"] } },
+          })
+          .sort(sortObj)
+          .lean(),
+
+        LiveCourse.find(filter, baseProjection)
+          .populate({
+            path: "assigned_instructor",
+            select: "full_name email role domain",
+            match: { role: { $in: ["instructor"] } },
+          })
+          .sort(sortObj)
+          .lean(),
+
+        FreeCourse.find(filter, baseProjection)
+          .populate({
+            path: "assigned_instructor",
+            select: "full_name email role domain",
+            match: { role: { $in: ["instructor"] } },
+          })
+          .sort(sortObj)
+          .lean(),
+      ]);
 
     // Combine all courses and mark course types
     const newTypeCourses = [
-      ...blendedCourses.map(c => ({ ...c, course_type: "blended", _source: "new_model" })),
-      ...liveCourses.map(c => ({ ...c, course_type: "live", _source: "new_model" })),
-      ...freeCourses.map(c => ({ ...c, course_type: "free", _source: "new_model" }))
+      ...blendedCourses.map((c) => ({
+        ...c,
+        course_type: "blended",
+        _source: "new_model",
+      })),
+      ...liveCourses.map((c) => ({
+        ...c,
+        course_type: "live",
+        _source: "new_model",
+      })),
+      ...freeCourses.map((c) => ({
+        ...c,
+        course_type: "free",
+        _source: "new_model",
+      })),
     ];
 
-    const legacyCoursesMarked = legacyCourses.map(c => ({ ...c, _source: "legacy_model" }));
+    const legacyCoursesMarked = legacyCourses.map((c) => ({
+      ...c,
+      _source: "legacy_model",
+    }));
     let allCourses = [...legacyCoursesMarked, ...newTypeCourses];
 
     // Process courses response (format durations, etc.)
@@ -5071,16 +5309,18 @@ const getCoursesByCategoryName = async (req, res) => {
     let curriculumStats = null;
     if (include_curriculum === "true" && paginatedCourses.length > 0) {
       curriculumStats = {
-        courses_with_curriculum: paginatedCourses.filter(course => course.curriculum && course.curriculum.length > 0).length,
+        courses_with_curriculum: paginatedCourses.filter(
+          (course) => course.curriculum && course.curriculum.length > 0,
+        ).length,
         total_weeks: paginatedCourses.reduce((total, course) => {
           return total + (course.curriculum ? course.curriculum.length : 0);
         }, 0),
-        avg_weeks_per_course: 0
+        avg_weeks_per_course: 0,
       };
-      
+
       if (curriculumStats.courses_with_curriculum > 0) {
         curriculumStats.avg_weeks_per_course = Math.round(
-          curriculumStats.total_weeks / curriculumStats.courses_with_curriculum
+          curriculumStats.total_weeks / curriculumStats.courses_with_curriculum,
         );
       }
     }
@@ -5093,7 +5333,7 @@ const getCoursesByCategoryName = async (req, res) => {
         courses: paginatedCourses,
         category: {
           name: decodedCategoryName,
-          total_courses: totalCourses
+          total_courses: totalCourses,
         },
         pagination: {
           current_page: pageNum,
@@ -5101,21 +5341,21 @@ const getCoursesByCategoryName = async (req, res) => {
           total_courses: totalCourses,
           per_page: limitNum,
           has_next: pageNum < Math.ceil(totalCourses / limitNum),
-          has_prev: pageNum > 1
+          has_prev: pageNum > 1,
         },
         filters: {
           status: status,
-          include_curriculum: include_curriculum === "true"
+          include_curriculum: include_curriculum === "true",
         },
         sorting: {
           sort_by,
-          sort_order
+          sort_order,
         },
         sources: {
           legacy_model: legacyCoursesMarked.length,
-          new_model: newTypeCourses.length
-        }
-      }
+          new_model: newTypeCourses.length,
+        },
+      },
     };
 
     // Add curriculum stats if available
@@ -5124,11 +5364,10 @@ const getCoursesByCategoryName = async (req, res) => {
     }
 
     res.status(200).json(response);
-
   } catch (error) {
     console.error("Error fetching courses by category name:", error);
     logger.error("Error fetching courses by category name:", error);
-    
+
     res.status(500).json({
       success: false,
       message: "Error fetching courses by category name",
@@ -5200,7 +5439,10 @@ export {
 // List all courses with show_in_home tag for home page
 const getHomeCourses = async (req, res) => {
   try {
-    const courses = await Course.find({ show_in_home: true, status: "Published" })
+    const courses = await Course.find({
+      show_in_home: true,
+      status: "Published",
+    })
       .sort({ createdAt: -1 })
       .lean();
     return res.status(200).json({
@@ -5253,21 +5495,21 @@ const toggleShowInHome = async (req, res) => {
  */
 const schedulePublish = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const { publishDate, publishTime, timezone = 'UTC' } = req.body;
+  const { publishDate, publishTime, timezone = "UTC" } = req.body;
 
   // Validate required fields
   if (!publishDate) {
-    return res.status(400).json(
-      responseFormatter(false, "Publish date is required", null, 400)
-    );
+    return res
+      .status(400)
+      .json(responseFormatter(false, "Publish date is required", null, 400));
   }
 
   // Validate course exists
   const course = await Course.findById(id);
   if (!course) {
-    return res.status(404).json(
-      responseFormatter(false, "Course not found", null, 404)
-    );
+    return res
+      .status(404)
+      .json(responseFormatter(false, "Course not found", null, 404));
   }
 
   // Create scheduled publish datetime
@@ -5285,14 +5527,21 @@ const schedulePublish = catchAsync(async (req, res) => {
     // Validate the date is in the future
     const now = new Date();
     if (scheduledDateTime <= now) {
-      return res.status(400).json(
-        responseFormatter(false, "Scheduled publish date must be in the future", null, 400)
-      );
+      return res
+        .status(400)
+        .json(
+          responseFormatter(
+            false,
+            "Scheduled publish date must be in the future",
+            null,
+            400,
+          ),
+        );
     }
   } catch (error) {
-    return res.status(400).json(
-      responseFormatter(false, "Invalid date or time format", null, 400)
-    );
+    return res
+      .status(400)
+      .json(responseFormatter(false, "Invalid date or time format", null, 400));
   }
 
   // Update course with scheduled publish information
@@ -5302,14 +5551,16 @@ const schedulePublish = catchAsync(async (req, res) => {
       $set: {
         scheduledPublishDate: scheduledDateTime,
         scheduledPublishTimezone: timezone,
-        status: course.status === 'Published' ? 'Published' : 'Upcoming', // Keep published courses as published
-        'meta.lastUpdated': new Date()
-      }
+        status: course.status === "Published" ? "Published" : "Upcoming", // Keep published courses as published
+        "meta.lastUpdated": new Date(),
+      },
     },
-    { new: true, runValidators: true }
+    { new: true, runValidators: true },
   );
 
-  logger.info(`Course ${id} scheduled for publishing on ${scheduledDateTime.toISOString()}`);
+  logger.info(
+    `Course ${id} scheduled for publishing on ${scheduledDateTime.toISOString()}`,
+  );
 
   res.status(200).json(
     responseFormatter(
@@ -5322,11 +5573,11 @@ const schedulePublish = catchAsync(async (req, res) => {
           status: updatedCourse.status,
           scheduledPublishDate: updatedCourse.scheduledPublishDate,
           scheduledPublishTimezone: updatedCourse.scheduledPublishTimezone,
-          currentTime: new Date().toISOString()
-        }
+          currentTime: new Date().toISOString(),
+        },
       },
-      200
-    )
+      200,
+    ),
   );
 });
 
@@ -5339,13 +5590,13 @@ const getScheduledPublish = catchAsync(async (req, res) => {
   const { id } = req.params;
 
   const course = await Course.findById(id).select(
-    'course_title status scheduledPublishDate scheduledPublishTimezone meta.lastUpdated'
+    "course_title status scheduledPublishDate scheduledPublishTimezone meta.lastUpdated",
   );
 
   if (!course) {
-    return res.status(404).json(
-      responseFormatter(false, "Course not found", null, 404)
-    );
+    return res
+      .status(404)
+      .json(responseFormatter(false, "Course not found", null, 404));
   }
 
   const scheduleInfo = {
@@ -5355,7 +5606,7 @@ const getScheduledPublish = catchAsync(async (req, res) => {
     scheduledPublishDate: course.scheduledPublishDate || null,
     scheduledPublishTimezone: course.scheduledPublishTimezone || null,
     isScheduled: !!course.scheduledPublishDate,
-    currentTime: new Date().toISOString()
+    currentTime: new Date().toISOString(),
   };
 
   // Add time remaining if scheduled
@@ -5366,14 +5617,16 @@ const getScheduledPublish = catchAsync(async (req, res) => {
     scheduleInfo.isPastDue = timeRemaining <= 0;
   }
 
-  res.status(200).json(
-    responseFormatter(
-      true,
-      "Schedule information retrieved successfully",
-      scheduleInfo,
-      200
-    )
-  );
+  res
+    .status(200)
+    .json(
+      responseFormatter(
+        true,
+        "Schedule information retrieved successfully",
+        scheduleInfo,
+        200,
+      ),
+    );
 });
 
 /**
@@ -5386,15 +5639,22 @@ const cancelScheduledPublish = catchAsync(async (req, res) => {
 
   const course = await Course.findById(id);
   if (!course) {
-    return res.status(404).json(
-      responseFormatter(false, "Course not found", null, 404)
-    );
+    return res
+      .status(404)
+      .json(responseFormatter(false, "Course not found", null, 404));
   }
 
   if (!course.scheduledPublishDate) {
-    return res.status(400).json(
-      responseFormatter(false, "No scheduled publishing found for this course", null, 400)
-    );
+    return res
+      .status(400)
+      .json(
+        responseFormatter(
+          false,
+          "No scheduled publishing found for this course",
+          null,
+          400,
+        ),
+      );
   }
 
   // Remove scheduled publish information
@@ -5403,13 +5663,13 @@ const cancelScheduledPublish = catchAsync(async (req, res) => {
     {
       $unset: {
         scheduledPublishDate: 1,
-        scheduledPublishTimezone: 1
+        scheduledPublishTimezone: 1,
       },
       $set: {
-        'meta.lastUpdated': new Date()
-      }
+        "meta.lastUpdated": new Date(),
+      },
     },
-    { new: true, runValidators: true }
+    { new: true, runValidators: true },
   );
 
   logger.info(`Scheduled publishing cancelled for course ${id}`);
@@ -5421,10 +5681,10 @@ const cancelScheduledPublish = catchAsync(async (req, res) => {
       {
         courseId: updatedCourse._id,
         title: updatedCourse.course_title,
-        status: updatedCourse.status
+        status: updatedCourse.status,
       },
-      200
-    )
+      200,
+    ),
   );
 });
 
@@ -5435,35 +5695,40 @@ const cancelScheduledPublish = catchAsync(async (req, res) => {
  */
 const getAllScheduledPublishes = catchAsync(async (req, res) => {
   const { status, upcoming } = req.query;
-  
+
   // Build filter
   const filter = {
-    scheduledPublishDate: { $exists: true, $ne: null }
+    scheduledPublishDate: { $exists: true, $ne: null },
   };
 
-  if (status && status !== 'all') {
+  if (status && status !== "all") {
     filter.status = status;
   }
 
-  if (upcoming === 'true') {
+  if (upcoming === "true") {
     filter.scheduledPublishDate = { $gt: new Date() };
   }
 
   const courses = await Course.find(filter)
-    .select('course_title status scheduledPublishDate scheduledPublishTimezone meta.lastUpdated createdAt')
+    .select(
+      "course_title status scheduledPublishDate scheduledPublishTimezone meta.lastUpdated createdAt",
+    )
     .sort({ scheduledPublishDate: 1 });
 
   const now = new Date();
-  const scheduledCourses = courses.map(course => ({
+  const scheduledCourses = courses.map((course) => ({
     courseId: course._id,
     title: course.course_title,
     status: course.status,
     scheduledPublishDate: course.scheduledPublishDate,
     scheduledPublishTimezone: course.scheduledPublishTimezone,
-    timeRemainingMs: Math.max(0, course.scheduledPublishDate.getTime() - now.getTime()),
+    timeRemainingMs: Math.max(
+      0,
+      course.scheduledPublishDate.getTime() - now.getTime(),
+    ),
     isPastDue: course.scheduledPublishDate <= now,
     createdAt: course.createdAt,
-    lastUpdated: course.meta.lastUpdated
+    lastUpdated: course.meta.lastUpdated,
   }));
 
   res.status(200).json(
@@ -5473,10 +5738,10 @@ const getAllScheduledPublishes = catchAsync(async (req, res) => {
       {
         courses: scheduledCourses,
         total: scheduledCourses.length,
-        filters: { status: status || 'all', upcoming: upcoming === 'true' }
+        filters: { status: status || "all", upcoming: upcoming === "true" },
       },
-      200
-    )
+      200,
+    ),
   );
 });
 
@@ -5487,26 +5752,28 @@ const getAllScheduledPublishes = catchAsync(async (req, res) => {
  */
 const executeScheduledPublishes = catchAsync(async (req, res) => {
   const now = new Date();
-  
+
   // Find courses that are scheduled to be published and past their publish date
   const coursesToPublish = await Course.find({
     scheduledPublishDate: { $lte: now },
-    status: { $ne: 'Published' }
+    status: { $ne: "Published" },
   });
 
   if (coursesToPublish.length === 0) {
-    return res.status(200).json(
-      responseFormatter(
-        true,
-        "No courses ready for publishing",
-        { publishedCount: 0 },
-        200
-      )
-    );
+    return res
+      .status(200)
+      .json(
+        responseFormatter(
+          true,
+          "No courses ready for publishing",
+          { publishedCount: 0 },
+          200,
+        ),
+      );
   }
 
   const publishResults = [];
-  
+
   for (const course of coursesToPublish) {
     try {
       // Update course status to Published and remove scheduling fields
@@ -5514,42 +5781,46 @@ const executeScheduledPublishes = catchAsync(async (req, res) => {
         course._id,
         {
           $set: {
-            status: 'Published',
-            'meta.lastUpdated': new Date()
+            status: "Published",
+            "meta.lastUpdated": new Date(),
           },
           $unset: {
             scheduledPublishDate: 1,
-            scheduledPublishTimezone: 1
-          }
+            scheduledPublishTimezone: 1,
+          },
         },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true },
       );
 
       publishResults.push({
         courseId: course._id,
         title: course.course_title,
         previousStatus: course.status,
-        newStatus: 'Published',
+        newStatus: "Published",
         scheduledDate: course.scheduledPublishDate,
         publishedAt: new Date(),
-        success: true
+        success: true,
       });
 
-      logger.info(`Course ${course._id} (${course.course_title}) published successfully via scheduled publishing`);
+      logger.info(
+        `Course ${course._id} (${course.course_title}) published successfully via scheduled publishing`,
+      );
     } catch (error) {
       publishResults.push({
         courseId: course._id,
         title: course.course_title,
         error: error.message,
-        success: false
+        success: false,
       });
 
       logger.error(`Failed to publish course ${course._id}: ${error.message}`);
     }
   }
 
-  const successCount = publishResults.filter(result => result.success).length;
-  const failureCount = publishResults.filter(result => !result.success).length;
+  const successCount = publishResults.filter((result) => result.success).length;
+  const failureCount = publishResults.filter(
+    (result) => !result.success,
+  ).length;
 
   res.status(200).json(
     responseFormatter(
@@ -5558,10 +5829,10 @@ const executeScheduledPublishes = catchAsync(async (req, res) => {
       {
         publishedCount: successCount,
         failedCount: failureCount,
-        results: publishResults
+        results: publishResults,
       },
-      200
-    )
+      200,
+    ),
   );
 });
 
@@ -5594,7 +5865,9 @@ const getLessonSignedVideoUrl = async (req, res) => {
     // Fetch course and locate the lesson inside curriculum
     const course = await Course.findById(courseId).lean();
     if (!course) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Course not found" });
     }
 
     // Helper to find lesson in nested curriculum structure
@@ -5616,7 +5889,9 @@ const getLessonSignedVideoUrl = async (req, res) => {
     }
 
     if (!lesson) {
-      return res.status(404).json({ success: false, message: "Lesson not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Lesson not found" });
     }
 
     // Validate lesson is a video lesson and has a video_url
@@ -5715,7 +5990,7 @@ export const updateCourseBrochures = async (req, res) => {
     const course = await Course.findByIdAndUpdate(
       id,
       { $set: { brochures } },
-      { new: true, runValidators: true, select: "brochures" }
+      { new: true, runValidators: true, select: "brochures" },
     ).lean();
     if (!course) {
       return res.status(404).json({
@@ -5756,7 +6031,8 @@ export const uploadCourseBrochure = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        message: "No file uploaded. Please provide a PDF file in the 'file' field.",
+        message:
+          "No file uploaded. Please provide a PDF file in the 'file' field.",
       });
     }
     const ext = path.extname(req.file.originalname).toLowerCase();
@@ -5767,7 +6043,7 @@ export const uploadCourseBrochure = async (req, res) => {
       });
     }
     // Fetch course to get slug
-    const course = await Course.findById(id).select('slug');
+    const course = await Course.findById(id).select("slug");
     if (!course) {
       return res.status(404).json({
         success: false,
@@ -5785,7 +6061,9 @@ export const uploadCourseBrochure = async (req, res) => {
     // Optionally, add to course.brochures if query param addToCourse=true
     let updated = false;
     if (req.query.addToCourse === "true") {
-      await Course.findByIdAndUpdate(id, { $set: { brochures: [uploadResult.data.url] } });
+      await Course.findByIdAndUpdate(id, {
+        $set: { brochures: [uploadResult.data.url] },
+      });
       updated = true;
     }
     res.status(200).json({

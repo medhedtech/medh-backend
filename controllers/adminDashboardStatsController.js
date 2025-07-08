@@ -1907,6 +1907,114 @@ export const getCorporateTraining = async (req, res) => {
   }
 };
 
+/**
+ * Get recent enrollments for admin dashboard
+ * @route GET /api/v1/admin/recent-enrollments
+ * @access Admin only
+ */
+export const getRecentEnrollments = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 10;
+    // Fetch recent enrollments, populate student and course, and get latest payment
+    const enrollments = await Enrollment.find({})
+      .sort({ enrollment_date: -1 })
+      .limit(limit)
+      .populate("student", "full_name email")
+      .populate("course", "course_title");
+
+    // Format response: name, course, payment
+    const result = enrollments.map((enrollment) => {
+      // Get latest payment (if any, any status)
+      const latestPayment = (enrollment.payments || []).sort(
+        (a, b) => new Date(b.payment_date) - new Date(a.payment_date),
+      )[0];
+      const payment = latestPayment
+        ? {
+            amount: latestPayment.amount,
+            currency: latestPayment.currency,
+            date: latestPayment.payment_date,
+            method: latestPayment.payment_method,
+            status: latestPayment.payment_status,
+            transaction_id: latestPayment.transaction_id,
+          }
+        : {
+            amount: enrollment.total_amount_paid,
+            currency: enrollment.pricing_snapshot?.currency,
+            status: enrollment.total_amount_paid > 0 ? "paid" : "unpaid",
+            date: enrollment.enrollment_date,
+            method: null,
+            transaction_id: null,
+          };
+      return {
+        enrollment_id: enrollment._id,
+        student: enrollment.student
+          ? {
+              id: enrollment.student._id,
+              name: enrollment.student.full_name,
+              email: enrollment.student.email,
+            }
+          : null,
+        course: enrollment.course
+          ? {
+              id: enrollment.course._id,
+              title: enrollment.course.course_title,
+            }
+          : null,
+        payment,
+        enrollment_date: enrollment.enrollment_date,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error fetching recent enrollments:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching recent enrollments",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get recent user signups for admin dashboard
+ * @route GET /api/v1/admin/recent-users
+ * @access Admin only
+ */
+export const getRecentUsers = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 10;
+    // Fetch recent users, sorted by signup date
+    const users = await User.find({})
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .select("full_name email role createdAt");
+
+    const result = users.map((user) => ({
+      id: user._id,
+      full_name: user.full_name,
+      email: user.email,
+      role: user.role,
+      signup_date: user.createdAt,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error fetching recent users:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching recent users",
+      error: error.message,
+    });
+  }
+};
+
 // --- SUPER ADMIN MODEL REGISTRY & DYNAMIC ENDPOINTS ---
 import fs from "fs";
 import path from "path";

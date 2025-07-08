@@ -1,5 +1,5 @@
 import express from "express";
-import { 
+import {
   getDashboardStats,
   getUsers,
   getUserById,
@@ -14,7 +14,9 @@ import {
   getSupportTickets,
   getAssessments,
   getSystemStats,
-  getCorporateTraining
+  getCorporateTraining,
+  getRecentEnrollments,
+  getRecentUsers,
 } from "../controllers/adminDashboardStatsController.js";
 import { authenticateToken, authorize } from "../middleware/auth.js";
 
@@ -134,6 +136,22 @@ router.get(
   authenticateToken,
   authorize(["admin", "super-admin"]),
   getCorporateTraining,
+);
+
+// Recent Enrollments Route
+router.get(
+  "/recent-enrollments",
+  authenticateToken,
+  authorize(["admin", "super-admin"]),
+  getRecentEnrollments,
+);
+
+// Recent Users Route
+router.get(
+  "/recent-users",
+  authenticateToken,
+  authorize(["admin", "super-admin"]),
+  getRecentUsers,
 );
 
 export default router;
