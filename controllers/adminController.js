@@ -60,7 +60,7 @@ const defaultPopulate = {
   onlinemeeting: ["category"],
   category: [],
 };
-export const listModel = async (req, res) => {
+const listModel = async (req, res) => {
   try {
     const { modelName } = req.params;
     const Model = getModel(modelName);

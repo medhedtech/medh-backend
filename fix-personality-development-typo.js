@@ -1,3 +1,4 @@
+/* global db print printjson */
 // MongoDB Script to Fix "Personality Devlopement" Typo
 // This script fixes the typo in course titles across all course collections
 

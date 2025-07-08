@@ -1,3 +1,11 @@
+import express from "express";
+import { authenticateToken } from "../middleware/auth.js";
+import {
+  syncZoomRecordingsForBatch,
+  getZoomRecordingSyncStatus,
+  retryFailedZoomRecordings,
+} from "../controllers/batchController.js";
+const router = express.Router();
 // Zoom Recording Sync Routes
 router.post(
   "/:batchId/sync-zoom-recordings",
@@ -14,3 +22,5 @@ router.post(
   authenticateToken,
   retryFailedZoomRecordings,
 );
+
+export default router;
