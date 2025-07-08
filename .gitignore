@@ -42,6 +42,19 @@ lib-cov
 # Optional npm cache directory
 .npm
 
-# SSH keys
+# SSH keys and certificates
+*.pem
+*.key
+*.crt
+*.cert
 eval "$(ssh-agent -s)"
 eval "$(ssh-agent -s)".pubtest-video-lesson-fix-2.js
+
+# macOS system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

@@ -7,19 +7,48 @@ import ENV_VARS from "../config/env.js";
 // Load private key once during module initialization
 let privateKey = "";
 let hasLoggedWarning = false; // Track if we've already logged the warning
+let keyLoadAttempted = false; // Track if we've attempted to load the key
 
-try {
-  const keyPath =
-    ENV_VARS.CLOUDFRONT_PRIVATE_KEY_PATH ||
-    path.join(process.cwd(), "private_key.pem");
-  privateKey = fs.readFileSync(keyPath, "utf8");
-} catch (error) {
-  console.error(
-    "[cloudfrontSigner] Unable to read CloudFront private key:",
-    error.message,
-  );
-  // Leave privateKey empty – calling code should handle signing errors
-}
+const loadPrivateKey = () => {
+  if (keyLoadAttempted) return; // Only attempt to load once
+
+  try {
+    // First try: Use environment variable for key content directly
+    if (ENV_VARS.CLOUDFRONT_PRIVATE_KEY) {
+      privateKey = ENV_VARS.CLOUDFRONT_PRIVATE_KEY;
+      console.log(
+        "[cloudfrontSigner] CloudFront private key loaded from environment variable",
+      );
+      return;
+    }
+
+    // Second try: Read from file path
+    const keyPath =
+      ENV_VARS.CLOUDFRONT_PRIVATE_KEY_PATH ||
+      path.join(process.cwd(), "private_key.pem");
+
+    if (fs.existsSync(keyPath)) {
+      privateKey = fs.readFileSync(keyPath, "utf8");
+      console.log(
+        `[cloudfrontSigner] CloudFront private key loaded from file: ${keyPath}`,
+      );
+    } else {
+      console.warn(
+        `[cloudfrontSigner] CloudFront private key file not found: ${keyPath}`,
+      );
+    }
+  } catch (error) {
+    console.error(
+      "[cloudfrontSigner] Unable to read CloudFront private key:",
+      error.message,
+    );
+  } finally {
+    keyLoadAttempted = true;
+  }
+};
+
+// Load the key immediately
+loadPrivateKey();
 
 /**
  * Generate a signed CloudFront URL.
@@ -64,4 +93,20 @@ export const generateSignedUrl = (
  */
 export const resetCloudFrontWarning = () => {
   hasLoggedWarning = false;
+};
+
+/**
+ * Reload the private key (useful for testing or when key is updated)
+ */
+export const reloadPrivateKey = () => {
+  keyLoadAttempted = false;
+  privateKey = "";
+  loadPrivateKey();
+};
+
+/**
+ * Check if CloudFront signing is available
+ */
+export const isCloudFrontSigningAvailable = () => {
+  return !!(privateKey && ENV_VARS.CLOUDFRONT_KEY_PAIR_ID);
 };
