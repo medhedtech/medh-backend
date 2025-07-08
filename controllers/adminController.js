@@ -111,7 +111,7 @@ const listModel = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-export const getModelById = async (req, res) => {
+const getModelById = async (req, res) => {
   try {
     const { modelName, id } = req.params;
     const Model = getModel(modelName);
@@ -133,7 +133,7 @@ export const getModelById = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-export const createModel = async (req, res) => {
+const createModel = async (req, res) => {
   try {
     const { modelName } = req.params;
     const Model = getModel(modelName);
@@ -150,7 +150,7 @@ export const createModel = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-export const updateModel = async (req, res) => {
+exports.updateModel = async (req, res) => {
   try {
     const { modelName, id } = req.params;
     const Model = getModel(modelName);
@@ -168,7 +168,7 @@ export const updateModel = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-export const deleteModel = async (req, res) => {
+exports.deleteModel = async (req, res) => {
   try {
     const { modelName, id } = req.params;
     const Model = getModel(modelName);
@@ -204,17 +204,133 @@ export const deleteModel = async (req, res) => {
 // =====================
 // EXPORTS
 // =====================
-export {
-  // Dashboard/overview
-  // getDashboardStats, getAdminOverview, ...
-  // Dynamic model CRUD
-  listModel,
-  getModelById,
-  createModel,
-  updateModel,
-  deleteModel,
-  // Bulk ops
-  // bulkUserOperations, bulkCourseOperations, ...
-  // Standard CRUD
-  // createUser, updateUser, createCourse, updateCourse, ...
+exports.listModel = async (req, res) => {
+  try {
+    const { modelName } = req.params;
+    const Model = getModel(modelName);
+    if (!Model)
+      return res
+        .status(400)
+        .json({ success: false, message: `Unknown model: ${modelName}` });
+    const {
+      page = 1,
+      limit = 20,
+      search = "",
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      ...filters
+    } = req.query;
+    const skip = (page - 1) * limit;
+    const sortQuery = {};
+    sortQuery[sortBy] = sortOrder === "desc" ? -1 : 1;
+    const query = { ...filters };
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { title: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
+      ];
+    }
+    let q = Model.find(query).sort(sortQuery).skip(skip).limit(parseInt(limit));
+    (defaultPopulate[modelName.toLowerCase()] || []).forEach((field) => {
+      q = q.populate(field);
+    });
+    const [data, total] = await Promise.all([
+      q.lean(),
+      Model.countDocuments(query),
+    ]);
+    res.json({
+      success: true,
+      data,
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / limit),
+        total,
+        limit: parseInt(limit),
+      },
+      message: `Fetched ${data.length} ${modelName}(s)`,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
+exports.getModelById = async (req, res) => {
+  try {
+    const { modelName, id } = req.params;
+    const Model = getModel(modelName);
+    if (!Model)
+      return res
+        .status(400)
+        .json({ success: false, message: `Unknown model: ${modelName}` });
+    let q = Model.findById(id);
+    (defaultPopulate[modelName.toLowerCase()] || []).forEach((field) => {
+      q = q.populate(field);
+    });
+    const data = await q.lean();
+    if (!data)
+      return res
+        .status(404)
+        .json({ success: false, message: `${modelName} not found` });
+    res.json({ success: true, data, message: `Fetched ${modelName}` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+exports.createModel = async (req, res) => {
+  try {
+    const { modelName } = req.params;
+    const Model = getModel(modelName);
+    if (!Model)
+      return res
+        .status(400)
+        .json({ success: false, message: `Unknown model: ${modelName}` });
+    const doc = new Model(req.body);
+    await doc.save();
+    res
+      .status(201)
+      .json({ success: true, data: doc, message: `Created ${modelName}` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+exports.updateModel = async (req, res) => {
+  try {
+    const { modelName, id } = req.params;
+    const Model = getModel(modelName);
+    if (!Model)
+      return res
+        .status(400)
+        .json({ success: false, message: `Unknown model: ${modelName}` });
+    const updated = await Model.findByIdAndUpdate(id, req.body, { new: true });
+    if (!updated)
+      return res
+        .status(404)
+        .json({ success: false, message: `${modelName} not found` });
+    res.json({ success: true, data: updated, message: `Updated ${modelName}` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+exports.deleteModel = async (req, res) => {
+  try {
+    const { modelName, id } = req.params;
+    const Model = getModel(modelName);
+    if (!Model)
+      return res
+        .status(400)
+        .json({ success: false, message: `Unknown model: ${modelName}` });
+    const deleted = await Model.findByIdAndDelete(id);
+    if (!deleted)
+      return res
+        .status(404)
+        .json({ success: false, message: `${modelName} not found` });
+    res.json({ success: true, data: deleted, message: `Deleted ${modelName}` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+// Bulk ops
+// bulkUserOperations, bulkCourseOperations, ...
+// Standard CRUD
+// createUser, updateUser, createCourse, updateCourse, ...
