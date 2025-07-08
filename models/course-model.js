@@ -753,8 +753,8 @@ const courseSchema = new Schema(
       default: null,
     },
     course_subcategory: {
-      type: String,
-      trim: true,
+      type: [String],
+      default: [],
     },
     course_title: {
       type: String,
@@ -882,11 +882,13 @@ const courseSchema = new Schema(
       default: false,
       index: true,
     },
-    assigned_instructor: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
+    assigned_instructor: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+    // NOTE: This was previously a single ObjectId. Now supports multiple instructors. For backward compatibility, old records with a single instructor should be migrated to an array.
     specifications: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
@@ -916,6 +918,30 @@ const courseSchema = new Schema(
         },
         message: "Course image URL is required",
       },
+    },
+    /**
+     * Preview video for the course (optional, for marketing/demo)
+     */
+    preview_video: {
+      title: { type: String, trim: true, default: "" },
+      url: {
+        type: String,
+        trim: true,
+        validate: {
+          validator: function (v) {
+            // Only validate if preview_video is present
+            if (!v) return true;
+            // Basic check for video URL (http/https and common video extensions)
+            return /^(https?:\/\/).+\.(mp4|mov|webm|m3u8|avi|mkv|flv|wmv|youtube\.com|youtu\.be)/i.test(
+              v,
+            );
+          },
+          message: (props) => `${props.value} is not a valid video URL`,
+        },
+      },
+      thumbnail: { type: String, trim: true, default: "" },
+      duration: { type: String, trim: true, default: "" },
+      description: { type: String, trim: true, default: "" },
     },
     course_grade: {
       type: String,

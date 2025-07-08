@@ -34,7 +34,7 @@ const doubtSessionSchema = new Schema({
       type: String,
       required: [true, "Timezone is required"],
       trim: true,
-    }
+    },
   },
   meeting_link: {
     type: String,
@@ -58,35 +58,41 @@ const doubtSessionSchema = new Schema({
     required: [true, "Maximum participants is required"],
     min: [1, "Must allow at least 1 participant"],
   },
-  topics_covered: [{
-    type: String,
-    trim: true,
-  }],
-  prerequisites: [{
-    type: String,
-    trim: true,
-  }],
-  materials: [{
-    title: {
-      type: String,
-      required: [true, "Material title is required"],
-      trim: true,
-    },
-    description: {
+  topics_covered: [
+    {
       type: String,
       trim: true,
     },
-    file_url: {
+  ],
+  prerequisites: [
+    {
       type: String,
-      required: [true, "File URL is required"],
       trim: true,
     },
-    type: {
-      type: String,
-      enum: ["presentation", "document", "code", "other"],
-      default: "other",
-    }
-  }]
+  ],
+  materials: [
+    {
+      title: {
+        type: String,
+        required: [true, "Material title is required"],
+        trim: true,
+      },
+      description: {
+        type: String,
+        trim: true,
+      },
+      file_url: {
+        type: String,
+        required: [true, "File URL is required"],
+        trim: true,
+      },
+      type: {
+        type: String,
+        enum: ["presentation", "document", "code", "other"],
+        default: "other",
+      },
+    },
+  ],
 });
 
 // Schemas specific to blended courses
@@ -111,40 +117,42 @@ const curriculumSectionSchema = new Schema(
       required: [true, "Section order is required"],
       min: [0, "Order cannot be negative"],
     },
-    lessons: [{
-      title: {
-        type: String,
-        required: [true, "Lesson title is required"],
-        trim: true,
+    lessons: [
+      {
+        title: {
+          type: String,
+          required: [true, "Lesson title is required"],
+          trim: true,
+        },
+        description: {
+          type: String,
+          trim: true,
+        },
+        duration: {
+          type: Number,
+          required: [true, "Lesson duration is required"],
+          min: [0, "Duration cannot be negative"],
+        },
+        content_type: {
+          type: String,
+          enum: ["video", "document", "quiz", "assignment"],
+          required: [true, "Content type is required"],
+        },
+        content_url: {
+          type: String,
+          required: [true, "Content URL is required"],
+          trim: true,
+        },
+        is_preview: {
+          type: Boolean,
+          default: false,
+        },
+        order: {
+          type: Number,
+          required: [true, "Lesson order is required"],
+        },
       },
-      description: {
-        type: String,
-        trim: true,
-      },
-      duration: {
-        type: Number,
-        required: [true, "Lesson duration is required"],
-        min: [0, "Duration cannot be negative"],
-      },
-      content_type: {
-        type: String,
-        enum: ["video", "document", "quiz", "assignment"],
-        required: [true, "Content type is required"],
-      },
-      content_url: {
-        type: String,
-        required: [true, "Content URL is required"],
-        trim: true,
-      },
-      is_preview: {
-        type: Boolean,
-        default: false,
-      },
-      order: {
-        type: Number,
-        required: [true, "Lesson order is required"],
-      }
-    }],
+    ],
     resources: [
       {
         title: {
@@ -168,55 +176,59 @@ const curriculumSectionSchema = new Schema(
         },
       },
     ],
-    assignments: [{
-      title: {
-        type: String,
-        required: [true, "Assignment title is required"],
-        trim: true,
+    assignments: [
+      {
+        title: {
+          type: String,
+          required: [true, "Assignment title is required"],
+          trim: true,
+        },
+        description: {
+          type: String,
+          required: [true, "Assignment description is required"],
+          trim: true,
+        },
+        due_date: {
+          type: Date,
+          required: [true, "Due date is required"],
+        },
+        total_points: {
+          type: Number,
+          required: [true, "Total points is required"],
+          min: [0, "Total points cannot be negative"],
+        },
+        instructions: {
+          type: String,
+          required: [true, "Instructions are required"],
+          trim: true,
+        },
       },
-      description: {
-        type: String,
-        required: [true, "Assignment description is required"],
-        trim: true,
+    ],
+    quizzes: [
+      {
+        title: {
+          type: String,
+          required: [true, "Quiz title is required"],
+          trim: true,
+        },
+        description: {
+          type: String,
+          trim: true,
+        },
+        time_limit: {
+          type: Number,
+          required: [true, "Time limit is required"],
+          min: [1, "Time limit must be at least 1 minute"],
+        },
+        passing_score: {
+          type: Number,
+          required: [true, "Passing score is required"],
+          min: [0, "Passing score cannot be negative"],
+          max: [100, "Passing score cannot exceed 100"],
+        },
       },
-      due_date: {
-        type: Date,
-        required: [true, "Due date is required"],
-      },
-      total_points: {
-        type: Number,
-        required: [true, "Total points is required"],
-        min: [0, "Total points cannot be negative"],
-      },
-      instructions: {
-        type: String,
-        required: [true, "Instructions are required"],
-        trim: true,
-      }
-    }],
-    quizzes: [{
-      title: {
-        type: String,
-        required: [true, "Quiz title is required"],
-        trim: true,
-      },
-      description: {
-        type: String,
-        trim: true,
-      },
-      time_limit: {
-        type: Number,
-        required: [true, "Time limit is required"],
-        min: [1, "Time limit must be at least 1 minute"],
-      },
-      passing_score: {
-        type: Number,
-        required: [true, "Passing score is required"],
-        min: [0, "Passing score cannot be negative"],
-        max: [100, "Passing score cannot exceed 100"],
-      }
-    }],
-    doubt_sessions: [doubtSessionSchema]
+    ],
+    doubt_sessions: [doubtSessionSchema],
   },
   { timestamps: true },
 );
@@ -239,11 +251,11 @@ const blendedCourseSchema = new Schema({
     type: [curriculumSectionSchema],
     default: [],
     validate: {
-      validator: function(sections) {
+      validator: function (sections) {
         return this.curriculum.length > 0 || sections.length > 0;
       },
-      message: "Course must have either curriculum weeks or course modules"
-    }
+      message: "Course must have either curriculum weeks or course modules",
+    },
   },
   doubt_session_schedule: {
     frequency: {
@@ -251,56 +263,74 @@ const blendedCourseSchema = new Schema({
       enum: ["daily", "weekly", "bi-weekly", "monthly", "on-demand"],
       required: [true, "Doubt session frequency is required"],
     },
-    preferred_days: [{
-      type: String,
-      enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-    }],
-    preferred_time_slots: [{
-      start_time: {
+    preferred_days: [
+      {
         type: String,
-        required: [true, "Start time is required"],
-        trim: true,
+        enum: [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday",
+        ],
       },
-      end_time: {
-        type: String,
-        required: [true, "End time is required"],
-        trim: true,
+    ],
+    preferred_time_slots: [
+      {
+        start_time: {
+          type: String,
+          required: [true, "Start time is required"],
+          trim: true,
+        },
+        end_time: {
+          type: String,
+          required: [true, "End time is required"],
+          trim: true,
+        },
+        timezone: {
+          type: String,
+          required: [true, "Timezone is required"],
+          trim: true,
+        },
       },
-      timezone: {
-        type: String,
-        required: [true, "Timezone is required"],
-        trim: true,
-      }
-    }]
+    ],
   },
   certification: {
     is_certified: {
       type: Boolean,
       required: [true, "Certification status is required"],
-      default: true
+      default: true,
     },
     certification_criteria: {
       min_assignments_score: {
         type: Number,
         min: [0, "Minimum assignment score cannot be negative"],
         max: [100, "Minimum assignment score cannot exceed 100"],
-        default: 70
+        default: 70,
       },
       min_quizzes_score: {
         type: Number,
         min: [0, "Minimum quiz score cannot be negative"],
         max: [100, "Minimum quiz score cannot exceed 100"],
-        default: 70
+        default: 70,
       },
       min_attendance: {
         type: Number,
         min: [0, "Minimum attendance cannot be negative"],
         max: [100, "Minimum attendance cannot exceed 100"],
-        default: 80
-      }
-    }
+        default: 80,
+      },
+    },
   },
   // Pricing is now handled in base schema with legacy-compatible structure
+  // If assigned_instructor is defined in this schema, update as below:
+  // assigned_instructor: [{
+  //   type: mongoose.Schema.Types.ObjectId,
+  //   ref: "User",
+  // }],
+  // NOTE: This was previously a single ObjectId. Now supports multiple instructors. For backward compatibility, old records with a single instructor should be migrated to an array.
 });
 
 // Add pre-save hook for course modules ID assignment
@@ -326,4 +356,4 @@ blendedCourseSchema.pre("save", function (next) {
 // Create the BlendedCourse model using discriminator
 const BlendedCourse = BaseCourse.discriminator("blended", blendedCourseSchema);
 
-export default BlendedCourse; 
+export default BlendedCourse;

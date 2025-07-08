@@ -12,6 +12,7 @@ import {
   migrateImageToDocumentsBucket,
   shouldMigrateFromOldBucket,
 } from "../../utils/s3BucketManager.js";
+import { generateSignedUrl } from "../../utils/cloudfrontSigner.js";
 
 // Configure multer for memory storage
 const upload = multer({
@@ -372,10 +373,25 @@ export const handleBase64UploadOptimized = async (req, res) => {
       );
     }
 
+    // --- Add signed preview URL for all file types (including video) ---
+    let previewUrl = null;
+    if (result && result.data && result.data.url) {
+      try {
+        // Map S3 URL to CloudFront URL before signing
+        const cloudfrontUrl = mapS3UrlToCloudFrontUrl(result.data.url);
+        previewUrl = generateSignedUrl(cloudfrontUrl);
+      } catch (signErr) {
+        console.warn("Failed to generate signed preview URL:", signErr.message);
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: "File uploaded successfully",
-      data: result.data,
+      data: {
+        ...result.data,
+        previewUrl, // Signed URL for preview (CloudFront)
+      },
     });
   } catch (error) {
     console.error("Optimized base64 upload error:", error);
@@ -885,6 +901,23 @@ export const handleBulkFileMigration = async (req, res) => {
 export const handleBulkImageMigration = async (req, res) => {
   return await handleBulkFileMigration(req, res);
 };
+
+// Utility: Map S3 URL to CloudFront URL for signing (matches batch-controller.js logic)
+function mapS3UrlToCloudFrontUrl(s3Url) {
+  const cloudfrontDomain = ENV_VARS.CLOUDFRONT_DOMAIN || "cdn.medh.co";
+  // If already CloudFront URL, return as is
+  if (s3Url.includes(cloudfrontDomain)) return s3Url;
+  // If S3 URL, convert to CloudFront URL
+  if (s3Url.includes("medh-filess.s3.") && s3Url.includes(".amazonaws.com/")) {
+    const s3UrlParts = s3Url.split(".amazonaws.com/");
+    if (s3UrlParts.length === 2) {
+      const objectKey = s3UrlParts[1];
+      return `https://${cloudfrontDomain}/${objectKey}`;
+    }
+  }
+  // Fallback: return original URL
+  return s3Url;
+}
 
 // Export the multer instance to be used in routes
 export { upload };

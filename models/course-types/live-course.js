@@ -41,31 +41,35 @@ const liveSessionSchema = new Schema({
     type: Boolean,
     default: false,
   },
-  materials: [{
-    title: {
+  materials: [
+    {
+      title: {
+        type: String,
+        required: [true, "Material title is required"],
+        trim: true,
+      },
+      description: {
+        type: String,
+        trim: true,
+      },
+      file_url: {
+        type: String,
+        required: [true, "File URL is required"],
+        trim: true,
+      },
+      type: {
+        type: String,
+        enum: ["presentation", "document", "code", "other"],
+        default: "other",
+      },
+    },
+  ],
+  prerequisites: [
+    {
       type: String,
-      required: [true, "Material title is required"],
       trim: true,
     },
-    description: {
-      type: String,
-      trim: true,
-    },
-    file_url: {
-      type: String,
-      required: [true, "File URL is required"],
-      trim: true,
-    },
-    type: {
-      type: String,
-      enum: ["presentation", "document", "code", "other"],
-      default: "other",
-    }
-  }],
-  prerequisites: [{
-    type: String,
-    trim: true,
-  }]
+  ],
 });
 
 const moduleSchema = new Schema({
@@ -84,27 +88,29 @@ const moduleSchema = new Schema({
     required: [true, "Module order is required"],
   },
   sessions: [liveSessionSchema],
-  resources: [{
-    title: {
-      type: String,
-      required: [true, "Resource title is required"],
-      trim: true,
+  resources: [
+    {
+      title: {
+        type: String,
+        required: [true, "Resource title is required"],
+        trim: true,
+      },
+      description: {
+        type: String,
+        trim: true,
+      },
+      file_url: {
+        type: String,
+        required: [true, "File URL is required"],
+        trim: true,
+      },
+      type: {
+        type: String,
+        enum: ["pdf", "document", "video", "code", "other"],
+        required: [true, "Resource type is required"],
+      },
     },
-    description: {
-      type: String,
-      trim: true,
-    },
-    file_url: {
-      type: String,
-      required: [true, "File URL is required"],
-      trim: true,
-    },
-    type: {
-      type: String,
-      enum: ["pdf", "document", "video", "code", "other"],
-      required: [true, "Resource type is required"],
-    }
-  }]
+  ],
 });
 
 // Schema for live courses
@@ -118,17 +124,27 @@ const liveCourseSchema = new Schema({
       type: Date,
       required: [true, "Course end date is required"],
       validate: {
-        validator: function(v) {
+        validator: function (v) {
           return v > this.course_schedule.start_date;
         },
-        message: "End date must be after start date"
-      }
+        message: "End date must be after start date",
+      },
     },
-    session_days: [{
-      type: String,
-      enum: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
-      required: [true, "Session days are required"],
-    }],
+    session_days: [
+      {
+        type: String,
+        enum: [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday",
+        ],
+        required: [true, "Session days are required"],
+      },
+    ],
     session_time: {
       type: String,
       required: [true, "Session time is required"],
@@ -138,7 +154,7 @@ const liveCourseSchema = new Schema({
       type: String,
       required: [true, "Timezone is required"],
       trim: true,
-    }
+    },
   },
   total_sessions: {
     type: Number,
@@ -148,63 +164,70 @@ const liveCourseSchema = new Schema({
   session_duration: {
     type: mongoose.Schema.Types.Mixed, // Allow both String and Number for backward compatibility
     validate: {
-      validator: function(v) {
+      validator: function (v) {
         if (v === null || v === undefined) return true;
-        if (typeof v === 'string') return v.trim().length > 0;
-        if (typeof v === 'number') return v >= 30;
+        if (typeof v === "string") return v.trim().length > 0;
+        if (typeof v === "number") return v >= 30;
         return false;
       },
-      message: "Session duration must be a valid string or number (min 30 minutes if number)"
-    }
+      message:
+        "Session duration must be a valid string or number (min 30 minutes if number)",
+    },
   },
   modules: {
     type: [moduleSchema],
     required: [true, "Course modules are required"],
     validate: {
-      validator: function(modules) {
+      validator: function (modules) {
         return modules.length > 0;
       },
-      message: "Course must have at least one module"
-    }
+      message: "Course must have at least one module",
+    },
   },
   // Note: curriculum is now inherited from BaseCourse
-  instructors: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User", // Changed from "Instructor" to "User" to match the migration
-  }],
-  
+  instructors: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User", // Changed from "Instructor" to "User" to match the migration
+    },
+  ],
+
   // Legacy instructor assignment for backward compatibility
-  assigned_instructor: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    default: null,
-  },
+  assigned_instructor: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+  ],
+  // NOTE: This was previously a single ObjectId. Now supports multiple instructors. For backward compatibility, old records with a single instructor should be migrated to an array.
   max_students: {
     type: Number,
     required: [true, "Maximum number of students is required"],
     min: [1, "Course must allow at least 1 student"],
   },
   // Pricing is now handled in base schema with legacy-compatible structure
-  prerequisites: [{
-    type: String,
-    trim: true,
-  }],
+  prerequisites: [
+    {
+      type: String,
+      trim: true,
+    },
+  ],
   certification: {
     is_certified: {
       type: Boolean,
       required: [true, "Certification status is required"],
-      default: true
+      default: true,
     },
     attendance_required: {
       type: Number,
       min: [0, "Attendance requirement cannot be negative"],
       max: [100, "Attendance requirement cannot exceed 100%"],
-      default: 80
-    }
-  }
+      default: 80,
+    },
+  },
 });
 
 // Create the LiveCourse model using discriminator
 const LiveCourse = BaseCourse.discriminator("live", liveCourseSchema);
 
-export default LiveCourse; 
+export default LiveCourse;
