@@ -394,8 +394,7 @@ const universalFormSchema = new mongoose.Schema(
         'partnership_inquiry',
         'demo_request',
         'support_ticket'
-      ],
-      index: true
+      ]
     },
     form_id: { 
       type: String, 
@@ -408,8 +407,7 @@ const universalFormSchema = new mongoose.Schema(
     // User reference (optional - for logged-in users)
     user_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      index: true
+      ref: "User"
     },
     
     // Core information (always present)
@@ -554,8 +552,7 @@ const universalFormSchema = new mongoose.Schema(
         'cancelled',
         'on_hold'
       ],
-      default: 'submitted',
-      index: true
+      default: 'submitted'
     },
     
     // Priority and categorization

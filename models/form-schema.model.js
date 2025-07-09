@@ -286,8 +286,7 @@ const formSchemaModel = new mongoose.Schema({
   collection: 'form_schemas'
 });
 
-// Indexes for better performance
-formSchemaModel.index({ form_id: 1 });
+// Indexes for better performance (form_id already has unique index in schema)
 formSchemaModel.index({ status: 1, category: 1 });
 formSchemaModel.index({ created_at: -1 });
 formSchemaModel.index({ 'analytics.totalSubmissions': -1 });
