@@ -176,13 +176,7 @@ const liveCourseSchema = new Schema({
   },
   modules: {
     type: [moduleSchema],
-    required: [true, "Course modules are required"],
-    validate: {
-      validator: function (modules) {
-        return modules.length > 0;
-      },
-      message: "Course must have at least one module",
-    },
+    default: [],
   },
   // Note: curriculum is now inherited from BaseCourse
   instructors: [
