@@ -89,7 +89,12 @@ router.get("/by-category/:categoryName", getCoursesByCategoryName);
 router.get("/:id", getCourseById);
 router.get("/:id/brochures", getCourseBrochures);
 router.put("/:id/brochures", authenticateToken, updateCourseBrochures);
-router.post("/:id/brochures/upload", authenticateToken, upload.single("file"), uploadCourseBrochure);
+router.post(
+  "/:id/brochures/upload",
+  authenticateToken,
+  upload.single("file"),
+  uploadCourseBrochure,
+);
 router.get("/coorporate/:id", getCoorporateCourseById);
 
 // Admin Routes (Protected) - Place these BEFORE student routes to avoid conflicts
@@ -111,20 +116,43 @@ router.delete("/:id", authenticateToken, deleteCourse);
 router.post("/delete/:id", authenticateToken, deleteCourse); // Alternative POST endpoint for deletion
 router.patch("/:id/toggle-status", authenticateToken, toggleCourseStatus);
 router.post("/:id/recorded-videos", authenticateToken, updateRecordedVideos);
-router.get("/recorded-videos/:studentId", authenticateToken, getRecordedVideosForUser);
+router.get(
+  "/recorded-videos/:studentId",
+  authenticateToken,
+  getRecordedVideosForUser,
+);
 router.get("/:id/prices", authenticateToken, getCoursePrices);
 router.put("/:id/prices", authenticateToken, updateCoursePrices);
 router.post("/prices/bulk-update", authenticateToken, bulkUpdateCoursePrices);
 router.patch("/:id/toggle-home", authenticateToken, toggleShowInHome);
 
 // Schedule Publishing Routes (Admin Protected)
-router.post("/:id/schedule-publish", authenticateToken, validateSchedulePublish, schedulePublish);
+router.post(
+  "/:id/schedule-publish",
+  authenticateToken,
+  validateSchedulePublish,
+  schedulePublish,
+);
 router.get("/:id/schedule-publish", authenticateToken, getScheduledPublish);
-router.delete("/:id/schedule-publish", authenticateToken, cancelScheduledPublish);
-router.post("/execute-scheduled-publishes", authenticateToken, executeScheduledPublishes);
+router.delete(
+  "/:id/schedule-publish",
+  authenticateToken,
+  cancelScheduledPublish,
+);
+router.post(
+  "/execute-scheduled-publishes",
+  authenticateToken,
+  executeScheduledPublishes,
+);
 
 // File Upload Routes (Protected)
-router.post("/upload", authenticateToken, upload.single("file"), handleUploadError, handleUpload);
+router.post(
+  "/upload",
+  authenticateToken,
+  upload.single("file"),
+  handleUploadError,
+  handleUpload,
+);
 router.post(
   "/upload-multiple",
   authenticateToken,
@@ -154,33 +182,85 @@ router.post(
 );
 
 // Video Lesson Management Routes (Admin Protected)
-router.post("/:courseId/video-lessons", authenticateToken, addVideoLessonToCourse);
-router.put("/:courseId/video-lessons/:lessonId", authenticateToken, updateVideoLesson);
-router.delete("/:courseId/video-lessons/:lessonId", authenticateToken, deleteVideoLesson);
+router.post(
+  "/:courseId/video-lessons",
+  authenticateToken,
+  addVideoLessonToCourse,
+);
+router.put(
+  "/:courseId/video-lessons/:lessonId",
+  authenticateToken,
+  updateVideoLesson,
+);
+router.delete(
+  "/:courseId/video-lessons/:lessonId",
+  authenticateToken,
+  deleteVideoLesson,
+);
 
 // Student Routes (Protected)
 router.get("/:courseId/sections", authenticateToken, getCourseSections);
 router.get("/:courseId/lessons", authenticateToken, getCourseLessons);
 router.get("/:courseId/lessons/:lessonId", authenticateToken, getLessonDetails);
 router.get("/:courseId/progress", authenticateToken, getCourseProgress);
-router.post("/:courseId/lessons/:lessonId/complete", authenticateToken, markLessonComplete);
+router.post(
+  "/:courseId/lessons/:lessonId/complete",
+  authenticateToken,
+  markLessonComplete,
+);
 router.get("/:courseId/assignments", authenticateToken, getCourseAssignments);
-router.post("/:courseId/assignments/:assignmentId/submit", authenticateToken, submitAssignment);
+router.post(
+  "/:courseId/assignments/:assignmentId/submit",
+  authenticateToken,
+  submitAssignment,
+);
 router.get("/:courseId/quizzes", authenticateToken, getCourseQuizzes);
 router.post("/:courseId/quizzes/:quizId/submit", authenticateToken, submitQuiz);
-router.get("/:courseId/quizzes/:quizId/results", authenticateToken, getQuizResults);
-router.get("/:courseId/lessons/:lessonId/resources", authenticateToken, getLessonResources);
+router.get(
+  "/:courseId/quizzes/:quizId/results",
+  authenticateToken,
+  getQuizResults,
+);
+router.get(
+  "/:courseId/lessons/:lessonId/resources",
+  authenticateToken,
+  getLessonResources,
+);
 router.get(
   "/:courseId/lessons/:lessonId/resources/:resourceId/download",
   authenticateToken,
   downloadResource,
 );
-router.get("/:courseId/lessons/:lessonId/notes", authenticateToken, getLessonNotes);
-router.post("/:courseId/lessons/:lessonId/notes", authenticateToken, addLessonNote);
-router.put("/:courseId/lessons/:lessonId/notes/:noteId", authenticateToken, updateNote);
-router.delete("/:courseId/lessons/:lessonId/notes/:noteId", authenticateToken, deleteNote);
-router.get("/:courseId/lessons/:lessonId/bookmarks", authenticateToken, getLessonBookmarks);
-router.post("/:courseId/lessons/:lessonId/bookmarks", authenticateToken, addLessonBookmark);
+router.get(
+  "/:courseId/lessons/:lessonId/notes",
+  authenticateToken,
+  getLessonNotes,
+);
+router.post(
+  "/:courseId/lessons/:lessonId/notes",
+  authenticateToken,
+  addLessonNote,
+);
+router.put(
+  "/:courseId/lessons/:lessonId/notes/:noteId",
+  authenticateToken,
+  updateNote,
+);
+router.delete(
+  "/:courseId/lessons/:lessonId/notes/:noteId",
+  authenticateToken,
+  deleteNote,
+);
+router.get(
+  "/:courseId/lessons/:lessonId/bookmarks",
+  authenticateToken,
+  getLessonBookmarks,
+);
+router.post(
+  "/:courseId/lessons/:lessonId/bookmarks",
+  authenticateToken,
+  addLessonBookmark,
+);
 router.put(
   "/:courseId/lessons/:lessonId/bookmarks/:bookmarkId",
   authenticateToken,
@@ -191,7 +271,15 @@ router.delete(
   authenticateToken,
   deleteBookmark,
 );
-router.post("/broucher/download/:courseId", authenticateToken, downloadBrochure);
-router.get("/:courseId/lessons/:lessonId/video-signed-url", authenticateToken, getLessonSignedVideoUrl);
+router.post(
+  "/broucher/download/:courseId",
+  authenticateToken,
+  downloadBrochure,
+);
+router.get(
+  "/:courseId/lessons/:lessonId/video-signed-url",
+  authenticateToken,
+  getLessonSignedVideoUrl,
+);
 
 export default router;

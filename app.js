@@ -26,6 +26,7 @@ import "./config/passport-config.js";
 import wishlistRoutes from "./routes/wishlistRoutes.js";
 import studentProgressRoutes from "./routes/studentProgressRoutes.js";
 import courseMaterialRoutes from "./routes/courseMaterialRoutes.js";
+import sessionRatingRoutes from "./routes/sessionRatingRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -151,6 +152,7 @@ app.use("/api/v1", routes);
 app.use("/api/v1/wishlist", wishlistRoutes);
 app.use("/api/v1/student", studentProgressRoutes);
 app.use("/api/v1/materials", courseMaterialRoutes);
+app.use("/api/v1/sessions", sessionRatingRoutes); // New route for session ratings
 
 // Add Sentry error handler before other error handlers
 sentryUtils.setupSentryErrorHandler(app);

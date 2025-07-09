@@ -5,6 +5,8 @@ import { validationResult } from "express-validator";
 import mongoose from "mongoose";
 import zoomService from "../services/zoomService.js";
 import { generateSignedUrl } from "../utils/cloudfrontSigner.js";
+import OnlineMeeting from "../models/online-meeting.js";
+import SessionRating from "../models/session-rating.model.js"; // Import the new SessionRating model
 
 /**
  * @typedef {('group'|'individual')} TBatchType
@@ -1775,6 +1777,12 @@ export const getRecordedLessonsForStudent = async (req, res) => {
           const keyParts = object.Key.split("/");
           const fileName = keyParts[keyParts.length - 1];
 
+          // Extract session number from filename if present (e.g., "Session_14")
+          const sessionNumberMatch = fileName.match(/Session_(\d+)/i);
+          const extractedSessionNumber = sessionNumberMatch
+            ? parseInt(sessionNumberMatch[1], 10)
+            : null;
+
           // Extract file info
           const fileUrl = `https://${ENV_VARS.UPLOAD_CONSTANTS.BUCKET_NAME}.s3.${ENV_VARS.AWS_REGION}.amazonaws.com/${object.Key}`;
 
@@ -1795,9 +1803,12 @@ export const getRecordedLessonsForStudent = async (req, res) => {
           s3VideosData.push({
             id: object.Key.replace(/[^a-zA-Z0-9]/g, "_"), // Create a unique ID from the key
             title: fileName,
-            displayTitle: timestampInfo
-              ? `Session ${s3VideosData.length + 1}`
-              : fileName,
+            // Temporarily set displayTitle and session number based on extracted info
+            displayTitle: extractedSessionNumber
+              ? `Session ${extractedSessionNumber}`
+              : timestampInfo
+                ? `Session on ${timestampInfo.formattedDate}`
+                : fileName,
             fullPath: object.Key,
             url: signedUrl,
             originalUrl: fileUrl,
@@ -1806,7 +1817,7 @@ export const getRecordedLessonsForStudent = async (req, res) => {
             // Session metadata
             session: timestampInfo
               ? {
-                  number: s3VideosData.length + 1,
+                  number: extractedSessionNumber, // Store the extracted number
                   date: timestampInfo.date,
                   formattedDate: timestampInfo.formattedDate,
                   formattedTime: timestampInfo.formattedTime,
@@ -1814,7 +1825,7 @@ export const getRecordedLessonsForStudent = async (req, res) => {
                   duration: "90 min", // Default duration
                   status: "Available",
                   level: "Intermediate",
-                  rating: 5,
+                  rating: 0, // Placeholder, will be updated with actual average rating
                 }
               : null,
             source: "your_previous_sessions",
@@ -1825,19 +1836,63 @@ export const getRecordedLessonsForStudent = async (req, res) => {
           });
         }
 
-        // Sort by GMT timestamp in filename (newest first)
+        // Fetch average ratings for all collected S3 videos
+        if (s3VideosData.length > 0) {
+          const sessionIds = s3VideosData.map((video) => video.id);
+          const ratings = await SessionRating.aggregate([
+            { $match: { session_id: { $in: sessionIds } } },
+            { $group: { _id: "$session_id", averageRating: { $avg: "$rating" } } },
+          ]);
+
+          const ratingMap = new Map();
+          ratings.forEach((r) => {
+            ratingMap.set(r._id, parseFloat(r.averageRating.toFixed(1)));
+          });
+
+          s3VideosData.forEach((video) => {
+            if (video.session) {
+              video.session.rating = ratingMap.get(video.id) || 0; // Use fetched rating or default to 0
+            }
+          });
+        }
+
+        // Sort s3VideosData by session date in ascending order for numbering
+        // If dates are the same, sort by extractedSessionNumber ascending
         s3VideosData.sort((a, b) => {
-          const dateA = a.session?.date || new Date(a.lastModified);
-          const dateB = b.session?.date || new Date(b.lastModified);
-          return dateB - dateA; // Newest first
+          const dateA = a.session?.date
+            ? new Date(a.session.date).getTime()
+            : 0;
+          const dateB = b.session?.date
+            ? new Date(b.session.date).getTime()
+            : 0;
+
+          if (dateA !== dateB) {
+            return dateA - dateB; // Oldest first for numbering
+          }
+
+          // If dates are the same, sort by extracted session number ascending
+          const numA = a.session?.number || Infinity;
+          const numB = b.session?.number || Infinity;
+          return numA - numB;
         });
 
-        // Update session numbers after sorting to reflect chronological order
+        // Assign sequential displayTitle and session numbers based on this ascending sort
         s3VideosData.forEach((video, index) => {
+          video.displayTitle = `Session ${index + 1}`;
           if (video.session) {
             video.session.number = index + 1;
-            video.displayTitle = `Session ${index + 1}`;
           }
+        });
+
+        // Now, sort s3VideosData by date in descending order for final display
+        s3VideosData.sort((a, b) => {
+          const dateA = a.session?.date
+            ? new Date(a.session.date).getTime()
+            : 0;
+          const dateB = b.session?.date
+            ? new Date(b.session.date).getTime()
+            : 0;
+          return dateB - dateA; // Newest first for display
         });
       }
 
