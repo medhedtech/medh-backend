@@ -917,8 +917,7 @@ const userSchema = new Schema({
   // Timestamps
   created_at: {
     type: Date,
-    default: Date.now,
-    index: true
+    default: Date.now
   },
   updated_at: {
     type: Date,

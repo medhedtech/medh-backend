@@ -744,7 +744,6 @@ const courseSchema = new Schema(
       type: String,
       required: [true, "Course category is required"],
       trim: true,
-      index: true,
     },
     // Add category ref for population
     category: {
@@ -760,7 +759,6 @@ const courseSchema = new Schema(
       type: String,
       required: [true, "Course title is required"],
       trim: true,
-      index: true,
     },
     course_subtitle: {
       type: String,
@@ -768,7 +766,6 @@ const courseSchema = new Schema(
     },
     course_tag: {
       type: String,
-      index: true,
     },
     course_description: {
       type: Schema.Types.Mixed, // Allow both string and object for backward compatibility
@@ -865,7 +862,6 @@ const courseSchema = new Schema(
         message: "{VALUE} is not a valid status",
       },
       default: "Draft",
-      index: true,
     },
     category_type: {
       type: String,
@@ -875,12 +871,10 @@ const courseSchema = new Schema(
       },
       default: "Paid",
       required: [true, "Category type is required"],
-      index: true,
     },
     isFree: {
       type: Boolean,
       default: false,
-      index: true,
     },
     assigned_instructor: [
       {

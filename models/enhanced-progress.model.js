@@ -24,8 +24,7 @@ const lessonProgressDetailSchema = new Schema({
   status: {
     type: String,
     enum: ['not_started', 'in_progress', 'completed', 'skipped'],
-    default: 'not_started',
-    index: true
+    default: 'not_started'
   },
   // Progress percentage for partially completed lessons (0-100)
   progressPercentage: {
@@ -284,8 +283,7 @@ const enhancedProgressSchema = new Schema({
       type: Number,
       default: 0,
       min: 0,
-      max: 100,
-      index: true
+      max: 100
     },
     
     // Time tracking
@@ -373,8 +371,7 @@ const enhancedProgressSchema = new Schema({
   // Course completion status
   isCompleted: {
     type: Boolean,
-    default: false,
-    index: true
+    default: false
   },
   completedAt: Date,
   
@@ -410,8 +407,7 @@ const enhancedProgressSchema = new Schema({
   // Timestamps
   lastAccessedAt: {
     type: Date,
-    default: Date.now,
-    index: true
+    default: Date.now
   },
   firstAccessedAt: {
     type: Date,

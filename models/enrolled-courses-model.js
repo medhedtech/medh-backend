@@ -139,13 +139,11 @@ const enrolledCourseSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: [true, "Student ID is required"],
-      index: true,
     },
     course_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Course",
       required: [true, "Course ID is required"],
-      index: true,
     },
     enrollment_type: {
       type: String,
