@@ -1,0 +1,83 @@
+{
+  "type": "demo_certificates",
+  "generatedAt": "2025-07-10T14:39:08.390Z",
+  "student": {
+    "name": "Super Admin",
+    "email": "superadmin@medh.co",
+    "mongoId": "680092818c413e0442bf10dd"
+  },
+  "certificates": [
+    {
+      "certificateId": "MEDH-CERT-2024-01BEF944",
+      "certificateNumber": "CERT-20241215-18CFDB86",
+      "courseName": "Advanced JavaScript Programming",
+      "finalScore": 92,
+      "grade": "A-",
+      "completionDate": "2024-12-15T00:00:00.000Z",
+      "verificationUrl": "https://www.medh.co/verify-certificate/CERT-20241215-18CFDB86",
+      "instructor": "Dr. Sarah Johnson"
+    },
+    {
+      "certificateId": "MEDH-CERT-2024-51131566",
+      "certificateNumber": "CERT-20241220-2DC142EE",
+      "courseName": "React.js Development Masterclass",
+      "finalScore": 88,
+      "grade": "B+",
+      "completionDate": "2024-12-20T00:00:00.000Z",
+      "verificationUrl": "https://www.medh.co/verify-certificate/CERT-20241220-2DC142EE",
+      "instructor": "Prof. Michael Chen"
+    },
+    {
+      "certificateId": "MEDH-CERT-2024-C971ED24",
+      "certificateNumber": "CERT-20241225-CD490534",
+      "courseName": "Node.js Backend Development",
+      "finalScore": 94,
+      "grade": "A",
+      "completionDate": "2024-12-25T00:00:00.000Z",
+      "verificationUrl": "https://www.medh.co/verify-certificate/CERT-20241225-CD490534",
+      "instructor": "Dr. Emily Rodriguez"
+    },
+    {
+      "certificateId": "MEDH-CERT-2024-C34D3F2D",
+      "certificateNumber": "CERT-20241230-08943F43",
+      "courseName": "Database Design and Management",
+      "finalScore": 87,
+      "grade": "B+",
+      "completionDate": "2024-12-30T00:00:00.000Z",
+      "verificationUrl": "https://www.medh.co/verify-certificate/CERT-20241230-08943F43",
+      "instructor": "Prof. David Kim"
+    },
+    {
+      "certificateId": "MEDH-CERT-2025-BDBD13FD",
+      "certificateNumber": "CERT-20250105-2A406CC3",
+      "courseName": "DevOps and Cloud Computing",
+      "finalScore": 91,
+      "grade": "A-",
+      "completionDate": "2025-01-05T00:00:00.000Z",
+      "verificationUrl": "https://www.medh.co/verify-certificate/CERT-20250105-2A406CC3",
+      "instructor": "Dr. Lisa Thompson"
+    },
+    {
+      "certificateId": "MEDH-CERT-2025-DD2BF7D0",
+      "certificateNumber": "CERT-20250110-327DFCA7",
+      "courseName": "Full Stack Web Development",
+      "finalScore": 96,
+      "grade": "A",
+      "completionDate": "2025-01-10T00:00:00.000Z",
+      "verificationUrl": "https://www.medh.co/verify-certificate/CERT-20250110-327DFCA7",
+      "instructor": "Prof. James Wilson"
+    }
+  ],
+  "totalCertificates": 6,
+  "apiEndpoints": {
+    "verify": "GET /api/v1/certificates/verify/:certificateNumber",
+    "generateQR": "POST /api/v1/certificates/generate-qr-code",
+    "downloadQR": "GET /api/v1/certificates/:certificateId/qr-code/download"
+  },
+  "notes": [
+    "These are demo certificates without actual course or enrollment data",
+    "Course information is stored in certificate metadata",
+    "Certificates can be verified using the verification URLs",
+    "QR codes can be generated for any certificate using the API"
+  ]
+}

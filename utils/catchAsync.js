@@ -10,3 +10,4 @@ const catchAsync = (fn) => {
 };
 
 export default catchAsync;
+export { catchAsync };

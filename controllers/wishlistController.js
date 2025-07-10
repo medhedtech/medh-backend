@@ -1,6 +1,6 @@
 import Wishlist from '../models/wishlist.model.js';
 import Course from '../models/course-model.js';
-import { catchAsync } from '../utils/catchAsync.js';
+import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/appError.js';
 import { redisClient } from '../utils/cache.js';
 
