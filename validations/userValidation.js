@@ -55,14 +55,10 @@ const userValidation = joi.object({
     "string.empty": "Email is required",
     "string.email": "Please enter a valid email address",
   }),
-  password: joi
-    .string()
-    .min(8)
-    .required()
-    .messages({
-      "string.empty": "Password is required",
-      "string.min": "Password must be at least 8 characters",
-    }),
+  password: joi.string().min(8).required().messages({
+    "string.empty": "Password is required",
+    "string.min": "Password must be at least 8 characters",
+  }),
   phone_numbers: joi
     .array()
     .items(phoneNumberSchema)
@@ -158,7 +154,10 @@ const userValidation = joi.object({
         .valid("Under 18", "18-24", "25-34", "35-44", "45-54", "55-64", "65+")
         .optional(),
       category: joi.string().optional(),
-      gender: joi.string().valid("male", "female", "non-binary", "prefer-not-to-say", "other").default("male"),
+      gender: joi
+        .string()
+        .valid("male", "female", "non-binary", "prefer-not-to-say", "other")
+        .optional(),
       upload_resume: joi
         .array()
         .items(joi.string().uri())
@@ -168,7 +167,6 @@ const userValidation = joi.object({
         }),
     })
     .default(() => ({
-      gender: "male",
       upload_resume: [],
     })),
   admin_role: joi
