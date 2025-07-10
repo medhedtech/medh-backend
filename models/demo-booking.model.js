@@ -6,7 +6,6 @@ const demoBookingSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true,
     },
     email: {
       type: String,
@@ -35,7 +34,6 @@ const demoBookingSchema = new mongoose.Schema(
     scheduledDateTime: {
       type: Date,
       required: true,
-      index: true,
     },
     timezone: {
       type: String,
@@ -46,7 +44,6 @@ const demoBookingSchema = new mongoose.Schema(
       type: String,
       enum: ["pending", "confirmed", "cancelled", "rescheduled", "completed", "no-show"],
       default: "pending",
-      index: true,
     },
     demoType: {
       type: String,
@@ -433,7 +430,6 @@ const demoBookingSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
-      index: true,
     },
     // Auto-generation settings
     autoGenerateZoomMeeting: {
