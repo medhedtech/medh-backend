@@ -905,8 +905,6 @@ const getAllCoursesWithLimits = async (req, res) => {
       filter.no_of_Sessions = fullyDecodeURIComponent(no_of_Sessions);
     if (description)
       filter.course_description = fullyDecodeURIComponent(description);
-    if (course_grade)
-      filter.course_grade = fullyDecodeURIComponent(course_grade);
 
     const handleArrayOrStringFilter = (field, value) => {
       if (!value) return;
@@ -937,8 +935,8 @@ const getAllCoursesWithLimits = async (req, res) => {
             .filter(Boolean);
           console.log(`Split ${field} values:`, values);
 
-          // Use exact matching for categories
-          if (field === "course_category") {
+          // Use exact matching for categories and course_grade
+          if (field === "course_category" || field === "course_grade") {
             filter[field] = { $in: values };
           } else {
             filter[field] = {
@@ -946,8 +944,8 @@ const getAllCoursesWithLimits = async (req, res) => {
             };
           }
         } else {
-          // For single values, use exact match for categories
-          if (field === "course_category") {
+          // For single values, use exact match for categories and course_grade
+          if (field === "course_category" || field === "course_grade") {
             filter[field] = decodedValue;
           } else {
             filter[field] = { $regex: createSafeRegex(decodedValue) };
@@ -959,6 +957,7 @@ const getAllCoursesWithLimits = async (req, res) => {
     handleArrayOrStringFilter("course_category", course_category);
     handleArrayOrStringFilter("category_type", category_type);
     handleArrayOrStringFilter("course_tag", course_tag);
+    handleArrayOrStringFilter("course_grade", course_grade);
 
     // Special handling for class_type to better match Live and Blended courses
     if (class_type) {
@@ -1363,7 +1362,9 @@ const getCourseById = async (req, res) => {
 
     // First, try to find in legacy Course model (ensure preview_video is selected)
     course = await Course.findById(id)
-      .select("preview_video assigned_instructor course_title course_category course_tag course_image course_fee isFree status category_type class_type createdAt prices course_duration curriculum meta no_of_Sessions course_description course_grade brochures final_evaluation")
+      .select(
+        "preview_video assigned_instructor course_title course_category course_tag course_image course_fee isFree status category_type class_type createdAt prices course_duration curriculum meta no_of_Sessions course_description course_grade brochures final_evaluation",
+      )
       .populate({
         path: "assigned_instructor",
         select: "full_name email role domain phone_numbers",
@@ -1375,7 +1376,9 @@ const getCourseById = async (req, res) => {
     if (!course) {
       const [blendedCourse, liveCourse, freeCourse] = await Promise.all([
         BlendedCourse.findById(id)
-          .select("preview_video assigned_instructor course_title course_category course_tag course_image course_fee isFree status category_type class_type createdAt prices course_duration curriculum meta no_of_Sessions course_description course_grade brochures final_evaluation")
+          .select(
+            "preview_video assigned_instructor course_title course_category course_tag course_image course_fee isFree status category_type class_type createdAt prices course_duration curriculum meta no_of_Sessions course_description course_grade brochures final_evaluation",
+          )
           .populate({
             path: "assigned_instructor",
             select: "full_name email role domain phone_numbers",
@@ -1383,7 +1386,9 @@ const getCourseById = async (req, res) => {
           })
           .lean(),
         LiveCourse.findById(id)
-          .select("preview_video assigned_instructor course_title course_category course_tag course_image course_fee isFree status category_type class_type createdAt prices course_duration curriculum meta no_of_Sessions course_description course_grade brochures final_evaluation")
+          .select(
+            "preview_video assigned_instructor course_title course_category course_tag course_image course_fee isFree status category_type class_type createdAt prices course_duration curriculum meta no_of_Sessions course_description course_grade brochures final_evaluation",
+          )
           .populate({
             path: "assigned_instructor",
             select: "full_name email role domain phone_numbers",
@@ -1391,7 +1396,9 @@ const getCourseById = async (req, res) => {
           })
           .lean(),
         FreeCourse.findById(id)
-          .select("preview_video assigned_instructor course_title course_category course_tag course_image course_fee isFree status category_type class_type createdAt prices course_duration curriculum meta no_of_Sessions course_description course_grade brochures final_evaluation")
+          .select(
+            "preview_video assigned_instructor course_title course_category course_tag course_image course_fee isFree status category_type class_type createdAt prices course_duration curriculum meta no_of_Sessions course_description course_grade brochures final_evaluation",
+          )
           .populate({
             path: "assigned_instructor",
             select: "full_name email role domain phone_numbers",
@@ -1440,7 +1447,9 @@ const getCourseById = async (req, res) => {
     // Always return a signed URL for preview_video if url exists
     if (processedCourse.preview_video && processedCourse.preview_video.url) {
       try {
-        processedCourse.preview_video.signedUrl = generateSignedUrl(processedCourse.preview_video.url);
+        processedCourse.preview_video.signedUrl = generateSignedUrl(
+          processedCourse.preview_video.url,
+        );
       } catch (err) {
         processedCourse.preview_video.signedUrl = null;
       }
