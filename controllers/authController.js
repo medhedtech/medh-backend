@@ -1368,7 +1368,7 @@ class AuthController {
 
       // Send login notification email if from new device
       if (this.isNewDevice(user, deviceInfo)) {
-        await this.sendLoginNotification(user, deviceInfo, locationInfo);
+        this.sendLoginNotification(user, deviceInfo, locationInfo);
       }
 
       return this.completeLogin(
