@@ -981,7 +981,11 @@ class AuthController {
         });
       }
 
-      let { full_name, email, password, username, phone_numbers } = req.body;
+      let { full_name, email, password, username, phone_numbers, gender } =
+        req.body;
+
+      // Note: gender is optional and not required for account creation
+      // It will only be saved if provided by the user
 
       // Check if email already exists
       const existingEmailUser = await User.findOne({
@@ -1070,6 +1074,8 @@ class AuthController {
         },
         meta: {
           referral_source: req.body.referral_source || "direct",
+          // Gender is optional - only set if provided
+          ...(req.body.gender && { gender: req.body.gender.toLowerCase() }),
         },
       });
 
