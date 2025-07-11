@@ -13,6 +13,11 @@ import {
   passwordResetLimiter,
 } from "../middleware/rateLimit.js";
 import { validateChangePassword } from "../validations/passwordValidation.js";
+import {
+  demoUserValidation,
+  demoPasswordValidation,
+  demoLoginValidation,
+} from "../validations/userValidation.js";
 import oauthRoutes from "./oauthRoutes.js";
 
 const router = express.Router();
@@ -23,6 +28,160 @@ const router = express.Router();
 
 // Mount OAuth routes
 router.use("/oauth", oauthRoutes);
+
+// ============================================================================
+// DEMO USER ROUTES
+// ============================================================================
+
+/**
+ * @route   POST /api/v1/auth/demo-register
+ * @desc    Register a demo user without password requirement
+ * @access  Public
+ */
+router.post(
+  "/demo-register",
+  registerLimiter,
+  [
+    body("full_name")
+      .trim()
+      .isLength({ min: 2, max: 100 })
+      .matches(/^[a-zA-Z\s]*$/)
+      .withMessage(
+        "Full name must be 2-100 characters and contain only letters and spaces",
+      ),
+    body("email")
+      .isEmail()
+      .normalizeEmail()
+      .withMessage("Please provide a valid email address"),
+    body("username")
+      .optional()
+      .isLength({ min: 3, max: 30 })
+      .matches(/^[a-zA-Z0-9_]+$/)
+      .withMessage(
+        "Username must be 3-30 characters and contain only letters, numbers, and underscores",
+      ),
+    body("phone_numbers")
+      .optional()
+      .isArray()
+      .withMessage("Phone numbers must be an array"),
+    body("phone_numbers.*.country")
+      .optional()
+      .isLength({ min: 2, max: 3 })
+      .withMessage("Country code must be 2-3 characters"),
+    body("phone_numbers.*.number")
+      .optional()
+      .matches(/^\+[1-9]\d{1,14}$/)
+      .withMessage("Phone number must be in E.164 format"),
+    body("gender")
+      .optional()
+      .isIn(["male", "female", "non-binary", "prefer-not-to-say", "other"])
+      .withMessage("Invalid gender value"),
+    body("referral_source")
+      .optional()
+      .isString()
+      .withMessage("Referral source must be a string"),
+
+    // Enhanced demo session validation
+    body("course_category")
+      .isIn([
+        "web_development",
+        "data_science",
+        "mobile_development",
+        "cloud_computing",
+        "cybersecurity",
+        "ai_machine_learning",
+        "devops",
+        "ui_ux_design",
+        "digital_marketing",
+        "project_management",
+        "other",
+      ])
+      .withMessage("Please select a valid course category"),
+    body("grade_level")
+      .isIn(["beginner", "intermediate", "advanced", "expert"])
+      .withMessage("Please select a valid grade level"),
+    body("preferred_timing")
+      .isIn(["morning", "afternoon", "evening", "flexible"])
+      .withMessage("Please select a valid timing preference"),
+    body("preferred_timezone")
+      .optional()
+      .isString()
+      .withMessage("Timezone must be a string"),
+    body("preferred_days")
+      .optional()
+      .isArray()
+      .withMessage("Preferred days must be an array"),
+    body("preferred_days.*")
+      .optional()
+      .isIn([
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+      ])
+      .withMessage("Please select valid days of the week"),
+    body("session_duration")
+      .optional()
+      .isInt({ min: 30, max: 180 })
+      .withMessage("Session duration must be between 30 and 180 minutes"),
+  ],
+  authController.demoRegister.bind(authController),
+);
+
+/**
+ * @route   POST /api/v1/auth/demo/set-password
+ * @desc    Set password for demo user
+ * @access  Private (Demo users with setup token)
+ */
+router.post(
+  "/demo/set-password",
+  authenticateToken,
+  [
+    body("password")
+      .isLength({ min: 8 })
+      .matches(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+      )
+      .withMessage(
+        "Password must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+      ),
+    body("confirm_password").custom((value, { req }) => {
+      if (value !== req.body.password) {
+        throw new Error("Passwords do not match");
+      }
+      return true;
+    }),
+  ],
+  authController.setDemoPassword.bind(authController),
+);
+
+/**
+ * @route   GET /api/v1/auth/demo/status
+ * @desc    Get demo user status and information
+ * @access  Private (Demo users only)
+ */
+router.get(
+  "/demo/status",
+  authenticateToken,
+  authController.getDemoStatus.bind(authController),
+);
+
+/**
+ * @route   GET /api/v1/auth/demo/calendar/:eventId.ics
+ * @desc    Download calendar ICS file for demo session
+ * @access  Public
+ */
+router.get(
+  "/demo/calendar/:eventId.ics",
+  authController.downloadCalendarICS.bind(authController),
+);
+
+// ============================================================================
+// REGULAR AUTHENTICATION ROUTES
+// ============================================================================
 
 /**
  * @route   GET /api/v1/auth/check-availability
@@ -73,10 +232,28 @@ router.post(
 
 /**
  * @route   POST /api/v1/auth/login
- * @desc    Login a user and get token
+ * @desc    Unified login for both regular and demo users
  * @access  Public
  */
-router.post("/login", authController.loginUser.bind(authController));
+router.post(
+  "/login",
+  loginLimiter,
+  [
+    body("email")
+      .isEmail()
+      .normalizeEmail()
+      .withMessage("Please provide a valid email address"),
+    body("password")
+      .optional()
+      .isLength({ min: 8 })
+      .withMessage("Password must be at least 8 characters"),
+    body("remember_me")
+      .optional()
+      .isBoolean()
+      .withMessage("Remember me must be a boolean"),
+  ],
+  authController.login.bind(authController),
+);
 
 /**
  * @route   POST /api/v1/auth/complete-mfa-login

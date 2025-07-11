@@ -1162,7 +1162,7 @@ class AuthController {
 
       const { email, password, remember_me = false } = req.body;
 
-      // Find user by email with retry logic
+      // Find user by email with retry logic (includes both regular and demo users)
       let user;
       try {
         user = await dbUtils.findOne(User, { email: email.toLowerCase() });
@@ -1187,6 +1187,60 @@ class AuthController {
         });
       }
 
+      // Handle demo users special cases
+      if (user.is_demo) {
+        // Check if demo user needs password setup
+        if (user.needsPasswordSetup()) {
+          return res.status(200).json({
+            success: true,
+            message:
+              "Demo account found. Please set up your password to continue.",
+            requires_password_setup: true,
+            user_type: "demo",
+            data: {
+              user: {
+                id: user._id,
+                full_name: user.full_name,
+                email: user.email,
+                username: user.username,
+                is_demo: user.is_demo,
+                password_set: user.password_set,
+              },
+              setup_token: this.generateJWT(user, "1h"), // Short-lived token for password setup
+            },
+          });
+        }
+
+        // If demo user has password but no password provided in request
+        if (!password && user.password_set) {
+          return res.status(200).json({
+            success: true,
+            message:
+              "Demo account found. Please enter your password to continue.",
+            requires_password: true,
+            user_type: "demo",
+            data: {
+              user: {
+                id: user._id,
+                full_name: user.full_name,
+                email: user.email,
+                username: user.username,
+                is_demo: user.is_demo,
+                password_set: user.password_set,
+              },
+            },
+          });
+        }
+      }
+
+      // For regular users, password is always required
+      if (!user.is_demo && !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Password is required",
+        });
+      }
+
       // Check if account is locked using improved logic
       const lockStatus = this.isAccountLocked(user);
       if (lockStatus.isLocked) {
@@ -1207,61 +1261,64 @@ class AuthController {
         await this.resetLockoutFields(user);
       }
 
-      // Verify password
-      const isValidPassword = await user.comparePassword(password);
-      if (!isValidPassword) {
-        try {
-          const attemptResult = await this.incrementFailedAttempts(
-            user,
-            "login",
-          );
+      // Verify password (only if password is provided)
+      if (password) {
+        const isValidPassword = await user.comparePassword(password);
+        if (!isValidPassword) {
+          try {
+            const attemptResult = await this.incrementFailedAttempts(
+              user,
+              "login",
+            );
 
-          if (attemptResult.shouldReturnError) {
-            if (attemptResult.isLocked) {
-              return res.status(423).json({
-                success: false,
-                message: `Account temporarily locked due to multiple failed attempts. Please try again after ${attemptResult.lockInfo.remainingMinutes} minute(s).`,
-                lockout_info: {
-                  locked_until: attemptResult.lockInfo.lockedUntil,
-                  remaining_time: attemptResult.lockInfo.remainingTimeFormatted,
-                  remaining_minutes: attemptResult.lockInfo.remainingMinutes,
-                  lockout_reason: attemptResult.lockInfo.lockoutReason,
-                },
-              });
-            } else {
-              return res.status(401).json({
-                success: false,
-                message: "Invalid credentials",
-                attempts_info: {
-                  failed_attempts: attemptResult.attempts,
-                  remaining_attempts: attemptResult.remainingAttempts,
-                  warning:
-                    attemptResult.remainingAttempts <= 1
-                      ? "Account will be locked after next failed attempt"
-                      : null,
-                },
-              });
+            if (attemptResult.shouldReturnError) {
+              if (attemptResult.isLocked) {
+                return res.status(423).json({
+                  success: false,
+                  message: `Account temporarily locked due to multiple failed attempts. Please try again after ${attemptResult.lockInfo.remainingMinutes} minute(s).`,
+                  lockout_info: {
+                    locked_until: attemptResult.lockInfo.lockedUntil,
+                    remaining_time:
+                      attemptResult.lockInfo.remainingTimeFormatted,
+                    remaining_minutes: attemptResult.lockInfo.remainingMinutes,
+                    lockout_reason: attemptResult.lockInfo.lockoutReason,
+                  },
+                });
+              } else {
+                return res.status(401).json({
+                  success: false,
+                  message: "Invalid credentials",
+                  attempts_info: {
+                    failed_attempts: attemptResult.attempts,
+                    remaining_attempts: attemptResult.remainingAttempts,
+                    warning:
+                      attemptResult.remainingAttempts <= 1
+                        ? "Account will be locked after next failed attempt"
+                        : null,
+                  },
+                });
+              }
             }
+          } catch (dbError) {
+            logger.error(
+              "Database error during login - failed attempt handling",
+              {
+                error: dbError.message,
+                userId: user._id,
+                stack: dbError.stack,
+              },
+            );
+
+            return res.status(401).json({
+              success: false,
+              message: "Invalid credentials",
+            });
           }
-        } catch (dbError) {
-          logger.error(
-            "Database error during login - failed attempt handling",
-            {
-              error: dbError.message,
-              userId: user._id,
-              stack: dbError.stack,
-            },
-          );
-
-          return res.status(401).json({
-            success: false,
-            message: "Invalid credentials",
-          });
         }
-      }
 
-      // Reset failed login attempts on successful login
-      await this.resetLockoutFields(user);
+        // Reset failed login attempts on successful login
+        await this.resetLockoutFields(user);
+      }
 
       // Check if MFA is enabled for this user
       if (user.two_factor_enabled) {
@@ -1521,10 +1578,15 @@ class AuthController {
           last_seen: user.last_seen,
           statistics: user.statistics,
           preferences: user.preferences,
+          // Demo user specific fields
+          is_demo: user.is_demo,
+          password_set: user.password_set,
+          first_login_completed: user.first_login_completed,
         },
         token,
         session_id: sessionId,
         expires_in: remember_me ? "30d" : "24h",
+        user_type: user.is_demo ? "demo" : "regular",
       },
     });
   }
@@ -4541,6 +4603,622 @@ class AuthController {
         email: user.email,
       });
       throw error;
+    }
+  }
+
+  // ============================================================================
+  // DEMO USER REGISTRATION METHODS
+  // ============================================================================
+
+  /**
+   * Register a demo user without password requirement
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async demoRegister(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      let {
+        full_name,
+        email,
+        phone_numbers,
+        username,
+        // Enhanced demo session fields
+        course_category,
+        grade_level,
+        preferred_timing,
+        preferred_timezone,
+        preferred_days,
+        session_duration,
+      } = req.body;
+
+      // Check if email already exists
+      const existingEmailUser = await User.findOne({
+        email: email.toLowerCase(),
+      });
+      if (existingEmailUser) {
+        return res.status(409).json({
+          success: false,
+          message: "An account with this email already exists",
+          details: {
+            email_taken: true,
+            existing_user_type: existingEmailUser.is_demo ? "demo" : "regular",
+          },
+        });
+      }
+
+      // Auto-generate username if not provided
+      if (!username || username.trim() === "") {
+        username = await this.generateUniqueUsername(full_name, email);
+      } else {
+        // Check for username conflicts if username was provided by user
+        const existingUsernameUser = await User.findOne({
+          username: username.trim(),
+        });
+        if (existingUsernameUser) {
+          return res.status(409).json({
+            success: false,
+            message: "This username is already taken",
+            details: {
+              username_taken: true,
+            },
+          });
+        }
+      }
+
+      // Extract device and location information
+      const deviceInfo = this.extractDeviceInfo(req);
+      const locationInfo = this.extractLocationInfo(req);
+
+      // Generate demo student ID
+      const demoId = await User.generateDemoId();
+
+      // Create new demo user with session details
+      const newUser = new User({
+        full_name,
+        email: email.toLowerCase(),
+        username,
+        phone_numbers,
+        role: "student",
+        student_id: demoId,
+        is_demo: true,
+        password_set: false,
+        first_login_completed: false,
+        email_verified: true, // Demo users are auto-verified
+        devices: [deviceInfo],
+        statistics: {
+          engagement: {
+            total_logins: 0,
+            total_session_time: 0,
+            last_active_date: new Date(),
+          },
+          learning: {
+            current_streak: 0,
+            longest_streak: 0,
+          },
+        },
+        preferences: {
+          theme: "auto",
+          language: "en",
+          timezone: locationInfo.timezone || "UTC",
+        },
+        meta: {
+          referral_source: req.body.referral_source || "demo",
+          registration_type: "demo",
+          // Gender is optional - only set if provided
+          ...(req.body.gender && { gender: req.body.gender.toLowerCase() }),
+        },
+        demo_session: {
+          course_category,
+          grade_level,
+          preferred_timing,
+          preferred_timezone: preferred_timezone || "UTC",
+          preferred_days: preferred_days || [],
+          session_duration: session_duration || 60,
+          demo_scheduled: false,
+          demo_completed: false,
+        },
+      });
+
+      await newUser.save();
+
+      // Create Zoom meeting and calendar event for demo session
+      let zoomMeeting = null;
+      let calendarEvent = null;
+
+      try {
+        // Import services dynamically
+        const zoomService = (await import("../services/zoomService.js"))
+          .default;
+        const calendarService = (await import("../services/calendarService.js"))
+          .default;
+
+        // Create Zoom meeting
+        zoomMeeting = await zoomService.createDemoMeeting(
+          { full_name, email },
+          newUser.demo_session,
+        );
+
+        // Update user with Zoom meeting details
+        await newUser.updateZoomMeeting(zoomMeeting);
+
+        // Generate calendar event
+        calendarEvent = calendarService.generateDemoSessionEvent(
+          { full_name, email },
+          newUser.demo_session,
+          zoomMeeting,
+        );
+
+        // Update user with calendar event details
+        await newUser.updateCalendarEvent(calendarEvent);
+
+        // Mark session as scheduled
+        await newUser.scheduleDemoSession({
+          ...newUser.demo_session,
+          demo_scheduled: true,
+        });
+      } catch (integrationError) {
+        console.error(
+          "Integration error during demo registration:",
+          integrationError,
+        );
+        // Continue with registration even if Zoom/Calendar fails
+      }
+
+      // Log demo registration activity
+      await newUser.logActivity(
+        "demo_register",
+        null,
+        {
+          registration_method: "demo",
+          referral_source: req.body.referral_source || "demo",
+          course_category,
+          grade_level,
+          preferred_timing,
+          session_scheduled: !!zoomMeeting,
+        },
+        {
+          ip_address: deviceInfo.ip_address,
+          user_agent: req.headers["user-agent"],
+          device_type: deviceInfo.device_type,
+          geolocation: locationInfo,
+        },
+      );
+
+      // Send demo welcome email
+      await this.sendDemoWelcomeEmail(newUser);
+
+      // Generate JWT token for immediate access
+      const token = this.generateJWT(newUser);
+
+      // Track demo user registration
+      this.trackUserAnalytics("demo_user_registered", {
+        user_id: newUser._id,
+        email: newUser.email,
+        registration_date: new Date(),
+        device_info: deviceInfo,
+        location_info: locationInfo,
+      });
+
+      res.status(201).json({
+        success: true,
+        message:
+          "Demo account created successfully with scheduled session. You can start exploring immediately!",
+        data: {
+          user: {
+            id: newUser._id,
+            full_name: newUser.full_name,
+            email: newUser.email,
+            username: newUser.username,
+            role: newUser.role,
+            student_id: newUser.student_id,
+            is_demo: newUser.is_demo,
+            password_set: newUser.password_set,
+            first_login_completed: newUser.first_login_completed,
+            email_verified: newUser.email_verified,
+            account_type: newUser.account_type,
+            created_at: newUser.created_at,
+          },
+          demo_session: {
+            course_category,
+            grade_level,
+            preferred_timing,
+            session_duration: session_duration || 60,
+            demo_scheduled: !!zoomMeeting,
+            zoom_meeting: zoomMeeting
+              ? {
+                  meeting_url: zoomMeeting.meeting_url,
+                  meeting_id: zoomMeeting.meeting_id,
+                  meeting_password: zoomMeeting.meeting_password,
+                  scheduled_for: zoomMeeting.scheduled_for,
+                  duration: zoomMeeting.duration,
+                }
+              : null,
+            calendar_event: calendarEvent
+              ? {
+                  event_url: calendarEvent.event_url,
+                  ics_download: `${process.env.BACKEND_URL || "https://api.medh.co"}/api/v1/demo/calendar/${calendarEvent.event_id}.ics`,
+                }
+              : null,
+          },
+          token,
+          expires_in: "24h",
+          next_steps: {
+            message:
+              "Your demo session is scheduled! You can start exploring the platform immediately and set up a password anytime to secure your account.",
+            password_setup_required: true,
+            demo_session_scheduled: !!zoomMeeting,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Demo registration error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during demo registration",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Set password for demo user
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async setDemoPassword(req, res) {
+    try {
+      const { password, confirm_password } = req.body;
+      const userId = req.user.id;
+
+      // Validate passwords
+      if (!password || !confirm_password) {
+        return res.status(400).json({
+          success: false,
+          message: "Password and password confirmation are required",
+        });
+      }
+
+      if (password !== confirm_password) {
+        return res.status(400).json({
+          success: false,
+          message: "Passwords do not match",
+        });
+      }
+
+      // Validate password strength
+      const passwordValidation = this.validatePasswordStrength(password);
+      if (!passwordValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          message: "Password does not meet requirements",
+          password_requirements: passwordValidation.requirements,
+          errors: passwordValidation.errors,
+        });
+      }
+
+      // Find demo user
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      if (!user.is_demo) {
+        return res.status(400).json({
+          success: false,
+          message: "This endpoint is only for demo users",
+        });
+      }
+
+      // Set password using the user method
+      await user.setDemoPassword(password);
+
+      // Automatically convert demo user to regular account
+      await user.convertDemoToRegular();
+
+      // Extract device and location information
+      const deviceInfo = this.extractDeviceInfo(req);
+      const locationInfo = this.extractLocationInfo(req);
+
+      // Create session
+      const sessionId = crypto.randomBytes(32).toString("hex");
+      const sessionData = {
+        session_id: sessionId,
+        device_id: deviceInfo.device_id,
+        ip_address: deviceInfo.ip_address,
+        user_agent: req.headers["user-agent"],
+        geolocation: locationInfo,
+      };
+
+      await user.createSession(sessionData);
+
+      // Update user statistics
+      user.last_login = new Date();
+      user.statistics.engagement.last_active_date = new Date();
+      user.statistics.engagement.total_logins += 1;
+      await user.save();
+
+      // Generate new JWT token
+      const token = this.generateJWT(user);
+
+      // Send account conversion confirmation email
+      await this.sendDemoConversionConfirmation(user);
+
+      res.status(200).json({
+        success: true,
+        message:
+          "Password set successfully! Your demo account has been converted to a regular account.",
+        data: {
+          user: {
+            id: user._id,
+            full_name: user.full_name,
+            email: user.email,
+            username: user.username,
+            role: user.role,
+            student_id: user.student_id, // Now has regular student ID
+            is_demo: user.is_demo, // Now false
+            password_set: user.password_set,
+            first_login_completed: user.first_login_completed,
+            account_type: user.account_type,
+          },
+          token,
+          expires_in: "24h",
+          session_id: sessionId,
+          account_converted: true,
+          user_type: "regular",
+        },
+      });
+    } catch (error) {
+      console.error("Set demo password error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error setting password",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Get demo user status and information
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getDemoStatus(req, res) {
+    try {
+      const userId = req.user.id;
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      if (!user.is_demo) {
+        return res.status(400).json({
+          success: false,
+          message: "User is not a demo user",
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Demo status retrieved successfully",
+        data: {
+          user: {
+            id: user._id,
+            full_name: user.full_name,
+            email: user.email,
+            username: user.username,
+            is_demo: user.is_demo,
+            password_set: user.password_set,
+            first_login_completed: user.first_login_completed,
+          },
+          actions_available: {
+            can_set_password: !user.password_set,
+            needs_password_setup: user.needsPasswordSetup(),
+            auto_convert_on_password: true,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Get demo status error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error retrieving demo status",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Send demo welcome email
+   * @param {Object} user - User object
+   */
+  async sendDemoWelcomeEmail(user) {
+    try {
+      const emailService = (await import("../services/emailService.js"))
+        .default;
+
+      const demoDetails = {
+        "Demo ID": user.student_id,
+        "Account Type": "Demo Account",
+        "Features Available": "Full platform access",
+        "Next Step": "Set up your password to secure your account",
+      };
+
+      await emailService.sendNotificationEmail(
+        user.email,
+        "🎉 Welcome to Your Medh Demo Account!",
+        `Hello ${user.full_name}, welcome to Medh Learning Platform! Your demo account is ready to use. Explore all features and set up a password anytime to secure your account permanently.`,
+        {
+          user_name: user.full_name,
+          email: user.email,
+          details: demoDetails,
+          actionUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/demo/setup-password`,
+          actionText: "Set Up Password",
+          currentYear: new Date().getFullYear(),
+        },
+      );
+
+      logger.info("Demo welcome email sent successfully", {
+        userId: user._id,
+        email: user.email,
+      });
+    } catch (error) {
+      logger.error("Failed to send demo welcome email", {
+        error: error.message,
+        userId: user._id,
+        email: user.email,
+      });
+    }
+  }
+
+  /**
+   * Send demo password setup confirmation email
+   * @param {Object} user - User object
+   */
+  async sendDemoPasswordSetupConfirmation(user) {
+    try {
+      const emailService = (await import("../services/emailService.js"))
+        .default;
+
+      await emailService.sendNotificationEmail(
+        user.email,
+        "🔐 Password Set Successfully - Medh Demo Account",
+        `Hello ${user.full_name}, your demo account password has been set successfully! Your account is now secured and you can continue exploring the platform.`,
+        {
+          user_name: user.full_name,
+          email: user.email,
+          details: {
+            "Password Set": "Successfully",
+            "Account Status": "Secured Demo Account",
+            "Next Step": "Convert to regular account anytime",
+          },
+          actionUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/demo/convert`,
+          actionText: "Convert to Regular Account",
+          currentYear: new Date().getFullYear(),
+        },
+      );
+
+      logger.info("Demo password setup confirmation sent successfully", {
+        userId: user._id,
+        email: user.email,
+      });
+    } catch (error) {
+      logger.error("Failed to send demo password setup confirmation", {
+        error: error.message,
+        userId: user._id,
+        email: user.email,
+      });
+    }
+  }
+
+  /**
+   * Send demo conversion confirmation email
+   * @param {Object} user - User object
+   */
+  async sendDemoConversionConfirmation(user) {
+    try {
+      const emailService = (await import("../services/emailService.js"))
+        .default;
+
+      await emailService.sendNotificationEmail(
+        user.email,
+        "🎊 Welcome to Medh - Account Converted Successfully!",
+        `Hello ${user.full_name}, congratulations! Your demo account has been successfully converted to a regular Medh Learning Platform account. You now have full access to all features with no time limits.`,
+        {
+          user_name: user.full_name,
+          email: user.email,
+          details: {
+            "Account Type": "Regular Student Account",
+            "Student ID": user.student_id,
+            "Conversion Date": new Date().toLocaleDateString(),
+            "Account Status": "Active",
+            "Access Level": "Full Platform Access",
+            "Time Limit": "None",
+          },
+          actionUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/dashboard`,
+          actionText: "Go to Dashboard",
+          currentYear: new Date().getFullYear(),
+        },
+      );
+
+      logger.info("Demo conversion confirmation sent successfully", {
+        userId: user._id,
+        email: user.email,
+      });
+    } catch (error) {
+      logger.error("Failed to send demo conversion confirmation", {
+        error: error.message,
+        userId: user._id,
+        email: user.email,
+      });
+    }
+  }
+
+  /**
+   * Download calendar ICS file for demo session
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async downloadCalendarICS(req, res) {
+    try {
+      const { eventId } = req.params;
+
+      // Remove .ics extension if present
+      const cleanEventId = eventId.replace(".ics", "");
+
+      // Find user with matching calendar event
+      const user = await User.findOne({
+        "demo_session.calendar_event.event_id": cleanEventId,
+        is_demo: true,
+      });
+
+      if (!user || !user.demo_session?.calendar_event) {
+        return res.status(404).json({
+          success: false,
+          message: "Calendar event not found",
+        });
+      }
+
+      const calendarEvent = user.demo_session.calendar_event;
+
+      // Set appropriate headers for ICS file download
+      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${cleanEventId}.ics"`,
+      );
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+
+      // Send the ICS content
+      res.send(calendarEvent.ics_content);
+    } catch (error) {
+      console.error("Error downloading calendar ICS:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error while downloading calendar file",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
     }
   }
 }
