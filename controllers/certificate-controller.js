@@ -662,7 +662,8 @@ export const verifyCertificate = async (req, res) => {
       },
       student: {
         id: certificate.student._id,
-        name: certificate.student.full_name,
+        // Prefer denormalized student_name, fallback to populated student.full_name
+        name: certificate.student_name || certificate.student.full_name,
         email: certificate.student.email,
         studentId: certificate.student.student_id,
       },

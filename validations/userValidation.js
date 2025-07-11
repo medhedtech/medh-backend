@@ -180,4 +180,159 @@ const userValidation = joi.object({
   corporate_id: joi.string().optional(),
 });
 
+// Demo User Validation Schema (without password requirement)
+const demoUserValidation = joi.object({
+  full_name: joi
+    .string()
+    .required()
+    .min(2)
+    .max(100)
+    .pattern(/^[a-zA-Z\s]*$/)
+    .messages({
+      "string.empty": "Full name is required",
+      "string.min": "Full name must be at least 2 characters",
+      "string.max": "Full name cannot exceed 100 characters",
+      "string.pattern.base": "Full name can only contain letters and spaces",
+    }),
+  email: joi.string().email().trim().lowercase().required().messages({
+    "string.empty": "Email is required",
+    "string.email": "Please enter a valid email address",
+  }),
+  username: joi
+    .string()
+    .min(3)
+    .max(30)
+    .pattern(/^[a-zA-Z0-9_]+$/)
+    .optional()
+    .messages({
+      "string.min": "Username must be at least 3 characters",
+      "string.max": "Username cannot exceed 30 characters",
+      "string.pattern.base":
+        "Username can only contain letters, numbers, and underscores",
+    }),
+  phone_numbers: joi
+    .array()
+    .items(phoneNumberSchema)
+    .min(1)
+    .unique((a, b) => a.number === b.number)
+    .optional()
+    .messages({
+      "array.min": "At least one phone number is required",
+      "array.unique": "Duplicate phone numbers are not allowed",
+    }),
+  referral_source: joi.string().optional().default("demo"),
+  gender: joi
+    .string()
+    .valid("male", "female", "non-binary", "prefer-not-to-say", "other")
+    .optional(),
+  
+  // Enhanced demo session fields
+  course_category: joi
+    .string()
+    .required()
+    .valid(
+      "web_development",
+      "data_science", 
+      "mobile_development",
+      "cloud_computing",
+      "cybersecurity",
+      "ai_machine_learning",
+      "devops",
+      "ui_ux_design",
+      "digital_marketing",
+      "project_management",
+      "other"
+    )
+    .messages({
+      "string.empty": "Course category is required",
+      "any.only": "Please select a valid course category",
+    }),
+    
+  grade_level: joi
+    .string()
+    .required()
+    .valid("beginner", "intermediate", "advanced", "expert")
+    .messages({
+      "string.empty": "Grade level is required",
+      "any.only": "Please select a valid grade level",
+    }),
+    
+  preferred_timing: joi
+    .string()
+    .required()
+    .valid("morning", "afternoon", "evening", "flexible")
+    .messages({
+      "string.empty": "Preferred timing is required",
+      "any.only": "Please select a valid timing preference",
+    }),
+    
+  preferred_timezone: joi
+    .string()
+    .optional()
+    .default("UTC")
+    .messages({
+      "string.base": "Timezone must be a string",
+    }),
+    
+  preferred_days: joi
+    .array()
+    .items(
+      joi.string().valid(
+        "monday", "tuesday", "wednesday", "thursday", 
+        "friday", "saturday", "sunday"
+      )
+    )
+    .optional()
+    .default([])
+    .messages({
+      "array.base": "Preferred days must be an array",
+      "any.only": "Please select valid days of the week",
+    }),
+    
+  session_duration: joi
+    .number()
+    .integer()
+    .min(30)
+    .max(180)
+    .optional()
+    .default(60)
+    .messages({
+      "number.base": "Session duration must be a number",
+      "number.min": "Session duration must be at least 30 minutes",
+      "number.max": "Session duration cannot exceed 180 minutes",
+    }),
+});
+
+// Demo Password Setup Validation
+const demoPasswordValidation = joi.object({
+  password: joi
+    .string()
+    .min(8)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+    .required()
+    .messages({
+      "string.empty": "Password is required",
+      "string.min": "Password must be at least 8 characters",
+      "string.pattern.base":
+        "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+    }),
+  confirm_password: joi
+    .string()
+    .valid(joi.ref("password"))
+    .required()
+    .messages({
+      "any.only": "Passwords do not match",
+      "string.empty": "Password confirmation is required",
+    }),
+});
+
+// Demo Login Validation (email only)
+const demoLoginValidation = joi.object({
+  email: joi.string().email().trim().lowercase().required().messages({
+    "string.empty": "Email is required",
+    "string.email": "Please enter a valid email address",
+  }),
+});
+
 export default userValidation;
+export { demoUserValidation, demoPasswordValidation, demoLoginValidation };

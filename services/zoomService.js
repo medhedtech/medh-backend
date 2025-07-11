@@ -2,6 +2,8 @@ import crypto from "crypto";
 import qs from "querystring";
 
 import axios from "axios";
+import jwt from "jsonwebtoken";
+import fetch from "node-fetch";
 
 class ZoomService {
   constructor() {
@@ -13,6 +15,10 @@ class ZoomService {
     this.baseUrl = "https://api.zoom.us/v2";
     this.tokenCache = null;
     this.tokenExpiry = null;
+    this.apiBaseUrl = "https://api.zoom.us/v2";
+    this.clientId = process.env.ZOOM_CLIENT_ID;
+    this.clientSecret = process.env.ZOOM_CLIENT_SECRET;
+    this.accountId = process.env.ZOOM_ACCOUNT_ID;
   }
 
   async getAccessToken() {
@@ -63,6 +69,210 @@ class ZoomService {
           "Please check your ZOOM_CLIENT_ID and ZOOM_CLIENT_SECRET environment variables",
         );
       }
+      throw error;
+    }
+  }
+
+  /**
+   * Generate Zoom access token using Server-to-Server OAuth
+   */
+  async generateAccessToken() {
+    try {
+      const response = await fetch(`https://zoom.us/oauth/token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`,
+        },
+        body: new URLSearchParams({
+          grant_type: "account_credentials",
+          account_id: this.accountId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          `Zoom token error: ${data.error_description || data.error}`,
+        );
+      }
+
+      return data.access_token;
+    } catch (error) {
+      console.error("Error generating Zoom access token:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a Zoom meeting for demo session
+   */
+  async createDemoMeeting(userDetails, sessionDetails) {
+    try {
+      const accessToken = await this.generateAccessToken();
+
+      // Calculate meeting start time based on preferences
+      const startTime = this.calculateMeetingTime(sessionDetails);
+
+      const meetingData = {
+        topic: `Medh Demo Session - ${sessionDetails.course_category.replace("_", " ").toUpperCase()}`,
+        type: 2, // Scheduled meeting
+        start_time: startTime.toISOString(),
+        duration: sessionDetails.session_duration || 60,
+        timezone: sessionDetails.preferred_timezone || "UTC",
+        password: this.generateMeetingPassword(),
+        agenda: `Demo session for ${userDetails.full_name} - ${sessionDetails.course_category} (${sessionDetails.grade_level} level)`,
+        settings: {
+          host_video: true,
+          participant_video: true,
+          cn_meeting: false,
+          in_meeting: false,
+          join_before_host: true,
+          mute_upon_entry: true,
+          watermark: false,
+          use_pmi: false,
+          approval_type: 0, // Automatically approve
+          audio: "both",
+          auto_recording: "cloud",
+          enforce_login: false,
+          registrants_confirmation_email: true,
+          waiting_room: false,
+          registrants_email_notification: true,
+        },
+        recurrence: {
+          type: 1, // Daily
+          repeat_interval: 1,
+          end_times: 1,
+        },
+      };
+
+      const response = await fetch(`${this.apiBaseUrl}/users/me/meetings`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(meetingData),
+      });
+
+      const meeting = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          `Zoom meeting creation error: ${meeting.message || "Unknown error"}`,
+        );
+      }
+
+      return {
+        meeting_id: meeting.id.toString(),
+        meeting_url: meeting.join_url,
+        meeting_password: meeting.password,
+        host_key: meeting.host_key,
+        scheduled_for: new Date(meeting.start_time),
+        start_url: meeting.start_url,
+        topic: meeting.topic,
+        duration: meeting.duration,
+      };
+    } catch (error) {
+      console.error("Error creating Zoom meeting:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Calculate optimal meeting time based on user preferences
+   */
+  calculateMeetingTime(sessionDetails) {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Set time based on preferred timing
+    switch (sessionDetails.preferred_timing) {
+      case "morning":
+        tomorrow.setHours(10, 0, 0, 0); // 10 AM
+        break;
+      case "afternoon":
+        tomorrow.setHours(14, 0, 0, 0); // 2 PM
+        break;
+      case "evening":
+        tomorrow.setHours(18, 0, 0, 0); // 6 PM
+        break;
+      default:
+        tomorrow.setHours(14, 0, 0, 0); // Default to 2 PM
+    }
+
+    return tomorrow;
+  }
+
+  /**
+   * Generate a random meeting password
+   */
+  generateMeetingPassword() {
+    const chars =
+      "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let password = "";
+    for (let i = 0; i < 8; i++) {
+      password += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return password;
+  }
+
+  /**
+   * Update meeting details
+   */
+  async updateMeeting(meetingId, updateData) {
+    try {
+      const accessToken = await this.generateAccessToken();
+
+      const response = await fetch(`${this.apiBaseUrl}/meetings/${meetingId}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updateData),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(
+          `Zoom meeting update error: ${error.message || "Unknown error"}`,
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error updating Zoom meeting:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a meeting
+   */
+  async deleteMeeting(meetingId) {
+    try {
+      const accessToken = await this.generateAccessToken();
+
+      const response = await fetch(`${this.apiBaseUrl}/meetings/${meetingId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(
+          `Zoom meeting deletion error: ${error.message || "Unknown error"}`,
+        );
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error("Error deleting Zoom meeting:", error);
       throw error;
     }
   }

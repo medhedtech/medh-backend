@@ -123,6 +123,12 @@ const userActivitySchema = new Schema(
         "mfa_verification_failed",
         "backup_codes_regenerated",
         "mfa_recovery_requested",
+        // Demo user actions
+        "demo_register",
+        "demo_password_set",
+        "demo_converted",
+        "demo_scheduled",
+        "demo_completed",
       ],
     },
     resource: {
@@ -612,8 +618,111 @@ const userSchema = new Schema(
     },
     password: {
       type: String,
-      required: [true, "Password is required"],
+      required: function () {
+        // Password is not required for demo users initially
+        return !this.is_demo;
+      },
       minlength: [8, "Password must be at least 8 characters"],
+    },
+
+    // Demo User Management
+    password_set: {
+      type: Boolean,
+      default: function () {
+        return !this.is_demo; // Regular users have password set by default
+      },
+    },
+    first_login_completed: {
+      type: Boolean,
+      default: false,
+    },
+
+    // Demo Session Details
+    demo_session: {
+      course_category: {
+        type: String,
+        enum: [
+          "web_development",
+          "data_science",
+          "mobile_development",
+          "cloud_computing",
+          "cybersecurity",
+          "ai_machine_learning",
+          "devops",
+          "ui_ux_design",
+          "digital_marketing",
+          "project_management",
+          "other",
+        ],
+      },
+      grade_level: {
+        type: String,
+        enum: ["beginner", "intermediate", "advanced", "expert"],
+      },
+      preferred_timing: {
+        type: String,
+        enum: [
+          "morning", // 9 AM - 12 PM
+          "afternoon", // 12 PM - 5 PM
+          "evening", // 5 PM - 8 PM
+          "flexible",
+        ],
+      },
+      preferred_timezone: {
+        type: String,
+        default: "UTC",
+      },
+      preferred_days: [
+        {
+          type: String,
+          enum: [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+          ],
+        },
+      ],
+      session_duration: {
+        type: Number,
+        default: 60, // minutes
+        min: 30,
+        max: 180,
+      },
+      zoom_meeting: {
+        meeting_id: String,
+        meeting_url: String,
+        meeting_password: String,
+        host_key: String,
+        created_at: Date,
+        scheduled_for: Date,
+      },
+      calendar_event: {
+        event_id: String,
+        event_url: String,
+        ics_content: String,
+        created_at: Date,
+      },
+      demo_scheduled: {
+        type: Boolean,
+        default: false,
+      },
+      demo_completed: {
+        type: Boolean,
+        default: false,
+      },
+      demo_feedback: {
+        rating: {
+          type: Number,
+          min: 1,
+          max: 5,
+        },
+        comments: String,
+        completed_at: Date,
+      },
     },
 
     // Contact Information
@@ -1703,6 +1812,161 @@ userSchema.statics.findByStudentId = function (studentId) {
 // Add static method to validate student ID format
 userSchema.statics.isValidStudentIdFormat = function (studentId) {
   return /^MED-\d{4}-\d{6}$/.test(studentId);
+};
+
+// Demo User Management Methods
+userSchema.methods.isDemoUser = function () {
+  return this.is_demo === true;
+};
+
+userSchema.methods.needsPasswordSetup = function () {
+  return this.is_demo && !this.password_set;
+};
+
+userSchema.methods.setDemoPassword = async function (password) {
+  if (!this.is_demo) {
+    throw new Error("This method is only for demo users");
+  }
+
+  this.password = password;
+  this.password_set = true;
+  this.first_login_completed = true;
+
+  // Log the password setup activity
+  await this.logActivity("demo_password_set", null, {
+    password_set_date: new Date(),
+    converted_from_demo: true,
+  });
+
+  return this.save();
+};
+
+userSchema.methods.convertDemoToRegular = async function () {
+  if (!this.is_demo) {
+    throw new Error("User is not a demo user");
+  }
+
+  this.is_demo = false;
+  this.password_set = true;
+  this.first_login_completed = true;
+
+  // Log the conversion activity
+  await this.logActivity("demo_converted", null, {
+    conversion_date: new Date(),
+    demo_duration: this.createdAt ? new Date() - this.createdAt : null,
+  });
+
+  return this.save();
+};
+
+// Static methods for demo users
+userSchema.statics.findDemoUsers = function () {
+  return this.find({ is_demo: true });
+};
+
+userSchema.statics.findDemoUsersNeedingPasswordSetup = function () {
+  return this.find({
+    is_demo: true,
+    password_set: false,
+  });
+};
+
+userSchema.statics.generateDemoId = async function () {
+  const currentYear = new Date().getFullYear();
+  const prefix = `DEMO-${currentYear}-`;
+
+  try {
+    // Find the latest demo ID for the current year
+    const latestDemo = await this.findOne({
+      student_id: { $regex: `^${prefix}` },
+      is_demo: true,
+    }).sort({ student_id: -1 });
+
+    let nextNumber = 1;
+
+    if (latestDemo && latestDemo.student_id) {
+      // Extract the number part from the demo ID
+      const numberPart = latestDemo.student_id.split("-")[2];
+      nextNumber = parseInt(numberPart) + 1;
+    }
+
+    // Format with leading zeros (6 digits)
+    const formattedNumber = nextNumber.toString().padStart(6, "0");
+    return `${prefix}${formattedNumber}`;
+  } catch (error) {
+    console.error("Error generating demo ID:", error);
+    // Fallback to timestamp-based ID
+    const timestamp = Date.now().toString().slice(-6);
+    return `${prefix}${timestamp}`;
+  }
+};
+
+// Demo Session Management Methods
+userSchema.methods.scheduleDemoSession = async function (sessionDetails) {
+  if (!this.demo_session) {
+    this.demo_session = {};
+  }
+
+  // Update demo session details
+  Object.assign(this.demo_session, sessionDetails);
+  this.demo_session.demo_scheduled = true;
+
+  // Log the demo scheduling activity
+  await this.logActivity("demo_scheduled", null, {
+    scheduled_date: new Date(),
+    course_category: sessionDetails.course_category,
+    grade_level: sessionDetails.grade_level,
+    preferred_timing: sessionDetails.preferred_timing,
+  });
+
+  return this.save();
+};
+
+userSchema.methods.updateZoomMeeting = async function (zoomDetails) {
+  if (!this.demo_session) {
+    this.demo_session = {};
+  }
+
+  this.demo_session.zoom_meeting = {
+    ...zoomDetails,
+    created_at: new Date(),
+  };
+
+  return this.save();
+};
+
+userSchema.methods.updateCalendarEvent = async function (calendarDetails) {
+  if (!this.demo_session) {
+    this.demo_session = {};
+  }
+
+  this.demo_session.calendar_event = {
+    ...calendarDetails,
+    created_at: new Date(),
+  };
+
+  return this.save();
+};
+
+userSchema.methods.completeDemoSession = async function (feedback) {
+  if (!this.demo_session) {
+    this.demo_session = {};
+  }
+
+  this.demo_session.demo_completed = true;
+  this.demo_session.demo_feedback = {
+    ...feedback,
+    completed_at: new Date(),
+  };
+
+  // Log the demo completion activity
+  await this.logActivity("demo_completed", null, {
+    completed_date: new Date(),
+    rating: feedback.rating,
+    course_category: this.demo_session.course_category,
+  });
+
+  return this.save();
 };
 
 // Create and export the model
