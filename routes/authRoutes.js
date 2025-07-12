@@ -7,11 +7,6 @@ import * as corporateController from "../controllers/corporateController.js";
 import * as instructorController from "../controllers/instructor-controller.js";
 import * as assignInstructorController from "../controllers/assignInstructorController.js";
 import { authenticateToken } from "../middleware/auth.js";
-import {
-  loginLimiter,
-  registerLimiter,
-  passwordResetLimiter,
-} from "../middleware/rateLimit.js";
 import { validateChangePassword } from "../validations/passwordValidation.js";
 import {
   demoUserValidation,
@@ -40,7 +35,6 @@ router.use("/oauth", oauthRoutes);
  */
 router.post(
   "/demo-register",
-  registerLimiter,
   [
     body("full_name")
       .trim()
@@ -237,7 +231,6 @@ router.post(
  */
 router.post(
   "/login",
-  loginLimiter,
   [
     body("email")
       .isEmail()
@@ -315,7 +308,6 @@ router.post(
  */
 router.post(
   "/forgot-password",
-  passwordResetLimiter,
   authController.forgotPassword.bind(authController),
 );
 
@@ -326,7 +318,6 @@ router.post(
  */
 router.post(
   "/reset-password",
-  passwordResetLimiter,
   authController.resetPassword.bind(authController),
 );
 
@@ -337,7 +328,6 @@ router.post(
  */
 router.post(
   "/verify-temp-password",
-  passwordResetLimiter, // Apply rate limiting to prevent brute force
   [
     body("email")
       .isEmail()
@@ -361,7 +351,6 @@ router.put(
   "/change-password",
   authenticateToken,
   validateChangePassword,
-  passwordResetLimiter, // Apply rate limiting to prevent brute force
   authController.changePassword.bind(authController),
 );
 

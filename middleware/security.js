@@ -1,29 +1,9 @@
 import compression from "compression";
 import mongoSanitize from "express-mongo-sanitize";
-import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 
 // import { ENV_VARS } from '../config/envVars.js';
 import logger from "../utils/logger.js";
-
-// Rate limiting configuration
-export const rateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
-  message: "Too many requests from this IP, please try again later",
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    logger.warn("Rate limit exceeded", {
-      ip: req.ip,
-      path: req.path,
-    });
-    res.status(429).json({
-      status: "error",
-      message: "Too many requests from this IP, please try again later",
-    });
-  },
-});
 
 // Security headers configuration
 export const securityHeaders = helmet({

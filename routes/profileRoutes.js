@@ -7,7 +7,7 @@ import {
   getProfileStats,
   updatePreferences,
   getComprehensiveProfile,
-  updateComprehensiveProfile
+  updateComprehensiveProfile,
 } from "../controllers/profileController.js";
 import {
   validateUserId,
@@ -15,10 +15,9 @@ import {
   validatePreferencesUpdate,
   validateDeleteProfile,
   validateComprehensiveProfileUpdate,
-  validateComprehensiveProfileUpdateConditional
+  validateComprehensiveProfileUpdateConditional,
 } from "../validations/profileValidation.js";
 import { authenticateToken, authorize } from "../middleware/auth.js";
-import rateLimit from "express-rate-limit";
 
 const router = express.Router();
 
@@ -32,8 +31,16 @@ const router = express.Router();
 router.get(
   "/me/comprehensive",
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
-  getComprehensiveProfile
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
+  getComprehensiveProfile,
 );
 
 /**
@@ -44,9 +51,17 @@ router.get(
 router.put(
   "/me/comprehensive",
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
   validateComprehensiveProfileUpdateConditional,
-  updateComprehensiveProfile
+  updateComprehensiveProfile,
 );
 
 /**
@@ -57,9 +72,17 @@ router.put(
 router.patch(
   "/me/comprehensive",
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
   validateComprehensiveProfileUpdateConditional,
-  updateComprehensiveProfile
+  updateComprehensiveProfile,
 );
 
 /**
@@ -70,12 +93,20 @@ router.patch(
 router.get(
   "/me",
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
   (req, res, next) => {
     req.params.userId = req.user.id;
     next();
   },
-  getProfile
+  getProfile,
 );
 
 /**
@@ -86,13 +117,21 @@ router.get(
 router.put(
   "/me",
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
   validateProfileUpdate,
   (req, res, next) => {
     req.params.userId = req.user.id;
     next();
   },
-  updateProfile
+  updateProfile,
 );
 
 /**
@@ -103,12 +142,20 @@ router.put(
 router.get(
   "/me/stats",
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
   (req, res, next) => {
     req.params.userId = req.user.id;
     next();
   },
-  getProfileStats
+  getProfileStats,
 );
 
 /**
@@ -119,13 +166,21 @@ router.get(
 router.put(
   "/me/preferences",
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
   validatePreferencesUpdate,
   (req, res, next) => {
     req.params.userId = req.user.id;
     next();
   },
-  updatePreferences
+  updatePreferences,
 );
 
 /**
@@ -136,48 +191,22 @@ router.put(
 router.delete(
   "/me",
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
   validateDeleteProfile,
   (req, res, next) => {
     req.params.userId = req.user.id;
     next();
   },
-  deleteProfile
+  deleteProfile,
 );
-
-// Rate limiting for profile operations
-const profileRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: {
-    success: false,
-    message: "Too many profile requests from this IP, please try again later."
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const updateRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // limit each IP to 20 update requests per windowMs
-  message: {
-    success: false,
-    message: "Too many profile update requests from this IP, please try again later."
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-const deleteRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // limit each IP to 5 delete requests per hour
-  message: {
-    success: false,
-    message: "Too many profile deletion requests from this IP, please try again later."
-  },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
 
 /**
  * @route   GET /api/v1/profile/:userId
@@ -186,11 +215,18 @@ const deleteRateLimit = rateLimit({
  */
 router.get(
   "/:userId",
-  profileRateLimit,
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
   validateUserId,
-  getProfile
+  getProfile,
 );
 
 /**
@@ -200,12 +236,19 @@ router.get(
  */
 router.put(
   "/:userId",
-  updateRateLimit,
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
   validateUserId,
   validateProfileUpdate,
-  updateProfile
+  updateProfile,
 );
 
 /**
@@ -215,12 +258,19 @@ router.put(
  */
 router.delete(
   "/:userId",
-  deleteRateLimit,
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
   validateUserId,
   validateDeleteProfile,
-  deleteProfile
+  deleteProfile,
 );
 
 /**
@@ -230,11 +280,10 @@ router.delete(
  */
 router.post(
   "/:userId/restore",
-  profileRateLimit,
   authenticateToken,
   authorize(["admin", "super-admin"]),
   validateUserId,
-  restoreProfile
+  restoreProfile,
 );
 
 /**
@@ -244,11 +293,18 @@ router.post(
  */
 router.get(
   "/:userId/stats",
-  profileRateLimit,
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
   validateUserId,
-  getProfileStats
+  getProfileStats,
 );
 
 /**
@@ -258,14 +314,19 @@ router.get(
  */
 router.put(
   "/:userId/preferences",
-  updateRateLimit,
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student", "corporate", "corporate-student", "parent"]),
+  authorize([
+    "admin",
+    "instructor",
+    "super-admin",
+    "student",
+    "corporate",
+    "corporate-student",
+    "parent",
+  ]),
   validateUserId,
   validatePreferencesUpdate,
-  updatePreferences
+  updatePreferences,
 );
 
-
-
-export default router; 
+export default router;
