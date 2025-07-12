@@ -1,4 +1,4 @@
-import express from 'express';
+import express from "express";
 import {
   createProgress,
   getUserProgress,
@@ -19,65 +19,129 @@ import {
   restoreProgress,
   getProgressStats,
   validateProgressData,
-  getProgressRecommendations
-} from '../controllers/enhanced-progress.controller.js';
-import { authenticate, authorize } from '../middleware/auth.js';
-import { validateRequest } from '../middleware/validation.js';
-import { rateLimit } from '../middleware/rateLimit.js';
-import { body, query, param } from 'express-validator';
+  getProgressRecommendations,
+} from "../controllers/enhanced-progress.controller.js";
+import { authenticate, authorize } from "../middleware/auth.js";
+import { validateRequest } from "../middleware/validation.js";
+import { body, query, param } from "express-validator";
 
 const router = express.Router();
 
-// Rate limiting for progress tracking endpoints
-const progressRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // 100 requests per window
-  message: 'Too many progress requests, please try again later.'
-});
-
-const analyticsRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // 50 requests per window
-  message: 'Too many analytics requests, please try again later.'
-});
-
 // Validation schemas
 const createProgressValidation = [
-  body('userId').isMongoId().withMessage('Valid user ID is required'),
-  body('courseId').isMongoId().withMessage('Valid course ID is required'),
-  body('contentType').isIn(['lesson', 'quiz', 'assignment', 'project', 'exam', 'module', 'course']),
-  body('contentId').isMongoId().withMessage('Valid content ID is required'),
-  body('progressPercentage').isFloat({ min: 0, max: 100 })
+  body("userId").isMongoId().withMessage("Valid user ID is required"),
+  body("courseId").isMongoId().withMessage("Valid course ID is required"),
+  body("contentType").isIn([
+    "lesson",
+    "quiz",
+    "assignment",
+    "project",
+    "exam",
+    "module",
+    "course",
+  ]),
+  body("contentId").isMongoId().withMessage("Valid content ID is required"),
+  body("progressPercentage").isFloat({ min: 0, max: 100 }),
 ];
 
 const updateProgressValidation = [
-  param('progressId').isMongoId().withMessage('Valid progress ID is required'),
-  body('progressPercentage').optional().isFloat({ min: 0, max: 100 }).withMessage('Progress percentage must be between 0 and 100'),
-  body('status').optional().isIn(['not_started', 'in_progress', 'completed', 'paused', 'failed']).withMessage('Invalid status'),
-  body('timeSpent').optional().isInt({ min: 0 }).withMessage('Time spent must be a positive integer'),
-  body('score').optional().isFloat({ min: 0, max: 100 }).withMessage('Score must be between 0 and 100'),
-  body('notes').optional().isLength({ max: 1000 }).withMessage('Notes cannot exceed 1000 characters'),
-  body('metadata').optional().isObject().withMessage('Metadata must be an object')
+  param("progressId").isMongoId().withMessage("Valid progress ID is required"),
+  body("progressPercentage")
+    .optional()
+    .isFloat({ min: 0, max: 100 })
+    .withMessage("Progress percentage must be between 0 and 100"),
+  body("status")
+    .optional()
+    .isIn(["not_started", "in_progress", "completed", "paused", "failed"])
+    .withMessage("Invalid status"),
+  body("timeSpent")
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage("Time spent must be a positive integer"),
+  body("score")
+    .optional()
+    .isFloat({ min: 0, max: 100 })
+    .withMessage("Score must be between 0 and 100"),
+  body("notes")
+    .optional()
+    .isLength({ max: 1000 })
+    .withMessage("Notes cannot exceed 1000 characters"),
+  body("metadata")
+    .optional()
+    .isObject()
+    .withMessage("Metadata must be an object"),
 ];
 
 const bulkUpdateValidation = [
-  body('updates').isArray({ min: 1 }).withMessage('Updates array is required'),
-  body('updates.*.progressId').isMongoId().withMessage('Valid progress ID is required for each update'),
-  body('updates.*.progressPercentage').optional().isFloat({ min: 0, max: 100 }).withMessage('Progress percentage must be between 0 and 100'),
-  body('updates.*.status').optional().isIn(['not_started', 'in_progress', 'completed', 'paused', 'failed']).withMessage('Invalid status'),
-  body('updates.*.timeSpent').optional().isInt({ min: 0 }).withMessage('Time spent must be a positive integer'),
-  body('updates.*.score').optional().isFloat({ min: 0, max: 100 }).withMessage('Score must be between 0 and 100')
+  body("updates").isArray({ min: 1 }).withMessage("Updates array is required"),
+  body("updates.*.progressId")
+    .isMongoId()
+    .withMessage("Valid progress ID is required for each update"),
+  body("updates.*.progressPercentage")
+    .optional()
+    .isFloat({ min: 0, max: 100 })
+    .withMessage("Progress percentage must be between 0 and 100"),
+  body("updates.*.status")
+    .optional()
+    .isIn(["not_started", "in_progress", "completed", "paused", "failed"])
+    .withMessage("Invalid status"),
+  body("updates.*.timeSpent")
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage("Time spent must be a positive integer"),
+  body("updates.*.score")
+    .optional()
+    .isFloat({ min: 0, max: 100 })
+    .withMessage("Score must be between 0 and 100"),
 ];
 
 const queryValidation = [
-  query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
-  query('sortBy').optional().isIn(['createdAt', 'updatedAt', 'progressPercentage', 'timeSpent', 'score']).withMessage('Invalid sort field'),
-  query('sortOrder').optional().isIn(['asc', 'desc']).withMessage('Sort order must be asc or desc'),
-  query('status').optional().isIn(['not_started', 'in_progress', 'completed', 'paused', 'failed']).withMessage('Invalid status filter'),
-  query('contentType').optional().isIn(['lesson', 'quiz', 'assignment', 'project', 'exam', 'module', 'course']).withMessage('Invalid content type'),
-  query('minProgress').optional().isFloat({ min: 0, max: 100 }).withMessage('Minimum progress must be between 0 and 100'),
-  query('maxProgress').optional().isFloat({ min: 0, max: 100 }).withMessage('Maximum progress must be between 0 and 100')
+  query("page")
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage("Page must be a positive integer"),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage("Limit must be between 1 and 100"),
+  query("sortBy")
+    .optional()
+    .isIn([
+      "createdAt",
+      "updatedAt",
+      "progressPercentage",
+      "timeSpent",
+      "score",
+    ])
+    .withMessage("Invalid sort field"),
+  query("sortOrder")
+    .optional()
+    .isIn(["asc", "desc"])
+    .withMessage("Sort order must be asc or desc"),
+  query("status")
+    .optional()
+    .isIn(["not_started", "in_progress", "completed", "paused", "failed"])
+    .withMessage("Invalid status filter"),
+  query("contentType")
+    .optional()
+    .isIn([
+      "lesson",
+      "quiz",
+      "assignment",
+      "project",
+      "exam",
+      "module",
+      "course",
+    ])
+    .withMessage("Invalid content type"),
+  query("minProgress")
+    .optional()
+    .isFloat({ min: 0, max: 100 })
+    .withMessage("Minimum progress must be between 0 and 100"),
+  query("maxProgress")
+    .optional()
+    .isFloat({ min: 0, max: 100 })
+    .withMessage("Maximum progress must be between 0 and 100"),
 ];
 
 // ========================================
@@ -89,12 +153,12 @@ const queryValidation = [
  * @desc    Create a new progress entry
  * @access  Private (Authenticated users)
  */
-router.post('/', 
-  progressRateLimit,
-  authenticate, 
+router.post(
+  "/",
+  authenticate,
   createProgressValidation,
   validateRequest,
-  createProgress
+  createProgress,
 );
 
 /**
@@ -102,13 +166,13 @@ router.post('/',
  * @desc    Get all progress entries for a specific user
  * @access  Private (Own progress or Admin/Instructor)
  */
-router.get('/user/:userId',
-  progressRateLimit,
+router.get(
+  "/user/:userId",
   authenticate,
-  param('userId').isMongoId().withMessage('Valid user ID is required'),
+  param("userId").isMongoId().withMessage("Valid user ID is required"),
   queryValidation,
   validateRequest,
-  getUserProgress
+  getUserProgress,
 );
 
 /**
@@ -116,8 +180,8 @@ router.get('/user/:userId',
  * @desc    Get current user's progress (convenience endpoint)
  * @access  Private
  */
-router.get('/my-progress',
-  progressRateLimit,
+router.get(
+  "/my-progress",
   authenticate,
   queryValidation,
   validateRequest,
@@ -125,7 +189,7 @@ router.get('/my-progress',
     req.params.userId = req.user.id;
     next();
   },
-  getUserProgress
+  getUserProgress,
 );
 
 /**
@@ -133,12 +197,12 @@ router.get('/my-progress',
  * @desc    Get a specific progress entry by ID
  * @access  Private (Own progress or Admin/Instructor)
  */
-router.get('/:progressId',
-  progressRateLimit,
+router.get(
+  "/:progressId",
   authenticate,
-  param('progressId').isMongoId().withMessage('Valid progress ID is required'),
+  param("progressId").isMongoId().withMessage("Valid progress ID is required"),
   validateRequest,
-  getProgressById
+  getProgressById,
 );
 
 /**
@@ -146,12 +210,12 @@ router.get('/:progressId',
  * @desc    Update a specific progress entry
  * @access  Private (Own progress or Admin/Instructor)
  */
-router.put('/:progressId',
-  progressRateLimit,
+router.put(
+  "/:progressId",
   authenticate,
   updateProgressValidation,
   validateRequest,
-  updateProgress
+  updateProgress,
 );
 
 /**
@@ -159,12 +223,12 @@ router.put('/:progressId',
  * @desc    Delete a specific progress entry (soft delete)
  * @access  Private (Own progress or Admin/Instructor)
  */
-router.delete('/:progressId',
-  progressRateLimit,
+router.delete(
+  "/:progressId",
   authenticate,
-  param('progressId').isMongoId().withMessage('Valid progress ID is required'),
+  param("progressId").isMongoId().withMessage("Valid progress ID is required"),
   validateRequest,
-  deleteProgress
+  deleteProgress,
 );
 
 /**
@@ -172,14 +236,20 @@ router.delete('/:progressId',
  * @desc    Get progress summary for a user
  * @access  Private (Own progress or Admin/Instructor)
  */
-router.get('/summary/:userId',
-  progressRateLimit,
+router.get(
+  "/summary/:userId",
   authenticate,
-  param('userId').isMongoId().withMessage('Valid user ID is required'),
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('timeframe').optional().isIn(['week', 'month', 'quarter', 'year', 'all']).withMessage('Invalid timeframe'),
+  param("userId").isMongoId().withMessage("Valid user ID is required"),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("timeframe")
+    .optional()
+    .isIn(["week", "month", "quarter", "year", "all"])
+    .withMessage("Invalid timeframe"),
   validateRequest,
-  getProgressSummary
+  getProgressSummary,
 );
 
 /**
@@ -187,17 +257,29 @@ router.get('/summary/:userId',
  * @desc    Get progress history for a user
  * @access  Private (Own progress or Admin/Instructor)
  */
-router.get('/history/:userId',
-  progressRateLimit,
+router.get(
+  "/history/:userId",
   authenticate,
-  param('userId').isMongoId().withMessage('Valid user ID is required'),
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('contentId').optional().isMongoId().withMessage('Valid content ID required'),
-  query('startDate').optional().isISO8601().withMessage('Valid start date required'),
-  query('endDate').optional().isISO8601().withMessage('Valid end date required'),
+  param("userId").isMongoId().withMessage("Valid user ID is required"),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("contentId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid content ID required"),
+  query("startDate")
+    .optional()
+    .isISO8601()
+    .withMessage("Valid start date required"),
+  query("endDate")
+    .optional()
+    .isISO8601()
+    .withMessage("Valid end date required"),
   queryValidation,
   validateRequest,
-  getProgressHistory
+  getProgressHistory,
 );
 
 /**
@@ -205,14 +287,29 @@ router.get('/history/:userId',
  * @desc    Reset progress for a user (specific course or all)
  * @access  Private (Own progress or Admin only)
  */
-router.post('/reset/:userId',
+router.post(
+  "/reset/:userId",
   authenticate,
-  param('userId').isMongoId().withMessage('Valid user ID is required'),
-  body('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  body('contentType').optional().isIn(['lesson', 'quiz', 'assignment', 'project', 'exam', 'module', 'course']).withMessage('Invalid content type'),
-  body('confirmReset').isBoolean().withMessage('Reset confirmation required'),
+  param("userId").isMongoId().withMessage("Valid user ID is required"),
+  body("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  body("contentType")
+    .optional()
+    .isIn([
+      "lesson",
+      "quiz",
+      "assignment",
+      "project",
+      "exam",
+      "module",
+      "course",
+    ])
+    .withMessage("Invalid content type"),
+  body("confirmReset").isBoolean().withMessage("Reset confirmation required"),
   validateRequest,
-  resetProgress
+  resetProgress,
 );
 
 /**
@@ -220,13 +317,16 @@ router.post('/reset/:userId',
  * @desc    Sync progress data (for offline/online synchronization)
  * @access  Private
  */
-router.post('/sync',
-  progressRateLimit,
+router.post(
+  "/sync",
   authenticate,
-  body('progressData').isArray().withMessage('Progress data array is required'),
-  body('lastSyncTimestamp').optional().isISO8601().withMessage('Valid timestamp required'),
+  body("progressData").isArray().withMessage("Progress data array is required"),
+  body("lastSyncTimestamp")
+    .optional()
+    .isISO8601()
+    .withMessage("Valid timestamp required"),
   validateRequest,
-  syncProgress
+  syncProgress,
 );
 
 /**
@@ -234,14 +334,20 @@ router.post('/sync',
  * @desc    Get personalized learning recommendations based on progress
  * @access  Private (Own progress or Admin/Instructor)
  */
-router.get('/recommendations/:userId',
-  progressRateLimit,
+router.get(
+  "/recommendations/:userId",
   authenticate,
-  param('userId').isMongoId().withMessage('Valid user ID is required'),
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('limit').optional().isInt({ min: 1, max: 20 }).withMessage('Limit must be between 1 and 20'),
+  param("userId").isMongoId().withMessage("Valid user ID is required"),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 20 })
+    .withMessage("Limit must be between 1 and 20"),
   validateRequest,
-  getProgressRecommendations
+  getProgressRecommendations,
 );
 
 // ========================================
@@ -253,15 +359,24 @@ router.get('/recommendations/:userId',
  * @desc    Get detailed analytics for a user's progress
  * @access  Private (Own analytics or Admin/Instructor)
  */
-router.get('/analytics/user/:userId',
-  analyticsRateLimit,
+router.get(
+  "/analytics/user/:userId",
   authenticate,
-  param('userId').isMongoId().withMessage('Valid user ID is required'),
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('timeframe').optional().isIn(['week', 'month', 'quarter', 'year', 'all']).withMessage('Invalid timeframe'),
-  query('includeComparison').optional().isBoolean().withMessage('Include comparison must be boolean'),
+  param("userId").isMongoId().withMessage("Valid user ID is required"),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("timeframe")
+    .optional()
+    .isIn(["week", "month", "quarter", "year", "all"])
+    .withMessage("Invalid timeframe"),
+  query("includeComparison")
+    .optional()
+    .isBoolean()
+    .withMessage("Include comparison must be boolean"),
   validateRequest,
-  getProgressAnalytics
+  getProgressAnalytics,
 );
 
 /**
@@ -269,14 +384,25 @@ router.get('/analytics/user/:userId',
  * @desc    Get AI-powered insights and patterns from user's progress
  * @access  Private (Own insights or Admin/Instructor)
  */
-router.get('/insights/:userId',
-  analyticsRateLimit,
+router.get(
+  "/insights/:userId",
   authenticate,
-  param('userId').isMongoId().withMessage('Valid user ID is required'),
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('analysisType').optional().isIn(['learning_patterns', 'performance_trends', 'engagement_analysis', 'all']).withMessage('Invalid analysis type'),
+  param("userId").isMongoId().withMessage("Valid user ID is required"),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("analysisType")
+    .optional()
+    .isIn([
+      "learning_patterns",
+      "performance_trends",
+      "engagement_analysis",
+      "all",
+    ])
+    .withMessage("Invalid analysis type"),
   validateRequest,
-  getProgressInsights
+  getProgressInsights,
 );
 
 /**
@@ -284,14 +410,27 @@ router.get('/insights/:userId',
  * @desc    Get progress leaderboard (course or global)
  * @access  Private
  */
-router.get('/leaderboard',
+router.get(
+  "/leaderboard",
   authenticate,
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('timeframe').optional().isIn(['week', 'month', 'quarter', 'year', 'all']).withMessage('Invalid timeframe'),
-  query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
-  query('includeAnonymous').optional().isBoolean().withMessage('Include anonymous must be boolean'),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("timeframe")
+    .optional()
+    .isIn(["week", "month", "quarter", "year", "all"])
+    .withMessage("Invalid timeframe"),
+  query("limit")
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage("Limit must be between 1 and 100"),
+  query("includeAnonymous")
+    .optional()
+    .isBoolean()
+    .withMessage("Include anonymous must be boolean"),
   validateRequest,
-  getProgressLeaderboard
+  getProgressLeaderboard,
 );
 
 /**
@@ -299,15 +438,27 @@ router.get('/leaderboard',
  * @desc    Export user's progress data
  * @access  Private (Own data or Admin/Instructor)
  */
-router.post('/export/:userId',
+router.post(
+  "/export/:userId",
   authenticate,
-  param('userId').isMongoId().withMessage('Valid user ID is required'),
-  body('format').isIn(['json', 'csv', 'xlsx', 'pdf']).withMessage('Invalid export format'),
-  body('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  body('includeMetadata').optional().isBoolean().withMessage('Include metadata must be boolean'),
-  body('dateRange').optional().isObject().withMessage('Date range must be an object'),
+  param("userId").isMongoId().withMessage("Valid user ID is required"),
+  body("format")
+    .isIn(["json", "csv", "xlsx", "pdf"])
+    .withMessage("Invalid export format"),
+  body("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  body("includeMetadata")
+    .optional()
+    .isBoolean()
+    .withMessage("Include metadata must be boolean"),
+  body("dateRange")
+    .optional()
+    .isObject()
+    .withMessage("Date range must be an object"),
   validateRequest,
-  exportProgressData
+  exportProgressData,
 );
 
 // ========================================
@@ -319,14 +470,20 @@ router.post('/export/:userId',
  * @desc    Get multiple progress entries by IDs
  * @access  Private (Admin/Instructor only)
  */
-router.post('/bulk/get',
+router.post(
+  "/bulk/get",
   authenticate,
-  authorize(['admin', 'instructor']),
-  body('progressIds').isArray({ min: 1 }).withMessage('Progress IDs array is required'),
-  body('progressIds.*').isMongoId().withMessage('Valid progress IDs required'),
-  body('includeMetadata').optional().isBoolean().withMessage('Include metadata must be boolean'),
+  authorize(["admin", "instructor"]),
+  body("progressIds")
+    .isArray({ min: 1 })
+    .withMessage("Progress IDs array is required"),
+  body("progressIds.*").isMongoId().withMessage("Valid progress IDs required"),
+  body("includeMetadata")
+    .optional()
+    .isBoolean()
+    .withMessage("Include metadata must be boolean"),
   validateRequest,
-  getBulkProgress
+  getBulkProgress,
 );
 
 /**
@@ -334,12 +491,13 @@ router.post('/bulk/get',
  * @desc    Update multiple progress entries
  * @access  Private (Admin/Instructor only)
  */
-router.post('/bulk/update',
+router.post(
+  "/bulk/update",
   authenticate,
-  authorize(['admin', 'instructor']),
+  authorize(["admin", "instructor"]),
   bulkUpdateValidation,
   validateRequest,
-  bulkUpdateProgress
+  bulkUpdateProgress,
 );
 
 /**
@@ -347,14 +505,20 @@ router.post('/bulk/update',
  * @desc    Archive multiple progress entries
  * @access  Private (Admin only)
  */
-router.post('/bulk/archive',
+router.post(
+  "/bulk/archive",
   authenticate,
-  authorize(['admin']),
-  body('progressIds').isArray({ min: 1 }).withMessage('Progress IDs array is required'),
-  body('progressIds.*').isMongoId().withMessage('Valid progress IDs required'),
-  body('reason').optional().isLength({ max: 500 }).withMessage('Reason cannot exceed 500 characters'),
+  authorize(["admin"]),
+  body("progressIds")
+    .isArray({ min: 1 })
+    .withMessage("Progress IDs array is required"),
+  body("progressIds.*").isMongoId().withMessage("Valid progress IDs required"),
+  body("reason")
+    .optional()
+    .isLength({ max: 500 })
+    .withMessage("Reason cannot exceed 500 characters"),
   validateRequest,
-  archiveProgress
+  archiveProgress,
 );
 
 /**
@@ -362,13 +526,16 @@ router.post('/bulk/archive',
  * @desc    Restore multiple archived progress entries
  * @access  Private (Admin only)
  */
-router.post('/bulk/restore',
+router.post(
+  "/bulk/restore",
   authenticate,
-  authorize(['admin']),
-  body('progressIds').isArray({ min: 1 }).withMessage('Progress IDs array is required'),
-  body('progressIds.*').isMongoId().withMessage('Valid progress IDs required'),
+  authorize(["admin"]),
+  body("progressIds")
+    .isArray({ min: 1 })
+    .withMessage("Progress IDs array is required"),
+  body("progressIds.*").isMongoId().withMessage("Valid progress IDs required"),
   validateRequest,
-  restoreProgress
+  restoreProgress,
 );
 
 // ========================================
@@ -380,14 +547,24 @@ router.post('/bulk/restore',
  * @desc    Get comprehensive progress statistics (Admin dashboard)
  * @access  Private (Admin/Instructor only)
  */
-router.get('/admin/stats',
+router.get(
+  "/admin/stats",
   authenticate,
-  authorize(['admin', 'instructor']),
-  query('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  query('timeframe').optional().isIn(['week', 'month', 'quarter', 'year', 'all']).withMessage('Invalid timeframe'),
-  query('groupBy').optional().isIn(['day', 'week', 'month', 'course', 'user']).withMessage('Invalid groupBy parameter'),
+  authorize(["admin", "instructor"]),
+  query("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  query("timeframe")
+    .optional()
+    .isIn(["week", "month", "quarter", "year", "all"])
+    .withMessage("Invalid timeframe"),
+  query("groupBy")
+    .optional()
+    .isIn(["day", "week", "month", "course", "user"])
+    .withMessage("Invalid groupBy parameter"),
   validateRequest,
-  getProgressStats
+  getProgressStats,
 );
 
 /**
@@ -395,15 +572,25 @@ router.get('/admin/stats',
  * @desc    Validate and fix progress data inconsistencies
  * @access  Private (Admin only)
  */
-router.post('/admin/validate',
+router.post(
+  "/admin/validate",
   authenticate,
-  authorize(['admin']),
-  body('courseId').optional().isMongoId().withMessage('Valid course ID required'),
-  body('userId').optional().isMongoId().withMessage('Valid user ID required'),
-  body('autoFix').optional().isBoolean().withMessage('Auto fix must be boolean'),
-  body('reportOnly').optional().isBoolean().withMessage('Report only must be boolean'),
+  authorize(["admin"]),
+  body("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Valid course ID required"),
+  body("userId").optional().isMongoId().withMessage("Valid user ID required"),
+  body("autoFix")
+    .optional()
+    .isBoolean()
+    .withMessage("Auto fix must be boolean"),
+  body("reportOnly")
+    .optional()
+    .isBoolean()
+    .withMessage("Report only must be boolean"),
   validateRequest,
-  validateProgressData
+  validateProgressData,
 );
 
 // ========================================
@@ -415,21 +602,21 @@ router.post('/admin/validate',
  * @desc    Health check for progress tracking service
  * @access  Public
  */
-router.get('/health', (req, res) => {
+router.get("/health", (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Enhanced Progress Tracking Service is operational',
+    message: "Enhanced Progress Tracking Service is operational",
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
+    version: "1.0.0",
     endpoints: {
       total: 22,
       public: 1,
       authenticated: 21,
       admin_only: 4,
       bulk_operations: 4,
-      analytics: 3
-    }
+      analytics: 3,
+    },
   });
 });
 
-export default router; 
+export default router;

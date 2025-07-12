@@ -11,10 +11,15 @@ import Order from "../models/Order.js";
  */
 export const createOrder = async (orderData) => {
   try {
+    // Defensive logging
+    console.log("[RazorpayService][createOrder] orderData:", orderData);
+
     const razorpay = await razorpayConfig.getInstance();
-    
+
     if (!razorpay) {
-      throw new Error("Razorpay is not initialized. Please check your credentials.");
+      throw new Error(
+        "Razorpay is not initialized. Please check your credentials.",
+      );
     }
 
     const {
@@ -26,11 +31,28 @@ export const createOrder = async (orderData) => {
       productInfo,
     } = orderData;
 
+    // Validate required fields
+    if (typeof amount !== "number" || isNaN(amount) || amount <= 0) {
+      throw new Error("Invalid amount: must be a positive number.");
+    }
+    let safeReceipt = receipt;
+    if (!safeReceipt || typeof safeReceipt !== "string") {
+      throw new Error(
+        "Invalid receipt: must be a non-empty string up to 40 characters.",
+      );
+    }
+    if (safeReceipt.length > 40) {
+      console.warn(
+        `[RazorpayService] Truncating receipt from ${safeReceipt.length} to 40 characters.`,
+      );
+      safeReceipt = safeReceipt.slice(0, 40);
+    }
+
     // Create order in Razorpay
     const razorpayOrder = await razorpay.orders.create({
       amount: amount * 100, // Amount in paise (Razorpay uses smallest currency unit)
       currency,
-      receipt,
+      receipt: safeReceipt,
       notes,
     });
 
@@ -48,7 +70,21 @@ export const createOrder = async (orderData) => {
     await order.save();
     return { order, razorpayOrder };
   } catch (error) {
-    throw new Error(`Failed to create Razorpay order: ${error.message}`);
+    // Enhanced error handling
+    let errorMsg = "Unknown error";
+    if (error && typeof error === "object" && "message" in error) {
+      errorMsg = error.message;
+    } else if (typeof error === "string") {
+      errorMsg = error;
+    } else if (error) {
+      try {
+        errorMsg = JSON.stringify(error);
+      } catch (e) {
+        errorMsg = String(error);
+      }
+    }
+    console.error("[RazorpayService][createOrder] Raw error:", error);
+    throw new Error(`Failed to create Razorpay order: ${errorMsg}`);
   }
 };
 
@@ -106,9 +142,11 @@ export const verifyPayment = async (paymentData) => {
 export const getPaymentDetails = async (paymentId) => {
   try {
     const razorpay = await razorpayConfig.getInstance();
-    
+
     if (!razorpay) {
-      throw new Error("Razorpay is not initialized. Please check your credentials.");
+      throw new Error(
+        "Razorpay is not initialized. Please check your credentials.",
+      );
     }
 
     const payment = await razorpay.payments.fetch(paymentId);
@@ -155,5 +193,5 @@ export default {
   verifyPayment,
   getPaymentDetails,
   getUserOrders,
-  getOrderById
+  getOrderById,
 };
