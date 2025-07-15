@@ -249,6 +249,16 @@ const createBrouchers = async (req, res) => {
       });
     }
 
+    // Validate phone number with country code
+    const phoneRegex = /^\+\d{10,15}$/;
+    if (!phoneRegex.test(phone_number.replace(/[-\s]/g, ""))) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Please provide a valid phone number with country code (e.g., +12345678901)",
+      });
+    }
+
     // Fetch course details by course_title from all course types
     const course = await findCourseAcrossTypes(course_title);
 
@@ -449,6 +459,16 @@ const updateBroucher = async (req, res) => {
       });
     }
 
+    // Validate phone number with country code
+    const phoneRegex = /^\+\d{10,15}$/;
+    if (!phoneRegex.test(phone_number.replace(/[-\s]/g, ""))) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Please provide a valid phone number with country code (e.g., +12345678901)",
+      });
+    }
+
     // If course title provided, verify course exists
     let courseData = {};
     if (course_title) {
@@ -603,6 +623,16 @@ const downloadBrochure = async (req, res) => {
         success: false,
         message:
           "Please provide all required information (name, email, and phone number)",
+      });
+    }
+
+    // Validate phone number with country code
+    const phoneRegex = /^\+\d{10,15}$/;
+    if (!phoneRegex.test(phone_number.replace(/[-\s]/g, ""))) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Please provide a valid phone number with country code (e.g., +12345678901)",
       });
     }
 
