@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import passwordSecurity from "../utils/passwordSecurity.js";
 const { Schema } = mongoose;
 
 // Define constants for roles and permissions for better maintainability
@@ -1261,8 +1262,20 @@ userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
 
   try {
-    const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(this.password, salt);
+    // Validate and normalize password
+    const normalized = passwordSecurity.normalizePassword(this.password);
+    if (!normalized.isValid) {
+      return next(new Error(normalized.error));
+    }
+
+    // Basic password validation (only length and format checks)
+    const validation = passwordSecurity.validatePasswordStrength(normalized.normalized);
+    if (!validation.isValid) {
+      return next(new Error(`Password validation failed: ${validation.errors.join(', ')}`));
+    }
+
+    // Hash password using industry-standard security
+    this.password = await passwordSecurity.hashPassword(normalized.normalized);
     next();
   } catch (error) {
     next(error);
@@ -1293,7 +1306,32 @@ userSchema.pre("save", function (next) {
 
 // Instance methods
 userSchema.methods.comparePassword = async function (candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
+  // Use timing-safe password comparison to prevent timing attacks
+  return await passwordSecurity.comparePassword(candidatePassword, this.password);
+};
+
+// Method to validate password strength before setting
+userSchema.methods.validatePasswordStrength = function (password) {
+  return passwordSecurity.validatePasswordStrength(password);
+};
+
+// Method to check if password needs rehashing
+userSchema.methods.needsPasswordRehash = function () {
+  return passwordSecurity.needsRehashing(this.password);
+};
+
+// Method to rehash password if needed (for security updates)
+userSchema.methods.rehashPasswordIfNeeded = async function (currentPassword) {
+  if (this.needsPasswordRehash()) {
+    // Verify current password first
+    const isValid = await this.comparePassword(currentPassword);
+    if (isValid) {
+      this.password = currentPassword; // Will trigger pre-save hook
+      await this.save();
+      return true;
+    }
+  }
+  return false;
 };
 
 userSchema.methods.updateLastSeen = function () {
