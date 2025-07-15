@@ -29,7 +29,7 @@ export const enrollStudentInBatch = async (req, res) => {
     }
 
     // Additional check: ensure the user has student role
-    if (!student.role || !student.role.includes('student')) {
+    if (!student.role || !student.role.includes("student")) {
       return res.status(400).json({
         success: false,
         message: "User is not a student",
@@ -89,9 +89,13 @@ export const enrollStudentInBatch = async (req, res) => {
     accessExpiryDate.setDate(accessExpiryDate.getDate() + 30); // Add 30 days grace period after batch ends
 
     // Get course pricing for the enrollment
-    const coursePricing = course.prices?.[0] || { batch: 0, individual: 0, currency: 'INR' };
+    const coursePricing = course.prices?.[0] || {
+      batch: 0,
+      individual: 0,
+      currency: "INR",
+    };
     const enrollmentType = req.body.enrollment_type || "batch";
-    
+
     // Calculate pricing based on enrollment type
     let originalPrice, finalPrice, pricingType;
     if (enrollmentType === "individual") {
@@ -129,20 +133,21 @@ export const enrollStudentInBatch = async (req, res) => {
         currency: coursePricing.currency || "INR",
         pricing_type: pricingType,
         discount_applied: discountApplied,
-        discount_code: req.body.discount_code || null
+        discount_code: req.body.discount_code || null,
       },
       // Progress tracking initialization
       progress: {
         overall_percentage: 0,
         lessons_completed: 0,
-        last_activity_date: new Date()
+        last_activity_date: new Date(),
       },
       // Batch-specific information (required for batch enrollments)
       batch_info: {
-        batch_size: enrollmentType === "batch" ? (req.body.batch_size || 2) : 1,
+        batch_size: enrollmentType === "batch" ? req.body.batch_size || 2 : 1,
         is_batch_leader: enrollmentType === "batch",
-        batch_members: enrollmentType === "batch" ? (req.body.batch_members || []) : []
-      }
+        batch_members:
+          enrollmentType === "batch" ? req.body.batch_members || [] : [],
+      },
     });
 
     // If payment details are provided, add them
@@ -155,7 +160,7 @@ export const enrollStudentInBatch = async (req, res) => {
         payment_status: paymentDetails.payment_status || "pending",
         payment_date: new Date(),
         receipt_url: paymentDetails.receipt_url,
-        metadata: paymentDetails.metadata
+        metadata: paymentDetails.metadata,
       });
 
       // Update total amount paid if payment is completed
@@ -168,8 +173,11 @@ export const enrollStudentInBatch = async (req, res) => {
     if (req.body.payment_plan) {
       enrollment.payment_plan = req.body.payment_plan;
       enrollment.installments_count = req.body.installments_count || 1;
-      
-      if (req.body.payment_plan === "installment" && req.body.next_payment_date) {
+
+      if (
+        req.body.payment_plan === "installment" &&
+        req.body.next_payment_date
+      ) {
         enrollment.next_payment_date = new Date(req.body.next_payment_date);
       }
     }
@@ -243,10 +251,11 @@ export const recordPayment = async (req, res) => {
     });
 
     // Update next payment date if payment plan is installment
-    if (enrollment.payment_plan === "installment" && 
-        enrollment.installments_count > enrollment.payments.length &&
-        paymentData.payment_status === "completed") {
-      
+    if (
+      enrollment.payment_plan === "installment" &&
+      enrollment.installments_count > enrollment.payments.length &&
+      paymentData.payment_status === "completed"
+    ) {
       // Calculate next payment date (usually monthly)
       const nextPaymentDate = new Date();
       nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
@@ -291,7 +300,7 @@ export const updateProgress = async (req, res) => {
     // Verify user has permission (student owns enrollment or admin/instructor)
     const isStudent = enrollment.student.toString() === req.user.id;
     const isAdminOrInstructor = ["admin", "instructor"].includes(req.user.role);
-    
+
     if (!isStudent && !isAdminOrInstructor) {
       return res.status(403).json({
         success: false,
@@ -347,7 +356,7 @@ export const recordAssessmentScore = async (req, res) => {
     // Verify user has permission
     const isStudent = enrollment.student.toString() === req.user.id;
     const isAdminOrInstructor = ["admin", "instructor"].includes(req.user.role);
-    
+
     if (!isStudent && !isAdminOrInstructor) {
       return res.status(403).json({
         success: false,
@@ -367,8 +376,8 @@ export const recordAssessmentScore = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Assessment score recorded successfully",
-      data: enrollment.assessments.find(a => 
-        a.assessment_id.toString() === assessmentId
+      data: enrollment.assessments.find(
+        (a) => a.assessment_id.toString() === assessmentId,
       ),
     });
   } catch (error) {
@@ -402,7 +411,7 @@ export const getStudentEnrollments = async (req, res) => {
     // Verify user has permission
     const isOwnEnrollments = studentId === req.user.id;
     const isAdmin = req.user.role === "admin";
-    
+
     if (!isOwnEnrollments && !isAdmin) {
       return res.status(403).json({
         success: false,
@@ -480,7 +489,10 @@ export const getEnrollmentDetails = async (req, res) => {
     const enrollment = await Enrollment.findById(enrollmentId)
       .populate("student", "first_name last_name email profile_picture")
       .populate("course", "course_title course_image slug course_description")
-      .populate("batch", "batch_name schedule assigned_instructor start_date end_date")
+      .populate(
+        "batch",
+        "batch_name schedule assigned_instructor start_date end_date",
+      )
       .populate("certificate_id");
 
     if (!enrollment) {
@@ -493,7 +505,7 @@ export const getEnrollmentDetails = async (req, res) => {
     // Verify user has permission
     const isOwnEnrollment = enrollment.student._id.toString() === req.user.id;
     const isAdminOrInstructor = ["admin", "instructor"].includes(req.user.role);
-    
+
     if (!isOwnEnrollment && !isAdminOrInstructor) {
       return res.status(403).json({
         success: false,
@@ -526,7 +538,13 @@ export const updateEnrollmentStatus = async (req, res) => {
     const { status } = req.body;
 
     // Validate status
-    const validStatuses = ["active", "completed", "cancelled", "on_hold", "expired"];
+    const validStatuses = [
+      "active",
+      "completed",
+      "cancelled",
+      "on_hold",
+      "expired",
+    ];
     if (!validStatuses.includes(status)) {
       return res.status(400).json({
         success: false,
@@ -586,7 +604,7 @@ export const getPaymentHistory = async (req, res) => {
     // Verify user has permission
     const isOwnEnrollment = enrollment.student._id.toString() === req.user.id;
     const isAdmin = req.user.role === "admin";
-    
+
     if (!isOwnEnrollment && !isAdmin) {
       return res.status(403).json({
         success: false,
@@ -603,9 +621,9 @@ export const getPaymentHistory = async (req, res) => {
       paymentPlan: enrollment.payment_plan,
       discountApplied: enrollment.discount_applied,
       discountCode: enrollment.discount_code,
-      payments: enrollment.payments.sort((a, b) => 
-        new Date(b.payment_date) - new Date(a.payment_date)
-      )
+      payments: enrollment.payments.sort(
+        (a, b) => new Date(b.payment_date) - new Date(a.payment_date),
+      ),
     };
 
     res.status(200).json({
@@ -643,4 +661,64 @@ export const getEnrollmentStats = async (req, res) => {
       error: error.message,
     });
   }
-}; 
+};
+
+/**
+ * Check if a student is enrolled in a specific course
+ * @route GET /api/students/:studentId/enrollments/:courseId/check
+ * @access Student, Admin
+ */
+export const checkStudentEnrollmentInCourse = async (req, res) => {
+  try {
+    const { studentId, courseId } = req.params;
+
+    if (!studentId || !courseId) {
+      return res.status(400).json({
+        success: false,
+        message: "Student ID and Course ID are required",
+      });
+    }
+
+    // Optionally: validate ObjectId format
+    if (
+      !mongoose.Types.ObjectId.isValid(studentId) ||
+      !mongoose.Types.ObjectId.isValid(courseId)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid student or course ID format",
+      });
+    }
+
+    // Check for enrollment
+    const enrollment = await Enrollment.findOne({
+      student: studentId,
+      course: courseId,
+      status: { $ne: "cancelled" },
+    })
+      .populate("course", "course_title course_image slug category_type")
+      .populate("batch", "batch_name batch_code start_date end_date schedule");
+
+    if (enrollment) {
+      return res.status(200).json({
+        success: true,
+        enrolled: true,
+        message: "Student is enrolled in this course",
+        data: enrollment,
+      });
+    } else {
+      return res.status(200).json({
+        success: true,
+        enrolled: false,
+        message: "Student is not enrolled in this course",
+      });
+    }
+  } catch (error) {
+    console.error("Error checking enrollment status:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while checking enrollment status",
+      error: error.message,
+    });
+  }
+};
