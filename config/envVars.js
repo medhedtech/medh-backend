@@ -8,6 +8,10 @@ export const ENV_VARS = {
   MONGODB_URI: process.env.MONGODB_URL,
   JWT_SECRET_KEY: process.env.JWT_SECRET_KEY,
   PORT: process.env.PORT || 8080,
+  
+  // Password Security Configuration
+  BCRYPT_WORK_FACTOR: process.env.BCRYPT_WORK_FACTOR || 12,
+  PASSWORD_PEPPER: process.env.PASSWORD_PEPPER || "",
   HTTPS_PORT: process.env.HTTPS_PORT || 443,
   NODE_ENV: process.env.NODE_ENV || "development",
   ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS

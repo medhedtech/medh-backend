@@ -3225,4 +3225,39 @@ router.put("/profile", authenticateToken, async (req, res) => {
   }
 });
 
+// ============================================================================
+// PASSWORD SECURITY ROUTES
+// ============================================================================
+
+/**
+ * @route   POST /api/v1/auth/validate-password-strength
+ * @desc    Validate password strength according to security standards
+ * @access  Public
+ */
+router.post(
+  "/validate-password-strength",
+  [
+    body("password")
+      .notEmpty()
+      .withMessage("Password is required for validation"),
+  ],
+  authController.validatePasswordStrength
+);
+
+/**
+ * @route   POST /api/v1/auth/generate-secure-password
+ * @desc    Generate a secure password with specified length
+ * @access  Public
+ */
+router.post(
+  "/generate-secure-password",
+  [
+    body("length")
+      .optional()
+      .isInt({ min: 8, max: 128 })
+      .withMessage("Password length must be between 8 and 128 characters"),
+  ],
+  authController.generateSecurePassword
+);
+
 export default router;

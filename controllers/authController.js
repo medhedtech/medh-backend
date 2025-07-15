@@ -2,6 +2,7 @@ import crypto from "crypto";
 
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import passwordSecurity from "../utils/passwordSecurity.js";
 
 import { ENV_VARS } from "../config/envVars.js";
 import User, {
@@ -164,11 +165,13 @@ class AuthController {
         });
       }
 
-      // Basic password validation (matches user model requirement)
-      if (password.length < 6) {
+      // Basic password validation (only length and format checks)
+      const passwordValidation = passwordSecurity.validatePasswordStrength(password);
+      if (!passwordValidation.isValid) {
         return res.status(400).json({
           success: false,
-          message: "Password must be at least 6 characters long.",
+          message: "Password validation failed",
+          errors: passwordValidation.errors,
         });
       }
 
@@ -199,9 +202,8 @@ class AuthController {
         });
       }
 
-      // Hash the new password
-      const salt = await bcrypt.genSalt(10);
-      user.password = await bcrypt.hash(password, salt);
+      // Set the new password (will be hashed by the pre-save hook with proper security)
+      user.password = password;
 
       // Clear the reset token fields and temp password verification fields
       user.password_reset_token = undefined;
@@ -1332,6 +1334,12 @@ class AuthController {
                   },
                 });
               }
+            } else {
+              // Even if shouldReturnError is false, we should still return error for invalid password
+              return res.status(401).json({
+                success: false,
+                message: "Invalid credentials",
+              });
             }
           } catch (dbError) {
             logger.error(
@@ -1351,8 +1359,37 @@ class AuthController {
         }
         authenticated = true;
         loginMethod = "email_password";
+        
         // Reset failed login attempts on successful password login
         await this.resetLockoutFields(user);
+        
+        // Check if password needs rehashing (for security updates)
+        try {
+          if (user.needsPasswordRehash()) {
+            // Rehash password in background without blocking response
+            setImmediate(async () => {
+              try {
+                await user.rehashPasswordIfNeeded(password);
+                logger.info("Password rehashed for improved security", {
+                  userId: user._id,
+                  email: user.email
+                });
+              } catch (rehashError) {
+                logger.error("Password rehashing failed", {
+                  userId: user._id,
+                  email: user.email,
+                  error: rehashError.message
+                });
+              }
+            });
+          }
+        } catch (rehashCheckError) {
+          logger.error("Password rehash check failed", {
+            userId: user._id,
+            email: user.email,
+            error: rehashCheckError.message
+          });
+        }
       }
 
       // If not authenticated by either method
@@ -5472,6 +5509,87 @@ class AuthController {
         message: "Internal server error while downloading calendar file",
         error:
           process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Validate password strength endpoint
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async validatePasswordStrength(req, res) {
+    try {
+      const { password } = req.body;
+
+      if (!password) {
+        return res.status(400).json({
+          success: false,
+          message: "Password is required for validation",
+        });
+      }
+
+      // Basic password validation (only length and format checks)
+      const validation = passwordSecurity.validatePasswordStrength(password);
+      
+      return res.status(200).json({
+        success: true,
+        message: "Password validation completed",
+        data: {
+          isValid: validation.isValid,
+          errors: validation.errors,
+          strength: validation.strength,
+        },
+      });
+    } catch (error) {
+      logger.error("Password validation error:", {
+        error: error.message,
+        stack: error.stack,
+      });
+
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error during password validation",
+      });
+    }
+  }
+
+  /**
+   * Generate secure password endpoint
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async generateSecurePassword(req, res) {
+    try {
+      const { length = 16 } = req.body;
+
+      if (length < 8 || length > 128) {
+        return res.status(400).json({
+          success: false,
+          message: "Password length must be between 8 and 128 characters",
+        });
+      }
+
+      const password = passwordSecurity.generateSecurePassword(length);
+      const validation = passwordSecurity.validatePasswordStrength(password);
+
+      return res.status(200).json({
+        success: true,
+        message: "Secure password generated successfully",
+        data: {
+          password,
+          strength: validation.strength,
+        },
+      });
+    } catch (error) {
+      logger.error("Password generation error:", {
+        error: error.message,
+        stack: error.stack,
+      });
+
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error during password generation",
       });
     }
   }
