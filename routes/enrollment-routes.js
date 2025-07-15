@@ -9,7 +9,8 @@ import {
   getEnrollmentDetails,
   updateEnrollmentStatus,
   getPaymentHistory,
-  getEnrollmentStats
+  getEnrollmentStats,
+  checkStudentEnrollmentInCourse,
 } from "../controllers/student-batch-controller.js";
 import { authenticateToken, authorize } from "../middleware/auth.js";
 
@@ -23,14 +24,14 @@ router.post(
   "/students/:studentId/enroll",
   authenticateToken,
   authorize(["admin", "student", "super-admin"]),
-  enrollStudentInBatch
+  enrollStudentInBatch,
 );
 
 // Get all enrollments for a student
 router.get(
   "/students/:studentId/enrollments",
   authenticateToken,
-  getStudentEnrollments
+  getStudentEnrollments,
 );
 
 /**
@@ -41,7 +42,7 @@ router.get(
   "/batches/:batchId/students",
   authenticateToken,
   authorize(["admin", "instructor"]),
-  getBatchStudents
+  getBatchStudents,
 );
 
 /**
@@ -51,7 +52,7 @@ router.get(
 router.get(
   "/enrollments/:enrollmentId",
   authenticateToken,
-  getEnrollmentDetails
+  getEnrollmentDetails,
 );
 
 // Update enrollment status
@@ -59,7 +60,7 @@ router.put(
   "/enrollments/:enrollmentId/status",
   authenticateToken,
   authorize(["admin"]),
-  updateEnrollmentStatus
+  updateEnrollmentStatus,
 );
 
 /**
@@ -70,14 +71,14 @@ router.post(
   "/enrollments/:enrollmentId/payments",
   authenticateToken,
   authorize(["admin"]),
-  recordPayment
+  recordPayment,
 );
 
 // Get payment history for an enrollment
 router.get(
   "/enrollments/:enrollmentId/payments",
   authenticateToken,
-  getPaymentHistory
+  getPaymentHistory,
 );
 
 /**
@@ -87,14 +88,14 @@ router.get(
 router.put(
   "/enrollments/:enrollmentId/progress/:lessonId",
   authenticateToken,
-  updateProgress
+  updateProgress,
 );
 
 // Record assessment score
 router.post(
   "/enrollments/:enrollmentId/assessments/:assessmentId/scores",
   authenticateToken,
-  recordAssessmentScore
+  recordAssessmentScore,
 );
 
 /**
@@ -105,7 +106,14 @@ router.get(
   "/enrollments/stats",
   authenticateToken,
   authorize(["admin"]),
-  getEnrollmentStats
+  getEnrollmentStats,
 );
 
-export default router; 
+// Check if a student is enrolled in a specific course
+router.get(
+  "/students/:studentId/enrollments/:courseId/check",
+  authenticateToken,
+  checkStudentEnrollmentInCourse,
+);
+
+export default router;
