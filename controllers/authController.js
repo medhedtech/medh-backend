@@ -1160,7 +1160,13 @@ class AuthController {
         });
       }
 
-      const { email, password, remember_me = false } = req.body;
+      const {
+        email,
+        password,
+        quick_login_key,
+        remember_me = false,
+        generate_quick_login_key = false,
+      } = req.body;
 
       // Find user by email with retry logic (includes both regular and demo users)
       let user;
@@ -1187,60 +1193,6 @@ class AuthController {
         });
       }
 
-      // Handle demo users special cases
-      if (user.is_demo) {
-        // Check if demo user needs password setup
-        if (user.needsPasswordSetup()) {
-          return res.status(200).json({
-            success: true,
-            message:
-              "Demo account found. Please set up your password to continue.",
-            requires_password_setup: true,
-            user_type: "demo",
-            data: {
-              user: {
-                id: user._id,
-                full_name: user.full_name,
-                email: user.email,
-                username: user.username,
-                is_demo: user.is_demo,
-                password_set: user.password_set,
-              },
-              setup_token: this.generateJWT(user, "1h"), // Short-lived token for password setup
-            },
-          });
-        }
-
-        // If demo user has password but no password provided in request
-        if (!password && user.password_set) {
-          return res.status(200).json({
-            success: true,
-            message:
-              "Demo account found. Please enter your password to continue.",
-            requires_password: true,
-            user_type: "demo",
-            data: {
-              user: {
-                id: user._id,
-                full_name: user.full_name,
-                email: user.email,
-                username: user.username,
-                is_demo: user.is_demo,
-                password_set: user.password_set,
-              },
-            },
-          });
-        }
-      }
-
-      // For regular users, password is always required
-      if (!user.is_demo && !password) {
-        return res.status(400).json({
-          success: false,
-          message: "Password is required",
-        });
-      }
-
       // Check if account is locked using improved logic
       const lockStatus = this.isAccountLocked(user);
       if (lockStatus.isLocked) {
@@ -1261,8 +1213,90 @@ class AuthController {
         await this.resetLockoutFields(user);
       }
 
-      // Verify password (only if password is provided)
-      if (password) {
+      let authenticated = false;
+      let loginMethod = "unknown";
+
+      // 1. Attempt quick login if quick_login_key is provided
+      if (quick_login_key) {
+        const foundKey = user.quick_login_keys.find(
+          (key) => key.key_id === quick_login_key,
+        );
+        if (foundKey) {
+          // Compare the provided key with the hashed key in the database
+          const isValidQuickKey = await bcrypt.compare(
+            quick_login_key,
+            foundKey.hashed_key,
+          );
+          if (isValidQuickKey) {
+            authenticated = true;
+            loginMethod = "quick_login";
+            // Update last used timestamp
+            foundKey.last_used = new Date();
+          }
+        }
+
+        if (!authenticated) {
+          // Do not increment failed attempts for quick login attempts
+          return res.status(401).json({
+            success: false,
+            message: "Invalid quick login key",
+          });
+        }
+      } else {
+        // 2. Fallback to traditional password login if no quick_login_key
+        // For regular users, password is always required if not using quick login
+        if (!user.is_demo && !password) {
+          return res.status(400).json({
+            success: false,
+            message: "Password is required for regular login",
+          });
+        }
+
+        // Handle demo users special cases for password
+        if (user.is_demo) {
+          if (user.needsPasswordSetup()) {
+            return res.status(200).json({
+              success: true,
+              message:
+                "Demo account found. Please set up your password to continue.",
+              requires_password_setup: true,
+              user_type: "demo",
+              data: {
+                user: {
+                  id: user._id,
+                  full_name: user.full_name,
+                  email: user.email,
+                  username: user.username,
+                  is_demo: user.is_demo,
+                  password_set: user.password_set,
+                },
+                setup_token: this.generateJWT(user, "1h"), // Short-lived token for password setup
+              },
+            });
+          }
+
+          if (!password && user.password_set) {
+            return res.status(200).json({
+              success: true,
+              message:
+                "Demo account found. Please enter your password to continue.",
+              requires_password: true,
+              user_type: "demo",
+              data: {
+                user: {
+                  id: user._id,
+                  full_name: user.full_name,
+                  email: user.email,
+                  username: user.username,
+                  is_demo: user.is_demo,
+                  password_set: user.password_set,
+                },
+              },
+            });
+          }
+        }
+
+        // Verify password
         const isValidPassword = await user.comparePassword(password);
         if (!isValidPassword) {
           try {
@@ -1315,18 +1349,27 @@ class AuthController {
             });
           }
         }
-
-        // Reset failed login attempts on successful login
+        authenticated = true;
+        loginMethod = "email_password";
+        // Reset failed login attempts on successful password login
         await this.resetLockoutFields(user);
       }
 
-      // Check if MFA is enabled for this user
+      // If not authenticated by either method
+      if (!authenticated) {
+        return res.status(401).json({
+          success: false,
+          message: "Authentication failed. Please check your credentials.",
+        });
+      }
+
+      // Check if MFA is enabled for this user (applies after quick login or password login)
       if (user.two_factor_enabled) {
         // For MFA-enabled users, return a temporary response indicating MFA is required
         return res.status(200).json({
           success: true,
           message:
-            "Password verified. Please provide your two-factor authentication code.",
+            "Credentials verified. Please provide your two-factor authentication code.",
           requires_mfa: true,
           mfa_method: user.two_factor_method,
           data: {
@@ -1340,7 +1383,7 @@ class AuthController {
         });
       }
 
-      // Extract device and location information
+      // Proceed to complete login after successful authentication (either quick login or password)
       const deviceInfo = this.extractDeviceInfo(req);
       const locationInfo = this.extractLocationInfo(req);
 
@@ -1391,64 +1434,35 @@ class AuthController {
         "login",
         null,
         {
-          login_method: "email_password",
+          login_method: loginMethod, // Use the determined login method
           session_id: sessionId,
           remember_me,
         },
         {
           ip_address: deviceInfo.ip_address,
-          user_agent: req.headers["user-agent"],
           device_type: deviceInfo.device_type,
+          browser: deviceInfo.browser,
+          operating_system: deviceInfo.operating_system,
           geolocation: locationInfo,
         },
       );
 
-      // Generate JWT token
-      const tokenExpiry = remember_me ? "30d" : "24h";
-      const token = this.generateJWT(user, tokenExpiry);
-
-      // Track real-time login
-      this.activeUsers.set(user._id.toString(), {
-        user_id: user._id,
-        session_id: sessionId,
-        login_time: new Date(),
-        device_info: deviceInfo,
-        location_info: locationInfo,
-      });
-
-      this.sessionStore.set(sessionId, {
-        user_id: user._id,
-        created_at: new Date(),
-        last_activity: new Date(),
-        device_info: deviceInfo,
-      });
-
-      // Send login notification email if from new device
-      if (this.isNewDevice(user, deviceInfo)) {
-        this.sendLoginNotification(user, deviceInfo, locationInfo);
-      }
-
-      return this.completeLogin(
+      // Generate JWT and send response
+      this.completeLogin(
         user,
         deviceInfo,
         locationInfo,
         sessionId,
-        token,
         remember_me,
         res,
+        generate_quick_login_key,
       );
     } catch (error) {
-      logger.error("Login error:", {
-        error: error.message,
-        stack: error.stack,
-        email: req.body?.email,
-      });
-
+      logger.error("Login error:", error);
       res.status(500).json({
         success: false,
-        message: "Internal server error during login",
-        error:
-          process.env.NODE_ENV === "development" ? error.message : undefined,
+        message: "Server error during login",
+        error: error.message,
       });
     }
   }
@@ -1498,17 +1512,14 @@ class AuthController {
 
       await user.save();
 
-      // Generate JWT token
-      const token = this.generateJWT(user);
-
       return this.completeLogin(
         user,
         deviceInfo,
         locationInfo,
         sessionId,
-        token,
-        false,
+        false, // remember_me is false for MFA login
         res,
+        false, // Do not generate quick login key
       );
     } catch (error) {
       logger.error("Complete MFA login error:", {
@@ -1534,10 +1545,36 @@ class AuthController {
     deviceInfo,
     locationInfo,
     sessionId,
-    token,
     remember_me,
     res,
+    generateQuickLoginKey = false, // New parameter
   ) {
+    // Generate JWT token
+    const tokenExpiry = remember_me ? "30d" : "24h";
+    const token = this.generateJWT(user, tokenExpiry);
+
+    let quickLoginKey = null;
+
+    if (generateQuickLoginKey) {
+      const newQuickLoginKey = crypto.randomBytes(32).toString("hex");
+      const hashedQuickLoginKey = bcrypt.hashSync(newQuickLoginKey, 10);
+      const keyId = crypto.randomBytes(16).toString("hex"); // Unique ID for the key
+
+      user.quick_login_keys.push({
+        key_id: keyId,
+        hashed_key: hashedQuickLoginKey,
+        created_at: new Date(),
+        last_used: new Date(),
+      });
+
+      // Save the user with the new quick login key
+      user.save().catch((err) => {
+        logger.error("Error saving user with new quick login key:", err);
+      });
+
+      quickLoginKey = newQuickLoginKey;
+    }
+
     // Track real-time login
     this.activeUsers.set(user._id.toString(), {
       user_id: user._id,
@@ -1587,6 +1624,7 @@ class AuthController {
         session_id: sessionId,
         expires_in: remember_me ? "30d" : "24h",
         user_type: user.is_demo ? "demo" : "regular",
+        quick_login_key: quickLoginKey, // Return the unhashed key if generated
       },
     });
   }
@@ -1702,7 +1740,7 @@ class AuthController {
           userId: user._id,
           email: user.email,
         });
-        // Don't fail the logout if email fails
+        // Don\'t fail the logout if email fails
       }
 
       logger.info("All sessions invalidated by user request", {
@@ -1737,6 +1775,61 @@ class AuthController {
         message: "Internal server error during logout from all devices",
         error:
           process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Revoke a specific quick login key for the authenticated user
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async revokeQuickLoginKey(req, res) {
+    try {
+      const { keyId } = req.params;
+      const user = req.user; // Authenticated user from middleware
+
+      // Find the index of the key to remove
+      const keyIndex = user.quick_login_keys.findIndex(
+        (key) => key.key_id === keyId,
+      );
+
+      if (keyIndex === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "Quick login key not found",
+        });
+      }
+
+      // Remove the key from the array
+      user.quick_login_keys.splice(keyIndex, 1);
+
+      // Save the updated user document
+      await user.save();
+
+      // Log the key revocation activity
+      await user.logActivity("quick_login_key_revoked", null, {
+        key_id: keyId,
+        revocation_time: new Date(),
+        revoked_by: "user",
+      });
+
+      logger.info("Quick login key revoked successfully", {
+        userId: user._id,
+        keyId,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Quick login key revoked successfully",
+        data: { key_id: keyId },
+      });
+    } catch (error) {
+      logger.error("Error revoking quick login key:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error revoking quick login key",
+        error: error.message,
       });
     }
   }
@@ -2238,6 +2331,148 @@ class AuthController {
         message: "Internal server error processing password reset request",
         error:
           process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Login a user using a quick login key
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async quickLogin(req, res) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { email, quick_login_key } = req.body;
+
+      // Find user by email
+      const user = await dbUtils.findOne(User, { email: email.toLowerCase() });
+      logger.debug(
+        `Quick login attempt for email: ${email.toLowerCase()}, User found: ${!!user}`,
+      );
+
+      if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid credentials", // Keep generic for security
+        });
+      }
+
+      // Check if account is locked
+      const lockStatus = this.isAccountLocked(user);
+      if (lockStatus.isLocked) {
+        return res.status(423).json({
+          success: false,
+          message: `Account temporarily locked due to multiple failed login attempts. Please try again after ${lockStatus.remainingMinutes} minute(s).`,
+          lockout_info: {
+            locked_until: lockStatus.lockedUntil,
+            remaining_time: lockStatus.remainingTimeFormatted,
+            remaining_minutes: lockStatus.remainingMinutes,
+            lockout_reason: lockStatus.lockoutReason,
+          },
+        });
+      }
+
+      // If lockout period has expired, reset fields
+      if (lockStatus.needsReset) {
+        await this.resetLockoutFields(user);
+      }
+
+      // Find the quick login key by iterating and comparing hashed values
+      let foundKey = null;
+      for (const key of user.quick_login_keys) {
+        const isValid = await bcrypt.compare(quick_login_key, key.hashed_key);
+        if (isValid) {
+          foundKey = key;
+          break;
+        }
+      }
+      logger.debug(`Quick login key found on user (after bcrypt compare): ${!!foundKey}`);
+
+      if (!foundKey) {
+        // Do not increment failed attempts for quick login attempts
+        return res.status(401).json({
+          success: false,
+          message: "Invalid quick login key",
+        });
+      }
+
+      // Update last used timestamp
+      foundKey.last_used = new Date();
+
+      // Create or update session
+      const deviceInfo = this.extractDeviceInfo(req);
+      const locationInfo = this.extractLocationInfo(req);
+      const sessionId = crypto.randomBytes(32).toString("hex");
+      const sessionData = {
+        session_id: sessionId,
+        device_id: deviceInfo.device_id,
+        ip_address: deviceInfo.ip_address,
+        user_agent: req.headers["user-agent"],
+        geolocation: locationInfo,
+      };
+
+      await user.createSession(sessionData);
+
+      // Update user statistics
+      user.last_login = new Date();
+      user.statistics.engagement.last_active_date = new Date();
+      user.statistics.engagement.total_logins += 1;
+
+      try {
+        await dbUtils.save(user);
+      } catch (dbError) {
+        logger.error(
+          "Database error during quick login - user statistics save",
+          {
+            error: dbError.message,
+            userId: user._id,
+          },
+        );
+        // Continue with login process even if statistics save fails
+      }
+
+      // Log login activity
+      await user.logActivity(
+        "login",
+        null,
+        {
+          login_method: "quick_login",
+          session_id: sessionId,
+        },
+        {
+          ip_address: deviceInfo.ip_address,
+          device_type: deviceInfo.device_type,
+          browser: deviceInfo.browser,
+          operating_system: deviceInfo.operating_system,
+          geolocation: locationInfo,
+        },
+      );
+
+      // Generate JWT and send response (no quick login key generation here as it's used to login)
+      this.completeLogin(
+        user,
+        deviceInfo,
+        locationInfo,
+        sessionId,
+        false, // remember_me is false for quick login as it's a single-use key
+        res,
+        false, // Do not generate a new quick login key on quick login
+      );
+    } catch (error) {
+      logger.error("Quick login error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error during quick login",
+        error: error.message,
       });
     }
   }
@@ -4116,6 +4351,7 @@ class AuthController {
         return res.status(400).json({
           success: false,
           message: "Refresh token is required",
+          error_code: "MISSING_REFRESH_TOKEN",
         });
       }
 
@@ -4154,11 +4390,29 @@ class AuthController {
       });
     } catch (error) {
       logger.error("Refresh token error:", error);
-      res.status(401).json({
-        success: false,
-        message: "Invalid or expired refresh token",
-        error: error.message,
-      });
+      // Log the specific JWT error for debugging
+      if (error.name === "TokenExpiredError") {
+        logger.error("JWT Token Expired Error:", error.message);
+        res.status(401).json({
+          success: false,
+          message: "Refresh token has expired. Please log in again.",
+          error_code: "TOKEN_EXPIRED",
+        });
+      } else if (error.name === "JsonWebTokenError") {
+        logger.error("JWT Invalid Token Error:", error.message);
+        res.status(401).json({
+          success: false,
+          message: "Invalid refresh token. Please log in again.",
+          error_code: "INVALID_TOKEN",
+        });
+      } else {
+        logger.error("Unexpected Refresh Token Error:", error.message);
+        res.status(401).json({
+          success: false,
+          message: "Invalid or expired refresh token",
+          error: error.message,
+        });
+      }
     }
   }
 

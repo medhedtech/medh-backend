@@ -320,9 +320,9 @@ if (process.env.NODE_ENV !== "production") {
   // Development console transport - full detail with colors
   logger.add(
     new winston.transports.Console({
+      level: "debug", // Set to 'debug' to see all messages during development
       format: consoleLogFormat,
       handleExceptions: true,
-      handleRejections: true,
     }),
   );
 } else {
@@ -476,7 +476,11 @@ logger.fatal = (message, meta = {}) => {
   logger.log("fatal", message, meta);
 
   // Always sent to Sentry regardless of environment
-  if (Sentry && process.env.SENTRY_DSN && process.env.SENTRY_DSN.startsWith('https://')) {
+  if (
+    Sentry &&
+    process.env.SENTRY_DSN &&
+    process.env.SENTRY_DSN.startsWith("https://")
+  ) {
     // Sentry.captureMessage disabled to prevent crashes
   }
 };
@@ -996,9 +1000,9 @@ logger.redis = {
       chalk.red("❌ REDIS CONNECTION ERROR") +
       " ".repeat(24) +
       chalk.red(" ┃");
-    
+
     // Safely handle error messages that might be undefined
-    const errorMessage = err && err.message ? err.message : 'Unknown error';
+    const errorMessage = err && err.message ? err.message : "Unknown error";
     const errorMsg =
       chalk.red("┃ ") +
       chalk.yellow(errorMessage) +
@@ -1104,7 +1108,10 @@ logger.connection = {
       chalk.red("┃");
 
     // Extract error message safely
-    const errorMessage = error instanceof Error ? (error.message || 'Unknown error') : String(error || 'Unknown error');
+    const errorMessage =
+      error instanceof Error
+        ? error.message || "Unknown error"
+        : String(error || "Unknown error");
     const truncatedMessage = errorMessage.substring(0, 55);
     const errorMsgLine =
       chalk.red("┃ ") +

@@ -7,7 +7,7 @@ import { upload } from "../controllers/upload/uploadController.js";
 const router = express.Router();
 
 // Create new brochure
-router.post("/create", authenticateToken, broucherController.createBrouchers);
+router.post("/create", broucherController.createBrouchers);
 
 // Get all brochures
 router.get("/", broucherController.getAllBrouchers);

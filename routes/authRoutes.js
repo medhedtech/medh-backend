@@ -178,6 +178,13 @@ router.get(
 // ============================================================================
 
 /**
+ * @route   POST /api/v1/auth/refresh-token
+ * @desc    Get a new access token using a refresh token
+ * @access  Public
+ */
+router.post("/refresh-token", authController.refreshToken.bind(authController));
+
+/**
  * @route   GET /api/v1/auth/check-availability
  * @desc    Check if email or username is available
  * @access  Public
@@ -240,6 +247,10 @@ router.post(
       .optional()
       .isLength({ min: 8 })
       .withMessage("Password must be at least 8 characters"),
+    body("quick_login_key")
+      .optional()
+      .isString()
+      .withMessage("Quick login key must be a string"),
     body("remember_me")
       .optional()
       .isBoolean()
@@ -257,27 +268,6 @@ router.post(
   "/complete-mfa-login",
   authController.completeMFALogin.bind(authController),
 );
-
-/**
- * @route   POST /api/v1/auth/refresh-token
- * @desc    Get a new access token using a refresh token
- * @access  Public
- */
-router.post("/refresh-token", (req, res, next) => {
-  // Validate the input before processing
-  const { refresh_token } = req.body;
-
-  if (!refresh_token) {
-    return res.status(400).json({
-      success: false,
-      message: "Refresh token is required",
-      error_code: "MISSING_REFRESH_TOKEN",
-    });
-  }
-
-  // Continue to the controller
-  return authController.refreshToken.bind(authController)(req, res, next);
-});
 
 /**
  * @route   POST /api/v1/auth/logout
@@ -2654,6 +2644,25 @@ router.post(
 );
 
 /**
+ * @route   POST /api/v1/auth/quick-login
+ * @desc    Login a user using a quick login key
+ * @access  Public
+ */
+router.post(
+  "/quick-login",
+  [
+    body("email")
+      .isEmail()
+      .normalizeEmail()
+      .withMessage("Please provide a valid email address"),
+    body("quick_login_key")
+      .notEmpty()
+      .withMessage("Quick login key is required"),
+  ],
+  authController.quickLogin.bind(authController),
+);
+
+/**
  * @route   POST /api/v1/auth/reset-password
  * @desc    Reset password with token
  * @access  Public
@@ -3155,5 +3164,65 @@ router.put(
     }
   },
 );
+
+// Quick Login Key Management Routes
+/**
+ * @route   DELETE /api/v1/auth/quick-login/:keyId
+ * @desc    Revoke a specific quick login key for the authenticated user
+ * @access  Private (Authenticated users)
+ */
+router.delete(
+  "/quick-login/:keyId",
+  authenticateToken,
+  authController.revokeQuickLoginKey.bind(authController),
+);
+
+/**
+ * @route   PUT /api/v1/auth/profile
+ */
+router.put("/profile", authenticateToken, async (req, res) => {
+  try {
+    const User = (await import("../models/user-modal.js")).default;
+
+    const user = await User.findById(req.user.id)
+      .select(
+        "-password -resetPasswordToken -resetPasswordExpires -emailVerificationOTP -emailVerificationOTPExpires",
+      )
+      .populate("assigned_instructor", "full_name email role");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Add computed fields for better frontend experience
+    const userProfile = {
+      ...user.toObject(),
+      profile_completion: calculateProfileCompletion(user),
+      account_insights: {
+        member_since: user.createdAt,
+        login_stats: user.getLoginStats(),
+        is_frequent_user: user.isFrequentUser(),
+        device_preference: user.getDevicePreference(),
+        login_pattern: user.getLoginPattern(),
+      },
+    };
+
+    res.status(200).json({
+      success: true,
+      message: "Profile retrieved successfully",
+      data: userProfile,
+    });
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching profile",
+      error: error.message,
+    });
+  }
+});
 
 export default router;

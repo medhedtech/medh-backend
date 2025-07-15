@@ -82,6 +82,31 @@ const phoneNumberSchema = new Schema(
   { _id: false },
 );
 
+// Quick Login Key Schema
+const quickLoginKeySchema = new Schema(
+  {
+    key_id: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    hashed_key: {
+      type: String,
+      required: true,
+    },
+    created_at: {
+      type: Date,
+      default: Date.now,
+    },
+    last_used: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false },
+);
+
 // User Activity Tracking Schema
 const userActivitySchema = new Schema(
   {
@@ -1105,6 +1130,7 @@ const userSchema = new Schema(
     devices: [deviceInfoSchema],
     sessions: [sessionSchema],
     activity_log: [userActivitySchema],
+    quick_login_keys: [quickLoginKeySchema], // Array of quick login keys
 
     // Timestamps
     created_at: {
