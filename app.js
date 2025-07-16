@@ -85,7 +85,7 @@ app.use(
 // Configure JSON parser with increased limit for base64 uploads
 app.use(
   express.json({
-    limit: "50mb", // Increase limit for base64 uploads
+    limit: "10gb", // Increase limit for base64 uploads
     verify: (req, res, buf, encoding) => {
       // Store raw body for potential streaming use
       if (
@@ -97,7 +97,7 @@ app.use(
     },
   }),
 );
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10gb" }));
 app.use(morgan("dev"));
 
 // Session configuration for OAuth
