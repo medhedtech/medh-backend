@@ -15,7 +15,7 @@ jobs:
     runs-on: self-hosted
     strategy:
       matrix:
-        node-version: [22.x] # Add more versions as needed
+        node-version: [22.x]
     steps:
       - name: Clean runner temp files
         run: |
@@ -69,16 +69,22 @@ jobs:
       - name: Build application
         run: npm run build --if-present
 
-      # ← New step to ensure PM2 v5+ is installed in the runner
       - name: Install PM2 globally
         run: npm install -g pm2@latest
+
+      # New step: rename CommonJS ecosystem file so PM2 loads it under ESM mode
+      - name: Rename PM2 config to .cjs
+        run: |
+          if [ -f ecosystem.config.js ]; then
+            mv ecosystem.config.js ecosystem.config.cjs
+          fi
 
       - name: Restart PM2 Processes
         run: |
           if command -v pm2 &> /dev/null; then
-            pm2 restart all || pm2 start ecosystem.config.js --env production
+            pm2 restart all || pm2 start ecosystem.config.cjs --env production
           else
-            echo "PM2 not found, please install PM2 globally: npm install -g pm2"
+            echo "PM2 not found after install"
             exit 1
           fi
 
