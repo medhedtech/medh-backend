@@ -28,26 +28,39 @@ const demoBookingSchema = new mongoose.Schema(
     },
     timeSlot: {
       type: String,
-      required: true,
+      required: false, // Changed from true to false
       trim: true,
     },
     scheduledDateTime: {
       type: Date,
-      required: true,
+      required: false, // Changed from true to false
     },
     timezone: {
       type: String,
-      required: true,
+      required: false, // Changed from true to false
       default: "UTC",
     },
     status: {
       type: String,
-      enum: ["pending", "confirmed", "cancelled", "rescheduled", "completed", "no-show"],
+      enum: [
+        "pending",
+        "confirmed",
+        "cancelled",
+        "rescheduled",
+        "completed",
+        "no-show",
+        "awaiting_schedule", // Added new status
+      ],
       default: "pending",
     },
     demoType: {
       type: String,
-      enum: ["course_demo", "consultation", "product_walkthrough", "general_inquiry"],
+      enum: [
+        "course_demo",
+        "consultation",
+        "product_walkthrough",
+        "general_inquiry",
+      ],
       default: "course_demo",
     },
     courseInterest: {
@@ -75,6 +88,13 @@ const demoBookingSchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: [500, "Notes cannot exceed 500 characters"],
+    },
+    // Grade field for analytics and reporting (e.g., 'Free Demo', 'Grade 1', etc.)
+    grade: {
+      type: String,
+      trim: true,
+      default: null,
+      // For free demo bookings, set to 'Free Demo'.
     },
     meetingLink: {
       type: String,
@@ -278,10 +298,12 @@ const demoBookingSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
           },
-          rooms: [{
-            name: String,
-            participants: [String],
-          }],
+          rooms: [
+            {
+              name: String,
+              participants: [String],
+            },
+          ],
         },
         // Additional admin-level settings
         internal_meeting: {
@@ -306,18 +328,20 @@ const demoBookingSchema = new mongoose.Schema(
           type: Boolean,
           default: false,
         },
-        resources: [{
-          resource_type: {
-            type: String,
-            enum: ["whiteboard", "shared_document"],
+        resources: [
+          {
+            resource_type: {
+              type: String,
+              enum: ["whiteboard", "shared_document"],
+            },
+            resource_id: String,
+            permission_level: {
+              type: String,
+              enum: ["editor", "viewer", "commenter"],
+              default: "editor",
+            },
           },
-          resource_id: String,
-          permission_level: {
-            type: String,
-            enum: ["editor", "viewer", "commenter"],
-            default: "editor",
-          },
-        }],
+        ],
       },
       // Auto-generated fields for easy access
       isZoomMeetingCreated: {
@@ -409,6 +433,23 @@ const demoBookingSchema = new mongoose.Schema(
       trim: true,
       maxlength: [1000, "Feedback cannot exceed 1000 characters"],
     },
+    // Audit fields
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    history: [
+      {
+        action: { type: String, required: true }, // e.g., 'Created', 'Time Assigned', 'Status Changed', 'Note Added'
+        timestamp: { type: Date, default: Date.now },
+        user: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // User who performed the action
+        details: { type: String }, // Additional context (e.g., reason, old/new value)
+      },
+    ],
     source: {
       type: String,
       enum: ["website", "social_media", "referral", "advertisement", "other"],
@@ -486,7 +527,7 @@ const demoBookingSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
-  }
+  },
 );
 
 // Indexes for performance
@@ -495,113 +536,206 @@ demoBookingSchema.index({ scheduledDateTime: 1, status: 1 });
 demoBookingSchema.index({ email: 1, scheduledDateTime: -1 });
 demoBookingSchema.index({ instructorId: 1, scheduledDateTime: 1 });
 demoBookingSchema.index({ createdAt: -1 });
-demoBookingSchema.index({ 'zoomMeeting.id': 1 });
-demoBookingSchema.index({ 'zoomMeeting.isZoomMeetingCreated': 1 });
+demoBookingSchema.index({ "zoomMeeting.id": 1 });
+demoBookingSchema.index({ "zoomMeeting.isZoomMeetingCreated": 1 });
 
 // Virtual for checking if booking is upcoming
-demoBookingSchema.virtual('isUpcoming').get(function() {
-  return this.scheduledDateTime > new Date() && 
-         ['confirmed', 'rescheduled'].includes(this.status);
+demoBookingSchema.virtual("isUpcoming").get(function () {
+  return (
+    this.scheduledDateTime > new Date() &&
+    ["confirmed", "rescheduled"].includes(this.status)
+  );
 });
 
 // Virtual for checking if booking can be rescheduled
-demoBookingSchema.virtual('canReschedule').get(function() {
+demoBookingSchema.virtual("canReschedule").get(function () {
   const now = new Date();
   const scheduledTime = new Date(this.scheduledDateTime);
   const hoursUntilDemo = (scheduledTime - now) / (1000 * 60 * 60);
-  
-  return hoursUntilDemo > 24 && 
-         ['confirmed', 'pending'].includes(this.status) &&
-         this.rescheduleHistory.length < 3; // Max 3 reschedules allowed
+
+  return (
+    hoursUntilDemo > 24 &&
+    ["confirmed", "pending"].includes(this.status) &&
+    this.rescheduleHistory.length < 3
+  ); // Max 3 reschedules allowed
 });
 
 // Virtual for checking if booking can be cancelled
-demoBookingSchema.virtual('canCancel').get(function() {
+demoBookingSchema.virtual("canCancel").get(function () {
   const now = new Date();
   const scheduledTime = new Date(this.scheduledDateTime);
   const hoursUntilDemo = (scheduledTime - now) / (1000 * 60 * 60);
-  
-  return hoursUntilDemo > 2 && 
-         ['confirmed', 'pending', 'rescheduled'].includes(this.status);
+
+  return (
+    hoursUntilDemo > 2 &&
+    ["confirmed", "pending", "rescheduled"].includes(this.status)
+  );
 });
 
 // Pre-save middleware to set scheduledDateTime from timeSlot if not provided
-demoBookingSchema.pre('save', function(next) {
+demoBookingSchema.pre("save", function (next) {
   if (!this.scheduledDateTime && this.timeSlot) {
     try {
       // Assuming timeSlot format: "2024-01-15T14:30:00.000Z" or similar ISO string
       this.scheduledDateTime = new Date(this.timeSlot);
     } catch (error) {
-      return next(new Error('Invalid timeSlot format. Please provide a valid ISO date string.'));
+      return next(
+        new Error(
+          "Invalid timeSlot format. Please provide a valid ISO date string.",
+        ),
+      );
     }
   }
   next();
 });
 
-// Pre-save middleware to validate future date
-demoBookingSchema.pre('save', function(next) {
-  if (this.scheduledDateTime <= new Date()) {
-    return next(new Error('Demo booking must be scheduled for a future date and time.'));
+// Pre-save middleware to validate future date (only if scheduledDateTime is present)
+demoBookingSchema.pre("save", function (next) {
+  if (this.scheduledDateTime && this.scheduledDateTime <= new Date()) {
+    return next(
+      new Error("Demo booking must be scheduled for a future date and time."),
+    );
   }
   next();
 });
 
 // Instance method to reschedule booking
-demoBookingSchema.methods.reschedule = function(newDateTime, reason, rescheduledBy = 'user') {
+demoBookingSchema.methods.reschedule = function (
+  newDateTime,
+  reason,
+  rescheduledBy = "user",
+) {
   if (!this.canReschedule) {
-    throw new Error('This booking cannot be rescheduled.');
+    throw new Error("This booking cannot be rescheduled.");
   }
-  
+
   // Add to reschedule history
   this.rescheduleHistory.push({
     fromDateTime: this.scheduledDateTime,
     toDateTime: new Date(newDateTime),
-    reason: reason || 'No reason provided',
-    rescheduledBy
+    reason: reason || "No reason provided",
+    rescheduledBy,
   });
-  
+
+  // Add to main history
+  this.history.push({
+    action: "Rescheduled",
+    user: this.updatedBy, // updatedBy will be set before saving
+    details: `From ${this.scheduledDateTime.toISOString()} to ${newDateTime}. Reason: ${reason || "Not provided"}`,
+  });
+
   // Update booking details
   this.scheduledDateTime = new Date(newDateTime);
   this.timeSlot = new Date(newDateTime).toISOString();
-  this.status = 'rescheduled';
-  
+  this.status = "rescheduled";
+
   return this;
 };
 
 // Instance method to cancel booking
-demoBookingSchema.methods.cancel = function(reason) {
+demoBookingSchema.methods.cancel = function (reason) {
   if (!this.canCancel) {
-    throw new Error('This booking cannot be cancelled.');
+    throw new Error("This booking cannot be cancelled.");
   }
-  
-  this.status = 'cancelled';
-  this.cancellationReason = reason || 'No reason provided';
+
+  this.status = "cancelled";
+  this.cancellationReason = reason || "No reason provided";
   this.cancellationDate = new Date();
-  
+
+  // Add to main history
+  this.history.push({
+    action: "Cancelled",
+    user: this.updatedBy, // updatedBy will be set before saving
+    details: `Reason: ${reason || "Not provided"}`,
+  });
+
   return this;
 };
 
 // Instance method to mark as completed
-demoBookingSchema.methods.markCompleted = function(notes, rating, feedback) {
-  this.status = 'completed';
+demoBookingSchema.methods.markCompleted = function (notes, rating, feedback) {
+  this.status = "completed";
   if (notes) this.completionNotes = notes;
   if (rating) this.rating = rating;
   if (feedback) this.feedback = feedback;
-  
+
+  // Add to main history
+  this.history.push({
+    action: "Completed",
+    user: this.updatedBy, // updatedBy will be set before saving
+    details: `Notes: ${notes || "Not provided"}. Rating: ${rating || "N/A"}`,
+  });
+
   return this;
 };
 
+// Add a new instance method to add a history entry
+demoBookingSchema.methods.addHistoryEntry = function (action, user, details) {
+  this.history.push({
+    action,
+    user,
+    details,
+    timestamp: new Date(),
+  });
+  return this; // For chaining
+};
+
+// Pre-save middleware to set updatedBy and add general history entry
+demoBookingSchema.pre("save", function (next) {
+  // If this is a new document, set createdBy and add initial history entry
+  if (this.isNew) {
+    this.createdBy =
+      this.createdBy || (this._reqUser ? this._reqUser.id : null); // Set createdBy from req.user if available
+    this.history.push({
+      action: "Created",
+      user: this.createdBy,
+      details: this.timeSlot
+        ? "Booking created with time slot"
+        : "Booking created without time slot (manual request)",
+    });
+  } else {
+    // For updates, set updatedBy and add a general update history entry
+    // Only add if there are actual modifications and updatedBy is set
+    if (this.isModified() && this._reqUser && this._reqUser.id) {
+      this.updatedBy = this._reqUser.id;
+      // Avoid adding duplicate 'Updated' entries if specific actions already added them
+      const lastHistoryEntry = this.history[this.history.length - 1];
+      const isLastEntrySpecificUpdate =
+        lastHistoryEntry &&
+        (lastHistoryEntry.action === "Rescheduled" ||
+          lastHistoryEntry.action === "Cancelled" ||
+          lastHistoryEntry.action === "Completed" ||
+          lastHistoryEntry.action === "Note Added" ||
+          lastHistoryEntry.action === "Time Assigned");
+
+      if (!isLastEntrySpecificUpdate) {
+        const modifiedPaths = this.modifiedPaths()
+          .filter((path) => !["updatedAt", "history", "__v"].includes(path))
+          .join(", ");
+        if (modifiedPaths) {
+          this.history.push({
+            action: "Updated",
+            user: this.updatedBy,
+            details: `Fields updated: ${modifiedPaths}`,
+          });
+        }
+      }
+    }
+  }
+  next();
+});
+
 // Instance method to create Zoom meeting data structure
-demoBookingSchema.methods.prepareZoomMeetingData = function() {
+demoBookingSchema.methods.prepareZoomMeetingData = function () {
   const defaultSettings = this.zoomMeetingSettings || {};
-  
+
   return {
-    topic: `Demo Session - ${this.demoType.replace('_', ' ').toUpperCase()} - ${this.fullName}`,
+    topic: `Demo Session - ${this.demoType.replace("_", " ").toUpperCase()} - ${this.fullName}`,
     type: 2, // Scheduled meeting
     start_time: this.scheduledDateTime.toISOString(),
     duration: defaultSettings.duration || this.durationMinutes || 60,
-    timezone: this.timezone || 'UTC',
-    agenda: `Demo session for ${this.fullName}${this.courseInterest ? ` - ${this.courseInterest}` : ''}${this.requirements ? `\n\nRequirements: ${this.requirements}` : ''}`,
+    timezone: this.timezone || "UTC",
+    agenda: `Demo session for ${this.fullName}${this.courseInterest ? ` - ${this.courseInterest}` : ""}${this.requirements ? `\n\nRequirements: ${this.requirements}` : ""}`,
     settings: {
       host_video: defaultSettings.host_video ?? true,
       participant_video: defaultSettings.participant_video ?? true,
@@ -612,8 +746,10 @@ demoBookingSchema.methods.prepareZoomMeetingData = function() {
       registration_type: 1, // Required registration
       approval_type: 0, // Auto approve
       close_registration: false,
-      registrants_confirmation_email: defaultSettings.registrants_confirmation_email ?? true,
-      registrants_email_notification: defaultSettings.registrants_email_notification ?? true,
+      registrants_confirmation_email:
+        defaultSettings.registrants_confirmation_email ?? true,
+      registrants_email_notification:
+        defaultSettings.registrants_email_notification ?? true,
       meeting_authentication: defaultSettings.meeting_authentication ?? false,
       audio: "both",
       encryption_type: "enhanced_encryption",
@@ -632,12 +768,12 @@ demoBookingSchema.methods.prepareZoomMeetingData = function() {
       },
       participant_focused_meeting: false,
       push_change_to_calendar: true,
-    }
+    },
   };
 };
 
 // Instance method to store Zoom meeting details
-demoBookingSchema.methods.storeZoomMeetingDetails = function(zoomMeetingData) {
+demoBookingSchema.methods.storeZoomMeetingDetails = function (zoomMeetingData) {
   this.zoomMeeting = {
     id: zoomMeetingData.id,
     uuid: zoomMeetingData.uuid,
@@ -661,55 +797,60 @@ demoBookingSchema.methods.storeZoomMeetingDetails = function(zoomMeetingData) {
     zoomMeetingCreatedAt: new Date(),
     zoomMeetingError: null,
   };
-  
+
   // Also update legacy fields for backward compatibility
   this.meetingLink = zoomMeetingData.join_url;
   this.meetingId = zoomMeetingData.id.toString();
   this.meetingPassword = zoomMeetingData.password;
-  
+
   return this;
 };
 
 // Instance method to handle Zoom meeting creation errors
-demoBookingSchema.methods.handleZoomMeetingError = function(error) {
+demoBookingSchema.methods.handleZoomMeetingError = function (error) {
   this.zoomMeeting = this.zoomMeeting || {};
   this.zoomMeeting.isZoomMeetingCreated = false;
-  this.zoomMeeting.zoomMeetingError = error.message || 'Failed to create Zoom meeting';
+  this.zoomMeeting.zoomMeetingError =
+    error.message || "Failed to create Zoom meeting";
   this.zoomMeeting.zoomMeetingCreatedAt = new Date();
-  
+
   return this;
 };
 
 // Static method to find upcoming bookings
-demoBookingSchema.statics.findUpcoming = function(userId, limit = 10) {
+demoBookingSchema.statics.findUpcoming = function (userId, limit = 10) {
   return this.find({
     userId,
     scheduledDateTime: { $gt: new Date() },
-    status: { $in: ['confirmed', 'rescheduled'] },
-    isActive: true
+    status: { $in: ["confirmed", "rescheduled"] },
+    isActive: true,
   })
-  .sort({ scheduledDateTime: 1 })
-  .limit(limit)
-  .populate('instructorId', 'full_name email');
+    .sort({ scheduledDateTime: 1 })
+    .limit(limit)
+    .populate("instructorId", "full_name email");
 };
 
 // Static method to find bookings by date range
-demoBookingSchema.statics.findByDateRange = function(startDate, endDate, options = {}) {
+demoBookingSchema.statics.findByDateRange = function (
+  startDate,
+  endDate,
+  options = {},
+) {
   const query = {
     scheduledDateTime: {
       $gte: new Date(startDate),
-      $lte: new Date(endDate)
+      $lte: new Date(endDate),
     },
     isActive: true,
-    ...options
+    ...options,
   };
-  
+
   return this.find(query)
     .sort({ scheduledDateTime: 1 })
-    .populate('userId', 'full_name email')
-    .populate('instructorId', 'full_name email');
+    .populate("userId", "full_name email")
+    .populate("instructorId", "full_name email");
 };
 
 const DemoBooking = mongoose.model("DemoBooking", demoBookingSchema);
 
-export default DemoBooking; 
+export default DemoBooking;
