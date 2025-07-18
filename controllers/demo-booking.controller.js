@@ -1,12 +1,13 @@
-import moment from 'moment-timezone';
-import mongoose from 'mongoose';
+import moment from "moment-timezone";
+import mongoose from "mongoose";
 
-import DemoBooking from '../models/demo-booking.model.js';
-import User from '../models/user-modal.js';
-import { AppError } from '../utils/errorHandler.js';
-import catchAsync from '../utils/catchAsync.js';
-import logger from '../utils/logger.js';
-import zoomService from '../services/zoomService.js';
+import DemoBooking from "../models/demo-booking.model.js";
+import User from "../models/user-modal.js";
+import { AppError } from "../utils/errorHandler.js";
+import catchAsync from "../utils/catchAsync.js";
+import logger from "../utils/logger.js";
+import emailService from "../services/emailService.js"; // Corrected import
+import zoomService from "../services/zoomService.js";
 
 /**
  * Create a new demo booking
@@ -59,40 +60,50 @@ export const createDemoBooking = catchAsync(async (req, res) => {
     timelineExpectations,
     hasLaptop,
     internetSpeed,
-    previousOnlineLearningExperience
+    previousOnlineLearningExperience,
+    // Accept grade from request
+    grade,
   } = req.body;
 
   try {
-    // Business Rule: Enforce minimum 1-day advance booking
-    const requestedDateTime = new Date(timeSlot);
-    const currentTime = new Date();
-    const tomorrowStart = new Date(currentTime);
-    tomorrowStart.setDate(currentTime.getDate() + 1);
-    tomorrowStart.setHours(0, 0, 0, 0);
+    // Set _reqUser on the booking instance for pre-save hooks to access user ID
+    // This is primarily for createdBy on new documents
+    if (req.user) {
+      req.body._reqUser = req.user;
+    }
 
-    if (requestedDateTime < tomorrowStart) {
-      return res.status(400).json({
-        success: false,
-        message: 'Demo bookings must be scheduled at least 1 day in advance. Please select a slot from tomorrow onwards.',
-        error_code: 'INVALID_BOOKING_DATE',
-        data: {
-          requested_date: requestedDateTime.toISOString(),
-          minimum_date: tomorrowStart.toISOString(),
-          current_date: currentTime.toISOString()
-        }
-      });
+    let requestedDateTime = null;
+    if (timeSlot) {
+      requestedDateTime = new Date(timeSlot);
+      const currentTime = new Date();
+      const tomorrowStart = new Date(currentTime);
+      tomorrowStart.setDate(currentTime.getDate() + 1);
+      tomorrowStart.setHours(0, 0, 0, 0);
+      if (requestedDateTime < tomorrowStart) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Demo bookings must be scheduled at least 1 day in advance. Please select a slot from tomorrow onwards.",
+          error_code: "INVALID_BOOKING_DATE",
+          data: {
+            requested_date: requestedDateTime.toISOString(),
+            minimum_date: tomorrowStart.toISOString(),
+            current_date: currentTime.toISOString(),
+          },
+        });
+      }
     }
 
     // If user is authenticated, use their ID, otherwise use provided userId or create guest booking
     let finalUserId = null;
     let userDetails = null;
-    
+
     if (req.user && req.user.id) {
       finalUserId = req.user.id;
-      userDetails = await User.findById(finalUserId).select('full_name email');
+      userDetails = await User.findById(finalUserId).select("full_name email");
     } else if (userId) {
       // Verify the provided userId exists
-      userDetails = await User.findById(userId).select('full_name email');
+      userDetails = await User.findById(userId).select("full_name email");
       if (userDetails) {
         finalUserId = userId;
       }
@@ -100,83 +111,195 @@ export const createDemoBooking = catchAsync(async (req, res) => {
 
     // Validate timezone
     const supportedTimezones = [
-      'UTC',
-      'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
-      'America/Toronto', 'America/Vancouver', 'America/Sao_Paulo', 'America/Mexico_City',
-      'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Rome', 'Europe/Madrid',
-      'Europe/Amsterdam', 'Europe/Stockholm', 'Europe/Zurich', 'Europe/Vienna',
-      'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Asia/Shanghai',
-      'Asia/Hong_Kong', 'Asia/Seoul', 'Asia/Bangkok', 'Asia/Jakarta',
-      'Australia/Sydney', 'Australia/Melbourne', 'Australia/Perth',
-      'Pacific/Auckland', 'Pacific/Honolulu',
-      'Africa/Cairo', 'Africa/Lagos', 'Africa/Johannesburg'
+      "UTC",
+      "America/New_York",
+      "America/Chicago",
+      "America/Denver",
+      "America/Los_Angeles",
+      "America/Toronto",
+      "America/Vancouver",
+      "America/Sao_Paulo",
+      "America/Mexico_City",
+      "Europe/London",
+      "Europe/Paris",
+      "Europe/Berlin",
+      "Europe/Rome",
+      "Europe/Madrid",
+      "Europe/Amsterdam",
+      "Europe/Stockholm",
+      "Europe/Zurich",
+      "Europe/Vienna",
+      "Asia/Dubai",
+      "Asia/Kolkata",
+      "Asia/Singapore",
+      "Asia/Tokyo",
+      "Asia/Shanghai",
+      "Asia/Hong_Kong",
+      "Asia/Seoul",
+      "Asia/Bangkok",
+      "Asia/Jakarta",
+      "Australia/Sydney",
+      "Australia/Melbourne",
+      "Australia/Perth",
+      "Pacific/Auckland",
+      "Pacific/Honolulu",
+      "Africa/Cairo",
+      "Africa/Lagos",
+      "Africa/Johannesburg",
     ];
 
     // Validate and process enhanced student details
     const validationErrors = [];
-    
+
     // Timezone validation
     if (timezone && !supportedTimezones.includes(timezone)) {
-      validationErrors.push({ 
-        field: 'timezone', 
-        message: 'Unsupported timezone. Please select from the supported timezone list.',
-        supportedTimezones: supportedTimezones
+      validationErrors.push({
+        field: "timezone",
+        message:
+          "Unsupported timezone. Please select from the supported timezone list.",
+        supportedTimezones: supportedTimezones,
       });
     }
-    
+
     // Age validation
-    if (age && (isNaN(parseInt(age)) || parseInt(age) < 13 || parseInt(age) > 100)) {
-      validationErrors.push({ field: 'age', message: 'Age must be between 13 and 100' });
+    if (
+      age &&
+      (isNaN(parseInt(age)) || parseInt(age) < 13 || parseInt(age) > 100)
+    ) {
+      validationErrors.push({
+        field: "age",
+        message: "Age must be between 13 and 100",
+      });
     }
-    
+
     // Gender validation
-    const validGenders = ['male', 'female', 'non-binary', 'prefer-not-to-say', 'other'];
+    const validGenders = [
+      "male",
+      "female",
+      "non-binary",
+      "prefer-not-to-say",
+      "other",
+    ];
     if (gender && !validGenders.includes(gender.toLowerCase())) {
-      validationErrors.push({ field: 'gender', message: 'Invalid gender option' });
+      validationErrors.push({
+        field: "gender",
+        message: "Invalid gender option",
+      });
     }
-    
+
     // Education level validation
-    const validEducationLevels = ['high-school', 'diploma', 'undergraduate', 'graduate', 'postgraduate', 'phd', 'other'];
-    if (educationLevel && !validEducationLevels.includes(educationLevel.toLowerCase())) {
-      validationErrors.push({ field: 'educationLevel', message: 'Invalid education level' });
+    const validEducationLevels = [
+      "high-school",
+      "diploma",
+      "undergraduate",
+      "graduate",
+      "postgraduate",
+      "phd",
+      "other",
+    ];
+    if (
+      educationLevel &&
+      !validEducationLevels.includes(educationLevel.toLowerCase())
+    ) {
+      validationErrors.push({
+        field: "educationLevel",
+        message: "Invalid education level",
+      });
     }
-    
+
     // Student status validation
-    const validStudentStatuses = ['student', 'working-professional', 'job-seeker', 'entrepreneur', 'freelancer', 'other'];
-    if (studentStatus && !validStudentStatuses.includes(studentStatus.toLowerCase())) {
-      validationErrors.push({ field: 'studentStatus', message: 'Invalid student status' });
+    const validStudentStatuses = [
+      "student",
+      "working-professional",
+      "job-seeker",
+      "entrepreneur",
+      "freelancer",
+      "other",
+    ];
+    if (
+      studentStatus &&
+      !validStudentStatuses.includes(studentStatus.toLowerCase())
+    ) {
+      validationErrors.push({
+        field: "studentStatus",
+        message: "Invalid student status",
+      });
     }
-    
+
     // Programming experience validation
-    const validExperienceLevels = ['beginner', 'basic', 'intermediate', 'advanced', 'expert'];
-    if (programmingExperience && !validExperienceLevels.includes(programmingExperience.toLowerCase())) {
-      validationErrors.push({ field: 'programmingExperience', message: 'Invalid programming experience level' });
+    const validExperienceLevels = [
+      "beginner",
+      "basic",
+      "intermediate",
+      "advanced",
+      "expert",
+    ];
+    if (
+      programmingExperience &&
+      !validExperienceLevels.includes(programmingExperience.toLowerCase())
+    ) {
+      validationErrors.push({
+        field: "programmingExperience",
+        message: "Invalid programming experience level",
+      });
     }
-    
+
     // Learning style validation
-    const validLearningStyles = ['visual', 'auditory', 'hands-on', 'reading', 'mixed'];
-    if (preferredLearningStyle && !validLearningStyles.includes(preferredLearningStyle.toLowerCase())) {
-      validationErrors.push({ field: 'preferredLearningStyle', message: 'Invalid learning style' });
+    const validLearningStyles = [
+      "visual",
+      "auditory",
+      "hands-on",
+      "reading",
+      "mixed",
+    ];
+    if (
+      preferredLearningStyle &&
+      !validLearningStyles.includes(preferredLearningStyle.toLowerCase())
+    ) {
+      validationErrors.push({
+        field: "preferredLearningStyle",
+        message: "Invalid learning style",
+      });
     }
-    
+
     // Contact method validation
-    const validContactMethods = ['email', 'phone', 'whatsapp', 'telegram', 'discord'];
-    if (preferredContactMethod && !validContactMethods.includes(preferredContactMethod.toLowerCase())) {
-      validationErrors.push({ field: 'preferredContactMethod', message: 'Invalid contact method' });
+    const validContactMethods = [
+      "email",
+      "phone",
+      "whatsapp",
+      "telegram",
+      "discord",
+    ];
+    if (
+      preferredContactMethod &&
+      !validContactMethods.includes(preferredContactMethod.toLowerCase())
+    ) {
+      validationErrors.push({
+        field: "preferredContactMethod",
+        message: "Invalid contact method",
+      });
     }
-    
+
     // Available time validation
-    if (availableTimePerWeek && (isNaN(parseInt(availableTimePerWeek)) || parseInt(availableTimePerWeek) < 1 || parseInt(availableTimePerWeek) > 168)) {
-      validationErrors.push({ field: 'availableTimePerWeek', message: 'Available time per week must be between 1 and 168 hours' });
+    if (
+      availableTimePerWeek &&
+      (isNaN(parseInt(availableTimePerWeek)) ||
+        parseInt(availableTimePerWeek) < 1 ||
+        parseInt(availableTimePerWeek) > 168)
+    ) {
+      validationErrors.push({
+        field: "availableTimePerWeek",
+        message: "Available time per week must be between 1 and 168 hours",
+      });
     }
 
     // Return validation errors if any
     if (validationErrors.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Student details validation failed',
-        error_code: 'STUDENT_DETAILS_VALIDATION_ERROR',
-        errors: validationErrors
+        message: "Student details validation failed",
+        error_code: "STUDENT_DETAILS_VALIDATION_ERROR",
+        errors: validationErrors,
       });
     }
 
@@ -184,46 +307,73 @@ export const createDemoBooking = catchAsync(async (req, res) => {
       personalInfo: {
         age: age ? parseInt(age) : null,
         gender: gender ? gender.toLowerCase() : null,
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null
+        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
       },
       academicInfo: {
         educationLevel: educationLevel ? educationLevel.toLowerCase() : null,
         fieldOfStudy,
         currentOccupation,
-        studentStatus: studentStatus ? studentStatus.toLowerCase() : 'other'
+        studentStatus: studentStatus ? studentStatus.toLowerCase() : "other",
       },
       technicalInfo: {
-        programmingExperience: programmingExperience ? programmingExperience.toLowerCase() : 'beginner',
-        currentSkills: Array.isArray(currentSkills) ? currentSkills : (currentSkills ? [currentSkills] : []),
-        interestedTechnologies: Array.isArray(interestedTechnologies) ? interestedTechnologies : (interestedTechnologies ? [interestedTechnologies] : []),
+        programmingExperience: programmingExperience
+          ? programmingExperience.toLowerCase()
+          : "beginner",
+        currentSkills: Array.isArray(currentSkills)
+          ? currentSkills
+          : currentSkills
+            ? [currentSkills]
+            : [],
+        interestedTechnologies: Array.isArray(interestedTechnologies)
+          ? interestedTechnologies
+          : interestedTechnologies
+            ? [interestedTechnologies]
+            : [],
         hasLaptop: hasLaptop !== undefined ? Boolean(hasLaptop) : null,
         internetSpeed,
-        previousOnlineLearningExperience: previousOnlineLearningExperience ? previousOnlineLearningExperience.toLowerCase() : 'none'
+        previousOnlineLearningExperience: previousOnlineLearningExperience
+          ? previousOnlineLearningExperience.toLowerCase()
+          : "none",
       },
       learningPreferences: {
-        preferredLearningStyle: preferredLearningStyle ? preferredLearningStyle.toLowerCase() : 'mixed',
-        learningGoals: Array.isArray(learningGoals) ? learningGoals : (learningGoals ? [learningGoals] : []),
+        preferredLearningStyle: preferredLearningStyle
+          ? preferredLearningStyle.toLowerCase()
+          : "mixed",
+        learningGoals: Array.isArray(learningGoals)
+          ? learningGoals
+          : learningGoals
+            ? [learningGoals]
+            : [],
         careerObjectives,
-        availableTimePerWeek: availableTimePerWeek ? parseInt(availableTimePerWeek) : null,
+        availableTimePerWeek: availableTimePerWeek
+          ? parseInt(availableTimePerWeek)
+          : null,
         timelineExpectations,
-        budgetRange
+        budgetRange,
       },
       contactInfo: {
-        preferredContactMethod: preferredContactMethod ? preferredContactMethod.toLowerCase() : 'email',
+        preferredContactMethod: preferredContactMethod
+          ? preferredContactMethod.toLowerCase()
+          : "email",
         socialMediaProfiles: socialMediaProfiles || {},
-        emergencyContact: emergencyContact || {}
+        emergencyContact: emergencyContact || {},
       },
       additionalInfo: {
         howDidYouHearAboutUs,
         referralCode,
-        specialRequirements
-      }
+        specialRequirements,
+      },
     };
 
     // Process timezone and time information
-    const userTimezone = timezone || 'UTC';
-    const scheduledDateTime = new Date(timeSlot);
-    const userTimezoneMoment = moment.tz(scheduledDateTime, userTimezone);
+    const userTimezone = timezone || "UTC";
+    // If no timeSlot, scheduledDateTime will be null. If timeSlot exists, parse it.
+    const finalScheduledDateTime = timeSlot
+      ? moment.tz(timeSlot, userTimezone).toDate()
+      : null;
+    const userTimezoneMoment = finalScheduledDateTime
+      ? moment.tz(finalScheduledDateTime, userTimezone)
+      : null;
 
     // Create booking data
     const bookingData = {
@@ -231,70 +381,89 @@ export const createDemoBooking = catchAsync(async (req, res) => {
       email: email.toLowerCase(),
       fullName: fullName || userDetails?.full_name || fullName,
       phoneNumber,
-      timeSlot,
-      scheduledDateTime: scheduledDateTime,
+      timeSlot: timeSlot || null,
+      scheduledDateTime: finalScheduledDateTime,
       timezone: userTimezone,
       // Enhanced time information
       timeInfo: {
-        originalTimeSlot: timeSlot,
+        originalTimeSlot: timeSlot || null,
         userTimezone: userTimezone,
-        userLocalTime: userTimezoneMoment.format('YYYY-MM-DD HH:mm:ss'),
-        userDisplayTime: userTimezoneMoment.format('MMMM Do, YYYY [at] h:mm A'),
-        utcTime: moment.utc(scheduledDateTime).format('YYYY-MM-DD HH:mm:ss'),
-        timezoneName: userTimezoneMoment.format('z'), // e.g., "EST", "PST"
-        timezoneOffset: userTimezoneMoment.format('Z') // e.g., "-05:00"
+        userLocalTime: userTimezoneMoment
+          ? userTimezoneMoment.format("YYYY-MM-DD HH:mm:ss")
+          : null,
+        userDisplayTime: userTimezoneMoment
+          ? userTimezoneMoment.format("MMMM Do, YYYY [at] h:mm A")
+          : "To be scheduled",
+        utcTime: finalScheduledDateTime
+          ? moment.utc(finalScheduledDateTime).format("YYYY-MM-DD HH:mm:ss")
+          : null,
+        timezoneName: userTimezoneMoment
+          ? userTimezoneMoment.format("z")
+          : userTimezone, // e.g., "EST", "PST"
+        timezoneOffset: userTimezoneMoment
+          ? userTimezoneMoment.format("Z")
+          : "+00:00", // e.g., "-05:00"
       },
-      demoType: demoType || 'course_demo',
+      demoType: demoType || "course_demo",
       courseInterest,
       experienceLevel,
       companyName,
       jobTitle,
       requirements,
       notes,
-      source: source || 'website',
+      source: source || "website",
       utmParameters,
       ipAddress,
       userAgent,
-      status: 'pending', // Default status
+      status: timeSlot ? "pending" : "awaiting_schedule", // Set status based on timeSlot
       autoGenerateZoomMeeting,
       zoomMeetingSettings,
       // Enhanced student details
-      studentDetails
+      studentDetails,
+      // Grade logic: use provided grade, else if demoType is 'course_demo', treat as 'Free Demo'
+      grade:
+        grade || (demoType === "course_demo" || !demoType ? "Free Demo" : null),
+      createdBy: finalUserId, // Set createdBy here, will be used by model's pre-save hook
     };
 
     // Create the demo booking
     const demoBooking = new DemoBooking(bookingData);
+
+    // Pass req.user to the document instance for use in pre-save hooks (for createdBy/updatedBy)
+    demoBooking._reqUser = req.user;
     await demoBooking.save();
 
-    // Auto-generate Zoom meeting if enabled
-    if (autoGenerateZoomMeeting) {
+    // Auto-generate Zoom meeting if enabled AND timeSlot is provided
+    if (autoGenerateZoomMeeting && timeSlot) {
       try {
-        logger.info('Creating Zoom meeting for demo booking', {
+        logger.info("Creating Zoom meeting for demo booking", {
           bookingId: demoBooking._id,
-          scheduledDateTime: demoBooking.scheduledDateTime
+          scheduledDateTime: demoBooking.scheduledDateTime,
         });
 
         // Prepare Zoom meeting data using the model method
         const zoomMeetingData = demoBooking.prepareZoomMeetingData();
-        
+
         // Create the Zoom meeting using the classroom meeting method for better features
-        const zoomMeeting = await zoomService.createClassroomMeeting('me', zoomMeetingData);
-        
+        const zoomMeeting = await zoomService.createClassroomMeeting(
+          "me",
+          zoomMeetingData,
+        );
+
         // Store the Zoom meeting details in the booking
         demoBooking.storeZoomMeetingDetails(zoomMeeting);
         await demoBooking.save();
 
-        logger.info('Zoom meeting created successfully for demo booking', {
+        logger.info("Zoom meeting created successfully for demo booking", {
           bookingId: demoBooking._id,
           zoomMeetingId: zoomMeeting.id,
-          joinUrl: zoomMeeting.join_url
+          joinUrl: zoomMeeting.join_url,
         });
-
       } catch (zoomError) {
-        logger.error('Failed to create Zoom meeting for demo booking', {
+        logger.error("Failed to create Zoom meeting for demo booking", {
           bookingId: demoBooking._id,
           error: zoomError.message,
-          stack: zoomError.stack
+          stack: zoomError.stack,
         });
 
         // Store the error but don't fail the booking creation
@@ -303,21 +472,27 @@ export const createDemoBooking = catchAsync(async (req, res) => {
       }
     }
 
-    // Populate user details for response
-    await demoBooking.populate('userId', 'full_name email');
+    // Populate user details for response, including audit fields
+    await demoBooking.populate("userId", "full_name email");
+    await demoBooking.populate("createdBy", "full_name email");
+    await demoBooking.populate("updatedBy", "full_name email");
+    await demoBooking.populate("history.user", "full_name email");
 
-    logger.info('Demo booking created successfully', {
+    logger.info("Demo booking created successfully", {
       bookingId: demoBooking._id,
       userId: finalUserId,
       email: email,
       scheduledDateTime: demoBooking.scheduledDateTime,
-      demoType: demoBooking.demoType
+      demoType: demoBooking.demoType,
+      status: demoBooking.status,
     });
 
     // Return success response
     res.status(201).json({
       success: true,
-      message: 'Demo booking created successfully',
+      message: timeSlot
+        ? "Demo booking created successfully"
+        : "Manual demo request submitted successfully. Our team will contact you soon!",
       data: {
         booking: {
           id: demoBooking._id,
@@ -330,9 +505,17 @@ export const createDemoBooking = catchAsync(async (req, res) => {
           // Enhanced time information
           timeInfo: demoBooking.timeInfo || {
             userTimezone: demoBooking.timezone,
-            userDisplayTime: moment.tz(demoBooking.scheduledDateTime, demoBooking.timezone).format('MMMM Do, YYYY [at] h:mm A'),
-            timezoneName: moment.tz(demoBooking.scheduledDateTime, demoBooking.timezone).format('z'),
-            timezoneOffset: moment.tz(demoBooking.scheduledDateTime, demoBooking.timezone).format('Z')
+            userDisplayTime: demoBooking.scheduledDateTime
+              ? moment
+                  .tz(demoBooking.scheduledDateTime, demoBooking.timezone)
+                  .format("MMMM Do, YYYY [at] h:mm A")
+              : "To be scheduled",
+            timezoneName: moment
+              .tz(demoBooking.scheduledDateTime, demoBooking.timezone)
+              .format("z"),
+            timezoneOffset: moment
+              .tz(demoBooking.scheduledDateTime, demoBooking.timezone)
+              .format("Z"),
           },
           status: demoBooking.status,
           demoType: demoBooking.demoType,
@@ -347,58 +530,417 @@ export const createDemoBooking = catchAsync(async (req, res) => {
           isUpcoming: demoBooking.isUpcoming,
           createdAt: demoBooking.createdAt,
           updatedAt: demoBooking.updatedAt,
+          createdBy: demoBooking.createdBy, // Include createdBy
+          updatedBy: demoBooking.updatedBy, // Include updatedBy
+          history: demoBooking.history, // Include history
           // Enhanced student details
           studentDetails: demoBooking.studentDetails,
+          // Grade field
+          grade: demoBooking.grade,
           // Zoom meeting details
           meetingLink: demoBooking.meetingLink,
           meetingId: demoBooking.meetingId,
           meetingPassword: demoBooking.meetingPassword,
-          zoomMeeting: demoBooking.zoomMeeting ? {
-            id: demoBooking.zoomMeeting.id,
-            topic: demoBooking.zoomMeeting.topic,
-            start_time: demoBooking.zoomMeeting.start_time,
-            duration: demoBooking.zoomMeeting.duration,
-            timezone: demoBooking.zoomMeeting.timezone,
-            agenda: demoBooking.zoomMeeting.agenda,
-            join_url: demoBooking.zoomMeeting.join_url,
-            password: demoBooking.zoomMeeting.password,
-            isZoomMeetingCreated: demoBooking.zoomMeeting.isZoomMeetingCreated,
-            zoomMeetingCreatedAt: demoBooking.zoomMeeting.zoomMeetingCreatedAt,
-            zoomMeetingError: demoBooking.zoomMeeting.zoomMeetingError,
-            settings: {
-              auto_recording: demoBooking.zoomMeeting.settings?.auto_recording,
-              waiting_room: demoBooking.zoomMeeting.settings?.waiting_room,
-              host_video: demoBooking.zoomMeeting.settings?.host_video,
-              participant_video: demoBooking.zoomMeeting.settings?.participant_video,
-              mute_upon_entry: demoBooking.zoomMeeting.settings?.mute_upon_entry,
-            }
-          } : null,
-          autoGenerateZoomMeeting: demoBooking.autoGenerateZoomMeeting
-        }
-      }
+          zoomMeeting: demoBooking.zoomMeeting
+            ? {
+                id: demoBooking.zoomMeeting.id,
+                topic: demoBooking.zoomMeeting.topic,
+                start_time: demoBooking.zoomMeeting.start_time,
+                duration: demoBooking.zoomMeeting.duration,
+                timezone: demoBooking.zoomMeeting.timezone,
+                agenda: demoBooking.zoomMeeting.agenda,
+                join_url: demoBooking.zoomMeeting.join_url,
+                password: demoBooking.zoomMeeting.password,
+                isZoomMeetingCreated:
+                  demoBooking.zoomMeeting.isZoomMeetingCreated,
+                zoomMeetingCreatedAt:
+                  demoBooking.zoomMeeting.zoomMeetingCreatedAt,
+                zoomMeetingError: demoBooking.zoomMeeting.zoomMeetingError,
+                settings: {
+                  auto_recording:
+                    demoBooking.zoomMeeting.settings?.auto_recording,
+                  waiting_room: demoBooking.zoomMeeting.settings?.waiting_room,
+                  host_video: demoBooking.zoomMeeting.settings?.host_video,
+                  participant_video:
+                    demoBooking.zoomMeeting.settings?.participant_video,
+                  mute_upon_entry:
+                    demoBooking.zoomMeeting.settings?.mute_upon_entry,
+                },
+              }
+            : null,
+          autoGenerateZoomMeeting: demoBooking.autoGenerateZoomMeeting,
+        },
+      },
     });
-
   } catch (error) {
-    logger.error('Error creating demo booking', {
+    logger.error("Error creating demo booking", {
       error: error.message,
       stack: error.stack,
-      requestData: { email, timeSlot, demoType }
+      requestData: { email, timeSlot, demoType },
     });
 
-    if (error.name === 'ValidationError') {
-      const validationErrors = Object.values(error.errors).map(err => ({
+    if (error.name === "ValidationError") {
+      const validationErrors = Object.values(error.errors).map((err) => ({
         field: err.path,
-        message: err.message
+        message: err.message,
       }));
-      
+
       return res.status(400).json({
         success: false,
-        message: 'Validation failed',
-        errors: validationErrors
+        message: "Validation failed",
+        errors: validationErrors,
       });
     }
 
-    throw new AppError('Failed to create demo booking', 500);
+    throw new AppError("Failed to create demo booking", 500);
+  }
+});
+
+/**
+ * Update a demo booking (cancel, reschedule, etc.)
+ * @route PUT /api/demo-booking
+ * @access Private
+ */
+export const updateDemoBooking = catchAsync(async (req, res) => {
+  const {
+    bookingId,
+    action,
+    newTimeSlot,
+    reason,
+    rating,
+    feedback,
+    completionNotes,
+  } = req.body;
+
+  try {
+    // Find the booking
+    const booking = await DemoBooking.findById(bookingId);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+        error_code: "BOOKING_NOT_FOUND",
+      });
+    }
+
+    // Pass req.user to the document instance for use in pre-save hooks (for updatedBy)
+    if (req.user) {
+      booking._reqUser = req.user;
+    }
+
+    // Check if user has permission to update this booking
+    if (
+      req.user &&
+      req.user.id &&
+      booking.userId &&
+      booking.userId.toString() !== req.user.id
+    ) {
+      // Check if user is admin or instructor
+      const userRole = req.user.role;
+      if (!["admin", "instructor"].includes(userRole)) {
+        return res.status(403).json({
+          success: false,
+          message: "You do not have permission to update this booking",
+          error_code: "INSUFFICIENT_PERMISSIONS",
+        });
+      }
+    }
+
+    let updatedBooking;
+    let successMessage;
+
+    if (action === "assign_time_slot" && newTimeSlot) {
+      const oldTimeSlot = booking.scheduledDateTime;
+
+      booking.timeSlot = newTimeSlot;
+      booking.scheduledDateTime = new Date(newTimeSlot);
+      booking.status = "pending"; // Or "confirmed" if auto-confirm upon assignment
+
+      // Add to history explicitly for this action
+      booking.addHistoryEntry(
+        "Time Assigned",
+        req.user?.id,
+        `Demo scheduled from ${oldTimeSlot ? oldTimeSlot.toISOString() : "unassigned"} to ${newTimeSlot}`,
+      );
+
+      await booking.save();
+
+      // Trigger Zoom meeting creation if auto-generate is true and it wasn't already created
+      if (
+        booking.autoGenerateZoomMeeting &&
+        !booking.zoomMeeting?.isZoomMeetingCreated
+      ) {
+        try {
+          logger.info("Creating Zoom meeting for assigned demo booking", {
+            bookingId: booking._id,
+            scheduledDateTime: booking.scheduledDateTime,
+          });
+
+          const zoomMeetingData = booking.prepareZoomMeetingData();
+          const zoomMeeting = await zoomService.createClassroomMeeting(
+            "me",
+            zoomMeetingData,
+          );
+          booking.storeZoomMeetingDetails(zoomMeeting);
+          await booking.save(); // Save again to store Zoom details and update history
+
+          logger.info(
+            "Zoom meeting created successfully for assigned demo booking",
+            {
+              bookingId: booking._id,
+              zoomMeetingId: zoomMeeting.id,
+              joinUrl: zoomMeeting.join_url,
+            },
+          );
+
+          // Send confirmation email to student
+          await emailService.sendMail({
+            to: booking.email,
+            subject: "Your Demo Booking is Confirmed!",
+            template: "demo-confirmation",
+            context: {
+              fullName: booking.fullName,
+              date: moment(booking.scheduledDateTime).format("MMMM Do, YYYY"),
+              time: moment(booking.scheduledDateTime).format("h:mm A"),
+              timezone: booking.timezone,
+              meetingLink: zoomMeeting.join_url,
+              // ... other details for email
+            },
+          });
+          booking.addHistoryEntry(
+            "Email Sent",
+            req.user?.id,
+            `Confirmation email sent to student.`,
+          );
+          await booking.save();
+        } catch (zoomError) {
+          logger.error(
+            "Failed to create Zoom meeting for assigned demo booking",
+            {
+              bookingId: booking._id,
+              error: zoomError.message,
+              stack: zoomError.stack,
+            },
+          );
+          booking.handleZoomMeetingError(zoomError);
+          booking.addHistoryEntry(
+            "Zoom Error",
+            req.user?.id,
+            `Failed to create Zoom meeting: ${zoomError.message}`,
+          );
+          await booking.save();
+        }
+      }
+
+      // Populate instructor details and audit fields before sending response
+      await booking.populate("instructorId", "full_name email");
+      await booking.populate("createdBy", "full_name email");
+      await booking.populate("updatedBy", "full_name email");
+      await booking.populate("history.user", "full_name email");
+
+      return res.status(200).json({
+        success: true,
+        message: "Time slot assigned and booking updated",
+        data: { booking },
+      });
+    }
+
+    switch (action) {
+      case "cancel":
+        if (!booking.canCancel) {
+          return res.status(400).json({
+            success: false,
+            message: "This booking cannot be cancelled",
+            error_code: "CANNOT_CANCEL_BOOKING",
+          });
+        }
+
+        booking.cancel(reason);
+        await booking.save();
+        updatedBooking = booking;
+        successMessage = "Booking cancelled successfully";
+        break;
+
+      case "reschedule":
+        if (!booking.canReschedule) {
+          return res.status(400).json({
+            success: false,
+            message: "This booking cannot be rescheduled",
+            error_code: "CANNOT_RESCHEDULE_BOOKING",
+          });
+        }
+
+        if (!newTimeSlot) {
+          return res.status(400).json({
+            success: false,
+            message: "New time slot is required for rescheduling",
+            error_code: "MISSING_NEW_TIME_SLOT",
+          });
+        }
+
+        booking.reschedule(newTimeSlot, reason, "user"); // 'user' will be overridden by _reqUser in pre-save if present
+        await booking.save();
+        updatedBooking = booking;
+        successMessage = "Booking rescheduled successfully";
+        break;
+
+      case "confirm":
+        if (booking.status !== "pending") {
+          return res.status(400).json({
+            success: false,
+            message: "Only pending bookings can be confirmed",
+            error_code: "INVALID_STATUS_FOR_CONFIRMATION",
+          });
+        }
+
+        const oldStatus = booking.status;
+        booking.status = "confirmed";
+        booking.addHistoryEntry(
+          "Status Changed",
+          req.user?.id,
+          `Status changed from ${oldStatus} to confirmed`,
+        );
+        await booking.save();
+        updatedBooking = booking;
+        successMessage = "Booking confirmed successfully";
+        break;
+
+      case "complete":
+        if (!["confirmed", "rescheduled"].includes(booking.status)) {
+          return res.status(400).json({
+            success: false,
+            message:
+              "Only confirmed or rescheduled bookings can be marked as completed",
+            error_code: "INVALID_STATUS_FOR_COMPLETION",
+          });
+        }
+
+        booking.markCompleted(completionNotes, rating, feedback);
+        await booking.save();
+        updatedBooking = booking;
+        successMessage = "Booking marked as completed successfully";
+        break;
+
+      default:
+        return res.status(400).json({
+          success: false,
+          message: "Invalid action specified",
+          error_code: "INVALID_ACTION",
+        });
+    }
+
+    // Populate instructor details and audit fields
+    await updatedBooking.populate("instructorId", "full_name email");
+    await updatedBooking.populate("createdBy", "full_name email");
+    await updatedBooking.populate("updatedBy", "full_name email");
+    await updatedBooking.populate("history.user", "full_name email");
+
+    logger.info("Demo booking updated successfully", {
+      bookingId: booking._id,
+      action: action,
+      userId: req.user?.id,
+      newStatus: updatedBooking.status,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: successMessage,
+      data: { booking: updatedBooking },
+    });
+  } catch (error) {
+    logger.error("Error updating demo booking", {
+      error: error.message,
+      stack: error.stack,
+      bookingId: bookingId,
+      action: action,
+    });
+
+    if (error.message.includes("cannot be")) {
+      return res.status(400).json({
+        success: false,
+        message: error.message,
+        error_code: "BUSINESS_RULE_VIOLATION",
+      });
+    }
+
+    throw new AppError("Failed to update booking", 500);
+  }
+});
+
+/**
+ * Add an internal note to a demo booking
+ * @route PUT /api/demo-booking/note
+ * @access Private (Admin/Instructor/Owner only)
+ */
+export const addBookingNote = catchAsync(async (req, res) => {
+  const { bookingId, note } = req.body;
+
+  if (!note || note.trim() === "") {
+    return res.status(400).json({
+      success: false,
+      message: "Note content cannot be empty",
+      error_code: "EMPTY_NOTE",
+    });
+  }
+
+  try {
+    const booking = await DemoBooking.findById(bookingId);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+        error_code: "BOOKING_NOT_FOUND",
+      });
+    }
+
+    // Check if user has permission to add note (admin, instructor, or booking owner)
+    const hasPermission =
+      req.user &&
+      (["admin", "super-admin", "instructor"].includes(req.user.role) ||
+        (booking.userId && booking.userId.toString() === req.user.id));
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        success: false,
+        message: "Insufficient permissions to add notes to this booking",
+        error_code: "INSUFFICIENT_PERMISSIONS",
+      });
+    }
+
+    // Pass req.user to the document instance for use in pre-save hooks (for updatedBy and history user)
+    booking._reqUser = req.user;
+
+    // Add note to history
+    booking.addHistoryEntry("Note Added", req.user.id, note);
+
+    await booking.save();
+
+    // Populate audit fields for response
+    await booking.populate("createdBy", "full_name email");
+    await booking.populate("updatedBy", "full_name email");
+    await booking.populate("history.user", "full_name email");
+
+    logger.info("Note added to demo booking successfully", {
+      bookingId: booking._id,
+      noteBy: req.user?.id,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Note added successfully",
+      data: { booking },
+    });
+  } catch (error) {
+    logger.error("Error adding note to demo booking", {
+      bookingId: bookingId,
+      noteBy: req.user?.id,
+      error: error.message,
+      stack: error.stack,
+    });
+
+    throw new AppError("Failed to add note to booking", 500);
   }
 });
 
@@ -414,7 +956,7 @@ export const getUserBookings = catchAsync(async (req, res) => {
     page = 1,
     limit = 10,
     startDate,
-    endDate
+    endDate,
   } = req.query;
 
   try {
@@ -424,19 +966,27 @@ export const getUserBookings = catchAsync(async (req, res) => {
       targetUserId = req.user.id;
     }
 
-    if (!targetUserId) {
+    // Admins/Instructors can fetch all bookings, not just their own
+    const isAdminOrInstructor =
+      req.user &&
+      ["admin", "super-admin", "instructor"].includes(req.user.role);
+    if (!targetUserId && !isAdminOrInstructor) {
       return res.status(400).json({
         success: false,
-        message: 'User ID is required',
-        error_code: 'MISSING_USER_ID'
+        message:
+          "User ID is required or admin/instructor privileges for general search",
+        error_code: "MISSING_USER_ID",
       });
     }
 
     // Build query
     const query = {
-      userId: targetUserId,
-      isActive: true
+      isActive: true,
     };
+
+    if (targetUserId) {
+      query.userId = targetUserId;
+    }
 
     if (status) {
       query.status = status;
@@ -459,12 +1009,16 @@ export const getUserBookings = catchAsync(async (req, res) => {
     // Fetch bookings with pagination
     const [bookings, total] = await Promise.all([
       DemoBooking.find(query)
-        .sort({ scheduledDateTime: -1 })
+        .sort({ createdAt: -1 }) // Sort by creation date by default for listing, or scheduledDateTime if present
         .skip(skip)
         .limit(limitNum)
-        .populate('instructorId', 'full_name email')
+        .populate("userId", "full_name email")
+        .populate("instructorId", "full_name email")
+        .populate("createdBy", "full_name email") // Populate createdBy
+        .populate("updatedBy", "full_name email") // Populate updatedBy
+        .populate("history.user", "full_name email") // Populate history.user
         .lean(),
-      DemoBooking.countDocuments(query)
+      DemoBooking.countDocuments(query),
     ]);
 
     // Calculate pagination metadata
@@ -472,33 +1026,49 @@ export const getUserBookings = catchAsync(async (req, res) => {
     const hasNextPage = page < totalPages;
     const hasPrevPage = page > 1;
 
-    // Enhance bookings with virtual properties
-    const enhancedBookings = bookings.map(booking => {
+    // Enhance bookings with virtual properties (adjust if .lean() affects them)
+    const enhancedBookings = bookings.map((booking) => {
       const now = new Date();
-      const scheduledTime = new Date(booking.scheduledDateTime);
-      const hoursUntilDemo = (scheduledTime - now) / (1000 * 60 * 60);
-      
+      const scheduledTime = booking.scheduledDateTime
+        ? new Date(booking.scheduledDateTime)
+        : null;
+      const hoursUntilDemo = scheduledTime
+        ? (scheduledTime - now) / (1000 * 60 * 60)
+        : -1;
+
       return {
         ...booking,
-        isUpcoming: scheduledTime > now && ['confirmed', 'rescheduled'].includes(booking.status),
-        canReschedule: hoursUntilDemo > 24 && 
-                       ['confirmed', 'pending'].includes(booking.status) &&
-                       booking.rescheduleHistory.length < 3,
-        canCancel: hoursUntilDemo > 2 && 
-                   ['confirmed', 'pending', 'rescheduled'].includes(booking.status)
+        isUpcoming:
+          booking.scheduledDateTime &&
+          scheduledTime > now &&
+          ["confirmed", "rescheduled", "pending"].includes(booking.status), // Also include pending for upcoming
+        canReschedule:
+          booking.scheduledDateTime &&
+          hoursUntilDemo > 24 &&
+          ["confirmed", "pending", "awaiting_schedule"].includes(
+            booking.status,
+          ) && // Allow rescheduling from awaiting_schedule
+          booking.rescheduleHistory.length < 3,
+        canCancel:
+          booking.scheduledDateTime &&
+          hoursUntilDemo > 2 &&
+          ["confirmed", "pending", "rescheduled", "awaiting_schedule"].includes(
+            booking.status,
+          ), // Allow canceling from awaiting_schedule
       };
     });
 
-    logger.info('User bookings retrieved successfully', {
-      userId: targetUserId,
+    logger.info("User bookings retrieved successfully", {
+      userId: targetUserId || req.user?.id,
       totalBookings: total,
       page: parseInt(page),
-      status: status
+      status: status,
+      isAdminOrInstructor: isAdminOrInstructor,
     });
 
     res.status(200).json({
       success: true,
-      message: 'Bookings retrieved successfully',
+      message: "Bookings retrieved successfully",
       data: {
         bookings: enhancedBookings,
         pagination: {
@@ -507,199 +1077,18 @@ export const getUserBookings = catchAsync(async (req, res) => {
           total_items: total,
           items_per_page: limitNum,
           has_next_page: hasNextPage,
-          has_prev_page: hasPrevPage
-        }
-      }
+          has_prev_page: hasPrevPage,
+        },
+      },
     });
-
   } catch (error) {
-    logger.error('Error retrieving user bookings', {
+    logger.error("Error retrieving user bookings", {
       error: error.message,
       stack: error.stack,
-      userId: userId || req.user?.id
+      userId: userId || req.user?.id,
     });
 
-    throw new AppError('Failed to retrieve bookings', 500);
-  }
-});
-
-/**
- * Update a demo booking (cancel, reschedule, etc.)
- * @route PUT /api/demo-booking
- * @access Private
- */
-export const updateDemoBooking = catchAsync(async (req, res) => {
-  const {
-    bookingId,
-    action,
-    newTimeSlot,
-    reason,
-    rating,
-    feedback,
-    completionNotes
-  } = req.body;
-
-  try {
-    // Find the booking
-    const booking = await DemoBooking.findById(bookingId);
-    
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found',
-        error_code: 'BOOKING_NOT_FOUND'
-      });
-    }
-
-    // Check if user has permission to update this booking
-    if (req.user && req.user.id && booking.userId && booking.userId.toString() !== req.user.id) {
-      // Check if user is admin or instructor
-      const userRole = req.user.role;
-      if (!['admin', 'instructor'].includes(userRole)) {
-        return res.status(403).json({
-          success: false,
-          message: 'You do not have permission to update this booking',
-          error_code: 'INSUFFICIENT_PERMISSIONS'
-        });
-      }
-    }
-
-    let updatedBooking;
-    let successMessage;
-
-    switch (action) {
-      case 'cancel':
-        if (!booking.canCancel) {
-          return res.status(400).json({
-            success: false,
-            message: 'This booking cannot be cancelled',
-            error_code: 'CANNOT_CANCEL_BOOKING'
-          });
-        }
-        
-        booking.cancel(reason);
-        await booking.save();
-        updatedBooking = booking;
-        successMessage = 'Booking cancelled successfully';
-        break;
-
-      case 'reschedule':
-        if (!booking.canReschedule) {
-          return res.status(400).json({
-            success: false,
-            message: 'This booking cannot be rescheduled',
-            error_code: 'CANNOT_RESCHEDULE_BOOKING'
-          });
-        }
-        
-        if (!newTimeSlot) {
-          return res.status(400).json({
-            success: false,
-            message: 'New time slot is required for rescheduling',
-            error_code: 'MISSING_NEW_TIME_SLOT'
-          });
-        }
-        
-        booking.reschedule(newTimeSlot, reason, 'user');
-        await booking.save();
-        updatedBooking = booking;
-        successMessage = 'Booking rescheduled successfully';
-        break;
-
-      case 'confirm':
-        if (booking.status !== 'pending') {
-          return res.status(400).json({
-            success: false,
-            message: 'Only pending bookings can be confirmed',
-            error_code: 'INVALID_STATUS_FOR_CONFIRMATION'
-          });
-        }
-        
-        booking.status = 'confirmed';
-        await booking.save();
-        updatedBooking = booking;
-        successMessage = 'Booking confirmed successfully';
-        break;
-
-      case 'complete':
-        if (!['confirmed', 'rescheduled'].includes(booking.status)) {
-          return res.status(400).json({
-            success: false,
-            message: 'Only confirmed or rescheduled bookings can be marked as completed',
-            error_code: 'INVALID_STATUS_FOR_COMPLETION'
-          });
-        }
-        
-        booking.markCompleted(completionNotes, rating, feedback);
-        await booking.save();
-        updatedBooking = booking;
-        successMessage = 'Booking marked as completed successfully';
-        break;
-
-      default:
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid action specified',
-          error_code: 'INVALID_ACTION'
-        });
-    }
-
-    // Populate instructor details
-    await updatedBooking.populate('instructorId', 'full_name email');
-
-    logger.info('Demo booking updated successfully', {
-      bookingId: booking._id,
-      action: action,
-      userId: req.user?.id,
-      newStatus: updatedBooking.status
-    });
-
-    res.status(200).json({
-      success: true,
-      message: successMessage,
-      data: {
-        booking: {
-          id: updatedBooking._id,
-          userId: updatedBooking.userId,
-          email: updatedBooking.email,
-          fullName: updatedBooking.fullName,
-          scheduledDateTime: updatedBooking.scheduledDateTime,
-          timezone: updatedBooking.timezone,
-          status: updatedBooking.status,
-          demoType: updatedBooking.demoType,
-          courseInterest: updatedBooking.courseInterest,
-          canReschedule: updatedBooking.canReschedule,
-          canCancel: updatedBooking.canCancel,
-          isUpcoming: updatedBooking.isUpcoming,
-          rescheduleHistory: updatedBooking.rescheduleHistory,
-          cancellationReason: updatedBooking.cancellationReason,
-          cancellationDate: updatedBooking.cancellationDate,
-          rating: updatedBooking.rating,
-          feedback: updatedBooking.feedback,
-          completionNotes: updatedBooking.completionNotes,
-          instructor: updatedBooking.instructorId,
-          updatedAt: updatedBooking.updatedAt
-        }
-      }
-    });
-
-  } catch (error) {
-    logger.error('Error updating demo booking', {
-      error: error.message,
-      stack: error.stack,
-      bookingId: bookingId,
-      action: action
-    });
-
-    if (error.message.includes('cannot be')) {
-      return res.status(400).json({
-        success: false,
-        message: error.message,
-        error_code: 'BUSINESS_RULE_VIOLATION'
-      });
-    }
-
-    throw new AppError('Failed to update booking', 500);
+    throw new AppError("Failed to retrieve bookings", 500);
   }
 });
 
@@ -713,32 +1102,40 @@ export const getDemoBookingById = catchAsync(async (req, res) => {
 
   try {
     const booking = await DemoBooking.findById(bookingId)
-      .populate('userId', 'full_name email')
-      .populate('instructorId', 'full_name email');
+      .populate("userId", "full_name email")
+      .populate("instructorId", "full_name email")
+      .populate("createdBy", "full_name email") // Populate createdBy
+      .populate("updatedBy", "full_name email") // Populate updatedBy
+      .populate("history.user", "full_name email"); // Populate history.user
 
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Booking not found',
-        error_code: 'BOOKING_NOT_FOUND'
+        message: "Booking not found",
+        error_code: "BOOKING_NOT_FOUND",
       });
     }
 
     // Check if user has permission to view this booking
-    if (req.user && req.user.id && booking.userId && booking.userId._id.toString() !== req.user.id) {
+    if (
+      req.user &&
+      req.user.id &&
+      booking.userId &&
+      booking.userId._id.toString() !== req.user.id
+    ) {
       const userRole = req.user.role;
-      if (!['admin', 'instructor'].includes(userRole)) {
+      if (!["admin", "instructor", "super-admin"].includes(userRole)) {
         return res.status(403).json({
           success: false,
-          message: 'You do not have permission to view this booking',
-          error_code: 'INSUFFICIENT_PERMISSIONS'
+          message: "You do not have permission to view this booking",
+          error_code: "INSUFFICIENT_PERMISSIONS",
         });
       }
     }
 
     res.status(200).json({
       success: true,
-      message: 'Booking retrieved successfully',
+      message: "Booking retrieved successfully",
       data: {
         booking: {
           id: booking._id,
@@ -774,19 +1171,21 @@ export const getDemoBookingById = catchAsync(async (req, res) => {
           followUpRequired: booking.followUpRequired,
           followUpCompleted: booking.followUpCompleted,
           createdAt: booking.createdAt,
-          updatedAt: booking.updatedAt
-        }
-      }
+          updatedAt: booking.updatedAt,
+          createdBy: booking.createdBy, // Include createdBy
+          updatedBy: booking.updatedBy, // Include updatedBy
+          history: booking.history, // Include history
+        },
+      },
     });
-
   } catch (error) {
-    logger.error('Error retrieving demo booking', {
+    logger.error("Error retrieving demo booking", {
       error: error.message,
       stack: error.stack,
-      bookingId: bookingId
+      bookingId: bookingId,
     });
 
-    throw new AppError('Failed to retrieve booking', 500);
+    throw new AppError("Failed to retrieve booking", 500);
   }
 });
 
@@ -796,11 +1195,11 @@ export const getDemoBookingById = catchAsync(async (req, res) => {
  * @access Public
  */
 export const getAvailableTimeSlots = catchAsync(async (req, res) => {
-  const { 
-    startDate, 
-    timezone = 'UTC', 
+  const {
+    startDate,
+    timezone = "UTC",
     days = 7,
-    singleDay = false // Option to get single day slots (backward compatibility)
+    singleDay = false, // Option to get single day slots (backward compatibility)
   } = req.query;
 
   try {
@@ -808,13 +1207,13 @@ export const getAvailableTimeSlots = catchAsync(async (req, res) => {
     let baseDate;
 
     // Business Rule: Demos can only be booked starting from tomorrow onwards
-    const tomorrowDate = currentTime.clone().add(1, 'day').startOf('day');
+    const tomorrowDate = currentTime.clone().add(1, "day").startOf("day");
 
     // Determine the starting date
     if (startDate) {
-      baseDate = moment.tz(startDate, timezone).startOf('day');
+      baseDate = moment.tz(startDate, timezone).startOf("day");
       // Enforce minimum 1-day advance booking - start from tomorrow if date is today or earlier
-      if (baseDate.isSameOrBefore(currentTime, 'day')) {
+      if (baseDate.isSameOrBefore(currentTime, "day")) {
         baseDate = tomorrowDate;
       }
     } else {
@@ -823,37 +1222,45 @@ export const getAvailableTimeSlots = catchAsync(async (req, res) => {
     }
 
     // Handle backward compatibility for single day requests
-    if (singleDay === 'true' || singleDay === true) {
-      const singleDaySlots = await generateSlotsForSingleDay(baseDate, currentTime, timezone);
+    if (singleDay === "true" || singleDay === true) {
+      const singleDaySlots = await generateSlotsForSingleDay(
+        baseDate,
+        currentTime,
+        timezone,
+      );
       return res.status(200).json({
         success: true,
-        message: 'Available time slots retrieved successfully (minimum 1-day advance booking)',
+        message:
+          "Available time slots retrieved successfully (minimum 1-day advance booking)",
         data: {
-          date: baseDate.format('YYYY-MM-DD'),
-          display_date: baseDate.format('MMMM Do, YYYY'),
+          date: baseDate.format("YYYY-MM-DD"),
+          display_date: baseDate.format("MMMM Do, YYYY"),
           timezone: timezone,
           minimum_advance_days: 1,
-          earliest_booking_date: tomorrowDate.format('YYYY-MM-DD'),
+          earliest_booking_date: tomorrowDate.format("YYYY-MM-DD"),
           slots: singleDaySlots.slots,
           total_slots: singleDaySlots.totalSlots,
-          available_slots: singleDaySlots.availableSlots
-        }
+          available_slots: singleDaySlots.availableSlots,
+        },
       });
     }
 
     // Generate slots for multiple days (minimum 7 days)
     const numberOfDays = Math.max(parseInt(days) || 7, 7);
-    const endDate = baseDate.clone().add(numberOfDays - 1, 'days').endOf('day');
+    const endDate = baseDate
+      .clone()
+      .add(numberOfDays - 1, "days")
+      .endOf("day");
 
     // Get existing bookings for the entire date range
     const existingBookings = await DemoBooking.find({
       scheduledDateTime: {
         $gte: baseDate.toDate(),
-        $lte: endDate.toDate()
+        $lte: endDate.toDate(),
       },
-      status: { $in: ['pending', 'confirmed', 'rescheduled'] },
-      isActive: true
-    }).select('scheduledDateTime');
+      status: { $in: ["pending", "confirmed", "rescheduled"] },
+      isActive: true,
+    }).select("scheduledDateTime");
 
     // Generate slots for each day
     const dailySlots = [];
@@ -861,13 +1268,18 @@ export const getAvailableTimeSlots = catchAsync(async (req, res) => {
     let totalSlots = 0;
 
     for (let i = 0; i < numberOfDays; i++) {
-      const currentDay = baseDate.clone().add(i, 'days');
-      const dayStart = currentDay.clone().startOf('day');
-      const dayEnd = currentDay.clone().endOf('day');
-      
+      const currentDay = baseDate.clone().add(i, "days");
+      const dayStart = currentDay.clone().startOf("day");
+      const dayEnd = currentDay.clone().endOf("day");
+
       // Get bookings for this specific day
-      const dayBookings = existingBookings.filter(booking => 
-        moment(booking.scheduledDateTime).isBetween(dayStart, dayEnd, null, '[]')
+      const dayBookings = existingBookings.filter((booking) =>
+        moment(booking.scheduledDateTime).isBetween(
+          dayStart,
+          dayEnd,
+          null,
+          "[]",
+        ),
       );
 
       // Generate time slots for this day (9 AM to 6 PM, 1-hour intervals)
@@ -877,28 +1289,28 @@ export const getAvailableTimeSlots = catchAsync(async (req, res) => {
 
       while (slotStart.isBefore(slotEnd)) {
         const slotTime = slotStart.clone();
-        
+
         // Only include slots that are after the current time
         if (slotTime.isAfter(currentTime)) {
-          const bookingsAtThisTime = dayBookings.filter(booking => 
-            moment(booking.scheduledDateTime).isSame(slotTime, 'hour')
+          const bookingsAtThisTime = dayBookings.filter((booking) =>
+            moment(booking.scheduledDateTime).isSame(slotTime, "hour"),
           ).length;
 
           const isAvailable = bookingsAtThisTime < 3; // Max 3 concurrent demos
-          
-                     daySlots.push({
-             datetime: slotTime.toISOString(),
-             time: slotTime.format('HH:mm'),
-             display_time: slotTime.format('h:mm A'),
-             display_datetime: slotTime.format('MMMM Do, YYYY [at] h:mm A'),
-             timezone_info: {
-               timezone: timezone,
-               offset: slotTime.format('Z'),
-               timezone_name: slotTime.format('z')
-             },
-             available: isAvailable,
-             bookings_count: bookingsAtThisTime
-           });
+
+          daySlots.push({
+            datetime: slotTime.toISOString(),
+            time: slotTime.format("HH:mm"),
+            display_time: slotTime.format("h:mm A"),
+            display_datetime: slotTime.format("MMMM Do, YYYY [at] h:mm A"),
+            timezone_info: {
+              timezone: timezone,
+              offset: slotTime.format("Z"),
+              timezone_name: slotTime.format("z"),
+            },
+            available: isAvailable,
+            bookings_count: bookingsAtThisTime,
+          });
 
           totalSlots++;
           if (isAvailable) {
@@ -906,21 +1318,24 @@ export const getAvailableTimeSlots = catchAsync(async (req, res) => {
           }
         }
 
-        slotStart.add(1, 'hour');
+        slotStart.add(1, "hour");
       }
 
       // Only include days that have available slots (since we start from tomorrow)
       if (daySlots.length > 0) {
         dailySlots.push({
-          date: currentDay.format('YYYY-MM-DD'),
-          display_date: currentDay.format('MMMM Do, YYYY'),
-          day_name: currentDay.format('dddd'),
-          is_tomorrow: currentDay.isSame(currentTime.clone().add(1, 'day'), 'day'),
+          date: currentDay.format("YYYY-MM-DD"),
+          display_date: currentDay.format("MMMM Do, YYYY"),
+          day_name: currentDay.format("dddd"),
+          is_tomorrow: currentDay.isSame(
+            currentTime.clone().add(1, "day"),
+            "day",
+          ),
           is_within_week: i < 7,
           days_from_today: i + 1, // Since we start from tomorrow, add 1
           slots: daySlots,
           total_day_slots: daySlots.length,
-          available_day_slots: daySlots.filter(slot => slot.available).length
+          available_day_slots: daySlots.filter((slot) => slot.available).length,
         });
       }
     }
@@ -930,39 +1345,49 @@ export const getAvailableTimeSlots = catchAsync(async (req, res) => {
       total_days: dailySlots.length,
       total_slots: totalSlots,
       available_slots: totalAvailableSlots,
-      fully_booked_days: dailySlots.filter(day => day.available_day_slots === 0).length,
-      partially_available_days: dailySlots.filter(day => day.available_day_slots > 0 && day.available_day_slots < day.total_day_slots).length,
-      fully_available_days: dailySlots.filter(day => day.available_day_slots === day.total_day_slots).length
+      fully_booked_days: dailySlots.filter(
+        (day) => day.available_day_slots === 0,
+      ).length,
+      partially_available_days: dailySlots.filter(
+        (day) =>
+          day.available_day_slots > 0 &&
+          day.available_day_slots < day.total_day_slots,
+      ).length,
+      fully_available_days: dailySlots.filter(
+        (day) => day.available_day_slots === day.total_day_slots,
+      ).length,
     };
 
     res.status(200).json({
       success: true,
       message: `Available time slots for ${numberOfDays} days retrieved successfully (minimum 1-day advance booking)`,
       data: {
-        start_date: baseDate.format('YYYY-MM-DD'),
-        end_date: baseDate.clone().add(numberOfDays - 1, 'days').format('YYYY-MM-DD'),
+        start_date: baseDate.format("YYYY-MM-DD"),
+        end_date: baseDate
+          .clone()
+          .add(numberOfDays - 1, "days")
+          .format("YYYY-MM-DD"),
         timezone: timezone,
         days: numberOfDays,
         minimum_advance_days: 1,
-        earliest_booking_date: tomorrowDate.format('YYYY-MM-DD'),
-        current_date: currentTime.format('YYYY-MM-DD'),
+        earliest_booking_date: tomorrowDate.format("YYYY-MM-DD"),
+        current_date: currentTime.format("YYYY-MM-DD"),
         daily_slots: dailySlots,
         summary: summary,
         // Quick access to next 3 available slots across all days
-        next_available_slots: getNextAvailableSlots(dailySlots, 3)
-      }
+        next_available_slots: getNextAvailableSlots(dailySlots, 3),
+      },
     });
-
   } catch (error) {
-    logger.error('Error retrieving available time slots', {
+    logger.error("Error retrieving available time slots", {
       error: error.message,
       stack: error.stack,
       startDate: startDate,
       timezone: timezone,
-      days: days
+      days: days,
     });
 
-    throw new AppError('Failed to retrieve available time slots', 500);
+    throw new AppError("Failed to retrieve available time slots", 500);
   }
 });
 
@@ -970,18 +1395,18 @@ export const getAvailableTimeSlots = catchAsync(async (req, res) => {
  * Helper function to generate slots for a single day (backward compatibility)
  */
 async function generateSlotsForSingleDay(requestedDate, currentTime, timezone) {
-  const startOfDay = requestedDate.clone().startOf('day');
-  const endOfDay = requestedDate.clone().endOf('day');
+  const startOfDay = requestedDate.clone().startOf("day");
+  const endOfDay = requestedDate.clone().endOf("day");
 
   // Get existing bookings for the date
   const existingBookings = await DemoBooking.find({
     scheduledDateTime: {
       $gte: startOfDay.toDate(),
-      $lte: endOfDay.toDate()
+      $lte: endOfDay.toDate(),
     },
-    status: { $in: ['pending', 'confirmed', 'rescheduled'] },
-    isActive: true
-  }).select('scheduledDateTime');
+    status: { $in: ["pending", "confirmed", "rescheduled"] },
+    isActive: true,
+  }).select("scheduledDateTime");
 
   // Generate time slots (9 AM to 6 PM, 1-hour intervals)
   const timeSlots = [];
@@ -990,31 +1415,31 @@ async function generateSlotsForSingleDay(requestedDate, currentTime, timezone) {
 
   while (current.isBefore(endTime)) {
     const slotTime = current.clone();
-    
+
     // Only include slots that are after the current time
     if (slotTime.isAfter(currentTime)) {
-      const bookingsAtThisTime = existingBookings.filter(booking => 
-        moment(booking.scheduledDateTime).isSame(slotTime, 'hour')
+      const bookingsAtThisTime = existingBookings.filter((booking) =>
+        moment(booking.scheduledDateTime).isSame(slotTime, "hour"),
       ).length;
 
       timeSlots.push({
         datetime: slotTime.toISOString(),
-        time: slotTime.format('HH:mm'),
-        display_time: slotTime.format('h:mm A'),
-        display_date: slotTime.format('MMMM Do, YYYY'),
-        display_datetime: slotTime.format('MMMM Do, YYYY [at] h:mm A'),
+        time: slotTime.format("HH:mm"),
+        display_time: slotTime.format("h:mm A"),
+        display_date: slotTime.format("MMMM Do, YYYY"),
+        display_datetime: slotTime.format("MMMM Do, YYYY [at] h:mm A"),
         available: bookingsAtThisTime < 3, // Max 3 concurrent demos
-        bookings_count: bookingsAtThisTime
+        bookings_count: bookingsAtThisTime,
       });
     }
 
-    current.add(1, 'hour');
+    current.add(1, "hour");
   }
 
   return {
     slots: timeSlots,
     totalSlots: timeSlots.length,
-    availableSlots: timeSlots.filter(slot => slot.available).length
+    availableSlots: timeSlots.filter((slot) => slot.available).length,
   };
 }
 
@@ -1023,7 +1448,7 @@ async function generateSlotsForSingleDay(requestedDate, currentTime, timezone) {
  */
 function getNextAvailableSlots(dailySlots, count = 3) {
   const availableSlots = [];
-  
+
   for (const day of dailySlots) {
     for (const slot of day.slots) {
       if (slot.available && availableSlots.length < count) {
@@ -1034,13 +1459,13 @@ function getNextAvailableSlots(dailySlots, count = 3) {
           day_name: day.day_name,
           is_tomorrow: day.is_tomorrow,
           is_within_week: day.is_within_week,
-          days_from_today: day.days_from_today
+          days_from_today: day.days_from_today,
         });
       }
     }
     if (availableSlots.length >= count) break;
   }
-  
+
   return availableSlots;
 }
 
@@ -1050,15 +1475,15 @@ function getNextAvailableSlots(dailySlots, count = 3) {
  * @access Private (Admin only)
  */
 export const getBookingStats = catchAsync(async (req, res) => {
-  const { startDate, endDate, period = '7d' } = req.query;
+  const { startDate, endDate, period = "7d" } = req.query;
 
   try {
     // Check if user is admin
-    if (!req.user || !['admin', 'instructor'].includes(req.user.role)) {
+    if (!req.user || !["admin", "instructor"].includes(req.user.role)) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Admin privileges required.',
-        error_code: 'INSUFFICIENT_PERMISSIONS'
+        message: "Access denied. Admin privileges required.",
+        error_code: "INSUFFICIENT_PERMISSIONS",
       });
     }
 
@@ -1067,16 +1492,16 @@ export const getBookingStats = catchAsync(async (req, res) => {
       dateRange = {
         createdAt: {
           $gte: new Date(startDate),
-          $lte: new Date(endDate)
-        }
+          $lte: new Date(endDate),
+        },
       };
     } else {
       // Default to last 7 days
-      const daysAgo = period === '30d' ? 30 : 7;
+      const daysAgo = period === "30d" ? 30 : 7;
       dateRange = {
         createdAt: {
-          $gte: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
-        }
+          $gte: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000),
+        },
       };
     }
 
@@ -1086,40 +1511,40 @@ export const getBookingStats = catchAsync(async (req, res) => {
       statusStats,
       demoTypeStats,
       recentBookings,
-      upcomingBookings
+      upcomingBookings,
     ] = await Promise.all([
       DemoBooking.countDocuments({ ...dateRange, isActive: true }),
-      
+
       DemoBooking.aggregate([
         { $match: { ...dateRange, isActive: true } },
-        { $group: { _id: '$status', count: { $sum: 1 } } }
+        { $group: { _id: "$status", count: { $sum: 1 } } },
       ]),
-      
+
       DemoBooking.aggregate([
         { $match: { ...dateRange, isActive: true } },
-        { $group: { _id: '$demoType', count: { $sum: 1 } } }
+        { $group: { _id: "$demoType", count: { $sum: 1 } } },
       ]),
-      
+
       DemoBooking.find({ ...dateRange, isActive: true })
         .sort({ createdAt: -1 })
         .limit(10)
-        .populate('userId', 'full_name email')
-        .select('fullName email scheduledDateTime status demoType createdAt'),
-      
+        .populate("userId", "full_name email")
+        .select("fullName email scheduledDateTime status demoType createdAt"),
+
       DemoBooking.find({
         scheduledDateTime: { $gt: new Date() },
-        status: { $in: ['confirmed', 'rescheduled'] },
-        isActive: true
+        status: { $in: ["confirmed", "rescheduled"] },
+        isActive: true,
       })
         .sort({ scheduledDateTime: 1 })
         .limit(10)
-        .populate('userId', 'full_name email')
-        .select('fullName email scheduledDateTime status demoType')
+        .populate("userId", "full_name email")
+        .select("fullName email scheduledDateTime status demoType"),
     ]);
 
     res.status(200).json({
       success: true,
-      message: 'Booking statistics retrieved successfully',
+      message: "Booking statistics retrieved successfully",
       data: {
         summary: {
           total_bookings: totalBookings,
@@ -1130,23 +1555,22 @@ export const getBookingStats = catchAsync(async (req, res) => {
           demo_type_breakdown: demoTypeStats.reduce((acc, stat) => {
             acc[stat._id] = stat.count;
             return acc;
-          }, {})
+          }, {}),
         },
         recent_bookings: recentBookings,
         upcoming_bookings: upcomingBookings,
         period: period,
-        date_range: dateRange
-      }
+        date_range: dateRange,
+      },
     });
-
   } catch (error) {
-    logger.error('Error retrieving booking statistics', {
+    logger.error("Error retrieving booking statistics", {
       error: error.message,
       stack: error.stack,
-      period: period
+      period: period,
     });
 
-    throw new AppError('Failed to retrieve booking statistics', 500);
+    throw new AppError("Failed to retrieve booking statistics", 500);
   }
 });
 
@@ -1165,22 +1589,22 @@ export const createZoomMeetingForDemo = catchAsync(async (req, res) => {
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Demo booking not found',
-        error_code: 'BOOKING_NOT_FOUND'
+        message: "Demo booking not found",
+        error_code: "BOOKING_NOT_FOUND",
       });
     }
 
     // Check if user has permission (admin, instructor, or booking owner)
-    const hasPermission = req.user && (
-      ['admin', 'super-admin', 'instructor'].includes(req.user.role) ||
-      req.user.id === booking.userId?.toString()
-    );
+    const hasPermission =
+      req.user &&
+      (["admin", "super-admin", "instructor"].includes(req.user.role) ||
+        req.user.id === booking.userId?.toString());
 
     if (!hasPermission) {
       return res.status(403).json({
         success: false,
-        message: 'Insufficient permissions to create Zoom meeting',
-        error_code: 'INSUFFICIENT_PERMISSIONS'
+        message: "Insufficient permissions to create Zoom meeting",
+        error_code: "INSUFFICIENT_PERMISSIONS",
       });
     }
 
@@ -1188,42 +1612,51 @@ export const createZoomMeetingForDemo = catchAsync(async (req, res) => {
     if (booking.scheduledDateTime <= new Date()) {
       return res.status(400).json({
         success: false,
-        message: 'Cannot create Zoom meeting for past bookings',
-        error_code: 'PAST_BOOKING'
+        message: "Cannot create Zoom meeting for past bookings",
+        error_code: "PAST_BOOKING",
       });
     }
 
     // Update zoom meeting settings if provided
     if (Object.keys(zoomMeetingSettings).length > 0) {
-      booking.zoomMeetingSettings = { ...booking.zoomMeetingSettings, ...zoomMeetingSettings };
+      booking.zoomMeetingSettings = {
+        ...booking.zoomMeetingSettings,
+        ...zoomMeetingSettings,
+      };
     }
 
-    logger.info('Creating/regenerating Zoom meeting for demo booking', {
+    logger.info("Creating/regenerating Zoom meeting for demo booking", {
       bookingId: booking._id,
       userId: req.user?.id,
-      scheduledDateTime: booking.scheduledDateTime
+      scheduledDateTime: booking.scheduledDateTime,
     });
 
     // Prepare Zoom meeting data
     const zoomMeetingData = booking.prepareZoomMeetingData();
-    
+
     // Create the Zoom meeting
-    const zoomMeeting = await zoomService.createClassroomMeeting('me', zoomMeetingData);
-    
+    const zoomMeeting = await zoomService.createClassroomMeeting(
+      "me",
+      zoomMeetingData,
+    );
+
     // Store the Zoom meeting details
     booking.storeZoomMeetingDetails(zoomMeeting);
     await booking.save();
 
-    logger.info('Zoom meeting created/regenerated successfully for demo booking', {
-      bookingId: booking._id,
-      zoomMeetingId: zoomMeeting.id,
-      joinUrl: zoomMeeting.join_url
-    });
+    logger.info(
+      "Zoom meeting created/regenerated successfully for demo booking",
+      {
+        bookingId: booking._id,
+        zoomMeetingId: zoomMeeting.id,
+        joinUrl: zoomMeeting.join_url,
+      },
+    );
 
     // Return success response
     res.status(201).json({
       success: true,
-      message: 'Zoom meeting created successfully',
+      message: "Zoom meeting created successfully",
       data: {
         bookingId: booking._id,
         zoomMeeting: {
@@ -1242,27 +1675,26 @@ export const createZoomMeetingForDemo = catchAsync(async (req, res) => {
             host_video: zoomMeeting.settings?.host_video,
             participant_video: zoomMeeting.settings?.participant_video,
             mute_upon_entry: zoomMeeting.settings?.mute_upon_entry,
-          }
-        }
-      }
+          },
+        },
+      },
     });
-
   } catch (error) {
-    logger.error('Error creating Zoom meeting for demo booking', {
+    logger.error("Error creating Zoom meeting for demo booking", {
       bookingId,
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
     });
 
     if (error.response?.data?.message) {
       return res.status(error.response.status || 500).json({
         success: false,
         message: `Zoom API error: ${error.response.data.message}`,
-        error_code: 'ZOOM_API_ERROR'
+        error_code: "ZOOM_API_ERROR",
       });
     }
 
-    throw new AppError('Failed to create Zoom meeting', 500);
+    throw new AppError("Failed to create Zoom meeting", 500);
   }
 });
 
@@ -1275,215 +1707,215 @@ export const getSupportedTimezones = catchAsync(async (req, res) => {
   try {
     const timezones = [
       {
-        value: 'UTC',
-        label: 'UTC (Coordinated Universal Time)',
-        offset: '+00:00',
-        region: 'Global'
+        value: "UTC",
+        label: "UTC (Coordinated Universal Time)",
+        offset: "+00:00",
+        region: "Global",
       },
       // North America
       {
-        value: 'America/New_York',
-        label: 'Eastern Time (New York)',
-        offset: moment.tz('America/New_York').format('Z'),
-        region: 'North America'
+        value: "America/New_York",
+        label: "Eastern Time (New York)",
+        offset: moment.tz("America/New_York").format("Z"),
+        region: "North America",
       },
       {
-        value: 'America/Chicago',
-        label: 'Central Time (Chicago)',
-        offset: moment.tz('America/Chicago').format('Z'),
-        region: 'North America'
+        value: "America/Chicago",
+        label: "Central Time (Chicago)",
+        offset: moment.tz("America/Chicago").format("Z"),
+        region: "North America",
       },
       {
-        value: 'America/Denver',
-        label: 'Mountain Time (Denver)',
-        offset: moment.tz('America/Denver').format('Z'),
-        region: 'North America'
+        value: "America/Denver",
+        label: "Mountain Time (Denver)",
+        offset: moment.tz("America/Denver").format("Z"),
+        region: "North America",
       },
       {
-        value: 'America/Los_Angeles',
-        label: 'Pacific Time (Los Angeles)',
-        offset: moment.tz('America/Los_Angeles').format('Z'),
-        region: 'North America'
+        value: "America/Los_Angeles",
+        label: "Pacific Time (Los Angeles)",
+        offset: moment.tz("America/Los_Angeles").format("Z"),
+        region: "North America",
       },
       {
-        value: 'America/Toronto',
-        label: 'Eastern Time (Toronto)',
-        offset: moment.tz('America/Toronto').format('Z'),
-        region: 'North America'
+        value: "America/Toronto",
+        label: "Eastern Time (Toronto)",
+        offset: moment.tz("America/Toronto").format("Z"),
+        region: "North America",
       },
       {
-        value: 'America/Vancouver',
-        label: 'Pacific Time (Vancouver)',
-        offset: moment.tz('America/Vancouver').format('Z'),
-        region: 'North America'
+        value: "America/Vancouver",
+        label: "Pacific Time (Vancouver)",
+        offset: moment.tz("America/Vancouver").format("Z"),
+        region: "North America",
       },
       {
-        value: 'America/Mexico_City',
-        label: 'Central Time (Mexico City)',
-        offset: moment.tz('America/Mexico_City').format('Z'),
-        region: 'North America'
+        value: "America/Mexico_City",
+        label: "Central Time (Mexico City)",
+        offset: moment.tz("America/Mexico_City").format("Z"),
+        region: "North America",
       },
       // South America
       {
-        value: 'America/Sao_Paulo',
-        label: 'Brasília Time (São Paulo)',
-        offset: moment.tz('America/Sao_Paulo').format('Z'),
-        region: 'South America'
+        value: "America/Sao_Paulo",
+        label: "Brasília Time (São Paulo)",
+        offset: moment.tz("America/Sao_Paulo").format("Z"),
+        region: "South America",
       },
       // Europe
       {
-        value: 'Europe/London',
-        label: 'Greenwich Mean Time (London)',
-        offset: moment.tz('Europe/London').format('Z'),
-        region: 'Europe'
+        value: "Europe/London",
+        label: "Greenwich Mean Time (London)",
+        offset: moment.tz("Europe/London").format("Z"),
+        region: "Europe",
       },
       {
-        value: 'Europe/Paris',
-        label: 'Central European Time (Paris)',
-        offset: moment.tz('Europe/Paris').format('Z'),
-        region: 'Europe'
+        value: "Europe/Paris",
+        label: "Central European Time (Paris)",
+        offset: moment.tz("Europe/Paris").format("Z"),
+        region: "Europe",
       },
       {
-        value: 'Europe/Berlin',
-        label: 'Central European Time (Berlin)',
-        offset: moment.tz('Europe/Berlin').format('Z'),
-        region: 'Europe'
+        value: "Europe/Berlin",
+        label: "Central European Time (Berlin)",
+        offset: moment.tz("Europe/Berlin").format("Z"),
+        region: "Europe",
       },
       {
-        value: 'Europe/Rome',
-        label: 'Central European Time (Rome)',
-        offset: moment.tz('Europe/Rome').format('Z'),
-        region: 'Europe'
+        value: "Europe/Rome",
+        label: "Central European Time (Rome)",
+        offset: moment.tz("Europe/Rome").format("Z"),
+        region: "Europe",
       },
       {
-        value: 'Europe/Madrid',
-        label: 'Central European Time (Madrid)',
-        offset: moment.tz('Europe/Madrid').format('Z'),
-        region: 'Europe'
+        value: "Europe/Madrid",
+        label: "Central European Time (Madrid)",
+        offset: moment.tz("Europe/Madrid").format("Z"),
+        region: "Europe",
       },
       {
-        value: 'Europe/Amsterdam',
-        label: 'Central European Time (Amsterdam)',
-        offset: moment.tz('Europe/Amsterdam').format('Z'),
-        region: 'Europe'
+        value: "Europe/Amsterdam",
+        label: "Central European Time (Amsterdam)",
+        offset: moment.tz("Europe/Amsterdam").format("Z"),
+        region: "Europe",
       },
       {
-        value: 'Europe/Stockholm',
-        label: 'Central European Time (Stockholm)',
-        offset: moment.tz('Europe/Stockholm').format('Z'),
-        region: 'Europe'
+        value: "Europe/Stockholm",
+        label: "Central European Time (Stockholm)",
+        offset: moment.tz("Europe/Stockholm").format("Z"),
+        region: "Europe",
       },
       {
-        value: 'Europe/Zurich',
-        label: 'Central European Time (Zurich)',
-        offset: moment.tz('Europe/Zurich').format('Z'),
-        region: 'Europe'
+        value: "Europe/Zurich",
+        label: "Central European Time (Zurich)",
+        offset: moment.tz("Europe/Zurich").format("Z"),
+        region: "Europe",
       },
       // Asia
       {
-        value: 'Asia/Dubai',
-        label: 'Gulf Standard Time (Dubai)',
-        offset: moment.tz('Asia/Dubai').format('Z'),
-        region: 'Asia'
+        value: "Asia/Dubai",
+        label: "Gulf Standard Time (Dubai)",
+        offset: moment.tz("Asia/Dubai").format("Z"),
+        region: "Asia",
       },
       {
-        value: 'Asia/Kolkata',
-        label: 'India Standard Time (Mumbai/Delhi)',
-        offset: moment.tz('Asia/Kolkata').format('Z'),
-        region: 'Asia'
+        value: "Asia/Kolkata",
+        label: "India Standard Time (Mumbai/Delhi)",
+        offset: moment.tz("Asia/Kolkata").format("Z"),
+        region: "Asia",
       },
       {
-        value: 'Asia/Singapore',
-        label: 'Singapore Standard Time',
-        offset: moment.tz('Asia/Singapore').format('Z'),
-        region: 'Asia'
+        value: "Asia/Singapore",
+        label: "Singapore Standard Time",
+        offset: moment.tz("Asia/Singapore").format("Z"),
+        region: "Asia",
       },
       {
-        value: 'Asia/Tokyo',
-        label: 'Japan Standard Time (Tokyo)',
-        offset: moment.tz('Asia/Tokyo').format('Z'),
-        region: 'Asia'
+        value: "Asia/Tokyo",
+        label: "Japan Standard Time (Tokyo)",
+        offset: moment.tz("Asia/Tokyo").format("Z"),
+        region: "Asia",
       },
       {
-        value: 'Asia/Shanghai',
-        label: 'China Standard Time (Shanghai)',
-        offset: moment.tz('Asia/Shanghai').format('Z'),
-        region: 'Asia'
+        value: "Asia/Shanghai",
+        label: "China Standard Time (Shanghai)",
+        offset: moment.tz("Asia/Shanghai").format("Z"),
+        region: "Asia",
       },
       {
-        value: 'Asia/Hong_Kong',
-        label: 'Hong Kong Time',
-        offset: moment.tz('Asia/Hong_Kong').format('Z'),
-        region: 'Asia'
+        value: "Asia/Hong_Kong",
+        label: "Hong Kong Time",
+        offset: moment.tz("Asia/Hong_Kong").format("Z"),
+        region: "Asia",
       },
       {
-        value: 'Asia/Seoul',
-        label: 'Korea Standard Time (Seoul)',
-        offset: moment.tz('Asia/Seoul').format('Z'),
-        region: 'Asia'
+        value: "Asia/Seoul",
+        label: "Korea Standard Time (Seoul)",
+        offset: moment.tz("Asia/Seoul").format("Z"),
+        region: "Asia",
       },
       {
-        value: 'Asia/Bangkok',
-        label: 'Indochina Time (Bangkok)',
-        offset: moment.tz('Asia/Bangkok').format('Z'),
-        region: 'Asia'
+        value: "Asia/Bangkok",
+        label: "Indochina Time (Bangkok)",
+        offset: moment.tz("Asia/Bangkok").format("Z"),
+        region: "Asia",
       },
       {
-        value: 'Asia/Jakarta',
-        label: 'Western Indonesia Time (Jakarta)',
-        offset: moment.tz('Asia/Jakarta').format('Z'),
-        region: 'Asia'
+        value: "Asia/Jakarta",
+        label: "Western Indonesia Time (Jakarta)",
+        offset: moment.tz("Asia/Jakarta").format("Z"),
+        region: "Asia",
       },
       // Australia & Oceania
       {
-        value: 'Australia/Sydney',
-        label: 'Australian Eastern Time (Sydney)',
-        offset: moment.tz('Australia/Sydney').format('Z'),
-        region: 'Australia & Oceania'
+        value: "Australia/Sydney",
+        label: "Australian Eastern Time (Sydney)",
+        offset: moment.tz("Australia/Sydney").format("Z"),
+        region: "Australia & Oceania",
       },
       {
-        value: 'Australia/Melbourne',
-        label: 'Australian Eastern Time (Melbourne)',
-        offset: moment.tz('Australia/Melbourne').format('Z'),
-        region: 'Australia & Oceania'
+        value: "Australia/Melbourne",
+        label: "Australian Eastern Time (Melbourne)",
+        offset: moment.tz("Australia/Melbourne").format("Z"),
+        region: "Australia & Oceania",
       },
       {
-        value: 'Australia/Perth',
-        label: 'Australian Western Time (Perth)',
-        offset: moment.tz('Australia/Perth').format('Z'),
-        region: 'Australia & Oceania'
+        value: "Australia/Perth",
+        label: "Australian Western Time (Perth)",
+        offset: moment.tz("Australia/Perth").format("Z"),
+        region: "Australia & Oceania",
       },
       {
-        value: 'Pacific/Auckland',
-        label: 'New Zealand Time (Auckland)',
-        offset: moment.tz('Pacific/Auckland').format('Z'),
-        region: 'Australia & Oceania'
+        value: "Pacific/Auckland",
+        label: "New Zealand Time (Auckland)",
+        offset: moment.tz("Pacific/Auckland").format("Z"),
+        region: "Australia & Oceania",
       },
       {
-        value: 'Pacific/Honolulu',
-        label: 'Hawaii-Aleutian Time (Honolulu)',
-        offset: moment.tz('Pacific/Honolulu').format('Z'),
-        region: 'Australia & Oceania'
+        value: "Pacific/Honolulu",
+        label: "Hawaii-Aleutian Time (Honolulu)",
+        offset: moment.tz("Pacific/Honolulu").format("Z"),
+        region: "Australia & Oceania",
       },
       // Africa
       {
-        value: 'Africa/Cairo',
-        label: 'Eastern European Time (Cairo)',
-        offset: moment.tz('Africa/Cairo').format('Z'),
-        region: 'Africa'
+        value: "Africa/Cairo",
+        label: "Eastern European Time (Cairo)",
+        offset: moment.tz("Africa/Cairo").format("Z"),
+        region: "Africa",
       },
       {
-        value: 'Africa/Lagos',
-        label: 'West Africa Time (Lagos)',
-        offset: moment.tz('Africa/Lagos').format('Z'),
-        region: 'Africa'
+        value: "Africa/Lagos",
+        label: "West Africa Time (Lagos)",
+        offset: moment.tz("Africa/Lagos").format("Z"),
+        region: "Africa",
       },
       {
-        value: 'Africa/Johannesburg',
-        label: 'South Africa Time (Johannesburg)',
-        offset: moment.tz('Africa/Johannesburg').format('Z'),
-        region: 'Africa'
-      }
+        value: "Africa/Johannesburg",
+        label: "South Africa Time (Johannesburg)",
+        offset: moment.tz("Africa/Johannesburg").format("Z"),
+        region: "Africa",
+      },
     ];
 
     // Group timezones by region
@@ -1494,30 +1926,29 @@ export const getSupportedTimezones = catchAsync(async (req, res) => {
       acc[tz.region].push({
         value: tz.value,
         label: tz.label,
-        offset: tz.offset
+        offset: tz.offset,
       });
       return acc;
     }, {});
 
     res.status(200).json({
       success: true,
-      message: 'Supported timezones retrieved successfully',
+      message: "Supported timezones retrieved successfully",
       data: {
         timezones: timezones,
         grouped_timezones: groupedTimezones,
         total_timezones: timezones.length,
-        current_utc_time: moment.utc().format('YYYY-MM-DD HH:mm:ss'),
-        user_detected_timezone: req.headers['x-timezone'] || 'UTC' // Can be set by frontend
-      }
+        current_utc_time: moment.utc().format("YYYY-MM-DD HH:mm:ss"),
+        user_detected_timezone: req.headers["x-timezone"] || "UTC", // Can be set by frontend
+      },
     });
-
   } catch (error) {
-    logger.error('Error retrieving supported timezones', {
+    logger.error("Error retrieving supported timezones", {
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
     });
 
-    throw new AppError('Failed to retrieve supported timezones', 500);
+    throw new AppError("Failed to retrieve supported timezones", 500);
   }
 });
 
@@ -1535,22 +1966,22 @@ export const getZoomMeetingDetails = catchAsync(async (req, res) => {
     if (!booking) {
       return res.status(404).json({
         success: false,
-        message: 'Demo booking not found',
-        error_code: 'BOOKING_NOT_FOUND'
+        message: "Demo booking not found",
+        error_code: "BOOKING_NOT_FOUND",
       });
     }
 
     // Check if user has permission
-    const hasPermission = req.user && (
-      ['admin', 'super-admin', 'instructor'].includes(req.user.role) ||
-      req.user.id === booking.userId?.toString()
-    );
+    const hasPermission =
+      req.user &&
+      (["admin", "super-admin", "instructor"].includes(req.user.role) ||
+        req.user.id === booking.userId?.toString());
 
     if (!hasPermission) {
       return res.status(403).json({
         success: false,
-        message: 'Insufficient permissions to view Zoom meeting details',
-        error_code: 'INSUFFICIENT_PERMISSIONS'
+        message: "Insufficient permissions to view Zoom meeting details",
+        error_code: "INSUFFICIENT_PERMISSIONS",
       });
     }
 
@@ -1558,20 +1989,22 @@ export const getZoomMeetingDetails = catchAsync(async (req, res) => {
     if (!booking.zoomMeeting?.isZoomMeetingCreated) {
       return res.status(404).json({
         success: false,
-        message: 'Zoom meeting not found for this booking',
-        error_code: 'ZOOM_MEETING_NOT_FOUND',
+        message: "Zoom meeting not found for this booking",
+        error_code: "ZOOM_MEETING_NOT_FOUND",
         data: {
-          zoomMeetingError: booking.zoomMeeting?.zoomMeetingError
-        }
+          zoomMeetingError: booking.zoomMeeting?.zoomMeetingError,
+        },
       });
     }
 
     // Return appropriate details based on user role
-    const isInstructorOrAdmin = ['admin', 'super-admin', 'instructor'].includes(req.user.role);
-    
+    const isInstructorOrAdmin = ["admin", "super-admin", "instructor"].includes(
+      req.user.role,
+    );
+
     res.status(200).json({
       success: true,
-      message: 'Zoom meeting details retrieved successfully',
+      message: "Zoom meeting details retrieved successfully",
       data: {
         bookingId: booking._id,
         zoomMeeting: {
@@ -1582,7 +2015,9 @@ export const getZoomMeetingDetails = catchAsync(async (req, res) => {
           timezone: booking.zoomMeeting.timezone,
           agenda: booking.zoomMeeting.agenda,
           join_url: booking.zoomMeeting.join_url,
-          start_url: isInstructorOrAdmin ? booking.zoomMeeting.start_url : undefined, // Only for instructors/admins
+          start_url: isInstructorOrAdmin
+            ? booking.zoomMeeting.start_url
+            : undefined, // Only for instructors/admins
           password: booking.zoomMeeting.password,
           status: booking.zoomMeeting.status,
           created_at: booking.zoomMeeting.created_at,
@@ -1592,19 +2027,18 @@ export const getZoomMeetingDetails = catchAsync(async (req, res) => {
             host_video: booking.zoomMeeting.settings?.host_video,
             participant_video: booking.zoomMeeting.settings?.participant_video,
             mute_upon_entry: booking.zoomMeeting.settings?.mute_upon_entry,
-          }
-        }
-      }
+          },
+        },
+      },
     });
-
   } catch (error) {
-    logger.error('Error retrieving Zoom meeting details', {
+    logger.error("Error retrieving Zoom meeting details", {
       bookingId,
       error: error.message,
-      stack: error.stack
+      stack: error.stack,
     });
 
-    throw new AppError('Failed to retrieve Zoom meeting details', 500);
+    throw new AppError("Failed to retrieve Zoom meeting details", 500);
   }
 });
 
@@ -1617,5 +2051,5 @@ export default {
   getBookingStats,
   createZoomMeetingForDemo,
   getZoomMeetingDetails,
-  getSupportedTimezones
-}; 
+  getSupportedTimezones,
+};

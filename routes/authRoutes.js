@@ -298,16 +298,36 @@ router.post(
  */
 router.post(
   "/forgot-password",
+  [
+    body("email")
+      .isEmail()
+      .normalizeEmail()
+      .withMessage("Please provide a valid email address"),
+  ],
   authController.forgotPassword.bind(authController),
 );
 
 /**
  * @route   POST /api/v1/auth/reset-password
- * @desc    Reset user password with token
+ * @desc    Reset user password without token requirement
  * @access  Public
  */
 router.post(
   "/reset-password",
+  [
+    body("email")
+      .isEmail()
+      .normalizeEmail()
+      .withMessage("Please provide a valid email address"),
+    body("newPassword")
+      .isLength({ min: 8 })
+      .withMessage("Password must be at least 8 characters long")
+      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+      .withMessage("Password must contain at least one uppercase letter, one lowercase letter, and one number"),
+    body("confirmPassword")
+      .notEmpty()
+      .withMessage("Confirm password is required"),
+  ],
   authController.resetPassword.bind(authController),
 );
 

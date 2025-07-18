@@ -142,9 +142,9 @@ class EmailService {
    */
   initializeQueue() {
     try {
-      // Force Redis to be enabled for email service
-      const redisIsEnabled = true; // Override any environment variable issues
-      console.log("Email service forcing Redis enabled:", redisIsEnabled);
+      // Check if Redis is actually available before forcing it
+      const redisIsEnabled = this.checkRedisAvailability();
+      console.log("Email service Redis availability:", redisIsEnabled);
 
       if (redisIsEnabled) {
         // Configure Redis client for Bull queue with proper authentication
@@ -156,7 +156,8 @@ class EmailService {
           db: 0,
           maxRetriesPerRequest: 3,
           retryDelayOnFailover: 100,
-          maxRetriesPerRequest: null,
+          connectTimeout: 5000, // 5 second timeout
+          lazyConnect: true, // Don't connect immediately
           maxMemoryPolicy: "noeviction",
         };
 
@@ -171,7 +172,7 @@ class EmailService {
           hasPassword: !!redisOptions.password,
         });
 
-        // Configure Bull queue with proper Redis options
+        // Configure Bull queue with proper Redis options and error handling
         this.queue = new Bull(EMAIL_QUEUE_NAME, {
           redis: redisOptions,
           defaultJobOptions: {
@@ -186,6 +187,12 @@ class EmailService {
           },
         });
 
+        // Handle queue connection errors gracefully
+        this.queue.on('error', (error) => {
+          logger.email.error("Queue connection error, disabling queue", { error });
+          this.queue = null; // Disable queue on error
+        });
+
         // Process emails from the queue
         this.queue.process(EMAIL_QUEUE_CONCURRENCY, async (job) => {
           const { mailOptions } = job.data;
@@ -198,11 +205,41 @@ class EmailService {
         logger.email.info("Email queue initialized successfully");
       } else {
         logger.email.warn(
-          "Redis not enabled - Using direct email sending without queuing",
+          "Redis not available - Using direct email sending without queuing",
         );
+        this.queue = null;
       }
     } catch (error) {
       logger.email.error("Failed to initialize email queue", { error });
+      this.queue = null; // Ensure queue is null on error
+    }
+  }
+
+  /**
+   * Check if Redis is available for the email service
+   * @returns {boolean} Whether Redis is available
+   */
+  checkRedisAvailability() {
+    try {
+      // Check if we're in development and Redis might not be available
+      if (process.env.NODE_ENV === 'development') {
+        // In development, allow fallback to direct email sending
+        const redisHost = process.env.REDIS_HOST;
+        if (!redisHost || redisHost === 'api.medh.co') {
+          // If Redis host is external and we're in development, likely not available
+          return false;
+        }
+      }
+
+      // Check if Redis environment variables are properly set
+      if (!process.env.REDIS_HOST && !process.env.REDIS_URL) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      logger.email.error("Error checking Redis availability", { error });
+      return false;
     }
   }
 

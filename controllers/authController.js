@@ -66,7 +66,23 @@ class AuthController {
    */
   async forgotPassword(req, res) {
     try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
       const { email } = req.body;
+
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is required",
+        });
+      }
 
       // Normalize email to lowercase for case-insensitive handling
       const normalizedEmail = email.toLowerCase().trim();
@@ -149,24 +165,53 @@ class AuthController {
   }
 
   /**
-   * Reset password using token
+   * Reset password without token requirement
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
   async resetPassword(req, res) {
     try {
-      const { token, password } = req.body;
-
-      // Validate input
-      if (!token || !password) {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
         return res.status(400).json({
           success: false,
-          message: "Token and new password are required.",
+          message: "Validation failed",
+          errors: errors.array(),
+        });
+      }
+
+      const { email, newPassword, confirmPassword } = req.body;
+
+      // Validate input
+      if (!email || !newPassword || !confirmPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Email, new password, and confirm password are required.",
+        });
+      }
+
+      // Check if passwords match
+      if (newPassword !== confirmPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "New password and confirm password do not match.",
+        });
+      }
+
+      // Find user by email
+      const user = await User.findOne({
+        email: email.toLowerCase(),
+      });
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found with this email address.",
         });
       }
 
       // Basic password validation (only length and format checks)
-      const passwordValidation = passwordSecurity.validatePasswordStrength(password);
+      const passwordValidation = passwordSecurity.validatePasswordStrength(newPassword);
       if (!passwordValidation.isValid) {
         return res.status(400).json({
           success: false,
@@ -175,37 +220,10 @@ class AuthController {
         });
       }
 
-      // First, try to find user by temporary password verification token
-      let user = await User.findOne({
-        temp_password_verification_token: token,
-        temp_password_verification_expires: { $gt: Date.now() },
-        temp_password_verified: true,
-      });
-
-      // If not found, try the original reset token method (for backward compatibility)
-      if (!user) {
-        const hashedToken = crypto
-          .createHash("sha256")
-          .update(token)
-          .digest("hex");
-
-        user = await User.findOne({
-          password_reset_token: hashedToken,
-          password_reset_expires: { $gt: Date.now() },
-        });
-      }
-
-      if (!user) {
-        return res.status(400).json({
-          success: false,
-          message: "Password reset token is invalid or has expired.",
-        });
-      }
-
       // Set the new password (will be hashed by the pre-save hook with proper security)
-      user.password = password;
+      user.password = newPassword;
 
-      // Clear the reset token fields and temp password verification fields
+      // Clear any existing reset token fields and temp password verification fields
       user.password_reset_token = undefined;
       user.password_reset_expires = undefined;
       user.temp_password_verified = false;
@@ -222,19 +240,17 @@ class AuthController {
       // Log password reset activity
       await user.logActivity("password_reset", null, {
         reset_time: new Date(),
-        reset_method: user.temp_password_verified
-          ? "temp_password_verification"
-          : "email_token",
+        reset_method: "direct_email_reset",
       });
 
-      logger.info(`Password successfully reset for user: ${user.email}`);
+      logger.auth.info(`Password successfully reset for user: ${user.email}`);
 
       return res.status(200).json({
         success: true,
         message: "Password has been reset successfully.",
       });
     } catch (err) {
-      logger.error("Error in reset password process:", err);
+      logger.auth.error("Error in reset password process:", err);
       return res.status(500).json({
         success: false,
         message: "Server error during password reset.",
