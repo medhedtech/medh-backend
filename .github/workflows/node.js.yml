@@ -17,20 +17,19 @@ jobs:
       matrix:
         node-version: [22.x] # Add more versions as needed
     steps:
-      # Clean up any stale runner files
       - name: Clean runner temp files
         run: |
           sudo rm -rf /home/ubuntu/actions-runner/_work/_temp/_runner_file_commands/* 2>/dev/null || true
           sudo mkdir -p /home/ubuntu/actions-runner/_work/_temp/_runner_file_commands
           sudo chmod 755 /home/ubuntu/actions-runner/_work/_temp/_runner_file_commands
         continue-on-error: true
-      
+
       - uses: actions/checkout@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           persist-credentials: true
           clean: true
-      # Update cache action to v3
+
       - name: Cache npm modules
         uses: actions/cache@v3
         with:
@@ -38,14 +37,15 @@ jobs:
           key: ${{ runner.os }}-node-${{ matrix.node-version }}-build-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-node-${{ matrix.node-version }}-build-
+
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
-      # Install dependencies
+
       - run: npm ci --legacy-peer-deps
-      # Create .env file securely
+
       - name: Create .env file
         run: |
           if [ -n "${{ secrets.PROD_ENV_FILE }}" ]; then
@@ -54,8 +54,7 @@ jobs:
             echo "Warning: PROD_ENV_FILE secret not found"
             cp .env.example .env 2>/dev/null || echo "No .env.example found"
           fi
-      
-      # Create CloudFront private key file
+
       - name: Setup CloudFront private key
         run: |
           if [ -n "${{ secrets.CLOUDFRONT_PRIVATE_KEY }}" ]; then
@@ -66,21 +65,23 @@ jobs:
           else
             echo "Warning: CLOUDFRONT_PRIVATE_KEY secret not found - CloudFront signing will be disabled"
           fi
-      # Build the application
+
       - name: Build application
         run: npm run build --if-present
-      # Restart PM2 processes
+
+      # ← New step to ensure PM2 v5+ is installed in the runner
+      - name: Install PM2 globally
+        run: npm install -g pm2@latest
+
       - name: Restart PM2 Processes
         run: |
-          # Check if PM2 is running and restart
           if command -v pm2 &> /dev/null; then
             pm2 restart all || pm2 start ecosystem.config.js --env production
           else
             echo "PM2 not found, please install PM2 globally: npm install -g pm2"
             exit 1
           fi
-        continue-on-error: false
-      # Display important instructions
+
       - name: CORS Configuration Instructions
         run: |
           echo "=================================================="
@@ -92,9 +93,3 @@ jobs:
           echo "4. Check firewall rules to ensure cross-origin requests are allowed"
           echo "5. Verify DNS configuration for api.medh.co is pointing to the correct server"
           echo "=================================================="
-    # Optional: Upload artifacts if needed
-    # - name: Upload Build Artifacts
-    #   uses: actions/upload-artifact@v2
-    #   with:
-    #     name: build-artifacts
-    #     path: path/to/artifacts
