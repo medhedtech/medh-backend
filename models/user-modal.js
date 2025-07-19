@@ -12,6 +12,8 @@ const ROLES = {
   CORPORATE_STUDENT: "corporate-student",
   PARENT: "parent",
   PROGRAM_COORDINATOR: "program_coordinator",
+  SALES_TEAM: "sales_team",
+  SUPPORT_TEAM: "support_team",
 };
 
 const PERMISSIONS = {
@@ -40,12 +42,28 @@ const PERMISSIONS = {
   View_Corporate_Student: "view_corporate_student",
   View_Admin: "view_admin",
   View_Super_Admin: "view_super_admin",
+  // Sales Team Permissions
+  SALES_DASHBOARD: "sales_dashboard",
+  VIEW_LEADS: "view_leads",
+  MANAGE_LEADS: "manage_leads",
+  VIEW_SALES_REPORTS: "view_sales_reports",
+  MANAGE_QUOTES: "manage_quotes",
+  VIEW_CUSTOMER_DATA: "view_customer_data",
+  // Support Team Permissions
+  SUPPORT_DASHBOARD: "support_dashboard",
+  VIEW_TICKETS: "view_tickets",
+  MANAGE_TICKETS: "manage_tickets",
+  VIEW_SUPPORT_REPORTS: "view_support_reports",
+  MANAGE_FAQ: "manage_faq",
+  VIEW_CUSTOMER_SUPPORT_DATA: "view_customer_support_data",
 };
 
 const ADMIN_ROLES = {
   SUPER_ADMIN: "super-admin",
   ADMIN: "admin",
   CORPORATE_ADMIN: "corporate-admin",
+  SALES_ADMIN: "sales-admin",
+  SUPPORT_ADMIN: "support-admin",
 };
 
 const AGE_GROUPS = [
@@ -1269,9 +1287,15 @@ userSchema.pre("save", async function (next) {
     }
 
     // Basic password validation (only length and format checks)
-    const validation = passwordSecurity.validatePasswordStrength(normalized.normalized);
+    const validation = passwordSecurity.validatePasswordStrength(
+      normalized.normalized,
+    );
     if (!validation.isValid) {
-      return next(new Error(`Password validation failed: ${validation.errors.join(', ')}`));
+      return next(
+        new Error(
+          `Password validation failed: ${validation.errors.join(", ")}`,
+        ),
+      );
     }
 
     // Hash password using industry-standard security
@@ -1284,6 +1308,9 @@ userSchema.pre("save", async function (next) {
 
 userSchema.pre("save", function (next) {
   this.updated_at = new Date();
+
+  // Handle student_id field to prevent duplicate key errors
+  // Note: Registration controller now handles this by not setting null values
 
   // Update last profile update if profile fields changed
   const profileFields = [
@@ -1307,7 +1334,10 @@ userSchema.pre("save", function (next) {
 // Instance methods
 userSchema.methods.comparePassword = async function (candidatePassword) {
   // Use timing-safe password comparison to prevent timing attacks
-  return await passwordSecurity.comparePassword(candidatePassword, this.password);
+  return await passwordSecurity.comparePassword(
+    candidatePassword,
+    this.password,
+  );
 };
 
 // Method to validate password strength before setting
@@ -1620,6 +1650,26 @@ userSchema.methods.isParent = function () {
   return this.role.includes(ROLES.PARENT);
 };
 
+// Add a method to check if user is a sales team member
+userSchema.methods.isSalesTeam = function () {
+  return this.role.includes(ROLES.SALES_TEAM);
+};
+
+// Add a method to check if user is a support team member
+userSchema.methods.isSupportTeam = function () {
+  return this.role.includes(ROLES.SUPPORT_TEAM);
+};
+
+// Add a method to check if user is a sales admin
+userSchema.methods.isSalesAdmin = function () {
+  return this.admin_role === ADMIN_ROLES.SALES_ADMIN;
+};
+
+// Add a method to check if user is a support admin
+userSchema.methods.isSupportAdmin = function () {
+  return this.admin_role === ADMIN_ROLES.SUPPORT_ADMIN;
+};
+
 // Add a method to check if user is active
 userSchema.methods.isActive = function () {
   return this.status === "Active";
@@ -1823,6 +1873,22 @@ userSchema.statics.findStudents = function () {
 
 userSchema.statics.findInstructors = function () {
   return this.find({ role: ROLES.INSTRUCTOR });
+};
+
+userSchema.statics.findSalesTeam = function () {
+  return this.find({ role: ROLES.SALES_TEAM });
+};
+
+userSchema.statics.findSupportTeam = function () {
+  return this.find({ role: ROLES.SUPPORT_TEAM });
+};
+
+userSchema.statics.findSalesAdmins = function () {
+  return this.find({ admin_role: ADMIN_ROLES.SALES_ADMIN });
+};
+
+userSchema.statics.findSupportAdmins = function () {
+  return this.find({ admin_role: ADMIN_ROLES.SUPPORT_ADMIN });
 };
 
 userSchema.statics.findCorporates = function () {

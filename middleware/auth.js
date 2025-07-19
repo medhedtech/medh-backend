@@ -42,6 +42,20 @@ const hasRole = (userRole, requiredRoles) => {
     }
   }
   
+  // sales-admin can access sales-team resources
+  if (userRoles.includes('sales-admin')) {
+    if (required.includes('sales_team')) {
+      return true;
+    }
+  }
+  
+  // support-admin can access support-team resources
+  if (userRoles.includes('support-admin')) {
+    if (required.includes('support_team')) {
+      return true;
+    }
+  }
+  
   return false;
 };
 
@@ -393,6 +407,42 @@ export const isStudent = (req, res, next) => {
     next();
   } else {
     next(new AppError("Access denied. Student only.", 403));
+  }
+};
+
+// Check if user is sales team member (sales-admin and super-admin automatically qualify)
+export const isSalesTeam = (req, res, next) => {
+  if (req.user && hasRole(req.user.role, "sales_team")) {
+    next();
+  } else {
+    next(new AppError("Access denied. Sales team only.", 403));
+  }
+};
+
+// Check if user is support team member (support-admin and super-admin automatically qualify)
+export const isSupportTeam = (req, res, next) => {
+  if (req.user && hasRole(req.user.role, "support_team")) {
+    next();
+  } else {
+    next(new AppError("Access denied. Support team only.", 403));
+  }
+};
+
+// Check if user is sales admin (super-admin automatically qualifies)
+export const isSalesAdmin = (req, res, next) => {
+  if (req.user && hasRole(req.user.role, "sales-admin")) {
+    next();
+  } else {
+    next(new AppError("Access denied. Sales admin only.", 403));
+  }
+};
+
+// Check if user is support admin (super-admin automatically qualifies)
+export const isSupportAdmin = (req, res, next) => {
+  if (req.user && hasRole(req.user.role, "support-admin")) {
+    next();
+  } else {
+    next(new AppError("Access denied. Support admin only.", 403));
   }
 };
 
