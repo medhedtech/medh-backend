@@ -74,6 +74,7 @@ import certificateMasterRoutes from "./certificate-master-routes.js";
 import masterDataRoutes from "./master-data-routes.js";
 import adminDashboardStatsRoutes from "./adminDashboardStats.js";
 import adminManagementRoutes from "./adminManagementRoutes.js";
+import salesSupportRoutes from "./salesSupportRoutes.js";
 
 const router = express.Router();
 
@@ -357,6 +358,10 @@ const moduleRoutes = [
   {
     path: "/admin",
     route: adminManagementRoutes,
+  },
+  {
+    path: "/team",
+    route: salesSupportRoutes,
   },
 ];
 

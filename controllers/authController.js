@@ -1047,8 +1047,12 @@ class AuthController {
       // Generate student ID for student roles
       let studentId = null;
       const role = req.body.role || "student"; // Default to student role
+      
+      // Handle both string and array role formats
+      const roles = Array.isArray(role) ? role : [role];
+      const hasStudentRole = roles.includes("student") || roles.includes("corporate-student");
 
-      if (role === "student" || role === "corporate-student") {
+      if (hasStudentRole) {
         try {
           studentId = await User.generateStudentId();
         } catch (error) {
@@ -1065,14 +1069,13 @@ class AuthController {
       }
 
       // Create new user with enhanced tracking
-      const newUser = new User({
+      const userData = {
         full_name,
         email: email.toLowerCase(),
         username,
         password,
         phone_numbers,
         role,
-        student_id: studentId,
         devices: [deviceInfo],
         statistics: {
           engagement: {
@@ -1095,8 +1098,14 @@ class AuthController {
           // Gender is optional - only set if provided
           ...(req.body.gender && { gender: req.body.gender.toLowerCase() }),
         },
-      });
+      };
 
+      // Only add student_id if it's not null/undefined
+      if (studentId) {
+        userData.student_id = studentId;
+      }
+
+      const newUser = new User(userData);
       await newUser.save();
 
       // Log registration activity
