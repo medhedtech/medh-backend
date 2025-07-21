@@ -5,7 +5,7 @@ import {
   validateFormUpdateMiddleware,
   validateInternalNote,
   validateFormId,
-  validateFormQuery
+  validateFormQuery,
 } from "../validations/universalFormValidation.js";
 import {
   submitForm,
@@ -19,7 +19,8 @@ import {
   getFormsByType,
   getPendingForms,
   getFormAnalytics,
-  exportForms
+  exportForms,
+  getLiveCourses, // Import new function
 } from "../controllers/universalFormController.js";
 
 const router = express.Router();
@@ -33,14 +34,21 @@ const router = express.Router();
  * @route   POST /api/v1/forms/submit
  * @access  Public
  */
-router.post('/submit', validateFormByType, submitForm);
+router.post("/submit", validateFormByType, submitForm);
 
 /**
  * @desc    Get form status by form_id (public lookup)
  * @route   GET /api/v1/forms/lookup/:formId
  * @access  Public
  */
-router.get('/lookup/:formId', getFormByFormId);
+router.get("/lookup/:formId", getFormByFormId);
+
+/**
+ * @desc    Get all live courses
+ * @route   GET /api/v1/forms/courses/live
+ * @access  Public
+ */
+router.get("/courses/live", getLiveCourses);
 
 // =========================================
 // PROTECTED ROUTES (ADMIN ONLY)
@@ -51,70 +59,82 @@ router.get('/lookup/:formId', getFormByFormId);
  * @route   GET /api/v1/forms
  * @access  Private (Admin)
  */
-router.get('/', authenticateToken, validateFormQuery, getAllForms);
+router.get("/", authenticateToken, validateFormQuery, getAllForms);
 
 /**
  * @desc    Get form analytics and statistics
  * @route   GET /api/v1/forms/analytics
  * @access  Private (Admin)
  */
-router.get('/analytics', authenticateToken, getFormAnalytics);
+router.get("/analytics", authenticateToken, getFormAnalytics);
 
 /**
  * @desc    Export forms to CSV
  * @route   GET /api/v1/forms/export
  * @access  Private (Admin)
  */
-router.get('/export', authenticateToken, exportForms);
+router.get("/export", authenticateToken, exportForms);
 
 /**
  * @desc    Get pending forms
  * @route   GET /api/v1/forms/pending
  * @access  Private (Admin)
  */
-router.get('/pending', authenticateToken, getPendingForms);
+router.get("/pending", authenticateToken, getPendingForms);
 
 /**
  * @desc    Get forms by type
  * @route   GET /api/v1/forms/type/:formType
  * @access  Private (Admin)
  */
-router.get('/type/:formType', authenticateToken, getFormsByType);
+router.get("/type/:formType", authenticateToken, getFormsByType);
 
 /**
  * @desc    Get form by ID
  * @route   GET /api/v1/forms/:id
  * @access  Private (Admin or Form Owner)
  */
-router.get('/:id', authenticateToken, validateFormId, getFormById);
+router.get("/:id", authenticateToken, validateFormId, getFormById);
 
 /**
  * @desc    Update form status and details
  * @route   PUT /api/v1/forms/:id
  * @access  Private (Admin)
  */
-router.put('/:id', authenticateToken, validateFormId, validateFormUpdateMiddleware, updateForm);
+router.put(
+  "/:id",
+  authenticateToken,
+  validateFormId,
+  validateFormUpdateMiddleware,
+  updateForm,
+);
 
 /**
  * @desc    Assign form to user
  * @route   PUT /api/v1/forms/:id/assign
  * @access  Private (Admin)
  */
-router.put('/:id/assign', authenticateToken, validateFormId, assignForm);
+router.put("/:id/assign", authenticateToken, validateFormId, assignForm);
 
 /**
  * @desc    Add internal note to form
  * @route   POST /api/v1/forms/:id/notes
  * @access  Private (Admin)
  */
-router.post('/:id/notes', authenticateToken, validateFormId, validateInternalNote, addInternalNote);
+router.post(
+  "/:id/notes",
+  authenticateToken,
+  validateFormId,
+  validateInternalNote,
+  addInternalNote,
+);
 
 /**
  * @desc    Delete form (soft delete)
  * @route   DELETE /api/v1/forms/:id
  * @access  Private (Admin)
  */
-router.delete('/:id', authenticateToken, validateFormId, deleteForm);
+router.delete("/:id", authenticateToken, validateFormId, deleteForm);
 
 // =========================================
 // CONVENIENCE ROUTES FOR SPECIFIC FORM TYPES
@@ -125,90 +145,210 @@ router.delete('/:id', authenticateToken, validateFormId, deleteForm);
  * @route   POST /api/v1/forms/corporate-training
  * @access  Public
  */
-router.post('/corporate-training', (req, res, next) => {
-  req.body.form_type = 'corporate_training_inquiry';
-  next();
-}, validateFormByType, submitForm);
+router.post(
+  "/corporate-training",
+  (req, res, next) => {
+    req.body.form_type = "corporate_training_inquiry";
+    next();
+  },
+  validateFormByType,
+  submitForm,
+);
 
 /**
  * @desc    Submit placement form
  * @route   POST /api/v1/forms/placement
  * @access  Public
  */
-router.post('/placement', (req, res, next) => {
-  req.body.form_type = 'placement_form';
-  next();
-}, validateFormByType, submitForm);
+router.post(
+  "/placement",
+  (req, res, next) => {
+    req.body.form_type = "placement_form";
+    next();
+  },
+  validateFormByType,
+  submitForm,
+);
 
 /**
  * @desc    Submit enrollment form
  * @route   POST /api/v1/forms/enrollment
  * @access  Public
  */
-router.post('/enrollment', (req, res, next) => {
-  req.body.form_type = 'enrollment_form';
-  next();
-}, validateFormByType, submitForm);
+router.post(
+  "/enrollment",
+  (req, res, next) => {
+    req.body.form_type = "enrollment_form";
+    next();
+  },
+  validateFormByType,
+  submitForm,
+);
 
 /**
  * @desc    Submit contact form
  * @route   POST /api/v1/forms/contact
  * @access  Public
  */
-router.post('/contact', (req, res, next) => {
-  req.body.form_type = 'contact_form';
-  next();
-}, validateFormByType, submitForm);
+router.post(
+  "/contact",
+  (req, res, next) => {
+    req.body.form_type = "contact_form";
+    next();
+  },
+  validateFormByType,
+  submitForm,
+);
 
 /**
  * @desc    Submit feedback form
  * @route   POST /api/v1/forms/feedback
  * @access  Public
  */
-router.post('/feedback', (req, res, next) => {
-  req.body.form_type = 'feedback_form';
-  next();
-}, validateFormByType, submitForm);
+router.post(
+  "/feedback",
+  (req, res, next) => {
+    req.body.form_type = "feedback_form";
+    next();
+  },
+  validateFormByType,
+  submitForm,
+);
 
 /**
  * @desc    Submit consultation request
  * @route   POST /api/v1/forms/consultation
  * @access  Public
  */
-router.post('/consultation', (req, res, next) => {
-  req.body.form_type = 'consultation_request';
-  next();
-}, validateFormByType, submitForm);
+router.post(
+  "/consultation",
+  (req, res, next) => {
+    req.body.form_type = "consultation_request";
+    next();
+  },
+  validateFormByType,
+  submitForm,
+);
 
 /**
  * @desc    Submit partnership inquiry
  * @route   POST /api/v1/forms/partnership
  * @access  Public
  */
-router.post('/partnership', (req, res, next) => {
-  req.body.form_type = 'partnership_inquiry';
-  next();
-}, validateFormByType, submitForm);
+router.post(
+  "/partnership",
+  (req, res, next) => {
+    req.body.form_type = "partnership_inquiry";
+    next();
+  },
+  validateFormByType,
+  submitForm,
+);
 
 /**
  * @desc    Submit demo request
  * @route   POST /api/v1/forms/demo
  * @access  Public
  */
-router.post('/demo', (req, res, next) => {
-  req.body.form_type = 'demo_request';
-  next();
-}, validateFormByType, submitForm);
+router.post(
+  "/demo",
+  (req, res, next) => {
+    req.body.form_type = "demo_request";
+    next();
+  },
+  validateFormByType,
+  submitForm,
+);
 
 /**
- * @desc    Submit support ticket
- * @route   POST /api/v1/forms/support
+ * @desc    Submit support ticket form
+ * @route   POST /api/v1/forms/support-ticket
  * @access  Public
  */
-router.post('/support', (req, res, next) => {
-  req.body.form_type = 'support_ticket';
-  next();
-}, validateFormByType, submitForm);
+router.post(
+  "/support-ticket",
+  (req, res, next) => {
+    req.body.form_type = "support_ticket";
+    next();
+  },
+  validateFormByType,
+  submitForm,
+);
+
+/**
+ * @desc    Submit school partnership inquiry
+ * @route   POST /api/v1/forms/school-partnership
+ * @access  Public
+ */
+router.post(
+  "/school-partnership",
+  (req, res, next) => {
+    req.body.form_type = "school_partnership_inquiry";
+    next();
+  },
+  validateFormByType,
+  submitForm,
+);
+
+/**
+ * @desc    Submit educator registration form
+ * @route   POST /api/v1/forms/educator-registration
+ * @access  Public
+ */
+router.post(
+  "/educator-registration",
+  (req, res, next) => {
+    req.body.form_type = "educator_registration";
+    next();
+  },
+  validateFormByType,
+  submitForm,
+);
+
+/**
+ * @desc    Get all educator registration forms
+ * @route   GET /api/v1/forms/admin/educator-registration
+ * @access  Private (Admin only)
+ */
+router.get(
+  "/admin/educator-registration",
+  authenticateToken,
+  (req, res, next) => {
+    req.params.formType = "educator_registration";
+    next();
+  },
+  getFormsByType,
+);
+
+/**
+ * @desc    Submit book a free demo session form
+ * @route   POST /api/v1/forms/book-a-free-demo-session
+ * @access  Public
+ */
+router.post(
+  "/book-a-free-demo-session",
+  (req, res, next) => {
+    req.body.form_type = "book_a_free_demo_session";
+    next();
+  },
+  validateFormByType,
+  submitForm,
+);
+
+/**
+ * @desc    Get all book a free demo session forms
+ * @route   GET /api/v1/forms/admin/book-a-free-demo-session
+ * @access  Private (Admin only)
+ */
+router.get(
+  "/admin/book-a-free-demo-session",
+  authenticateToken,
+  (req, res, next) => {
+    req.params.formType = "book_a_free_demo_session";
+    next();
+  },
+  getFormsByType,
+);
 
 // =========================================
 // ADMIN CONVENIENCE ROUTES
@@ -219,50 +359,105 @@ router.post('/support', (req, res, next) => {
  * @route   GET /api/v1/forms/admin/corporate-training
  * @access  Private (Admin)
  */
-router.get('/admin/corporate-training', authenticateToken, (req, res, next) => {
-  req.params.formType = 'corporate_training_inquiry';
-  next();
-}, getFormsByType);
+router.get(
+  "/admin/corporate-training",
+  authenticateToken,
+  (req, res, next) => {
+    req.params.formType = "corporate_training_inquiry";
+    next();
+  },
+  getFormsByType,
+);
 
 /**
  * @desc    Get all placement forms
  * @route   GET /api/v1/forms/admin/placement
  * @access  Private (Admin)
  */
-router.get('/admin/placement', authenticateToken, (req, res, next) => {
-  req.params.formType = 'placement_form';
-  next();
-}, getFormsByType);
+router.get(
+  "/admin/placement",
+  authenticateToken,
+  (req, res, next) => {
+    req.params.formType = "placement_form";
+    next();
+  },
+  getFormsByType,
+);
 
 /**
  * @desc    Get all enrollment forms
  * @route   GET /api/v1/forms/admin/enrollment
  * @access  Private (Admin)
  */
-router.get('/admin/enrollment', authenticateToken, (req, res, next) => {
-  req.params.formType = 'enrollment_form';
-  next();
-}, getFormsByType);
+router.get(
+  "/admin/enrollment",
+  authenticateToken,
+  (req, res, next) => {
+    req.params.formType = "enrollment_form";
+    next();
+  },
+  getFormsByType,
+);
 
 /**
  * @desc    Get all contact forms
  * @route   GET /api/v1/forms/admin/contact
  * @access  Private (Admin)
  */
-router.get('/admin/contact', authenticateToken, (req, res, next) => {
-  req.params.formType = 'contact_form';
-  next();
-}, getFormsByType);
+router.get(
+  "/admin/contact",
+  authenticateToken,
+  (req, res, next) => {
+    req.params.formType = "contact_form";
+    next();
+  },
+  getFormsByType,
+);
 
 /**
  * @desc    Get all feedback forms
  * @route   GET /api/v1/forms/admin/feedback
  * @access  Private (Admin)
  */
-router.get('/admin/feedback', authenticateToken, (req, res, next) => {
-  req.params.formType = 'feedback_form';
-  next();
-}, getFormsByType);
+router.get(
+  "/admin/feedback",
+  authenticateToken,
+  (req, res, next) => {
+    req.params.formType = "feedback_form";
+    next();
+  },
+  getFormsByType,
+);
+
+/**
+ * @desc    Get all school partnership inquiries
+ * @route   GET /api/v1/forms/admin/school-partnership
+ * @access  Private (Admin)
+ */
+router.get(
+  "/admin/school-partnership",
+  authenticateToken,
+  (req, res, next) => {
+    req.params.formType = "school_partnership_inquiry";
+    next();
+  },
+  getFormsByType,
+);
+
+/**
+ * @desc    Get all educator registration forms
+ * @route   GET /api/v1/forms/admin/educator-registration
+ * @access  Private (Admin)
+ */
+router.get(
+  "/admin/educator-registration",
+  authenticateToken,
+  (req, res, next) => {
+    req.params.formType = "educator_registration";
+    next();
+  },
+  getFormsByType,
+);
 
 // =========================================
 // BULK OPERATIONS
@@ -273,41 +468,42 @@ router.get('/admin/feedback', authenticateToken, (req, res, next) => {
  * @route   PUT /api/v1/forms/bulk/update
  * @access  Private (Admin)
  */
-router.put('/bulk/update', authenticateToken, async (req, res, next) => {
+router.put("/bulk/update", authenticateToken, async (req, res, next) => {
   try {
     const { form_ids, updates } = req.body;
-    
+
     if (!form_ids || !Array.isArray(form_ids) || form_ids.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'form_ids array is required'
+        message: "form_ids array is required",
       });
     }
 
-    if (!updates || typeof updates !== 'object') {
+    if (!updates || typeof updates !== "object") {
       return res.status(400).json({
         success: false,
-        message: 'updates object is required'
+        message: "updates object is required",
       });
     }
 
-    const UniversalForm = (await import('../models/universal-form.model.js')).default;
-    
+    const UniversalForm = (await import("../models/universal-form.model.js"))
+      .default;
+
     const result = await UniversalForm.updateMany(
-      { 
+      {
         _id: { $in: form_ids },
-        is_deleted: false 
+        is_deleted: false,
       },
-      { 
+      {
         ...updates,
-        handled_by: req.user._id
-      }
+        handled_by: req.user._id,
+      },
     );
 
     res.status(200).json({
       success: true,
       message: `${result.modifiedCount} forms updated successfully`,
-      modified_count: result.modifiedCount
+      modified_count: result.modifiedCount,
     });
   } catch (error) {
     next(error);
@@ -319,39 +515,40 @@ router.put('/bulk/update', authenticateToken, async (req, res, next) => {
  * @route   DELETE /api/v1/forms/bulk/delete
  * @access  Private (Admin)
  */
-router.delete('/bulk/delete', authenticateToken, async (req, res, next) => {
+router.delete("/bulk/delete", authenticateToken, async (req, res, next) => {
   try {
     const { form_ids } = req.body;
-    
+
     if (!form_ids || !Array.isArray(form_ids) || form_ids.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'form_ids array is required'
+        message: "form_ids array is required",
       });
     }
 
-    const UniversalForm = (await import('../models/universal-form.model.js')).default;
-    
+    const UniversalForm = (await import("../models/universal-form.model.js"))
+      .default;
+
     const result = await UniversalForm.updateMany(
-      { 
+      {
         _id: { $in: form_ids },
-        is_deleted: false 
+        is_deleted: false,
       },
-      { 
+      {
         is_deleted: true,
         deleted_at: new Date(),
-        deleted_by: req.user._id
-      }
+        deleted_by: req.user._id,
+      },
     );
 
     res.status(200).json({
       success: true,
       message: `${result.modifiedCount} forms deleted successfully`,
-      deleted_count: result.modifiedCount
+      deleted_count: result.modifiedCount,
     });
   } catch (error) {
     next(error);
   }
 });
 
-export default router; 
+export default router;

@@ -19,6 +19,7 @@ import { validationResult } from "express-validator";
 import nodemailer from "nodemailer";
 import geoip from "geoip-lite";
 import { UAParser } from "ua-parser-js";
+import cache from "../utils/cache.js";
 
 class AuthController {
   constructor() {
@@ -211,7 +212,8 @@ class AuthController {
       }
 
       // Basic password validation (only length and format checks)
-      const passwordValidation = passwordSecurity.validatePasswordStrength(newPassword);
+      const passwordValidation =
+        passwordSecurity.validatePasswordStrength(newPassword);
       if (!passwordValidation.isValid) {
         return res.status(400).json({
           success: false,
@@ -1047,10 +1049,11 @@ class AuthController {
       // Generate student ID for student roles
       let studentId = null;
       const role = req.body.role || "student"; // Default to student role
-      
+
       // Handle both string and array role formats
       const roles = Array.isArray(role) ? role : [role];
-      const hasStudentRole = roles.includes("student") || roles.includes("corporate-student");
+      const hasStudentRole =
+        roles.includes("student") || roles.includes("corporate-student");
 
       if (hasStudentRole) {
         try {
@@ -1245,21 +1248,20 @@ class AuthController {
 
       // 1. Attempt quick login if quick_login_key is provided
       if (quick_login_key) {
-        const foundKey = user.quick_login_keys.find(
-          (key) => key.key_id === quick_login_key,
-        );
-        if (foundKey) {
-          // Compare the provided key with the hashed key in the database
-          const isValidQuickKey = await bcrypt.compare(
-            quick_login_key,
-            foundKey.hashed_key,
-          );
-          if (isValidQuickKey) {
-            authenticated = true;
-            loginMethod = "quick_login";
-            // Update last used timestamp
-            foundKey.last_used = new Date();
+        let foundKey = null;
+        for (const key of user.quick_login_keys) {
+          const isValid = await bcrypt.compare(quick_login_key, key.hashed_key);
+          if (isValid) {
+            foundKey = key;
+            break;
           }
+        }
+
+        if (foundKey) {
+          authenticated = true;
+          loginMethod = "quick_login";
+          // Update last used timestamp
+          foundKey.last_used = new Date();
         }
 
         if (!authenticated) {
@@ -1384,10 +1386,10 @@ class AuthController {
         }
         authenticated = true;
         loginMethod = "email_password";
-        
+
         // Reset failed login attempts on successful password login
         await this.resetLockoutFields(user);
-        
+
         // Check if password needs rehashing (for security updates)
         try {
           if (user.needsPasswordRehash()) {
@@ -1397,13 +1399,13 @@ class AuthController {
                 await user.rehashPasswordIfNeeded(password);
                 logger.info("Password rehashed for improved security", {
                   userId: user._id,
-                  email: user.email
+                  email: user.email,
                 });
               } catch (rehashError) {
                 logger.error("Password rehashing failed", {
                   userId: user._id,
                   email: user.email,
-                  error: rehashError.message
+                  error: rehashError.message,
                 });
               }
             });
@@ -1412,7 +1414,7 @@ class AuthController {
           logger.error("Password rehash check failed", {
             userId: user._id,
             email: user.email,
-            error: rehashCheckError.message
+            error: rehashCheckError.message,
           });
         }
       }
@@ -2457,7 +2459,9 @@ class AuthController {
           break;
         }
       }
-      logger.debug(`Quick login key found on user (after bcrypt compare): ${!!foundKey}`);
+      logger.debug(
+        `Quick login key found on user (after bcrypt compare): ${!!foundKey}`,
+      );
 
       if (!foundKey) {
         // Do not increment failed attempts for quick login attempts
@@ -5556,7 +5560,7 @@ class AuthController {
 
       // Basic password validation (only length and format checks)
       const validation = passwordSecurity.validatePasswordStrength(password);
-      
+
       return res.status(200).json({
         success: true,
         message: "Password validation completed",
@@ -5616,6 +5620,1145 @@ class AuthController {
         success: false,
         message: "Internal server error during password generation",
       });
+    }
+  }
+
+  /**
+   * Generate a new quick login key for the authenticated user
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async generateQuickLoginKey(req, res) {
+    try {
+      const user = req.user;
+
+      // Generate new key
+      const newQuickLoginKey = crypto.randomBytes(32).toString("hex");
+      const hashedQuickLoginKey = await bcrypt.hash(newQuickLoginKey, 10);
+      const keyId = crypto.randomBytes(16).toString("hex");
+
+      // Add to user's quick login keys
+      user.quick_login_keys.push({
+        key_id: keyId,
+        hashed_key: hashedQuickLoginKey,
+        created_at: new Date(),
+        last_used: new Date(),
+      });
+
+      await user.save();
+
+      // Log the key generation activity
+      await user.logActivity("quick_login_key_generated", null, {
+        key_id: keyId,
+        generation_time: new Date(),
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Quick login key generated successfully",
+        data: {
+          key_id: keyId,
+          quick_login_key: newQuickLoginKey, // Return the plain key only once
+          created_at: new Date(),
+          warning: "Store this key securely. It will not be shown again.",
+        },
+      });
+    } catch (error) {
+      logger.error("Error generating quick login key:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error generating quick login key",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * List all quick login keys for the authenticated user (without secrets)
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async listQuickLoginKeys(req, res) {
+    try {
+      const user = req.user;
+
+      const keys = user.quick_login_keys.map((key) => ({
+        key_id: key.key_id,
+        created_at: key.created_at,
+        last_used: key.last_used,
+      }));
+
+      res.status(200).json({
+        success: true,
+        message: "Quick login keys retrieved successfully",
+        data: {
+          keys,
+          total: keys.length,
+        },
+      });
+    } catch (error) {
+      logger.error("Error listing quick login keys:", error);
+      res.status(500).json({
+        success: false,
+        message: "Server error listing quick login keys",
+        error: error.message,
+      });
+    }
+  }
+
+  // ============================================================================
+  // OAUTH ACCOUNT MANAGEMENT METHODS
+  // ============================================================================
+
+  /**
+   * Link OAuth account to existing user
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async linkOAuthAccount(req, res) {
+    try {
+      const { provider } = req.params;
+      const userId = req.user.id;
+
+      // Validate provider
+      const validProviders = [
+        "google",
+        "facebook",
+        "github",
+        "linkedin",
+        "microsoft",
+        "apple",
+      ];
+      if (!validProviders.includes(provider)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid OAuth provider",
+        });
+      }
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Check if provider is already linked
+      if (user.oauth && user.oauth[provider]) {
+        return res.status(409).json({
+          success: false,
+          message: `${provider} account is already linked to this user`,
+          data: {
+            provider,
+            connected_at: user.oauth[provider].connected_at,
+            last_login: user.oauth[provider].last_login,
+          },
+        });
+      }
+
+      // Store user ID in session for OAuth callback
+      req.session.linkingUserId = userId;
+      req.session.linkingProvider = provider;
+
+      // Redirect to OAuth provider
+      const authUrl = `/api/v1/auth/oauth/${provider}`;
+      res.status(200).json({
+        success: true,
+        message: `Redirecting to ${provider} for account linking`,
+        data: {
+          auth_url: authUrl,
+          provider,
+          linking_mode: true,
+        },
+      });
+    } catch (error) {
+      console.error("OAuth linking error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during OAuth linking",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Unlink OAuth account from user
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async unlinkOAuthAccount(req, res) {
+    try {
+      const { provider } = req.params;
+      const userId = req.user.id;
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Check if provider is linked
+      if (!user.oauth || !user.oauth[provider]) {
+        return res.status(404).json({
+          success: false,
+          message: `${provider} account is not linked to this user`,
+        });
+      }
+
+      // Check if user has a password set (prevent account lockout)
+      if (!user.password && Object.keys(user.oauth).length === 1) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Cannot unlink the only authentication method. Please set a password first.",
+          data: {
+            requires_password: true,
+            only_auth_method: true,
+          },
+        });
+      }
+
+      // Store OAuth info before removal for logging
+      const oauthInfo = user.oauth[provider];
+
+      // Remove OAuth provider
+      delete user.oauth[provider];
+
+      // Update statistics
+      if (
+        user.statistics &&
+        user.statistics.social &&
+        user.statistics.social.oauth_providers
+      ) {
+        user.statistics.social.oauth_providers =
+          user.statistics.social.oauth_providers.filter((p) => p !== provider);
+      }
+
+      // Remove provider-specific social links
+      switch (provider) {
+        case "google":
+          user.google_link = undefined;
+          break;
+        case "facebook":
+          user.facebook_link = undefined;
+          break;
+        case "github":
+          user.github_link = undefined;
+          user.github_username = undefined;
+          break;
+        case "linkedin":
+          user.linkedin_link = undefined;
+          break;
+      }
+
+      await user.save();
+
+      // Log OAuth unlinking activity
+      await user.logActivity("oauth_unlink", null, {
+        provider,
+        unlink_time: new Date(),
+        oauth_connected_since: oauthInfo.connected_at,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: `${provider} account unlinked successfully`,
+        data: {
+          provider,
+          unlinked_at: new Date(),
+          remaining_oauth_providers: Object.keys(user.oauth || {}),
+          has_password: !!user.password,
+        },
+      });
+    } catch (error) {
+      console.error("OAuth unlinking error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during OAuth unlinking",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Get connected OAuth providers for user
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getConnectedOAuthProviders(req, res) {
+    try {
+      const userId = req.user.id;
+
+      const user = await User.findById(userId).select(
+        "oauth email email_verified statistics",
+      );
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const connectedProviders = [];
+      const availableProviders = [
+        "google",
+        "facebook",
+        "github",
+        "linkedin",
+        "microsoft",
+        "apple",
+      ];
+
+      if (user.oauth) {
+        Object.keys(user.oauth).forEach((provider) => {
+          if (user.oauth[provider]) {
+            connectedProviders.push({
+              provider,
+              connected_at: user.oauth[provider].connected_at,
+              last_login: user.oauth[provider].last_login,
+              profile_id: user.oauth[provider].id,
+            });
+          }
+        });
+      }
+
+      const unconnectedProviders = availableProviders.filter(
+        (provider) => !user.oauth || !user.oauth[provider],
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "OAuth providers retrieved successfully",
+        data: {
+          user_id: userId,
+          email: user.email,
+          email_verified: user.email_verified,
+          connected_providers: connectedProviders,
+          unconnected_providers: unconnectedProviders,
+          total_connected: connectedProviders.length,
+          has_password: !!user.password,
+          oauth_statistics: user.statistics?.social?.oauth_providers || [],
+        },
+      });
+    } catch (error) {
+      console.error("Get OAuth providers error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error retrieving OAuth providers",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Sync email address between OAuth and direct registration
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async syncOAuthEmail(req, res) {
+    try {
+      const { provider, action } = req.body;
+      const userId = req.user.id;
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Check if OAuth provider is connected
+      if (!user.oauth || !user.oauth[provider]) {
+        return res.status(404).json({
+          success: false,
+          message: `${provider} account is not linked to this user`,
+        });
+      }
+
+      const oauthProfile = user.oauth[provider].profile;
+      let oauthEmail = null;
+
+      // Extract email from OAuth profile
+      if (provider === "google" && oauthProfile.emails) {
+        oauthEmail = oauthProfile.emails[0]?.value;
+      } else if (oauthProfile.email) {
+        oauthEmail = oauthProfile.email;
+      }
+
+      if (!oauthEmail) {
+        return res.status(400).json({
+          success: false,
+          message: `No email found in ${provider} profile`,
+        });
+      }
+
+      let updated = false;
+      let changes = [];
+
+      switch (action) {
+        case "use_oauth_email":
+          // Use OAuth email as primary email
+          if (user.email !== oauthEmail.toLowerCase()) {
+            // Store old email as alternative
+            if (!user.alternative_emails) user.alternative_emails = [];
+            if (user.email && !user.alternative_emails.includes(user.email)) {
+              user.alternative_emails.push(user.email);
+            }
+
+            user.email = oauthEmail.toLowerCase();
+            user.email_verified = true;
+            updated = true;
+            changes.push(`Primary email updated to ${oauthEmail}`);
+          }
+          break;
+
+        case "verify_current_email":
+          // Verify current email if it matches OAuth email
+          if (
+            user.email.toLowerCase() === oauthEmail.toLowerCase() &&
+            !user.email_verified
+          ) {
+            user.email_verified = true;
+            updated = true;
+            changes.push("Email verified through OAuth");
+          } else if (user.email.toLowerCase() !== oauthEmail.toLowerCase()) {
+            return res.status(400).json({
+              success: false,
+              message: "Current email does not match OAuth email",
+              data: {
+                current_email: user.email,
+                oauth_email: oauthEmail,
+              },
+            });
+          }
+          break;
+
+        case "add_alternative_email":
+          // Add OAuth email as alternative email
+          if (!user.alternative_emails) user.alternative_emails = [];
+          if (!user.alternative_emails.includes(oauthEmail.toLowerCase())) {
+            user.alternative_emails.push(oauthEmail.toLowerCase());
+            updated = true;
+            changes.push(`Added ${oauthEmail} as alternative email`);
+          }
+          break;
+
+        default:
+          return res.status(400).json({
+            success: false,
+            message:
+              "Invalid action. Use: use_oauth_email, verify_current_email, or add_alternative_email",
+          });
+      }
+
+      if (updated) {
+        await user.save();
+
+        // Log email sync activity
+        await user.logActivity("oauth_email_sync", null, {
+          provider,
+          action,
+          oauth_email: oauthEmail,
+          changes,
+          sync_time: new Date(),
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: updated
+          ? "Email synchronization completed"
+          : "No changes needed",
+        data: {
+          provider,
+          action,
+          oauth_email: oauthEmail,
+          current_email: user.email,
+          email_verified: user.email_verified,
+          alternative_emails: user.alternative_emails || [],
+          changes,
+          updated,
+        },
+      });
+    } catch (error) {
+      console.error("OAuth email sync error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during email synchronization",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Get OAuth account merge suggestions
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getOAuthMergeSuggestions(req, res) {
+    try {
+      const userId = req.user.id;
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const suggestions = [];
+
+      // Check for potential account merges based on email
+      if (user.email) {
+        // Find other users with same email but different OAuth providers
+        const similarUsers = await User.find({
+          email: user.email,
+          _id: { $ne: userId },
+          oauth: { $exists: true },
+        }).select("oauth email full_name created_at");
+
+        for (const similarUser of similarUsers) {
+          if (similarUser.oauth) {
+            const otherProviders = Object.keys(similarUser.oauth);
+            const userProviders = Object.keys(user.oauth || {});
+            const newProviders = otherProviders.filter(
+              (p) => !userProviders.includes(p),
+            );
+
+            if (newProviders.length > 0) {
+              suggestions.push({
+                type: "duplicate_account",
+                other_user_id: similarUser._id,
+                other_user_name: similarUser.full_name,
+                other_user_created: similarUser.created_at,
+                suggested_providers: newProviders,
+                risk_level: "medium",
+                description: `Found another account with same email using ${newProviders.join(", ")}`,
+              });
+            }
+          }
+        }
+      }
+
+      // Check for unverified email that could be verified through OAuth
+      if (!user.email_verified && user.oauth) {
+        const verifiableProviders = [];
+        Object.keys(user.oauth).forEach((provider) => {
+          const profile = user.oauth[provider].profile;
+          let oauthEmail = null;
+
+          if (provider === "google" && profile.emails) {
+            oauthEmail = profile.emails[0]?.value;
+          } else if (profile.email) {
+            oauthEmail = profile.email;
+          }
+
+          if (
+            oauthEmail &&
+            oauthEmail.toLowerCase() === user.email.toLowerCase()
+          ) {
+            verifiableProviders.push(provider);
+          }
+        });
+
+        if (verifiableProviders.length > 0) {
+          suggestions.push({
+            type: "email_verification",
+            suggested_providers: verifiableProviders,
+            risk_level: "low",
+            description: `Email can be verified through ${verifiableProviders.join(", ")} OAuth`,
+            action: "verify_current_email",
+          });
+        }
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "OAuth merge suggestions retrieved",
+        data: {
+          user_id: userId,
+          email: user.email,
+          email_verified: user.email_verified,
+          connected_providers: Object.keys(user.oauth || {}),
+          suggestions,
+          suggestion_count: suggestions.length,
+        },
+      });
+    } catch (error) {
+      console.error("OAuth merge suggestions error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Internal server error retrieving merge suggestions",
+        error:
+          process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  /**
+   * Handle OAuth login initiated from frontend
+   * Processes OAuth token/code sent from frontend and creates/updates user
+   * @route   POST /api/v1/auth/oauth/frontend
+   * @access  Public
+   */
+  async handleFrontendOAuth(req, res) {
+    try {
+      const { provider, token, code, userInfo } = req.body;
+
+      // Validate required fields
+      if (!provider || (!token && !code && !userInfo)) {
+        return res.status(400).json({
+          success: false,
+          message: "Provider and authentication data are required",
+        });
+      }
+
+      let userData;
+
+      // If userInfo is provided directly (client-side processed)
+      if (userInfo) {
+        userData = userInfo;
+      } else {
+        // If token or code is provided, verify with OAuth provider
+        userData = await this.verifyOAuthToken(provider, token, code);
+      }
+
+      if (!userData || !userData.email) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid OAuth data or missing email",
+        });
+      }
+
+      // Normalize user data
+      const normalizedUserInfo = {
+        id: userData.id || userData.sub,
+        email: userData.email.toLowerCase(),
+        full_name:
+          userData.name ||
+          `${userData.given_name} ${userData.family_name}`.trim(),
+        first_name: userData.given_name || userData.first_name,
+        last_name: userData.family_name || userData.last_name,
+        profile_picture: userData.picture || userData.avatar_url,
+        email_verified:
+          userData.email_verified || userData.verified_email || true,
+      };
+
+      // Use existing OAuth handler logic
+      const { handleOAuthCallback } = await import(
+        "../config/passport-config.js"
+      );
+      // Find or create user with OAuth data
+      const user = await this.findOrCreateOAuthUser(
+        provider,
+        normalizedUserInfo,
+      );
+
+      if (!user) {
+        return res.status(500).json({
+          success: false,
+          message: "OAuth authentication failed",
+          error: "Failed to create or find user",
+        });
+      }
+
+      // Generate JWT token
+      const token_payload = {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        admin_role: user.admin_role,
+      };
+
+      const accessToken = jwt.sign(token_payload, process.env.JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRES_IN || "24h",
+      });
+
+      const refreshToken = jwt.sign(
+        token_payload,
+        process.env.JWT_REFRESH_SECRET,
+        {
+          expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
+        },
+      );
+
+      // Store refresh token in Redis if available
+      if (cache && cache.connected) {
+        try {
+          await cache.setEx(
+            `refresh_token:${user._id}`,
+            7 * 24 * 60 * 60,
+            refreshToken,
+          );
+        } catch (redisError) {
+          logger.warn(
+            "Failed to store refresh token in Redis:",
+            redisError.message,
+          );
+        }
+      }
+
+      // Calculate profile completion
+      const { calculateProfileCompletion } = await import(
+        "../utils/profileCompletion.js"
+      );
+      const profileCompletion = calculateProfileCompletion(user);
+
+      // Log successful OAuth login
+      logger.info(`Frontend OAuth login successful for user: ${user.email}`);
+
+      res.status(200).json({
+        success: true,
+        message: "OAuth authentication successful",
+        data: {
+          user: {
+            id: user._id,
+            email: user.email,
+            full_name: user.full_name,
+            username: user.username,
+            user_image: user.user_image,
+            account_type: user.account_type,
+            email_verified: user.email_verified,
+            is_online: user.is_online,
+            last_login: user.last_login,
+            profile_completion: profileCompletion,
+            oauth_providers: user.oauth ? Object.keys(user.oauth) : [],
+          },
+          tokens: {
+            access_token: accessToken,
+            refresh_token: refreshToken,
+            token_type: "Bearer",
+            expires_in: process.env.JWT_EXPIRES_IN || "24h",
+          },
+        },
+      });
+    } catch (error) {
+      logger.error("Frontend OAuth handler error:", error);
+      res.status(500).json({
+        success: false,
+        message: "OAuth authentication failed",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Verify OAuth token with the respective provider
+   */
+  async verifyOAuthToken(provider, token, code) {
+    try {
+      switch (provider.toLowerCase()) {
+        case "google":
+          return await this.verifyGoogleToken(token, code);
+        case "facebook":
+          return await this.verifyFacebookToken(token);
+        case "github":
+          return await this.verifyGithubToken(token);
+        default:
+          throw new Error(`Unsupported OAuth provider: ${provider}`);
+      }
+    } catch (error) {
+      logger.error(`OAuth token verification failed for ${provider}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify Google OAuth token
+   */
+  async verifyGoogleToken(token, code) {
+    try {
+      let userData;
+
+      if (token) {
+        // Verify access token with Google
+        const response = await fetch(
+          `https://www.googleapis.com/oauth2/v2/userinfo?access_token=${token}`,
+        );
+        if (!response.ok) {
+          throw new Error("Invalid Google access token");
+        }
+        userData = await response.json();
+      } else if (code) {
+        // Exchange authorization code for tokens
+        const tokenResponse = await fetch(
+          "https://oauth2.googleapis.com/token",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: new URLSearchParams({
+              code,
+              client_id: process.env.GOOGLE_CLIENT_ID,
+              client_secret: process.env.GOOGLE_CLIENT_SECRET,
+              redirect_uri: process.env.GOOGLE_REDIRECT_URI || "postmessage",
+              grant_type: "authorization_code",
+            }),
+          },
+        );
+
+        if (!tokenResponse.ok) {
+          throw new Error("Failed to exchange Google authorization code");
+        }
+
+        const tokenData = await tokenResponse.json();
+
+        // Get user info with access token
+        const userResponse = await fetch(
+          `https://www.googleapis.com/oauth2/v2/userinfo?access_token=${tokenData.access_token}`,
+        );
+        if (!userResponse.ok) {
+          throw new Error("Failed to get Google user info");
+        }
+        userData = await userResponse.json();
+      }
+
+      return userData;
+    } catch (error) {
+      logger.error("Google token verification failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify Facebook OAuth token
+   */
+  async verifyFacebookToken(token) {
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/me?access_token=${token}&fields=id,name,email,picture`,
+      );
+      if (!response.ok) {
+        throw new Error("Invalid Facebook access token");
+      }
+      const userData = await response.json();
+      return userData;
+    } catch (error) {
+      logger.error("Facebook token verification failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify GitHub OAuth token
+   */
+  async verifyGithubToken(token) {
+    try {
+      const response = await fetch("https://api.github.com/user", {
+        headers: {
+          Authorization: `token ${token}`,
+          "User-Agent": "MEDH-App",
+        },
+      });
+      if (!response.ok) {
+        throw new Error("Invalid GitHub access token");
+      }
+      const userData = await response.json();
+      return userData;
+    } catch (error) {
+      logger.error("GitHub token verification failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find existing user or create new OAuth user
+   */
+  async findOrCreateOAuthUser(provider, userInfo) {
+    try {
+      const User = (await import("../models/user-modal.js")).default;
+
+      // Step 1: Look for existing user by OAuth provider ID
+      let user = await User.findOne({
+        [`oauth.${provider}.id`]: userInfo.id,
+      });
+
+      if (user) {
+        // Update existing OAuth user
+        user = await this.updateExistingOAuthUser(user, provider, userInfo);
+        logger.info(`Updated existing OAuth user: ${user.email}`);
+        return user;
+      }
+
+      // Step 2: Look for user by email for potential account merging
+      user = await User.findOne({
+        email: userInfo.email.toLowerCase(),
+        is_deleted: { $ne: true },
+      });
+
+      if (user) {
+        // Merge OAuth with existing email account
+        user = await this.mergeOAuthWithExistingUser(user, provider, userInfo);
+        logger.info(`Merged OAuth with existing user: ${user.email}`);
+        return user;
+      }
+
+      // Step 3: Create new OAuth user
+      user = await this.createNewOAuthUser(provider, userInfo);
+      logger.info(`Created new OAuth user: ${user.email}`);
+      return user;
+    } catch (error) {
+      logger.error("Error in findOrCreateOAuthUser:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update existing OAuth user
+   */
+  async updateExistingOAuthUser(user, provider, userInfo) {
+    try {
+      // Initialize oauth if missing
+      if (!user.oauth) {
+        user.oauth = {};
+      }
+
+      // Update OAuth provider data
+      user.oauth[provider] = {
+        id: userInfo.id,
+        profile: userInfo,
+        connected_at: user.oauth[provider]?.connected_at || new Date(),
+        last_login: new Date(),
+      };
+
+      // Update profile data if needed
+      if (!user.full_name || user.full_name === "User") {
+        user.full_name = userInfo.full_name;
+      }
+
+      if (!user.user_image?.url || user.user_image.url.includes("default")) {
+        user.user_image = {
+          url: userInfo.profile_picture,
+          public_id: null,
+          alt_text: `${user.full_name} profile picture from ${provider}`,
+          upload_date: new Date(),
+        };
+      }
+
+      // Update login tracking
+      user.last_login = new Date();
+      user.last_seen = new Date();
+      user.is_online = true;
+
+      // Log activity
+      await user.logActivity(
+        "oauth_login",
+        null,
+        {
+          provider,
+          login_method: `oauth_${provider}`,
+          profile_id: userInfo.id,
+        },
+        {
+          ip_address: "oauth_login",
+          user_agent: "oauth_login",
+          device_type: "web",
+        },
+      );
+
+      await user.save();
+      return user;
+    } catch (error) {
+      logger.error("Error updating OAuth user:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Merge OAuth with existing email account
+   */
+  async mergeOAuthWithExistingUser(user, provider, userInfo) {
+    try {
+      // Initialize oauth if missing
+      if (!user.oauth) {
+        user.oauth = {};
+      }
+
+      // Add OAuth provider data
+      user.oauth[provider] = {
+        id: userInfo.id,
+        profile: userInfo,
+        connected_at: new Date(),
+        last_login: new Date(),
+      };
+
+      // Update profile if needed
+      if (!user.full_name || user.full_name === "User") {
+        user.full_name = userInfo.full_name;
+      }
+
+      if (!user.user_image?.url || user.user_image.url.includes("default")) {
+        user.user_image = {
+          url: userInfo.profile_picture,
+          public_id: null,
+          alt_text: `${user.full_name} profile picture from ${provider}`,
+          upload_date: new Date(),
+        };
+      }
+
+      // Mark email as verified if OAuth email matches
+      if (user.email === userInfo.email && !user.email_verified) {
+        user.email_verified = true;
+      }
+
+      // Activate account if it was inactive
+      if (user.status === "Inactive") {
+        user.status = "Active";
+      }
+
+      // Update login tracking
+      user.last_login = new Date();
+      user.last_seen = new Date();
+      user.is_online = true;
+
+      // Log activity
+      await user.logActivity(
+        "oauth_link",
+        null,
+        {
+          provider,
+          account_merged: true,
+          login_method: `oauth_${provider}`,
+        },
+        {
+          ip_address: "oauth_login",
+          user_agent: "oauth_login",
+          device_type: "web",
+        },
+      );
+
+      await user.save();
+      return user;
+    } catch (error) {
+      logger.error("Error merging OAuth user:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create new OAuth user
+   */
+  async createNewOAuthUser(provider, userInfo) {
+    try {
+      const User = (await import("../models/user-modal.js")).default;
+
+      // Generate unique username
+      let username = userInfo.email.split("@")[0];
+      let counter = 1;
+      while (await User.findOne({ username })) {
+        username = `${userInfo.email.split("@")[0]}${counter}`;
+        counter++;
+      }
+
+      // Generate student ID
+      const studentId = `STU${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+
+      const userData = {
+        full_name: userInfo.full_name,
+        first_name: userInfo.first_name,
+        last_name: userInfo.last_name,
+        email: userInfo.email.toLowerCase(),
+        username,
+        user_image: userInfo.profile_picture
+          ? {
+              url: userInfo.profile_picture,
+              public_id: null,
+              alt_text: `${userInfo.full_name} profile picture from ${provider}`,
+              upload_date: new Date(),
+            }
+          : undefined,
+        email_verified: true,
+        status: "Active",
+        account_type: "free",
+        role: ["student"],
+        student_id: studentId,
+        password_set: false,
+
+        // OAuth information
+        oauth: {
+          [provider]: {
+            id: userInfo.id,
+            profile: userInfo,
+            connected_at: new Date(),
+            last_login: new Date(),
+          },
+        },
+
+        // User preferences with correct notification structure
+        preferences: {
+          theme: "auto",
+          language: "en",
+          timezone: "UTC",
+          notifications: {
+            email: {
+              marketing: false,
+              course_updates: true,
+              system_alerts: true,
+              weekly_summary: true,
+              achievement_unlocked: true,
+            },
+            push: {
+              enabled: false,
+              marketing: false,
+              course_reminders: true,
+              live_sessions: true,
+              community_activity: false,
+            },
+            sms: {
+              enabled: false,
+              course_reminders: false,
+              emergency_alerts: true,
+            },
+          },
+        },
+
+        // Metadata
+        meta: {
+          registration_method: `oauth_${provider}`,
+          referral_source: "social",
+          oauth_first_login: new Date(),
+          profile_source: provider,
+        },
+
+        // Tracking
+        last_login: new Date(),
+        last_seen: new Date(),
+        is_online: true,
+      };
+
+      const user = new User(userData);
+
+      // Log registration activity
+      await user.logActivity(
+        "oauth_register",
+        null,
+        {
+          provider,
+          registration_method: `oauth_${provider}`,
+          profile_id: userInfo.id,
+        },
+        {
+          ip_address: "oauth_register",
+          user_agent: "oauth_register",
+          device_type: "web",
+        },
+      );
+
+      await user.save();
+      return user;
+    } catch (error) {
+      logger.error("Error creating OAuth user:", error);
+      throw error;
     }
   }
 }

@@ -1,5 +1,5 @@
 import express from "express";
-import { body } from "express-validator";
+import { body, param } from "express-validator";
 
 import authController from "../controllers/authController.js";
 import * as corporateStudentController from "../controllers/coorporate-student-controller.js";
@@ -13,6 +13,7 @@ import {
   demoPasswordValidation,
   demoLoginValidation,
 } from "../validations/userValidation.js";
+import { calculateProfileCompletion } from "../utils/profileCompletion.js";
 import oauthRoutes from "./oauthRoutes.js";
 
 const router = express.Router();
@@ -320,13 +321,23 @@ router.post(
       .normalizeEmail()
       .withMessage("Please provide a valid email address"),
     body("newPassword")
-      .isLength({ min: 8 })
-      .withMessage("Password must be at least 8 characters long")
-      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
-      .withMessage("Password must contain at least one uppercase letter, one lowercase letter, and one number"),
+      .isLength({ min: 8, max: 128 })
+      .withMessage("Password must be between 8 and 128 characters")
+      .matches(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/,
+      )
+      .withMessage(
+        "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+      ),
     body("confirmPassword")
       .notEmpty()
-      .withMessage("Confirm password is required"),
+      .withMessage("Confirm password is required")
+      .custom((value, { req }) => {
+        if (value !== req.body.newPassword) {
+          throw new Error("Password confirmation does not match new password");
+        }
+        return true;
+      }),
   ],
   authController.resetPassword.bind(authController),
 );
@@ -1925,69 +1936,7 @@ router.get("/profile", authenticateToken, async (req, res) => {
   }
 });
 
-// Helper function to calculate profile completion percentage
-function calculateProfileCompletion(user) {
-  const requiredFields = [
-    "full_name",
-    "email",
-    "phone_numbers",
-    "user_image",
-    "address",
-    "organization",
-    "bio",
-    "meta.date_of_birth",
-    "meta.education_level",
-    "meta.institution_name",
-    "meta.field_of_study",
-    "meta.gender",
-    "meta.skills",
-    "country",
-    "timezone",
-  ];
-
-  // Social profile fields (bonus points)
-  const socialFields = [
-    "facebook_link",
-    "instagram_link",
-    "linkedin_link",
-    "twitter_link",
-    "youtube_link",
-    "github_link",
-    "portfolio_link",
-  ];
-
-  const totalFields = requiredFields.length + socialFields.length;
-
-  let completedFields = 0;
-
-  // Check required fields
-  requiredFields.forEach((field) => {
-    const fieldParts = field.split(".");
-    let value = user;
-
-    for (const part of fieldParts) {
-      value = value?.[part];
-    }
-
-    if (
-      value !== null &&
-      value !== undefined &&
-      value !== "" &&
-      (!Array.isArray(value) || value.length > 0)
-    ) {
-      completedFields++;
-    }
-  });
-
-  // Check social profile fields (bonus points)
-  socialFields.forEach((field) => {
-    if (user[field] && user[field].trim() !== "") {
-      completedFields++;
-    }
-  });
-
-  return Math.round((completedFields / totalFields) * 100);
-}
+// Profile completion calculation is now handled by utils/profileCompletion.js
 
 /**
  * @route   PUT /api/v1/auth/profile/personal
@@ -2683,7 +2632,7 @@ router.post(
 );
 
 /**
- * @route   POST /api/v1/auth/reset-password
+ * @route   POST /api/v1/auth/reset-password-with-token
  * @desc    Reset password with token
  * @access  Public
  */
@@ -3261,7 +3210,7 @@ router.post(
       .notEmpty()
       .withMessage("Password is required for validation"),
   ],
-  authController.validatePasswordStrength
+  authController.validatePasswordStrength,
 );
 
 /**
@@ -3277,7 +3226,134 @@ router.post(
       .isInt({ min: 8, max: 128 })
       .withMessage("Password length must be between 8 and 128 characters"),
   ],
-  authController.generateSecurePassword
+  authController.generateSecurePassword,
+);
+
+/**
+ * @route   POST /api/v1/auth/generate-quick-key
+ * @desc    Generate a new quick login key for permanent login
+ * @access  Private (Authenticated users)
+ */
+router.post(
+  "/generate-quick-key",
+  authenticateToken,
+  authController.generateQuickLoginKey.bind(authController),
+);
+
+/**
+ * @route   GET /api/v1/auth/quick-keys
+ * @desc    List all quick login keys for the user (without secrets)
+ * @access  Private (Authenticated users)
+ */
+router.get(
+  "/quick-keys",
+  authenticateToken,
+  authController.listQuickLoginKeys.bind(authController),
+);
+
+// ============================================================================
+// FRONTEND OAUTH ROUTE
+// ============================================================================
+
+/**
+ * @route   POST /api/v1/auth/oauth/frontend
+ * @desc    Handle OAuth login initiated from frontend
+ * @access  Public
+ */
+router.post(
+  "/oauth/frontend",
+  [
+    body("provider")
+      .isIn(["google", "facebook", "github", "linkedin", "microsoft", "apple"])
+      .withMessage("Invalid OAuth provider"),
+    body("token").optional().isString().withMessage("Token must be a string"),
+    body("code").optional().isString().withMessage("Code must be a string"),
+    body("userInfo")
+      .optional()
+      .isObject()
+      .withMessage("UserInfo must be an object"),
+  ],
+  authController.handleFrontendOAuth.bind(authController),
+);
+
+// ENHANCED OAUTH ACCOUNT MANAGEMENT ROUTES
+// ============================================================================
+
+/**
+ * @route   POST /api/v1/auth/oauth/link/:provider
+ * @desc    Link OAuth account to existing user
+ * @access  Private
+ */
+router.post(
+  "/oauth/link/:provider",
+  authenticateToken,
+  [
+    param("provider")
+      .isIn(["google", "facebook", "github", "linkedin", "microsoft", "apple"])
+      .withMessage("Invalid OAuth provider"),
+  ],
+  authController.linkOAuthAccount,
+);
+
+/**
+ * @route   DELETE /api/v1/auth/oauth/unlink/:provider
+ * @desc    Unlink OAuth account from user
+ * @access  Private
+ */
+router.delete(
+  "/oauth/unlink/:provider",
+  authenticateToken,
+  [
+    param("provider")
+      .isIn(["google", "facebook", "github", "linkedin", "microsoft", "apple"])
+      .withMessage("Invalid OAuth provider"),
+  ],
+  authController.unlinkOAuthAccount,
+);
+
+/**
+ * @route   GET /api/v1/auth/oauth/connected
+ * @desc    Get connected OAuth providers for user
+ * @access  Private
+ */
+router.get(
+  "/oauth/connected",
+  authenticateToken,
+  authController.getConnectedOAuthProviders,
+);
+
+/**
+ * @route   POST /api/v1/auth/oauth/sync-email
+ * @desc    Sync email address between OAuth and direct registration
+ * @access  Private
+ */
+router.post(
+  "/oauth/sync-email",
+  authenticateToken,
+  [
+    body("provider")
+      .isIn(["google", "facebook", "github", "linkedin", "microsoft", "apple"])
+      .withMessage("Invalid OAuth provider"),
+    body("action")
+      .isIn([
+        "use_oauth_email",
+        "verify_current_email",
+        "add_alternative_email",
+      ])
+      .withMessage("Invalid sync action"),
+  ],
+  authController.syncOAuthEmail,
+);
+
+/**
+ * @route   GET /api/v1/auth/oauth/merge-suggestions
+ * @desc    Get OAuth account merge suggestions
+ * @access  Private
+ */
+router.get(
+  "/oauth/merge-suggestions",
+  authenticateToken,
+  authController.getOAuthMergeSuggestions,
 );
 
 export default router;

@@ -4,7 +4,7 @@ import Course from "../models/course-model.js";
 // Create a new category
 export const createCategory = async (req, res) => {
   try {
-    const { category_name, category_image } = req.body;
+    const { category_name, category_image, class_type } = req.body;
 
     // Validate input
     if (!category_name) {
@@ -19,7 +19,11 @@ export const createCategory = async (req, res) => {
         .json({ message: "Category with this name already exists" });
     }
 
-    const category = new Category({ category_name, category_image });
+    const category = new Category({
+      category_name,
+      category_image,
+      class_type,
+    });
     await category.save();
 
     res.status(201).json({
@@ -34,7 +38,12 @@ export const createCategory = async (req, res) => {
 
 export const getCategories = async (req, res) => {
   try {
-    const categories = await Category.find();
+    const { class_type } = req.query;
+    const filter = {};
+    if (class_type) {
+      filter.class_type = class_type;
+    }
+    const categories = await Category.find(filter);
     res.status(200).json({
       success: true,
       message: "Categories fetched successfully",
@@ -57,7 +66,7 @@ export const getCategoryById = async (req, res) => {
 
     const category = await Category.findById(id).populate({
       path: "courses",
-      select: "course_title course_category",
+      select: "course_title course_category class_type",
     });
 
     if (!category) {
@@ -78,7 +87,7 @@ export const getCategoryById = async (req, res) => {
 export const updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
-    const { category_name, category_image } = req.body;
+    const { category_name, category_image, class_type } = req.body;
 
     if (!category_name) {
       return res.status(400).json({ message: "Category name is required" });
@@ -86,7 +95,7 @@ export const updateCategory = async (req, res) => {
 
     const category = await Category.findByIdAndUpdate(
       id,
-      { category_name, category_image },
+      { category_name, category_image, class_type },
       { new: true, runValidators: true },
     );
 
