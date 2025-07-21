@@ -67,8 +67,8 @@ const ADMIN_ROLES = {
 };
 
 const AGE_GROUPS = [
-  "Under 18",
-  "18-24",
+  "Under 16",
+  "16-24",
   "25-34",
   "35-44",
   "45-54",
@@ -159,6 +159,11 @@ const userActivitySchema = new Schema(
         "temp_password_verified",
         "admin_action",
         "profile_restore",
+        // OAuth-related actions
+        "oauth_login",
+        "oauth_register",
+        "oauth_link",
+        "oauth_unlink",
         // MFA-related actions
         "mfa_setup_initiated",
         "mfa_enabled",
@@ -187,7 +192,7 @@ const userActivitySchema = new Schema(
       user_agent: String,
       device_type: {
         type: String,
-        enum: ["desktop", "mobile", "tablet", "unknown"],
+        enum: ["desktop", "mobile", "tablet", "web", "unknown"],
       },
       browser: String,
       operating_system: String,
@@ -631,6 +636,20 @@ const userSchema = new Schema(
         message: "Please enter a valid email address",
       },
     },
+
+    // Alternative emails for OAuth account merging
+    alternative_emails: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: function (emails) {
+          return emails.every((email) =>
+            /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email),
+          );
+        },
+        message: "All alternative emails must be valid email addresses",
+      },
+    },
     username: {
       type: String,
       unique: true,
@@ -663,8 +682,8 @@ const userSchema = new Schema(
     password: {
       type: String,
       required: function () {
-        // Password is not required for demo users initially
-        return !this.is_demo;
+        // Password is not required for demo users or OAuth users initially
+        return !this.is_demo && !this.oauth;
       },
       minlength: [8, "Password must be at least 8 characters"],
     },
@@ -673,7 +692,7 @@ const userSchema = new Schema(
     password_set: {
       type: Boolean,
       default: function () {
-        return !this.is_demo; // Regular users have password set by default
+        return !this.is_demo && !this.oauth; // Regular users have password set by default
       },
     },
     first_login_completed: {
@@ -1100,6 +1119,26 @@ const userSchema = new Schema(
         last_refresh: Date,
       },
     },
+
+    // OAuth Management Tracking
+    oauth_account_merged: {
+      type: Boolean,
+      default: false,
+    },
+    oauth_profile_updated: {
+      type: Boolean,
+      default: false,
+    },
+    oauth_email_conflicts: [
+      {
+        provider: String,
+        oauth_email: String,
+        user_email: String,
+        detected_at: { type: Date, default: Date.now },
+        resolved: { type: Boolean, default: false },
+        resolution_method: String,
+      },
+    ],
 
     // Real-time Features
     is_online: {

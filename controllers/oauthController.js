@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/user-modal.js";
 import logger from "../utils/logger.js";
 import { validationResult } from "express-validator";
+import { calculateProfileCompletion } from "../utils/profileCompletion.js";
 
 /**
  * OAuth Controller for Social Login Integration
@@ -63,7 +64,10 @@ const getOAuthProviders = async (req, res) => {
       });
     }
 
-    if (process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET) {
+    if (
+      process.env.MICROSOFT_CLIENT_ID &&
+      process.env.MICROSOFT_CLIENT_SECRET
+    ) {
       providers.push({
         provider: "microsoft",
         name: "Microsoft",
@@ -74,7 +78,11 @@ const getOAuthProviders = async (req, res) => {
       });
     }
 
-    if (process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID) {
+    if (
+      process.env.APPLE_CLIENT_ID &&
+      process.env.APPLE_TEAM_ID &&
+      process.env.APPLE_KEY_ID
+    ) {
       providers.push({
         provider: "apple",
         name: "Apple",
@@ -91,7 +99,14 @@ const getOAuthProviders = async (req, res) => {
       data: {
         providers,
         total_providers: providers.length,
-        supported_providers: ["google", "facebook", "github", "linkedin", "microsoft", "apple"],
+        supported_providers: [
+          "google",
+          "facebook",
+          "github",
+          "linkedin",
+          "microsoft",
+          "apple",
+        ],
       },
     });
   } catch (error) {
@@ -99,7 +114,10 @@ const getOAuthProviders = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve OAuth providers",
-      error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
     });
   }
 };
@@ -128,7 +146,7 @@ const handleOAuthSuccess = async (req, res) => {
         account_type: user.account_type,
       },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" }
+      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" },
     );
 
     // Update user's last login and online status
@@ -158,7 +176,7 @@ const handleOAuthSuccess = async (req, res) => {
           is_online: user.is_online,
           last_login: user.last_login,
           connected_oauth_providers: connectedProviders,
-          profile_completion: user.calculateProfileCompletion(),
+          profile_completion: calculateProfileCompletion(user),
         },
         oauth: {
           connected_providers: connectedProviders,
@@ -171,7 +189,10 @@ const handleOAuthSuccess = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to complete OAuth authentication",
-      error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
     });
   }
 };
@@ -190,7 +211,8 @@ const handleOAuthFailure = async (req, res) => {
     res.status(401).json({
       success: false,
       message: "OAuth authentication failed",
-      error: error_description || error || "Authentication was cancelled or failed",
+      error:
+        error_description || error || "Authentication was cancelled or failed",
       data: {
         available_providers: "/api/v1/auth/oauth/providers",
         retry_login: true,
@@ -222,9 +244,9 @@ const getConnectedProviders = async (req, res) => {
     }
 
     const connectedProviders = [];
-    
+
     if (user.oauth) {
-      Object.keys(user.oauth).forEach(provider => {
+      Object.keys(user.oauth).forEach((provider) => {
         const providerData = user.oauth[provider];
         connectedProviders.push({
           provider,
@@ -250,7 +272,10 @@ const getConnectedProviders = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve connected providers",
-      error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
     });
   }
 };
@@ -284,7 +309,8 @@ const disconnectProvider = async (req, res) => {
     if (connectedProviders.length === 1 && !user.password) {
       return res.status(400).json({
         success: false,
-        message: "Cannot disconnect the only authentication method. Please set a password first.",
+        message:
+          "Cannot disconnect the only authentication method. Please set a password first.",
       });
     }
 
@@ -293,9 +319,8 @@ const disconnectProvider = async (req, res) => {
 
     // Update statistics
     if (user.statistics.social.oauth_providers) {
-      user.statistics.social.oauth_providers = user.statistics.social.oauth_providers.filter(
-        p => p !== provider
-      );
+      user.statistics.social.oauth_providers =
+        user.statistics.social.oauth_providers.filter((p) => p !== provider);
     }
 
     // Log disconnection activity
@@ -306,7 +331,9 @@ const disconnectProvider = async (req, res) => {
 
     await user.save();
 
-    logger.info(`OAuth provider ${provider} disconnected for user: ${user.email}`);
+    logger.info(
+      `OAuth provider ${provider} disconnected for user: ${user.email}`,
+    );
 
     res.status(200).json({
       success: true,
@@ -321,7 +348,10 @@ const disconnectProvider = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to disconnect OAuth provider",
-      error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
     });
   }
 };
@@ -334,7 +364,7 @@ const disconnectProvider = async (req, res) => {
 const linkProvider = async (req, res) => {
   try {
     const { provider } = req.params;
-    
+
     // Store user ID in session for linking after OAuth callback
     req.session.linkingUserId = req.user.userId;
     req.session.linkingProvider = provider;
@@ -353,7 +383,10 @@ const linkProvider = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to initiate OAuth provider linking",
-      error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
     });
   }
 };
@@ -381,7 +414,10 @@ const getProviderDisplayName = (provider) => {
 const getOAuthStats = async (req, res) => {
   try {
     // Check if user is admin
-    if (req.user.account_type !== "admin" && req.user.account_type !== "super-admin") {
+    if (
+      req.user.account_type !== "admin" &&
+      req.user.account_type !== "super-admin"
+    ) {
       return res.status(403).json({
         success: false,
         message: "Access denied. Admin privileges required.",
@@ -391,18 +427,18 @@ const getOAuthStats = async (req, res) => {
     const stats = await User.aggregate([
       {
         $match: {
-          oauth: { $exists: true, $ne: {} }
-        }
+          oauth: { $exists: true, $ne: {} },
+        },
       },
       {
         $project: {
           oauth_providers: { $objectToArray: "$oauth" },
           created_at: "$createdAt",
           last_login: "$last_login",
-        }
+        },
       },
       {
-        $unwind: "$oauth_providers"
+        $unwind: "$oauth_providers",
       },
       {
         $group: {
@@ -411,21 +447,26 @@ const getOAuthStats = async (req, res) => {
           recent_logins: {
             $sum: {
               $cond: [
-                { $gte: ["$last_login", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)] },
+                {
+                  $gte: [
+                    "$last_login",
+                    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                  ],
+                },
                 1,
-                0
-              ]
-            }
-          }
-        }
+                0,
+              ],
+            },
+          },
+        },
       },
       {
-        $sort: { total_users: -1 }
-      }
+        $sort: { total_users: -1 },
+      },
     ]);
 
     const totalOAuthUsers = await User.countDocuments({
-      oauth: { $exists: true, $ne: {} }
+      oauth: { $exists: true, $ne: {} },
     });
 
     const totalUsers = await User.countDocuments();
@@ -438,7 +479,8 @@ const getOAuthStats = async (req, res) => {
         summary: {
           total_oauth_users: totalOAuthUsers,
           total_users: totalUsers,
-          oauth_adoption_rate: ((totalOAuthUsers / totalUsers) * 100).toFixed(2) + "%",
+          oauth_adoption_rate:
+            ((totalOAuthUsers / totalUsers) * 100).toFixed(2) + "%",
         },
         generated_at: new Date(),
       },
@@ -448,7 +490,10 @@ const getOAuthStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to retrieve OAuth statistics",
-      error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
     });
   }
 };
@@ -461,4 +506,4 @@ export {
   disconnectProvider,
   linkProvider,
   getOAuthStats,
-}; 
+};
