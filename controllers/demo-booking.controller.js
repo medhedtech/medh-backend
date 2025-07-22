@@ -1200,6 +1200,7 @@ export const getAvailableTimeSlots = catchAsync(async (req, res) => {
     timezone = "UTC",
     days = 7,
     singleDay = false, // Option to get single day slots (backward compatibility)
+    slotType = "detailed", // ✅ NEW: "detailed" or "static" time slots
   } = req.query;
 
   try {
@@ -1219,6 +1220,38 @@ export const getAvailableTimeSlots = catchAsync(async (req, res) => {
     } else {
       // Default: Start from tomorrow
       baseDate = tomorrowDate;
+    }
+
+    // Generate slots for multiple days (minimum 7 days)
+    const numberOfDays = Math.max(parseInt(days) || 7, 7);
+
+    // ✅ NEW: Handle static time slots request
+    if (slotType === "static") {
+      const staticSlots = await generateStaticTimeSlots(
+        baseDate,
+        numberOfDays,
+        timezone,
+      );
+      return res.status(200).json({
+        success: true,
+        message: "Static time slots retrieved successfully",
+        data: {
+          slot_type: "static",
+          start_date: baseDate.format("YYYY-MM-DD"),
+          end_date: baseDate
+            .clone()
+            .add(numberOfDays - 1, "days")
+            .format("YYYY-MM-DD"),
+          timezone: timezone,
+          days: numberOfDays,
+          minimum_advance_days: 1,
+          earliest_booking_date: tomorrowDate.format("YYYY-MM-DD"),
+          current_date: currentTime.format("YYYY-MM-DD"),
+          static_slots: staticSlots.staticSlots,
+          daily_availability: staticSlots.dailyAvailability,
+          summary: staticSlots.summary,
+        },
+      });
     }
 
     // Handle backward compatibility for single day requests
@@ -1245,8 +1278,6 @@ export const getAvailableTimeSlots = catchAsync(async (req, res) => {
       });
     }
 
-    // Generate slots for multiple days (minimum 7 days)
-    const numberOfDays = Math.max(parseInt(days) || 7, 7);
     const endDate = baseDate
       .clone()
       .add(numberOfDays - 1, "days")
@@ -1467,6 +1498,111 @@ function getNextAvailableSlots(dailySlots, count = 3) {
   }
 
   return availableSlots;
+}
+
+/**
+ * ✅ NEW: Helper function to generate static time slots
+ * Returns broader time ranges: Morning 9-12, Afternoon 12-5, Evening 5-10
+ */
+async function generateStaticTimeSlots(baseDate, numberOfDays, timezone) {
+  const staticTimeSlots = [
+    { value: "morning 9-12", label: "Morning 9-12", available: true },
+    { value: "afternoon 12-5", label: "Afternoon 12-5", available: true },
+    { value: "evening 5-10", label: "Evening 5-10", available: true },
+  ];
+
+  const endDate = baseDate
+    .clone()
+    .add(numberOfDays - 1, "days")
+    .endOf("day");
+
+  // Get existing bookings for the entire date range
+  const existingBookings = await DemoBooking.find({
+    scheduledDateTime: {
+      $gte: baseDate.toDate(),
+      $lte: endDate.toDate(),
+    },
+    status: { $in: ["pending", "confirmed", "rescheduled"] },
+    isActive: true,
+  }).select("scheduledDateTime");
+
+  const dailyAvailability = [];
+  let totalBookedSlots = 0;
+
+  for (let i = 0; i < numberOfDays; i++) {
+    const currentDay = baseDate.clone().add(i, "days");
+    const dayStart = currentDay.clone().startOf("day");
+    const dayEnd = currentDay.clone().endOf("day");
+
+    // Get bookings for this specific day
+    const dayBookings = existingBookings.filter((booking) =>
+      moment(booking.scheduledDateTime).isBetween(dayStart, dayEnd, null, "[]"),
+    );
+
+    // Check availability for each static time slot
+    const daySlots = staticTimeSlots.map((slot) => {
+      let bookingsInSlot = 0;
+
+      if (slot.value === "morning 9-12") {
+        // Check bookings between 9 AM - 12 PM
+        bookingsInSlot = dayBookings.filter((booking) => {
+          const hour = moment(booking.scheduledDateTime).hour();
+          return hour >= 9 && hour < 12;
+        }).length;
+      } else if (slot.value === "afternoon 12-5") {
+        // Check bookings between 12 PM - 5 PM
+        bookingsInSlot = dayBookings.filter((booking) => {
+          const hour = moment(booking.scheduledDateTime).hour();
+          return hour >= 12 && hour < 17;
+        }).length;
+      } else if (slot.value === "evening 5-10") {
+        // Check bookings between 5 PM - 10 PM
+        bookingsInSlot = dayBookings.filter((booking) => {
+          const hour = moment(booking.scheduledDateTime).hour();
+          return hour >= 17 && hour < 22;
+        }).length;
+      }
+
+      // Assume max 5 concurrent demos per time slot (broader range)
+      const isAvailable = bookingsInSlot < 5;
+
+      if (bookingsInSlot > 0) totalBookedSlots++;
+
+      return {
+        ...slot,
+        available: isAvailable,
+        bookings_count: bookingsInSlot,
+        max_capacity: 5,
+      };
+    });
+
+    dailyAvailability.push({
+      date: currentDay.format("YYYY-MM-DD"),
+      display_date: currentDay.format("MMMM Do, YYYY"),
+      day_name: currentDay.format("dddd"),
+      is_tomorrow: currentDay.isSame(moment().add(1, "day"), "day"),
+      is_within_week: i < 7,
+      days_from_today: i + 1,
+      slots: daySlots,
+      available_slots_count: daySlots.filter((slot) => slot.available).length,
+      total_slots_count: daySlots.length,
+    });
+  }
+
+  return {
+    staticSlots: staticTimeSlots,
+    dailyAvailability: dailyAvailability,
+    summary: {
+      total_days: numberOfDays,
+      total_slots: numberOfDays * staticTimeSlots.length,
+      available_slots: dailyAvailability.reduce(
+        (acc, day) => acc + day.available_slots_count,
+        0,
+      ),
+      booked_slots: totalBookedSlots,
+      slot_types: staticTimeSlots.length,
+    },
+  };
 }
 
 /**

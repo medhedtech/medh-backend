@@ -22,6 +22,8 @@ import {
   getCountries,
   getLiveCourses,
 } from "../controllers/universalFormController.js";
+// ✅ ADD: Import demo booking controller for available slots
+import { getAvailableTimeSlots } from "../controllers/demo-booking.controller.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { validateFormSubmission } from "../middleware/validators/universalFormValidator.js";
 import { validateCorporateTrainingForm } from "../middleware/validators/corporateTrainingValidator.js";
@@ -40,6 +42,28 @@ router.get("/countries/phone-codes", (req, res, next) => {
   getCountries(req, res, next);
 });
 router.get("/live-courses", getLiveCourses);
+
+// ✅ ADD: Demo sessions available slots endpoint (public access)
+/**
+ * @route   GET /api/v1/forms/demo-sessions/available-slots
+ * @desc    Get available time slots for demo sessions
+ * @access  Public
+ * @query   { startDate?, timezone?, days?, singleDay?, slotType? }
+ */
+router.get("/demo-sessions/available-slots", getAvailableTimeSlots);
+
+// ✅ ADD: Static time slots endpoint (public access)
+/**
+ * @route   GET /api/v1/forms/demo-sessions/static-slots
+ * @desc    Get static time slots (Morning 9-12, Afternoon 12-5, Evening 5-10)
+ * @access  Public
+ * @query   { startDate?, timezone?, days? }
+ */
+router.get("/demo-sessions/static-slots", (req, res, next) => {
+  req.query.slotType = "static";
+  getAvailableTimeSlots(req, res, next);
+});
+
 router.post("/submit", submitForm);
 router.post(
   "/corporate-training",

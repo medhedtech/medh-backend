@@ -62,36 +62,63 @@ const contactInfoSchema = new mongoose.Schema(
       },
     },
 
-    // Enhanced mobile number with country support
+    // Mobile number with enhanced validation and normalization
     mobile_number: {
       country_code: {
         type: String,
         required: true,
-        default: "+91",
         validate: {
-          validator: function (v) {
-            return /^\+\d{1,4}$/.test(v);
+          validator: function (code) {
+            return /^\+\d{1,4}$/.test(code);
           },
-          message: "Invalid country code format",
+          message: "Country code must be in format +XX",
         },
       },
       number: {
         type: String,
         required: true,
-        validate: {
-          validator: function (v) {
-            try {
-              const fullNumber = `${this.country_code}${v}`;
-              return isValidPhoneNumber(fullNumber);
-            } catch (error) {
-              return false;
+        // ✅ ADD: Normalize phone number format
+        set: function (value) {
+          if (!value) return value;
+
+          // Remove all non-digit characters
+          const cleanNumber = value.toString().replace(/\D/g, "");
+
+          // If number starts with country code digits, remove them
+          const countryCode = this.country_code || this.parent()?.country_code;
+          if (countryCode) {
+            const countryDigits = countryCode.replace(/\D/g, "");
+            if (cleanNumber.startsWith(countryDigits)) {
+              return cleanNumber.substring(countryDigits.length);
             }
+          }
+
+          // Handle common country code patterns
+          if (cleanNumber.startsWith("91") && cleanNumber.length === 12) {
+            // Indian numbers: 91XXXXXXXXXX -> XXXXXXXXXX
+            return cleanNumber.substring(2);
+          }
+          if (cleanNumber.startsWith("1") && cleanNumber.length === 11) {
+            // US numbers: 1XXXXXXXXXX -> XXXXXXXXXX
+            return cleanNumber.substring(1);
+          }
+
+          return cleanNumber;
+        },
+        validate: {
+          validator: function (number) {
+            // Should be 10 digits for most countries after normalization
+            const cleanNumber = number.replace(/\D/g, "");
+            return /^\d{10}$/.test(cleanNumber);
           },
           message: "Please enter a valid mobile number",
         },
       },
-      formatted: String, // Auto-generated formatted number
-      is_validated: { type: Boolean, default: false },
+      formatted: String,
+      is_validated: {
+        type: Boolean,
+        default: false,
+      },
     },
 
     // Location fields
@@ -512,9 +539,49 @@ const studentDetailsSchema = new mongoose.Schema(
         "grade_9-10",
         "grade_11-12",
         "home_study",
+        // ✅ ADD: Support for alternative formats
+        "grade-1-2",
+        "grade-3-4",
+        "grade-5-6",
+        "grade-7-8",
+        "grade-9-10",
+        "grade-11-12",
+        "Grade 1-2",
+        "Grade 3-4",
+        "Grade 5-6",
+        "Grade 7-8",
+        "Grade 9-10",
+        "Grade 11-12",
+        "Home Study",
       ],
       required: function () {
         return this.parent().is_student_under_16;
+      },
+      // ✅ ADD: Normalize grade format
+      set: function (value) {
+        if (!value) return value;
+
+        // Normalize to standard format: grade_X-Y
+        const normalizeGrade = (grade) => {
+          const gradeStr = grade.toString().toLowerCase().trim();
+
+          // Handle "home study" variations
+          if (gradeStr.includes("home") && gradeStr.includes("study")) {
+            return "home_study";
+          }
+
+          // Handle grade patterns
+          const gradeMatch = gradeStr.match(/(\d+)[-\s]*(\d+)/);
+          if (gradeMatch) {
+            const [, start, end] = gradeMatch;
+            return `grade_${start}-${end}`;
+          }
+
+          // Return as-is if no pattern matches
+          return gradeStr;
+        };
+
+        return normalizeGrade(value);
       },
     },
     school_name: {
@@ -580,6 +647,11 @@ const demoSessionDetailsSchema = new mongoose.Schema(
     preferred_time_slot: {
       type: String,
       enum: [
+        // ✅ NEW: Static time slots
+        "morning 9-12",
+        "afternoon 12-5",
+        "evening 5-10",
+        // ✅ EXISTING: Hourly time slots (for backward compatibility)
         "09:00-10:00",
         "10:00-11:00",
         "11:00-12:00",
@@ -966,6 +1038,19 @@ const universalFormSchema = new mongoose.Schema(
         const timestamp = Date.now().toString().slice(-8);
         const random = Math.random().toString(36).substring(2, 8).toUpperCase();
         return `${prefix}${timestamp}${random}`;
+      },
+    },
+
+    // ✅ ADD: form_id field to match database index
+    form_id: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows null values but enforces uniqueness for non-null values
+      default: function () {
+        const prefix = this.form_type.toUpperCase().substring(0, 3);
+        const timestamp = Date.now().toString().slice(-6); // Different slice for form_id
+        const random = Math.random().toString(36).substring(2, 6).toUpperCase(); // Different length
+        return `FORM_${prefix}_${timestamp}_${random}`;
       },
     },
 
