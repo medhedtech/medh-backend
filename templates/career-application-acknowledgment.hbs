@@ -1,0 +1,386 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Application Received - MEDH</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background-color: #f8fafc;
+      }
+
+      .email-container {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .logo {
+        font-size: 28px;
+        font-weight: bold;
+        margin-bottom: 8px;
+      }
+
+      .header-subtitle {
+        font-size: 16px;
+        opacity: 0.9;
+      }
+
+      .content {
+        padding: 40px 30px;
+      }
+
+      .greeting {
+        font-size: 18px;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 20px;
+      }
+
+      .application-details {
+        background-color: #f7fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 25px 0;
+      }
+
+      .detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #e2e8f0;
+      }
+
+      .detail-row:last-child {
+        border-bottom: none;
+      }
+
+      .detail-label {
+        font-weight: 600;
+        color: #4a5568;
+        font-size: 14px;
+      }
+
+      .detail-value {
+        color: #2d3748;
+        font-weight: 500;
+        font-size: 14px;
+      }
+
+      .application-id {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-family: "Courier New", monospace;
+        font-size: 13px;
+        font-weight: bold;
+      }
+
+      .process-timeline {
+        margin: 30px 0;
+      }
+
+      .timeline-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 15px;
+      }
+
+      .timeline-steps {
+        list-style: none;
+        padding: 0;
+      }
+
+      .timeline-step {
+        padding: 12px 0;
+        border-left: 3px solid #e2e8f0;
+        padding-left: 20px;
+        margin-left: 10px;
+        position: relative;
+      }
+
+      .timeline-step:before {
+        content: "";
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: #667eea;
+        position: absolute;
+        left: -7px;
+        top: 16px;
+      }
+
+      .step-title {
+        font-weight: 600;
+        color: #2d3748;
+        font-size: 14px;
+      }
+
+      .step-description {
+        color: #4a5568;
+        font-size: 13px;
+        margin-top: 4px;
+      }
+
+      .contact-info {
+        background-color: #edf2f7;
+        border-left: 4px solid #667eea;
+        padding: 20px;
+        border-radius: 0 8px 8px 0;
+        margin: 25px 0;
+      }
+
+      .contact-title {
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 10px;
+        font-size: 16px;
+      }
+
+      .footer {
+        background-color: #2d3748;
+        color: #a0aec0;
+        text-align: center;
+        padding: 30px;
+        font-size: 14px;
+      }
+
+      .footer-logo {
+        color: white;
+        font-weight: bold;
+        font-size: 18px;
+        margin-bottom: 8px;
+      }
+
+      .footer-links {
+        margin: 15px 0;
+      }
+
+      .footer-links a {
+        color: #667eea;
+        text-decoration: none;
+        margin: 0 10px;
+      }
+
+      .footer-links a:hover {
+        text-decoration: underline;
+      }
+
+      .disclaimer {
+        margin-top: 20px;
+        font-size: 12px;
+        color: #718096;
+        line-height: 1.5;
+      }
+
+      @media (max-width: 600px) {
+        .email-container {
+          margin: 0;
+          border-radius: 0;
+        }
+
+        .content {
+          padding: 30px 20px;
+        }
+
+        .header {
+          padding: 25px 20px;
+        }
+
+        .detail-row {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 5px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <!-- Header -->
+      <div class="header">
+        <div class="logo">📚 MEDH</div>
+        <div class="header-subtitle">Learning Platform</div>
+      </div>
+
+      <!-- Content -->
+      <div class="content">
+        <div class="greeting">
+          Dear
+          {{name}},
+        </div>
+
+        <p>Thank you for applying to join our team at Medh! We've received your
+          application for the
+          <strong>{{position}}</strong>
+          role and appreciate your interest in being part of our mission to
+          transform skill development education.</p>
+
+        <!-- Application Details -->
+        <div class="application-details">
+          <div class="detail-row">
+            <div class="detail-label">Application ID:</div>
+            <div class="detail-value">
+              <span class="application-id">{{application_id}}</span>
+            </div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Position Applied:</div>
+            <div class="detail-value">{{position}}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Application Date:</div>
+            <div class="detail-value">{{formatDate
+                submitted_at
+                "MMMM DD, YYYY"
+              }}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Status:</div>
+            <div class="detail-value">Under Review</div>
+          </div>
+        </div>
+
+        <p><strong>Please quote this Application ID ({{application_id}}) in all
+            further communications.</strong></p>
+
+        <p>Your application has been successfully registered in our system, and
+          our hiring team is currently reviewing your qualifications and
+          experience. We're committed to a thorough and thoughtful selection
+          process to ensure mutual fit for both candidates and our organization.</p>
+
+        <!-- Process Timeline -->
+        <div class="process-timeline">
+          <div class="timeline-title">📋 What you can expect moving forward:</div>
+          <ul class="timeline-steps">
+            <li class="timeline-step">
+              <div class="step-title">Initial Review (1-2 days)</div>
+              <div class="step-description">Our hiring team will evaluate your
+                application against the role requirements</div>
+            </li>
+            <li class="timeline-step">
+              <div class="step-title">Preliminary Interview</div>
+              <div class="step-description">A brief conversation to discuss your
+                background and interest in the role</div>
+            </li>
+            <li class="timeline-step">
+              <div class="step-title">Technical Assessment (where applicable)</div>
+              <div class="step-description">A skills evaluation relevant to the
+                position</div>
+            </li>
+            <li class="timeline-step">
+              <div class="step-title">Final Interview Round (shortlisted
+                candidates)</div>
+              <div class="step-description">An in-depth discussion with
+                department leaders and potential team members</div>
+            </li>
+            <li class="timeline-step">
+              <div class="step-title">Final Decision</div>
+              <div class="step-description">Offer extended to the selected
+                candidate</div>
+            </li>
+          </ul>
+        </div>
+
+        <p>We aim to complete the initial review process within two weeks of
+          your application date. If your qualifications align with our current
+          needs, a member of our talent acquisition team will reach out to
+          schedule the next steps.</p>
+
+        <div class="contact-info">
+          <div class="contact-title">📞 Need Immediate Assistance?</div>
+          <p>If you have any questions about your application or the hiring
+            process, please contact our talent team at
+            <strong>careers@medh.co</strong>. Please reference your application
+            ID in all communications.</p>
+          <p><strong>Phone:</strong> +91 77108 40696</p>
+        </div>
+
+        <p>🌟
+          <strong>Explore Medh Further:</strong>
+          While you wait, we encourage you to learn more about our mission,
+          vision, and the impact we're making in the education space:</p>
+        <ul style="margin: 15px 0; padding-left: 20px;">
+          <li>Visit our website:
+            <a
+              href="https://www.medh.co"
+              style="color: #667eea;"
+            >www.medh.co</a></li>
+          <li>Follow us on
+            <a
+              href="https://www.linkedin.com/company/medh"
+              style="color: #667eea;"
+            >LinkedIn</a></li>
+          <li>Explore our blog for insights into our teaching methodology and
+            educational philosophy</li>
+        </ul>
+
+        <p>We appreciate your patience during our selection process and thank
+          you for your interest in contributing to Medh's mission of empowering
+          learners through quality skill development.</p>
+
+        <p style="margin-top: 30px;">
+          <strong>Best regards,</strong><br />
+          HR & Talent Acquisition Team<br />
+          <strong>MEDH Learning Platform</strong>
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <div class="footer-logo">MEDH</div>
+        <div>Empowering the next generation of learners</div>
+
+        <div class="footer-links">
+          <a href="https://www.medh.co/privacy-policy">Privacy Policy</a>
+          |
+          <a href="https://www.medh.co/terms-of-service">Terms of Service</a>
+          |
+          <a href="mailto:careers@medh.co">Contact HR</a>
+        </div>
+
+        <div class="disclaimer">
+          <p>&copy;
+            {{currentYear}}
+            MEDH Learning Platform. All rights reserved.</p>
+          <p style="margin-top: 10px;">This email confirms receipt of your job
+            application. Our team will be in touch within 2 business days if
+            your profile matches our requirements.</p>
+          <p style="margin-top: 10px;">
+            <strong>MEDH Learning Platform</strong><br />
+            📧 careers@medh.co | 📞 +91 77108 40696<br />
+            🌐
+            <a
+              href="https://www.medh.co"
+              style="color: #667eea;"
+            >www.medh.co</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -193,7 +193,6 @@ const demoFeedbackSchema = new mongoose.Schema(
       type: String,
       enum: ["pending", "reviewed", "responded", "archived"],
       default: "pending",
-      index: true,
     },
     
     // Internal notes for team

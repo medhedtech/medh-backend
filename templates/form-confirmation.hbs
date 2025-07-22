@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Form Submission Confirmation - Medh Learning Platform</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .email-wrapper {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 650px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #4a6cf7 0%, #667eea 100%);
+      color: white;
+      padding: 40px 30px;
+      text-align: center;
+      position: relative;
+    }
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><defs><radialGradient id="a" cx=".66" cy=".30" r=".7"><stop offset="0" stop-color="%23ffffff" stop-opacity=".2"/><stop offset=".5" stop-color="%23ffffff" stop-opacity=".05"/><stop offset="1" stop-color="%23ffffff" stop-opacity="0"/></radialGradient></defs><rect width="100" height="20" fill="url(%23a)"/></svg>');
+      opacity: 0.3;
+    }
+    .header-content {
+      position: relative;
+      z-index: 1;
+    }
+    .logo {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      letter-spacing: -0.5px;
+    }
+    .header-subtitle {
+      font-size: 16px;
+      opacity: 0.9;
+      font-weight: 300;
+    }
+    .success-icon {
+      font-size: 48px;
+      margin: 20px 0 10px;
+      display: block;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .confirmation-section {
+      background: linear-gradient(135deg, #e8f5e8 0%, #f0fff0 100%);
+      border: 2px solid #4caf50;
+      border-radius: 12px;
+      padding: 25px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+    .confirmation-title {
+      color: #2e7d32;
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0 0 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .confirmation-message {
+      color: #388e3c;
+      font-size: 16px;
+      margin: 0;
+      line-height: 1.5;
+    }
+    .form-details {
+      background: #f8fafc;
+      border-radius: 12px;
+      padding: 25px;
+      margin: 30px 0;
+    }
+    .details-header {
+      color: #2d3748;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 15px;
+    }
+    .detail-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 15px;
+      background: white;
+      border-radius: 8px;
+      border-left: 4px solid #4a6cf7;
+    }
+    .detail-label {
+      font-weight: 600;
+      color: #4a5568;
+      font-size: 14px;
+    }
+    .detail-value {
+      font-weight: 500;
+      color: #2d3748;
+      text-align: right;
+      max-width: 60%;
+      word-break: break-word;
+    }
+    .message-preview {
+      background: #fff5f5;
+      border-left: 4px solid #fc8181;
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+    .message-preview h4 {
+      margin: 0 0 10px;
+      color: #c53030;
+      font-size: 16px;
+    }
+    .message-preview p {
+      margin: 0;
+      color: #744210;
+      font-style: italic;
+      line-height: 1.4;
+    }
+    .next-steps {
+      background: linear-gradient(135deg, #e6f3ff 0%, #f0f8ff 100%);
+      border-radius: 12px;
+      padding: 25px;
+      margin: 30px 0;
+    }
+    .next-steps h3 {
+      color: #1e40af;
+      margin: 0 0 15px;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .next-steps ul {
+      margin: 0;
+      padding-left: 20px;
+      color: #1e3a8a;
+    }
+    .next-steps li {
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      margin: 30px 0;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 28px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 16px;
+      text-align: center;
+      transition: all 0.3s ease;
+      min-width: 150px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #4a6cf7 0%, #667eea 100%);
+      color: white;
+      border: 2px solid transparent;
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #3b5cf0 0%, #5a67d8 100%);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(74, 108, 247, 0.3);
+    }
+    .btn-secondary {
+      background: white;
+      color: #4a6cf7;
+      border: 2px solid #4a6cf7;
+    }
+    .btn-secondary:hover {
+      background: #4a6cf7;
+      color: white;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(74, 108, 247, 0.2);
+    }
+    .footer {
+      background: #f7fafc;
+      padding: 30px;
+      text-align: center;
+      border-top: 1px solid #e2e8f0;
+    }
+    .footer p {
+      margin: 0 0 10px;
+      color: #718096;
+      font-size: 14px;
+    }
+    .footer a {
+      color: #4a6cf7;
+      text-decoration: none;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    .social-links {
+      margin: 20px 0;
+    }
+    .social-links a {
+      display: inline-block;
+      margin: 0 10px;
+      color: #718096;
+      font-size: 18px;
+      text-decoration: none;
+      transition: color 0.3s ease;
+    }
+    .social-links a:hover {
+      color: #4a6cf7;
+    }
+    @media (max-width: 600px) {
+      .email-wrapper {
+        padding: 20px 10px;
+      }
+      .container {
+        border-radius: 8px;
+      }
+      .header, .content {
+        padding: 30px 20px;
+      }
+      .action-buttons {
+        flex-direction: column;
+        align-items: center;
+      }
+      .btn {
+        min-width: auto;
+        width: 100%;
+        max-width: 280px;
+      }
+      .detail-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+      }
+      .detail-value {
+        text-align: left;
+        max-width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-wrapper">
+    <div class="container">
+      <div class="header">
+        <div class="header-content">
+          <div class="logo">📚 Medh Learning Platform</div>
+          <div class="header-subtitle">Form Submission Confirmation</div>
+          <div class="success-icon">✅</div>
+        </div>
+      </div>
+      
+      <div class="content">
+        <div class="confirmation-section">
+          <div class="confirmation-title">
+            <span>🎉</span>
+            Form Submitted Successfully!
+          </div>
+          <div class="confirmation-message">
+            Thank you for submitting your {{form_type}} form. We have received your information and will get back to you soon.
+          </div>
+        </div>
+
+        <div class="form-details">
+          <div class="details-header">
+            <span>📋</span>
+            Submission Details
+          </div>
+          <div class="details-grid">
+            <div class="detail-item">
+              <div class="detail-label">Form ID</div>
+              <div class="detail-value">{{form_id}}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Form Type</div>
+              <div class="detail-value">{{form_type}}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Name</div>
+              <div class="detail-value">{{name}}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">Submitted On</div>
+              <div class="detail-value">{{formatDate submitted_at "full"}}</div>
+            </div>
+          </div>
+        </div>
+
+        {{#if message}}
+        <div class="message-preview">
+          <h4>📝 Your Message Preview</h4>
+          <p>"{{message}}"</p>
+        </div>
+        {{/if}}
+
+        <div class="next-steps">
+          <h3>
+            <span>🚀</span>
+            What Happens Next?
+          </h3>
+          <ul>
+            <li>Our team will review your submission within 24-48 hours</li>
+            <li>You'll receive a follow-up email with next steps</li>
+            <li>For urgent inquiries, you can contact us directly</li>
+            <li>Keep this email for your records</li>
+          </ul>
+        </div>
+
+        <div class="action-buttons">
+          <a href="{{dashboard_url}}" class="btn btn-primary">Go to Dashboard</a>
+          <a href="{{contact_url}}" class="btn btn-secondary">Contact Support</a>
+        </div>
+
+        <p style="margin-top: 30px; padding: 20px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #4a6cf7;">
+          <strong>💡 Need Help?</strong> If you have any questions about your submission or need immediate assistance, please don't hesitate to contact our support team at <a href="mailto:support@medh.co" style="color: #4a6cf7;">support@medh.co</a>
+        </p>
+      </div>
+      
+      <div class="footer">
+        <p><strong>Medh Learning Platform</strong></p>
+        <p>Empowering the next generation of learners</p>
+        
+        <div class="social-links">
+          <a href="#" title="Facebook">📘</a>
+          <a href="#" title="Twitter">🐦</a>
+          <a href="#" title="LinkedIn">💼</a>
+          <a href="#" title="Instagram">📸</a>
+        </div>
+        
+        <p>
+          <a href="{{privacy_url}}">Privacy Policy</a> | 
+          <a href="{{terms_url}}">Terms of Service</a> | 
+          <a href="{{unsubscribe_url}}">Unsubscribe</a>
+        </p>
+        
+        <p>&copy; {{currentYear}} Medh Learning Platform. All rights reserved.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html> 

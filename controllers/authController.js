@@ -3643,29 +3643,35 @@ class AuthController {
         .default;
 
       const loginDetails = {
-        Device: deviceInfo.device_name || "Unknown Device",
-        Browser: deviceInfo.browser || "Unknown Browser",
-        "Operating System": deviceInfo.operating_system || "Unknown OS",
-        Location: `${locationInfo.city || "Unknown"}, ${locationInfo.country || "Unknown"}`,
-        "IP Address": deviceInfo.ip_address || "Unknown",
         "Login Time": new Date().toLocaleString("en-US", {
           timeZone: user.preferences?.timezone || "UTC",
           dateStyle: "full",
           timeStyle: "medium",
         }),
+        Device: deviceInfo.device_name || "Unknown Device",
+        Browser: deviceInfo.browser || "Unknown Browser",
+        "Operating System": deviceInfo.operating_system || "Unknown OS",
+        Location: `${locationInfo.city || "Unknown"}, ${locationInfo.country || "Unknown"}`,
+        "IP Address": deviceInfo.ip_address || "Unknown",
       };
 
-      await emailService.sendNotificationEmail(
+      // Use the dedicated login notification email method
+      await emailService.sendLoginNotificationEmail(
         user.email,
-        "🔐 New Login Detected - Medh Learning Platform",
-        `Hello ${user.full_name}, we detected a new login to your Medh Learning Platform account. If this was you, you can safely ignore this email. If you don't recognize this activity, please secure your account immediately.`,
+        user.full_name,
+        loginDetails,
         {
-          user_name: user.full_name,
-          email: user.email,
-          details: loginDetails,
+          isNewDevice: this.isNewDevice(user, deviceInfo),
           actionUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/security`,
-          actionText: "Review Account Security",
-          currentYear: new Date().getFullYear(),
+          logoutAllUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/logout-all-devices`,
+          recentActivity: {
+            total_logins: user.statistics?.engagement?.total_logins || 0,
+            unique_locations: user.sessions?.length || 0,
+            unique_devices: user.devices?.length || 0,
+            last_login: user.last_login
+              ? user.last_login.toLocaleDateString()
+              : "First login",
+          },
         },
       );
 
@@ -6212,7 +6218,13 @@ class AuthController {
    */
   async handleFrontendOAuth(req, res) {
     try {
-      const { provider, token, code, userInfo } = req.body;
+      const {
+        provider,
+        token,
+        code,
+        userInfo,
+        generate_quick_login_key = false,
+      } = req.body;
 
       // Validate required fields
       if (!provider || (!token && !code && !userInfo)) {
@@ -6253,10 +6265,15 @@ class AuthController {
           userData.email_verified || userData.verified_email || true,
       };
 
-      // Use existing OAuth handler logic
-      const { handleOAuthCallback } = await import(
-        "../config/passport-config.js"
-      );
+      // Check if this is a new user
+      const existingUser = await User.findOne({
+        $or: [
+          { [`oauth.${provider}.id`]: normalizedUserInfo.id },
+          { email: normalizedUserInfo.email.toLowerCase() },
+        ],
+      });
+      const isNewUser = !existingUser;
+
       // Find or create user with OAuth data
       const user = await this.findOrCreateOAuthUser(
         provider,
@@ -6269,6 +6286,120 @@ class AuthController {
           message: "OAuth authentication failed",
           error: "Failed to create or find user",
         });
+      }
+
+      // Extract device and location info for tracking
+      const deviceInfo = this.extractDeviceInfo(req);
+      const locationInfo = this.extractLocationInfo(req);
+
+      // Create session for OAuth login
+      const sessionId = crypto.randomBytes(32).toString("hex");
+      const sessionData = {
+        session_id: sessionId,
+        device_id: deviceInfo.device_id,
+        ip_address: deviceInfo.ip_address,
+        user_agent: req.headers["user-agent"],
+        geolocation: locationInfo,
+      };
+
+      await user.createSession(sessionData);
+
+      // Update user login statistics
+      user.last_login = new Date();
+      user.last_seen = new Date();
+      user.is_online = true;
+      user.statistics.engagement.total_logins += 1;
+      user.statistics.engagement.last_active_date = new Date();
+
+      // Calculate login streak
+      const lastLogin = user.last_login;
+      const now = new Date();
+      const daysDiff = Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24));
+
+      if (daysDiff === 1) {
+        user.statistics.learning.current_streak += 1;
+        user.statistics.learning.longest_streak = Math.max(
+          user.statistics.learning.longest_streak,
+          user.statistics.learning.current_streak,
+        );
+      } else if (daysDiff > 1) {
+        user.statistics.learning.current_streak = 1;
+      }
+
+      // Generate quick login key if requested
+      let quickLoginKey = null;
+      if (generate_quick_login_key) {
+        const newQuickLoginKey = crypto.randomBytes(32).toString("hex");
+        const hashedQuickLoginKey = bcrypt.hashSync(newQuickLoginKey, 10);
+        const keyId = crypto.randomBytes(16).toString("hex");
+
+        if (!user.quick_login_keys) {
+          user.quick_login_keys = [];
+        }
+
+        user.quick_login_keys.push({
+          key_id: keyId,
+          hashed_key: hashedQuickLoginKey,
+          created_at: new Date(),
+          last_used: new Date(),
+        });
+
+        quickLoginKey = newQuickLoginKey;
+      }
+
+      await user.save();
+
+      // Log OAuth login activity
+      await user.logActivity(
+        "oauth_login",
+        null,
+        {
+          provider,
+          login_method: `oauth_${provider}`,
+          session_id: sessionId,
+          is_new_user: isNewUser,
+        },
+        {
+          ip_address: deviceInfo.ip_address,
+          device_type: deviceInfo.device_type,
+          browser: deviceInfo.browser,
+          operating_system: deviceInfo.operating_system,
+          geolocation: locationInfo,
+        },
+      );
+
+      // Send welcome email for new OAuth users
+      if (isNewUser) {
+        try {
+          const emailService = (await import("../services/emailService.js"))
+            .default;
+          await emailService.sendWelcomeEmail(user.email, user.full_name, {
+            registrationMethod: `OAuth (${provider})`,
+            provider: provider.charAt(0).toUpperCase() + provider.slice(1),
+            oauthLogin: true,
+          });
+          logger.info(`Welcome email sent to new OAuth user: ${user.email}`);
+        } catch (emailError) {
+          logger.error(
+            "Failed to send welcome email to OAuth user:",
+            emailError,
+          );
+        }
+      } else {
+        // Send login notification for existing users if from new device
+        if (this.isNewDevice(user, deviceInfo)) {
+          try {
+            this.sendLoginNotification(user, deviceInfo, locationInfo);
+            logger.info(
+              `Login notification sent for OAuth login: ${user.email}`,
+            );
+          } catch (emailError) {
+            logger.error(
+              "Failed to send OAuth login notification:",
+              emailError,
+            );
+          }
+        }
       }
 
       // Generate JWT token
@@ -6332,6 +6463,7 @@ class AuthController {
             last_login: user.last_login,
             profile_completion: profileCompletion,
             oauth_providers: user.oauth ? Object.keys(user.oauth) : [],
+            is_new_user: isNewUser,
           },
           tokens: {
             access_token: accessToken,
@@ -6339,6 +6471,8 @@ class AuthController {
             token_type: "Bearer",
             expires_in: process.env.JWT_EXPIRES_IN || "24h",
           },
+          quick_login_key: quickLoginKey,
+          session_id: sessionId,
         },
       });
     } catch (error) {
@@ -6722,6 +6856,26 @@ class AuthController {
           },
         },
 
+        // Enhanced statistics
+        statistics: {
+          engagement: {
+            total_logins: 1,
+            total_session_time: 0,
+            last_active_date: new Date(),
+            registration_date: new Date(),
+          },
+          learning: {
+            current_streak: 0,
+            longest_streak: 0,
+            courses_enrolled: 0,
+            certificates_earned: 0,
+          },
+          social: {
+            oauth_providers: [provider],
+            profile_completion: 60,
+          },
+        },
+
         // Metadata
         meta: {
           registration_method: `oauth_${provider}`,
@@ -6755,10 +6909,576 @@ class AuthController {
       );
 
       await user.save();
+
+      // Send welcome email for new OAuth user
+      try {
+        const emailService = (await import("../services/emailService.js"))
+          .default;
+        await emailService.sendWelcomeEmail(user.email, user.full_name, {
+          registrationMethod: `OAuth (${provider})`,
+          provider: provider.charAt(0).toUpperCase() + provider.slice(1),
+          oauthLogin: true,
+          studentId: user.student_id,
+        });
+        logger.info(`Welcome email sent to new OAuth user: ${user.email}`);
+      } catch (emailError) {
+        logger.error(
+          "Failed to send welcome email to new OAuth user:",
+          emailError,
+        );
+        // Don't throw error - user creation should succeed even if email fails
+      }
+
+      logger.info(`Created new OAuth user: ${user.email}`);
       return user;
     } catch (error) {
       logger.error("Error creating OAuth user:", error);
       throw error;
+    }
+  }
+
+  /**
+   * Refresh OAuth tokens automatically
+   * @param {Object} user - User object
+   * @param {String} provider - OAuth provider
+   * @returns {Promise<Object>} Updated user with fresh tokens
+   */
+  async refreshOAuthTokens(user, provider) {
+    try {
+      if (
+        !user.oauth ||
+        !user.oauth[provider] ||
+        !user.oauth[provider].refresh_token
+      ) {
+        throw new Error(`No refresh token available for ${provider}`);
+      }
+
+      const refreshToken = user.oauth[provider].refresh_token;
+      let tokenData;
+
+      switch (provider) {
+        case "google":
+          tokenData = await this.refreshGoogleToken(refreshToken);
+          break;
+        case "facebook":
+          tokenData = await this.refreshFacebookToken(refreshToken);
+          break;
+        case "github":
+          tokenData = await this.refreshGitHubToken(refreshToken);
+          break;
+        default:
+          throw new Error(`Token refresh not implemented for ${provider}`);
+      }
+
+      // Update user's OAuth tokens
+      user.oauth[provider].access_token = tokenData.access_token;
+      if (tokenData.refresh_token) {
+        user.oauth[provider].refresh_token = tokenData.refresh_token;
+      }
+      user.oauth[provider].last_refresh = new Date();
+      user.oauth[provider].expires_at = new Date(
+        Date.now() + tokenData.expires_in * 1000,
+      );
+
+      await user.save();
+      logger.info(
+        `OAuth tokens refreshed successfully for ${provider}: ${user.email}`,
+      );
+      return user;
+    } catch (error) {
+      logger.error(
+        `Failed to refresh ${provider} tokens for user ${user.email}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Refresh Google OAuth token
+   */
+  async refreshGoogleToken(refreshToken) {
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        refresh_token: refreshToken,
+        grant_type: "refresh_token",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Google token refresh failed: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Refresh Facebook OAuth token
+   */
+  async refreshFacebookToken(refreshToken) {
+    const response = await fetch(
+      `https://graph.facebook.com/v18.0/oauth/access_token`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        params: new URLSearchParams({
+          grant_type: "fb_exchange_token",
+          client_id: process.env.FACEBOOK_CLIENT_ID,
+          client_secret: process.env.FACEBOOK_CLIENT_SECRET,
+          fb_exchange_token: refreshToken,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`Facebook token refresh failed: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Refresh GitHub OAuth token
+   */
+  async refreshGitHubToken(refreshToken) {
+    const response = await fetch(
+      "https://github.com/login/oauth/access_token",
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          client_id: process.env.GITHUB_CLIENT_ID,
+          client_secret: process.env.GITHUB_CLIENT_SECRET,
+          refresh_token: refreshToken,
+          grant_type: "refresh_token",
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`GitHub token refresh failed: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Check if OAuth tokens need refresh and refresh if necessary
+   * @param {Object} user - User object
+   * @param {String} provider - OAuth provider
+   * @returns {Promise<Object>} User with refreshed tokens if needed
+   */
+  async ensureValidOAuthTokens(user, provider) {
+    try {
+      if (!user.oauth || !user.oauth[provider]) {
+        return user;
+      }
+
+      const oauthData = user.oauth[provider];
+      const now = new Date();
+
+      // Check if token expires within next 5 minutes
+      if (
+        oauthData.expires_at &&
+        oauthData.expires_at <= new Date(now.getTime() + 5 * 60 * 1000)
+      ) {
+        logger.info(`OAuth token for ${provider} expires soon, refreshing...`);
+        return await this.refreshOAuthTokens(user, provider);
+      }
+
+      return user;
+    } catch (error) {
+      logger.error(
+        `Error checking OAuth token validity for ${provider}:`,
+        error,
+      );
+      return user; // Return user unchanged if refresh fails
+    }
+  }
+
+  /**
+   * Link additional OAuth provider to existing user account
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async linkAdditionalOAuthProvider(req, res) {
+    try {
+      const { provider, token, code, userInfo } = req.body;
+      const userId = req.user.id;
+
+      // Validate provider
+      const validProviders = [
+        "google",
+        "facebook",
+        "github",
+        "linkedin",
+        "microsoft",
+        "apple",
+      ];
+      if (!validProviders.includes(provider)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid OAuth provider",
+        });
+      }
+
+      // Get current user
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Check if provider is already linked
+      if (user.oauth && user.oauth[provider]) {
+        return res.status(409).json({
+          success: false,
+          message: `${provider} account is already linked to this user`,
+          data: {
+            provider,
+            connected_at: user.oauth[provider].connected_at,
+            last_login: user.oauth[provider].last_login,
+          },
+        });
+      }
+
+      // Verify OAuth token/code
+      let userData;
+      if (userInfo) {
+        userData = userInfo;
+      } else {
+        userData = await this.verifyOAuthToken(provider, token, code);
+      }
+
+      if (!userData || !userData.email) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid OAuth data or missing email",
+        });
+      }
+
+      // Normalize user data
+      const normalizedUserInfo = {
+        id: userData.id || userData.sub,
+        email: userData.email.toLowerCase(),
+        full_name:
+          userData.name ||
+          `${userData.given_name} ${userData.family_name}`.trim(),
+        profile_picture: userData.picture || userData.avatar_url,
+        email_verified:
+          userData.email_verified || userData.verified_email || true,
+      };
+
+      // Check if this OAuth account is already linked to another user
+      const existingOAuthUser = await User.findOne({
+        [`oauth.${provider}.id`]: normalizedUserInfo.id,
+        _id: { $ne: userId },
+      });
+
+      if (existingOAuthUser) {
+        return res.status(409).json({
+          success: false,
+          message: `This ${provider} account is already linked to another user`,
+          error: "OAUTH_ACCOUNT_ALREADY_LINKED",
+        });
+      }
+
+      // Initialize oauth object if it doesn't exist
+      if (!user.oauth) {
+        user.oauth = {};
+      }
+
+      // Link the OAuth provider
+      user.oauth[provider] = {
+        id: normalizedUserInfo.id,
+        profile: normalizedUserInfo,
+        connected_at: new Date(),
+        last_login: new Date(),
+      };
+
+      // Update user statistics
+      if (!user.statistics.social.oauth_providers) {
+        user.statistics.social.oauth_providers = [];
+      }
+      if (!user.statistics.social.oauth_providers.includes(provider)) {
+        user.statistics.social.oauth_providers.push(provider);
+      }
+
+      await user.save();
+
+      // Log the linking activity
+      await user.logActivity(
+        "oauth_provider_linked",
+        null,
+        {
+          provider,
+          oauth_id: normalizedUserInfo.id,
+          total_providers: Object.keys(user.oauth).length,
+        },
+        {
+          ip_address: this.extractDeviceInfo(req).ip_address,
+          user_agent: req.headers["user-agent"],
+          device_type: "web",
+        },
+      );
+
+      // Send confirmation email
+      try {
+        const emailService = (await import("../services/emailService.js"))
+          .default;
+        await emailService.sendNotificationEmail(
+          user.email,
+          `${provider.charAt(0).toUpperCase() + provider.slice(1)} Account Linked Successfully`,
+          `Your ${provider} account has been successfully linked to your Medh Learning Platform account.`,
+          {
+            user_name: user.full_name,
+            details: {
+              Provider: provider.charAt(0).toUpperCase() + provider.slice(1),
+              "Linked At": new Date().toLocaleString(),
+              "Account Email": normalizedUserInfo.email,
+              "Total Linked Providers": Object.keys(user.oauth).length,
+            },
+            actionUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/settings/connected-accounts`,
+            actionText: "Manage Connected Accounts",
+          },
+        );
+      } catch (emailError) {
+        logger.error(
+          "Failed to send OAuth linking confirmation email:",
+          emailError,
+        );
+      }
+
+      logger.info(
+        `OAuth provider ${provider} linked successfully for user: ${user.email}`,
+      );
+
+      res.status(200).json({
+        success: true,
+        message: `${provider} account linked successfully`,
+        data: {
+          provider,
+          linked_at: user.oauth[provider].connected_at,
+          total_linked_providers: Object.keys(user.oauth).length,
+          connected_providers: Object.keys(user.oauth),
+        },
+      });
+    } catch (error) {
+      logger.error("OAuth provider linking error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to link OAuth provider",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Unlink OAuth provider from user account
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async unlinkOAuthProvider(req, res) {
+    try {
+      const { provider } = req.params;
+      const userId = req.user.id;
+
+      // Validate provider
+      const validProviders = [
+        "google",
+        "facebook",
+        "github",
+        "linkedin",
+        "microsoft",
+        "apple",
+      ];
+      if (!validProviders.includes(provider)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid OAuth provider",
+        });
+      }
+
+      // Get current user
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      // Check if provider is linked
+      if (!user.oauth || !user.oauth[provider]) {
+        return res.status(404).json({
+          success: false,
+          message: `${provider} account is not linked to this user`,
+        });
+      }
+
+      // Check if this is the only login method
+      const hasPassword = user.password_set;
+      const linkedProviders = Object.keys(user.oauth || {});
+
+      if (!hasPassword && linkedProviders.length === 1) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Cannot unlink the only authentication method. Please set a password first.",
+          error: "LAST_AUTH_METHOD",
+        });
+      }
+
+      // Store provider info before unlinking
+      const providerInfo = { ...user.oauth[provider] };
+
+      // Remove the OAuth provider
+      delete user.oauth[provider];
+
+      // Update statistics
+      if (user.statistics.social.oauth_providers) {
+        user.statistics.social.oauth_providers =
+          user.statistics.social.oauth_providers.filter((p) => p !== provider);
+      }
+
+      await user.save();
+
+      // Log the unlinking activity
+      await user.logActivity(
+        "oauth_provider_unlinked",
+        null,
+        {
+          provider,
+          unlinked_at: new Date(),
+          remaining_providers: Object.keys(user.oauth || {}),
+        },
+        {
+          ip_address: this.extractDeviceInfo(req).ip_address,
+          user_agent: req.headers["user-agent"],
+          device_type: "web",
+        },
+      );
+
+      // Send confirmation email
+      try {
+        const emailService = (await import("../services/emailService.js"))
+          .default;
+        await emailService.sendNotificationEmail(
+          user.email,
+          `${provider.charAt(0).toUpperCase() + provider.slice(1)} Account Unlinked`,
+          `Your ${provider} account has been unlinked from your Medh Learning Platform account.`,
+          {
+            user_name: user.full_name,
+            details: {
+              Provider: provider.charAt(0).toUpperCase() + provider.slice(1),
+              "Unlinked At": new Date().toLocaleString(),
+              "Remaining Providers": Object.keys(user.oauth || {}).length,
+            },
+            actionUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/settings/connected-accounts`,
+            actionText: "Manage Connected Accounts",
+          },
+        );
+      } catch (emailError) {
+        logger.error(
+          "Failed to send OAuth unlinking confirmation email:",
+          emailError,
+        );
+      }
+
+      logger.info(
+        `OAuth provider ${provider} unlinked successfully for user: ${user.email}`,
+      );
+
+      res.status(200).json({
+        success: true,
+        message: `${provider} account unlinked successfully`,
+        data: {
+          provider,
+          unlinked_at: new Date(),
+          remaining_providers: Object.keys(user.oauth || {}),
+          total_linked_providers: Object.keys(user.oauth || {}).length,
+        },
+      });
+    } catch (error) {
+      logger.error("OAuth provider unlinking error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to unlink OAuth provider",
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Get connected OAuth providers for user
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  async getConnectedOAuthProviders(req, res) {
+    try {
+      const userId = req.user.id;
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const connectedProviders = [];
+      const availableProviders = [
+        "google",
+        "facebook",
+        "github",
+        "linkedin",
+        "microsoft",
+        "apple",
+      ];
+
+      availableProviders.forEach((provider) => {
+        const isConnected = user.oauth && user.oauth[provider];
+        connectedProviders.push({
+          provider,
+          name: provider.charAt(0).toUpperCase() + provider.slice(1),
+          connected: !!isConnected,
+          connected_at: isConnected ? user.oauth[provider].connected_at : null,
+          last_login: isConnected ? user.oauth[provider].last_login : null,
+          profile_email: isConnected
+            ? user.oauth[provider].profile?.email
+            : null,
+        });
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          connected_providers: connectedProviders,
+          total_connected: connectedProviders.filter((p) => p.connected).length,
+          has_password: user.password_set,
+          can_unlink_all: user.password_set, // Can only unlink all if password is set
+        },
+      });
+    } catch (error) {
+      logger.error("Get connected OAuth providers error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to get connected providers",
+        error: error.message,
+      });
     }
   }
 }

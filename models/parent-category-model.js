@@ -69,7 +69,7 @@ const parentCategorySchema = new mongoose.Schema(
 );
 
 // Indexes for better performance
-parentCategorySchema.index({ name: 1 });
+// Note: name index already created via unique: true in schema
 parentCategorySchema.index({ isActive: 1 });
 parentCategorySchema.index({ sortOrder: 1 });
 

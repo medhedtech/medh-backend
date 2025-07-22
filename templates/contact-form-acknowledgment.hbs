@@ -1,0 +1,477 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Message Received - MEDH</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background-color: #f8fafc;
+      }
+
+      .email-container {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .logo {
+        font-size: 28px;
+        font-weight: bold;
+        margin-bottom: 8px;
+      }
+
+      .header-subtitle {
+        font-size: 16px;
+        opacity: 0.9;
+      }
+
+      .content {
+        padding: 40px 30px;
+      }
+
+      .greeting {
+        font-size: 20px;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 20px;
+      }
+
+      .reference-box {
+        background: linear-gradient(135deg, #e6fffa 0%, #f0fff4 100%);
+        border: 2px solid #48bb78;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 25px 0;
+        text-align: center;
+      }
+
+      .reference-label {
+        font-size: 14px;
+        font-weight: 600;
+        color: #38a169;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+      }
+
+      .reference-id {
+        font-size: 24px;
+        font-weight: bold;
+        color: #2f855a;
+        font-family: "Courier New", monospace;
+        letter-spacing: 1px;
+      }
+
+      .message-summary {
+        background-color: #f7fafc;
+        border-left: 4px solid #667eea;
+        padding: 20px;
+        margin: 25px 0;
+        border-radius: 0 8px 8px 0;
+      }
+
+      .summary-title {
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 12px;
+        font-size: 16px;
+      }
+
+      .summary-item {
+        margin-bottom: 8px;
+        display: flex;
+        align-items: flex-start;
+      }
+
+      .summary-label {
+        font-weight: 600;
+        color: #4a5568;
+        min-width: 80px;
+        margin-right: 12px;
+      }
+
+      .summary-value {
+        color: #2d3748;
+        flex: 1;
+      }
+
+      .next-steps {
+        background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+        border-radius: 8px;
+        padding: 25px;
+        margin: 25px 0;
+        border-left: 4px solid #f56565;
+      }
+
+      .steps-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #c53030;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+      }
+
+      .steps-icon {
+        margin-right: 10px;
+        font-size: 20px;
+      }
+
+      .step-item {
+        margin-bottom: 12px;
+        padding-left: 20px;
+        position: relative;
+      }
+
+      .step-item::before {
+        content: "✓";
+        position: absolute;
+        left: 0;
+        color: #38a169;
+        font-weight: bold;
+      }
+
+      .cta-section {
+        text-align: center;
+        margin: 30px 0;
+      }
+
+      .cta-button {
+        display: inline-block;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px 30px;
+        text-decoration: none;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+      }
+
+      .cta-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+      }
+
+      .response-time {
+        background-color: #edf2f7;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 25px 0;
+        text-align: center;
+      }
+
+      .response-icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+      }
+
+      .response-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 8px;
+      }
+
+      .response-subtitle {
+        color: #718096;
+        font-size: 14px;
+      }
+
+      .contact-info {
+        background-color: #f7fafc;
+        border-radius: 8px;
+        padding: 25px;
+        margin: 25px 0;
+      }
+
+      .contact-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 15px;
+        text-align: center;
+      }
+
+      .contact-methods {
+        display: flex;
+        justify-content: space-around;
+        flex-wrap: wrap;
+      }
+
+      .contact-method {
+        text-align: center;
+        margin: 10px;
+        flex: 1;
+        min-width: 150px;
+      }
+
+      .contact-icon {
+        font-size: 24px;
+        margin-bottom: 8px;
+        color: #667eea;
+      }
+
+      .contact-label {
+        font-weight: 600;
+        color: #4a5568;
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
+
+      .contact-value {
+        color: #2d3748;
+        font-size: 14px;
+      }
+
+      .footer {
+        background-color: #2d3748;
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .footer-logo {
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 15px;
+      }
+
+      .footer-links {
+        margin: 20px 0;
+      }
+
+      .footer-link {
+        color: #a0aec0;
+        text-decoration: none;
+        margin: 0 15px;
+        font-size: 14px;
+      }
+
+      .footer-link:hover {
+        color: white;
+      }
+
+      .social-links {
+        margin: 20px 0;
+      }
+
+      .social-link {
+        display: inline-block;
+        margin: 0 10px;
+        color: #a0aec0;
+        font-size: 20px;
+        text-decoration: none;
+      }
+
+      .social-link:hover {
+        color: white;
+      }
+
+      .footer-text {
+        font-size: 12px;
+        color: #a0aec0;
+        margin-top: 20px;
+        line-height: 1.5;
+      }
+
+      .divider {
+        height: 1px;
+        background: linear-gradient(90deg, transparent, #e2e8f0, transparent);
+        margin: 30px 0;
+      }
+
+      @media (max-width: 600px) {
+        .email-container {
+          margin: 10px;
+          border-radius: 0;
+        }
+
+        .content {
+          padding: 20px;
+        }
+
+        .header {
+          padding: 20px;
+        }
+
+        .contact-methods {
+          flex-direction: column;
+        }
+
+        .contact-method {
+          margin: 15px 0;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="email-container">
+      <!-- Header -->
+      <div class="header">
+        <div class="logo">MEDH</div>
+        <div class="header-subtitle">Message Received Successfully</div>
+      </div>
+
+      <!-- Content -->
+      <div class="content">
+        <div class="greeting">Hello {{name}}! 👋</div>
+
+        <p>Thank you for reaching out to us. We have successfully received your
+          message and wanted to confirm that it's now in our system.</p>
+
+        <!-- Reference ID Box -->
+        <div class="reference-box">
+          <div class="reference-label">Your Reference ID</div>
+          <div class="reference-id">{{reference_id}}</div>
+        </div>
+
+        <!-- Message Summary -->
+        <div class="message-summary">
+          <div class="summary-title">📋 Message Summary</div>
+          <div class="summary-item">
+            <span class="summary-label">Subject:</span>
+            <span class="summary-value">{{subject}}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Date:</span>
+            <span class="summary-value">{{inquiry_date}}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Email:</span>
+            <span class="summary-value">{{email}}</span>
+          </div>
+          {{#if phone}}
+            <div class="summary-item">
+              <span class="summary-label">Phone:</span>
+              <span class="summary-value">{{phone}}</span>
+            </div>
+          {{/if}}
+          <div class="summary-item">
+            <span class="summary-label">Message:</span>
+            <span class="summary-value">{{message_preview}}</span>
+          </div>
+        </div>
+
+        <!-- Response Time -->
+        <div class="response-time">
+          <div class="response-icon">⏰</div>
+          <div class="response-title">Expected Response Time</div>
+          <div class="response-subtitle">We typically respond within 24-48 hours
+            during business days</div>
+        </div>
+
+        <!-- Next Steps -->
+        <div class="next-steps">
+          <div class="steps-title">
+            <span class="steps-icon">🚀</span>
+            What Happens Next?
+          </div>
+          <div class="step-item">Our team will review your message carefully</div>
+          <div class="step-item">We'll prepare a personalized response</div>
+          <div class="step-item">You'll receive our reply via email</div>
+          <div class="step-item">We may follow up with additional questions if
+            needed</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Contact Information -->
+        <div class="contact-info">
+          <div class="contact-title">Need Immediate Assistance?</div>
+          <div class="contact-methods">
+            <div class="contact-method">
+              <div class="contact-icon">📧</div>
+              <div class="contact-label">Email</div>
+              <div class="contact-value">support@medh.co</div>
+            </div>
+            <div class="contact-method">
+              <div class="contact-icon">📞</div>
+              <div class="contact-label">Phone</div>
+              <div class="contact-value">+91-XXXX-XXXX</div>
+            </div>
+            <div class="contact-method">
+              <div class="contact-icon">💬</div>
+              <div class="contact-label">Live Chat</div>
+              <div class="contact-value">Available on website</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CTA Section -->
+        <div class="cta-section">
+          <a href="https://medh.co" class="cta-button">Visit Our Website</a>
+        </div>
+
+        <div class="divider"></div>
+
+        <p><strong>Important:</strong>
+          Please save this reference ID ({{reference_id}}) for your records. You
+          can use it to track your inquiry or reference it in future
+          communications.</p>
+
+        <p>Thank you for choosing MEDH. We're excited to assist you on your
+          learning journey!</p>
+
+        <p>Best regards,<br />
+          <strong>The MEDH Team</strong><br />
+          Customer Support Department</p>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <div class="footer-logo">MEDH</div>
+        <div class="footer-links">
+          <a href="https://medh.co/about" class="footer-link">About Us</a>
+          <a href="https://medh.co/courses" class="footer-link">Courses</a>
+          <a href="https://medh.co/support" class="footer-link">Support</a>
+          <a href="https://medh.co/contact" class="footer-link">Contact</a>
+        </div>
+
+        <div class="social-links">
+          <a href="#" class="social-link">📘</a>
+          <a href="#" class="social-link">🐦</a>
+          <a href="#" class="social-link">💼</a>
+          <a href="#" class="social-link">📸</a>
+        </div>
+
+        <div class="footer-text">
+          This email was sent to
+          {{email}}
+          because you contacted us through our website.<br />
+          If you have any questions, please don't hesitate to reach out to our
+          support team.<br /><br />
+          © 2025 MEDH. All rights reserved.<br />
+          <a href="#" style="color: #a0aec0;">Privacy Policy</a>
+          |
+          <a href="#" style="color: #a0aec0;">Terms of Service</a>
+          |
+          <a href="#" style="color: #a0aec0;">Unsubscribe</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

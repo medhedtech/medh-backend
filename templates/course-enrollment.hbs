@@ -1,0 +1,477 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to {{course_name}} - Medh Learning Platform</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        margin: 0;
+        padding: 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+      .email-wrapper {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 40px 20px;
+        min-height: 100vh;
+      }
+      .container {
+        max-width: 650px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+      .header {
+        background: linear-gradient(135deg, #4a6cf7 0%, #667eea 100%);
+        color: white;
+        padding: 40px 30px;
+        text-align: center;
+        position: relative;
+      }
+      .header::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><defs><radialGradient id="a" cx=".66" cy=".30" r=".7"><stop offset="0" stop-color="%23ffffff" stop-opacity=".2"/><stop offset=".5" stop-color="%23ffffff" stop-opacity=".05"/><stop offset="1" stop-color="%23ffffff" stop-opacity="0"/></radialGradient></defs><rect width="100" height="20" fill="url(%23a)"/></svg>');
+        opacity: 0.3;
+      }
+      .header-content {
+        position: relative;
+        z-index: 1;
+      }
+      .logo {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 10px;
+        letter-spacing: -0.5px;
+      }
+      .header-subtitle {
+        font-size: 16px;
+        opacity: 0.9;
+        font-weight: 300;
+      }
+      .celebration-icon {
+        font-size: 48px;
+        margin: 20px 0 10px;
+        display: block;
+      }
+      .content {
+        padding: 40px 30px;
+      }
+      .greeting {
+        font-size: 18px;
+        margin-bottom: 25px;
+        color: #2d3748;
+      }
+      .enrollment-success {
+        background: linear-gradient(135deg, #e8f5e8 0%, #f0fff0 100%);
+        border: 2px solid #4caf50;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 30px;
+        text-align: center;
+      }
+      .enrollment-title {
+        color: #2e7d32;
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0 0 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .enrollment-message {
+        color: #388e3c;
+        font-size: 16px;
+        margin: 0;
+        line-height: 1.5;
+      }
+      .course-highlight {
+        background: linear-gradient(135deg, #fef3cd 0%, #fef7e0 100%);
+        border: 2px solid #f59e0b;
+        border-radius: 12px;
+        padding: 25px;
+        margin: 30px 0;
+        text-align: center;
+      }
+      .course-highlight h3 {
+        color: #92400e;
+        margin: 0 0 15px;
+        font-size: 24px;
+        font-weight: 700;
+      }
+      .course-meta {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin: 20px 0;
+      }
+      .course-meta-item {
+        text-align: center;
+        padding: 10px;
+        background: rgba(255, 255, 255, 0.5);
+        border-radius: 8px;
+      }
+      .course-meta-label {
+        font-size: 12px;
+        color: #b45309;
+        text-transform: uppercase;
+        font-weight: 600;
+        margin-bottom: 5px;
+      }
+      .course-meta-value {
+        font-size: 16px;
+        color: #92400e;
+        font-weight: 600;
+      }
+      .course-details {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 25px;
+        margin: 30px 0;
+      }
+      .details-header {
+        color: #2d3748;
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .details-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 15px;
+      }
+      .detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 15px;
+        background: white;
+        border-radius: 8px;
+        border-left: 4px solid #4a6cf7;
+      }
+      .detail-label {
+        font-weight: 600;
+        color: #4a5568;
+        font-size: 14px;
+      }
+      .detail-value {
+        font-weight: 500;
+        color: #2d3748;
+        text-align: right;
+        max-width: 60%;
+        word-break: break-word;
+      }
+      .next-steps {
+        background: linear-gradient(135deg, #e6f3ff 0%, #f0f8ff 100%);
+        border-radius: 12px;
+        padding: 25px;
+        margin: 30px 0;
+      }
+      .next-steps h3 {
+        color: #1e40af;
+        margin: 0 0 15px;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .next-steps ul {
+        margin: 0;
+        padding-left: 20px;
+        color: #1e3a8a;
+      }
+      .next-steps li {
+        margin-bottom: 8px;
+        line-height: 1.4;
+      }
+      .action-buttons {
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        margin: 30px 0;
+        flex-wrap: wrap;
+      }
+      .btn {
+        display: inline-block;
+        padding: 14px 28px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 16px;
+        text-align: center;
+        transition: all 0.3s ease;
+        min-width: 150px;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, #4a6cf7 0%, #667eea 100%);
+        color: white;
+        border: 2px solid transparent;
+      }
+      .btn-primary:hover {
+        background: linear-gradient(135deg, #3b5cf0 0%, #5a67d8 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(74, 108, 247, 0.3);
+      }
+      .btn-secondary {
+        background: white;
+        color: #4a6cf7;
+        border: 2px solid #4a6cf7;
+      }
+      .btn-secondary:hover {
+        background: #4a6cf7;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(74, 108, 247, 0.2);
+      }
+      .instructor-info {
+        background: #f3e8ff;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 25px 0;
+        text-align: center;
+      }
+      .instructor-info h4 {
+        color: #7c3aed;
+        margin: 0 0 10px;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .instructor-info p {
+        color: #8b5cf6;
+        margin: 0;
+        font-size: 16px;
+      }
+      .footer {
+        background: #f7fafc;
+        padding: 30px;
+        text-align: center;
+        border-top: 1px solid #e2e8f0;
+      }
+      .footer p {
+        margin: 0 0 10px;
+        color: #718096;
+        font-size: 14px;
+      }
+      .footer a {
+        color: #4a6cf7;
+        text-decoration: none;
+      }
+      .footer a:hover {
+        text-decoration: underline;
+      }
+      .social-links {
+        margin: 20px 0;
+      }
+      .social-links a {
+        display: inline-block;
+        margin: 0 10px;
+        color: #718096;
+        font-size: 18px;
+        text-decoration: none;
+        transition: color 0.3s ease;
+      }
+      .social-links a:hover {
+        color: #4a6cf7;
+      }
+      @media (max-width: 600px) {
+        .email-wrapper {
+          padding: 20px 10px;
+        }
+        .container {
+          border-radius: 8px;
+        }
+        .header,
+        .content {
+          padding: 30px 20px;
+        }
+        .action-buttons {
+          flex-direction: column;
+          align-items: center;
+        }
+        .btn {
+          min-width: auto;
+          width: 100%;
+          max-width: 280px;
+        }
+        .detail-item {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 5px;
+        }
+        .detail-value {
+          text-align: left;
+          max-width: 100%;
+        }
+        .course-meta {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-wrapper">
+      <div class="container">
+        <div class="header">
+          <div class="header-content">
+            <div class="logo">🎓 Medh Learning Platform</div>
+            <div class="header-subtitle">Course Enrollment Confirmation</div>
+            <div class="celebration-icon">🎉</div>
+          </div>
+        </div>
+
+        <div class="content">
+          <div class="greeting">Hello {{student_name}},</div>
+
+          <div class="enrollment-success">
+            <div class="enrollment-title">
+              <span>✅</span>
+              Successfully Enrolled!
+            </div>
+            <div class="enrollment-message">
+              Congratulations! You're now enrolled in
+              {{course_name}}. Your learning journey starts now!
+            </div>
+          </div>
+
+          <div class="course-highlight">
+            <h3>{{course_name}}</h3>
+            <div class="course-meta">
+              <div class="course-meta-item">
+                <div class="course-meta-label">Course Type</div>
+                <div class="course-meta-value">{{course_type}}</div>
+              </div>
+              <div class="course-meta-item">
+                <div class="course-meta-label">Duration</div>
+                <div class="course-meta-value">{{course_duration}}</div>
+              </div>
+              {{#if start_date}}
+                <div class="course-meta-item">
+                  <div class="course-meta-label">Start Date</div>
+                  <div class="course-meta-value">{{formatDate
+                      start_date
+                      "short"
+                    }}</div>
+                </div>
+              {{/if}}
+            </div>
+          </div>
+
+          <div class="course-details">
+            <div class="details-header">
+              <span>📋</span>
+              Enrollment Details
+            </div>
+            <div class="details-grid">
+              <div class="detail-item">
+                <div class="detail-label">Enrollment Date</div>
+                <div class="detail-value">{{enrollment_date}}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Access Level</div>
+                <div class="detail-value">{{access_details}}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Course Status</div>
+                <div
+                  class="detail-value"
+                  style="color: #059669; font-weight: 600;"
+                >Active</div>
+              </div>
+            </div>
+          </div>
+
+          {{#if instructor_name}}
+            <div class="instructor-info">
+              <h4>
+                <span>👨‍🏫</span>
+                Your Instructor
+              </h4>
+              <p>{{instructor_name}}</p>
+            </div>
+          {{/if}}
+
+          <div class="next-steps">
+            <h3>
+              <span>🚀</span>
+              What's Next?
+            </h3>
+            <ul>
+              <li>Access your course materials from the student dashboard</li>
+              <li>Join the course community and connect with fellow students</li>
+              <li>Complete your profile to get personalized recommendations</li>
+              <li>Start with the first lesson or module</li>
+              <li>Set up your learning schedule and goals</li>
+            </ul>
+          </div>
+
+          <div class="action-buttons">
+            <a href="{{course_url}}" class="btn btn-primary">Start Learning</a>
+            <a href="{{dashboard_url}}" class="btn btn-secondary">Go to
+              Dashboard</a>
+          </div>
+
+          <p
+            style="margin-top: 30px; padding: 20px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #4a6cf7;"
+          >
+            <strong>💡 Need Help?</strong>
+            If you have any questions about your course or need technical
+            support, please contact us at
+            <a
+              href="mailto:support@medh.co"
+              style="color: #4a6cf7;"
+            >support@medh.co</a>
+            or visit our help center.
+          </p>
+
+          <p
+            style="margin-top: 20px; color: #6b7280; font-size: 14px; text-align: center;"
+          >
+            <strong>Welcome to the Medh community!</strong>
+            We're excited to be part of your learning journey. Remember, great
+            achievements start with small steps. Happy learning! 🌟
+          </p>
+        </div>
+
+        <div class="footer">
+          <p><strong>Medh Learning Platform</strong></p>
+          <p>Empowering learners worldwide</p>
+
+          <div class="social-links">
+            <a href="#" title="Facebook">📘</a>
+            <a href="#" title="Twitter">🐦</a>
+            <a href="#" title="LinkedIn">💼</a>
+            <a href="#" title="Instagram">📸</a>
+            <a href="#" title="YouTube">📺</a>
+          </div>
+
+          <p>
+            <a href="{{privacy_url}}">Privacy Policy</a>
+            |
+            <a href="{{terms_url}}">Terms of Service</a>
+            |
+            <a href="{{unsubscribe_url}}">Unsubscribe</a>
+          </p>
+
+          <p>&copy;
+            {{currentYear}}
+            Medh Learning Platform. All rights reserved.</p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

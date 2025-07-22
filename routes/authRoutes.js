@@ -3272,8 +3272,115 @@ router.post(
       .optional()
       .isObject()
       .withMessage("UserInfo must be an object"),
+    body("generate_quick_login_key")
+      .optional()
+      .isBoolean()
+      .withMessage("generate_quick_login_key must be a boolean"),
   ],
   authController.handleFrontendOAuth.bind(authController),
+);
+
+// ============================================================================
+// ENHANCED OAUTH MANAGEMENT ROUTES
+// ============================================================================
+
+/**
+ * @route   POST /api/v1/auth/oauth/link
+ * @desc    Link additional OAuth provider to existing account
+ * @access  Private (JWT required)
+ */
+router.post(
+  "/oauth/link",
+  authenticateToken,
+  [
+    body("provider")
+      .isIn(["google", "facebook", "github", "linkedin", "microsoft", "apple"])
+      .withMessage("Invalid OAuth provider"),
+    body("token").optional().isString().withMessage("Token must be a string"),
+    body("code").optional().isString().withMessage("Code must be a string"),
+    body("userInfo")
+      .optional()
+      .isObject()
+      .withMessage("UserInfo must be an object"),
+  ],
+  authController.linkAdditionalOAuthProvider.bind(authController),
+);
+
+/**
+ * @route   DELETE /api/v1/auth/oauth/unlink/:provider
+ * @desc    Unlink OAuth provider from account
+ * @access  Private (JWT required)
+ */
+router.delete(
+  "/oauth/unlink/:provider",
+  authenticateToken,
+  [
+    param("provider")
+      .isIn(["google", "facebook", "github", "linkedin", "microsoft", "apple"])
+      .withMessage("Invalid OAuth provider"),
+  ],
+  authController.unlinkOAuthProvider.bind(authController),
+);
+
+/**
+ * @route   GET /api/v1/auth/oauth/connected
+ * @desc    Get connected OAuth providers for user
+ * @access  Private (JWT required)
+ */
+router.get(
+  "/oauth/connected",
+  authenticateToken,
+  authController.getConnectedOAuthProviders.bind(authController),
+);
+
+/**
+ * @route   POST /api/v1/auth/oauth/refresh/:provider
+ * @desc    Refresh OAuth tokens for a provider
+ * @access  Private (JWT required)
+ */
+router.post(
+  "/oauth/refresh/:provider",
+  authenticateToken,
+  [
+    param("provider")
+      .isIn(["google", "facebook", "github", "linkedin", "microsoft", "apple"])
+      .withMessage("Invalid OAuth provider"),
+  ],
+  async (req, res) => {
+    try {
+      const { provider } = req.params;
+      const userId = req.user.id;
+
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+
+      const updatedUser = await authController.refreshOAuthTokens(
+        user,
+        provider,
+      );
+
+      res.status(200).json({
+        success: true,
+        message: `${provider} tokens refreshed successfully`,
+        data: {
+          provider,
+          refreshed_at: updatedUser.oauth[provider].last_refresh,
+          expires_at: updatedUser.oauth[provider].expires_at,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: `Failed to refresh ${req.params.provider} tokens`,
+        error: error.message,
+      });
+    }
+  },
 );
 
 // ENHANCED OAUTH ACCOUNT MANAGEMENT ROUTES

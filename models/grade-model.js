@@ -85,7 +85,7 @@ const gradeSchema = new mongoose.Schema(
 );
 
 // Indexes for better performance
-gradeSchema.index({ name: 1 });
+// Note: name index already created via unique: true in schema
 gradeSchema.index({ isActive: 1 });
 gradeSchema.index({ sortOrder: 1 });
 gradeSchema.index({ "academicInfo.gradeLevel": 1 });

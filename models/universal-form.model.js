@@ -559,18 +559,55 @@ const consentSchema = new mongoose.Schema(
   { _id: false },
 );
 
-// New schemas for Book-A-Free-Demo-Session
-const parentDetailsSchema = new mongoose.Schema(
+// Enhanced consent schema
+const enhancedConsentSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, trim: true, lowercase: true },
-    mobile_no: { type: String, required: true, trim: true }, // Already validated for international format in Joi
-    current_city: { type: String, required: true, trim: true },
-    preferred_timings_to_connect: { type: String, trim: true },
+    terms_accepted: {
+      type: Boolean,
+      required: true,
+      validate: {
+        validator: function (v) {
+          return v === true;
+        },
+        message: "Terms and conditions must be accepted",
+      },
+    },
+    privacy_policy_accepted: {
+      type: Boolean,
+      required: true,
+      validate: {
+        validator: function (v) {
+          return v === true;
+        },
+        message: "Privacy policy must be accepted",
+      },
+    },
+    marketing_consent: { type: Boolean, default: false },
+    data_processing_consent: {
+      type: Boolean,
+      required: true,
+      validate: {
+        validator: function (v) {
+          return v === true;
+        },
+        message: "Data processing consent must be accepted",
+      },
+    },
+    accuracy_declaration: {
+      type: Boolean,
+      required: true,
+      validate: {
+        validator: function (v) {
+          return v === true;
+        },
+        message: "Accuracy declaration must be confirmed",
+      },
+    },
   },
   { _id: false },
 );
 
+// Demo session schemas (restored)
 const studentUnder16DetailsSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -598,7 +635,7 @@ const student16AndAboveDetailsSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, trim: true, lowercase: true },
-    mobile_no: { type: String, required: true, trim: true }, // Already validated for international format in Joi
+    mobile_no: { type: String, required: true, trim: true },
     current_city: { type: String, required: true, trim: true },
     preferred_timings_to_connect: { type: String, trim: true },
     highest_qualification: {
@@ -636,6 +673,162 @@ const termsAndPrivacyConsentSchema = new mongoose.Schema(
   { _id: false },
 );
 
+// Parent details schema (for demo booking)
+const parentDetailsSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, trim: true, lowercase: true },
+    mobile_no: { type: String, required: true, trim: true },
+    current_city: { type: String, required: true, trim: true },
+    preferred_timings_to_connect: { type: String, trim: true },
+  },
+  { _id: false },
+);
+
+// Employment information schema for career applications
+const employmentInfoSchema = new mongoose.Schema(
+  {
+    has_work_experience: { type: Boolean, required: true },
+    currently_employed: { type: Boolean },
+    present_company_name: { type: String, trim: true },
+    working_since: { type: String, trim: true }, // Format: Month and Year
+    current_designation: { type: String, trim: true },
+    last_company_name: { type: String, trim: true },
+    last_working_day: { type: String, trim: true }, // Format: Month and Year
+    last_designation: { type: String, trim: true },
+    work_location_preference: {
+      type: String,
+      enum: ["wfh", "wfo", "hybrid"],
+      required: true,
+    },
+  },
+  { _id: false },
+);
+
+// IT Assets schema for educators
+const itAssetsSchema = new mongoose.Schema(
+  {
+    has_desktop_laptop: { type: Boolean, required: true },
+    has_webcam: { type: Boolean, required: true },
+    has_headphone_mic: { type: Boolean, required: true },
+    lms_proficiency: { type: Boolean, required: true },
+    video_conferencing_knowledge: { type: Boolean, required: true },
+    internet_connection_quality: {
+      type: String,
+      enum: ["excellent", "good", "average", "poor"],
+      required: true,
+    },
+  },
+  { _id: false },
+);
+
+// Subject areas schema for educators
+const subjectAreasSchema = new mongoose.Schema(
+  {
+    primary_subjects: [
+      {
+        type: String,
+        enum: [
+          "ai_data_science",
+          "digital_marketing",
+          "programming_development",
+          "personality_development",
+          "vedic_mathematics",
+          "other",
+        ],
+      },
+    ],
+    other_subject: { type: String, trim: true },
+    grade_levels: [
+      {
+        type: String,
+        enum: [
+          "elementary",
+          "middle_school",
+          "high_school",
+          "undergraduate",
+          "professionals",
+        ],
+      },
+    ],
+  },
+  { _id: false },
+);
+
+// Teaching portfolio schema
+const teachingPortfolioSchema = new mongoose.Schema(
+  {
+    youtube_videos: [{ type: String, trim: true }], // YouTube URLs
+    online_video_url: { type: String, trim: true },
+    recorded_video_file: {
+      filename: { type: String, trim: true },
+      mimetype: { type: String, trim: true },
+      size: { type: Number },
+      url: { type: String, trim: true },
+    },
+  },
+  { _id: false },
+);
+
+// Teaching availability schema
+const availabilitySchema = new mongoose.Schema(
+  {
+    hours_per_week: {
+      type: String,
+      enum: ["less_than_5", "5_to_10", "11_to_20", "21_to_30", "more_than_30"],
+      required: true,
+    },
+    preferred_schedule: {
+      monday: {
+        available: { type: Boolean, default: false },
+        time_from: { type: String, trim: true },
+        time_to: { type: String, trim: true },
+      },
+      tuesday: {
+        available: { type: Boolean, default: false },
+        time_from: { type: String, trim: true },
+        time_to: { type: String, trim: true },
+      },
+      wednesday: {
+        available: { type: Boolean, default: false },
+        time_from: { type: String, trim: true },
+        time_to: { type: String, trim: true },
+      },
+      thursday: {
+        available: { type: Boolean, default: false },
+        time_from: { type: String, trim: true },
+        time_to: { type: String, trim: true },
+      },
+      friday: {
+        available: { type: Boolean, default: false },
+        time_from: { type: String, trim: true },
+        time_to: { type: String, trim: true },
+      },
+      saturday: {
+        available: { type: Boolean, default: false },
+        time_from: { type: String, trim: true },
+        time_to: { type: String, trim: true },
+      },
+      sunday: {
+        available: { type: Boolean, default: false },
+        time_from: { type: String, trim: true },
+        time_to: { type: String, trim: true },
+      },
+    },
+    notice_period: {
+      type: String,
+      enum: [
+        "immediately",
+        "1_to_2_weeks",
+        "3_to_4_weeks",
+        "more_than_4_weeks",
+      ],
+      required: true,
+    },
+  },
+  { _id: false },
+);
+
 // Main universal form schema
 const universalFormSchema = new mongoose.Schema(
   {
@@ -646,10 +839,11 @@ const universalFormSchema = new mongoose.Schema(
       enum: [
         // Contact & Inquiry Forms
         "contact_form",
+        "contact_us", // Enhanced contact form
         "blog_contact_form",
         "corporate_training_inquiry",
         "hire_from_medh_inquiry",
-        "book_a_free_demo_session", // New form type
+        "book_a_free_demo_session",
 
         // Registration Forms
         "general_registration",
@@ -665,15 +859,23 @@ const universalFormSchema = new mongoose.Schema(
         // Career Application Forms
         "job_application",
         "placement_form",
+        "career_application", // New form type
+
+        // Partnership Forms
+        "partnership_inquiry",
+        "school_partnership_inquiry",
+        "school_institute_partnership_inquiry", // New form type
+
+        // Educator Forms
+        "educator_registration",
+        "educator_application", // New form type
+        "instructor_application",
 
         // Additional Forms
         "feedback_form",
         "consultation_request",
-        "partnership_inquiry",
-        "school_partnership_inquiry",
         "demo_request",
         "support_ticket",
-        "educator_registration",
       ],
     },
     form_id: {
@@ -764,6 +966,29 @@ const universalFormSchema = new mongoose.Schema(
       },
     },
     demo_session_details: demoSessionDetailsSchema,
+
+    // New fields for career applications
+    post_applying_for: { type: String, trim: true },
+    employment_info: employmentInfoSchema,
+
+    // New fields for educator applications
+    preferred_teaching_mode: {
+      type: String,
+      enum: ["in_person_only", "remote_only", "hybrid", "flexible"],
+    },
+    interested_in: [
+      {
+        type: String,
+        enum: ["full_time", "part_time", "hourly_basis"],
+      },
+    ],
+    subject_areas: subjectAreasSchema,
+    it_assets: itAssetsSchema,
+    teaching_portfolio: teachingPortfolioSchema,
+    availability: availabilitySchema,
+
+    // Enhanced consent (for more complex forms)
+    enhanced_consent: enhancedConsentSchema,
 
     // Skills and languages
     skills: [{ type: String, trim: true }],

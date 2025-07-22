@@ -161,7 +161,7 @@ const certificateMasterSchema = new mongoose.Schema(
 );
 
 // Indexes for better performance
-certificateMasterSchema.index({ name: 1 });
+// Note: name index already created via unique: true in schema
 certificateMasterSchema.index({ isActive: 1 });
 certificateMasterSchema.index({ sortOrder: 1 });
 certificateMasterSchema.index({ "metadata.level": 1 });
