@@ -2,7 +2,17 @@
 export default [
   // Global ignores
   {
-    ignores: ["node_modules/", "dist/", "coverage/", "logs/", "backups/"],
+    ignores: [
+      "node_modules/", 
+      "dist/", 
+      "coverage/", 
+      "logs/", 
+      "backups/",
+      // Example and documentation files with browser code
+      "demo-booking-example-implementation.js",
+      "**/*example*.js",
+      "**/*demo*.js"
+    ],
   },
 
   // Base configuration for JS files
