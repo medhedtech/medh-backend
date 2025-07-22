@@ -75,6 +75,9 @@ import masterDataRoutes from "./master-data-routes.js";
 import adminDashboardStatsRoutes from "./adminDashboardStats.js";
 import adminManagementRoutes from "./adminManagementRoutes.js";
 import salesSupportRoutes from "./salesSupportRoutes.js";
+import oauthAnalyticsRoutes from "./oauthAnalyticsRoutes.js";
+import twoFactorRoutes from "./twoFactorRoutes.js";
+import passkeyRoutes from "./passkeyRoutes.js";
 
 const router = express.Router();
 
@@ -362,6 +365,18 @@ const moduleRoutes = [
   {
     path: "/team",
     route: salesSupportRoutes,
+  },
+  {
+    path: "/oauth/analytics",
+    route: oauthAnalyticsRoutes,
+  },
+  {
+    path: "/2fa",
+    route: twoFactorRoutes,
+  },
+  {
+    path: "/passkeys",
+    route: passkeyRoutes,
   },
 ];
 

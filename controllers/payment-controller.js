@@ -104,38 +104,45 @@ const generateAndUploadReceipt = async (data, type) => {
 // Function to send receipt via email
 const sendReceiptEmail = async (email, receiptUrl, paymentDetails, type) => {
   try {
-    const subject =
-      type === "subscription"
-        ? `Your Subscription Receipt - ${paymentDetails.plan_name}`
-        : `Your Course Enrollment Receipt - ${paymentDetails.course_name || "Course"}`;
+    const receiptData = {
+      customer_name:
+        paymentDetails.customer_name ||
+        paymentDetails.student_name ||
+        "Customer",
+      payment_type: type,
+      payment_id:
+        paymentDetails.payment_id ||
+        paymentDetails.payment_details?.payment_id ||
+        "N/A",
+      amount:
+        paymentDetails.amount || paymentDetails.payment_details?.amount || 0,
+      currency: paymentDetails.currency || "USD",
+      receipt_number: paymentDetails.receipt_number || `RCP-${Date.now()}`,
+      payment_method: paymentDetails.payment_method || "Credit Card",
+      payment_status: "Completed",
+      payment_date: new Date(),
+      receipt_pdf_url: receiptUrl,
+    };
 
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2>Thank you for your ${type === "subscription" ? "subscription" : "course enrollment"}</h2>
-        <p>Your payment has been successfully processed.</p>
-        <p><strong>Payment ID:</strong> ${paymentDetails.payment_id || paymentDetails.payment_details?.payment_id || "N/A"}</p>
-        <p><strong>Amount:</strong> ${paymentDetails.amount || paymentDetails.payment_details?.amount || 0}</p>
-        <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
-        <p>Please find your receipt attached or <a href="${receiptUrl}" target="_blank">download it here</a>.</p>
-        <p>If you have any questions, please contact our support team.</p>
-        <p>Thank you for choosing our platform!</p>
-      </div>
-    `;
+    // Add type-specific data
+    if (type === "subscription") {
+      receiptData.plan_name = paymentDetails.plan_name || "Subscription Plan";
+      receiptData.billing_cycle = paymentDetails.billing_cycle || "Monthly";
+      receiptData.next_billing_date = paymentDetails.next_billing_date;
+      receiptData.access_level = paymentDetails.access_level || "Premium";
+    } else {
+      receiptData.course_name = paymentDetails.course_name || "Course";
+      receiptData.courses = paymentDetails.courses || [
+        {
+          name: paymentDetails.course_name || "Course",
+          type: paymentDetails.course_type || "Online",
+          duration: paymentDetails.duration || "Self-paced",
+          access_type: "Lifetime Access",
+        },
+      ];
+    }
 
-    await emailService.sendEmail({
-      to: email,
-      subject,
-      html,
-      attachments: receiptUrl
-        ? [
-            {
-              filename: `${type}_receipt.pdf`,
-              path: receiptUrl,
-            },
-          ]
-        : [],
-    }, { priority: "high" });
-
+    await emailService.sendReceiptEmail(email, receiptData);
     logger.info(`Receipt email sent to ${email}`);
     return true;
   } catch (error) {

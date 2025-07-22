@@ -512,6 +512,316 @@ const LoginPage = () => {
 export default LoginPage;
 ```
 
+## Enhanced Google OAuth with Quick Login
+
+Here's an enhanced example that includes quick login key generation and better error handling:
+
+```jsx
+import React, { useState, useEffect } from "react";
+
+const EnhancedGoogleLoginButton = ({ onSuccess, onError }) => {
+  const [loading, setLoading] = useState(false);
+  const [quickLoginEnabled, setQuickLoginEnabled] = useState(false);
+
+  useEffect(() => {
+    // Load Google Identity Services
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.onload = initializeGoogleSignIn;
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  const initializeGoogleSignIn = () => {
+    window.google.accounts.id.initialize({
+      client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID,
+      callback: handleGoogleResponse,
+    });
+
+    window.google.accounts.id.renderButton(
+      document.getElementById("google-signin-button"),
+      {
+        theme: "outline",
+        size: "large",
+        text: "signin_with",
+        shape: "rectangular",
+      },
+    );
+  };
+
+  const handleGoogleResponse = async (response) => {
+    setLoading(true);
+    try {
+      // Send credential token to backend with enhanced options
+      const backendResponse = await fetch("/api/v1/auth/oauth/frontend", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: "google",
+          token: response.credential, // This is a JWT ID token
+          generate_quick_login_key: quickLoginEnabled, // Request quick login key
+        }),
+      });
+
+      const result = await backendResponse.json();
+
+      if (result.success) {
+        // Store tokens
+        localStorage.setItem("access_token", result.data.tokens.access_token);
+        localStorage.setItem("refresh_token", result.data.tokens.refresh_token);
+
+        // Store quick login key if generated
+        if (result.data.quick_login_key) {
+          localStorage.setItem("quick_login_key", result.data.quick_login_key);
+          console.log("🔑 Quick login key generated for future logins!");
+        }
+
+        // Store user data
+        localStorage.setItem("user", JSON.stringify(result.data.user));
+        localStorage.setItem("session_id", result.data.session_id);
+
+        // Show welcome message for new users
+        if (result.data.user.is_new_user) {
+          console.log("🎉 Welcome! Check your email for welcome message.");
+        } else {
+          console.log(
+            "👋 Welcome back! Login notification sent if from new device.",
+          );
+        }
+
+        onSuccess(result.data);
+      } else {
+        onError(result.message);
+      }
+    } catch (error) {
+      onError(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="enhanced-oauth-login">
+      <div className="oauth-options">
+        <label>
+          <input
+            type="checkbox"
+            checked={quickLoginEnabled}
+            onChange={(e) => setQuickLoginEnabled(e.target.checked)}
+          />
+          Generate quick login key for faster future logins
+        </label>
+      </div>
+
+      <div id="google-signin-button" style={{ marginTop: "10px" }}></div>
+
+      {loading && (
+        <div className="loading-state">
+          <p>Authenticating with Google...</p>
+          <div className="spinner"></div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default EnhancedGoogleLoginButton;
+```
+
+## Quick Login Implementation
+
+After OAuth login with quick login key, users can use the key for faster subsequent logins:
+
+```jsx
+const QuickLoginComponent = () => {
+  const [quickLoginKey, setQuickLoginKey] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleQuickLogin = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/v1/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: localStorage.getItem("user_email"), // Stored from previous login
+          quick_login_key:
+            quickLoginKey || localStorage.getItem("quick_login_key"),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        localStorage.setItem("access_token", result.data.token);
+        console.log("⚡ Quick login successful!");
+        // Redirect to dashboard
+      } else {
+        console.error("Quick login failed:", result.message);
+      }
+    } catch (error) {
+      console.error("Quick login error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="quick-login">
+      <h3>Quick Login</h3>
+      <input
+        type="password"
+        placeholder="Enter your quick login key"
+        value={quickLoginKey}
+        onChange={(e) => setQuickLoginKey(e.target.value)}
+      />
+      <button onClick={handleQuickLogin} disabled={loading}>
+        {loading ? "Logging in..." : "Quick Login"}
+      </button>
+    </div>
+  );
+};
+```
+
+## Enhanced Login Page with All Features
+
+```jsx
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import EnhancedGoogleLoginButton from "./EnhancedGoogleLoginButton";
+
+const EnhancedLoginPage = () => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [loginMethod, setLoginMethod] = useState("oauth"); // "oauth", "password", "quick"
+  const navigate = useNavigate();
+
+  const handleOAuthSuccess = (data) => {
+    setLoading(false);
+    setError("");
+
+    // Show success message
+    const message = data.user.is_new_user
+      ? "🎉 Account created! Welcome email sent."
+      : "👋 Welcome back!";
+
+    console.log(message);
+
+    // Redirect to dashboard
+    navigate("/dashboard");
+  };
+
+  const handleOAuthError = (errorMessage) => {
+    setLoading(false);
+    setError(errorMessage);
+  };
+
+  return (
+    <div className="enhanced-login-container">
+      <h2>Sign In to Medh Learning Platform</h2>
+
+      {error && (
+        <div className="error-message">
+          <p>{error}</p>
+        </div>
+      )}
+
+      <div className="login-methods">
+        <div className="method-selector">
+          <button
+            className={loginMethod === "oauth" ? "active" : ""}
+            onClick={() => setLoginMethod("oauth")}
+          >
+            Social Login
+          </button>
+          <button
+            className={loginMethod === "password" ? "active" : ""}
+            onClick={() => setLoginMethod("password")}
+          >
+            Email & Password
+          </button>
+          <button
+            className={loginMethod === "quick" ? "active" : ""}
+            onClick={() => setLoginMethod("quick")}
+          >
+            Quick Login
+          </button>
+        </div>
+
+        <div className="login-content">
+          {loginMethod === "oauth" && (
+            <div className="oauth-section">
+              <p>Sign in with your social account:</p>
+              <EnhancedGoogleLoginButton
+                onSuccess={handleOAuthSuccess}
+                onError={handleOAuthError}
+              />
+              <div className="oauth-benefits">
+                <p>✅ No password required</p>
+                <p>📧 Automatic email notifications</p>
+                <p>⚡ Optional quick login key</p>
+                <p>🔒 Secure OAuth authentication</p>
+              </div>
+            </div>
+          )}
+
+          {loginMethod === "password" && (
+            <div className="password-section">
+              {/* Regular email/password form */}
+            </div>
+          )}
+
+          {loginMethod === "quick" && (
+            <div className="quick-login-section">{/* Quick login form */}</div>
+          )}
+        </div>
+      </div>
+
+      {loading && (
+        <div className="loading-overlay">
+          <div className="loading-content">
+            <div className="spinner"></div>
+            <p>Authenticating...</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default EnhancedLoginPage;
+```
+
+## Email Notifications
+
+The enhanced OAuth system automatically sends:
+
+### For New Users:
+
+- **Welcome Email** with OAuth registration details
+- **Account setup information**
+- **Platform features overview**
+
+### For Existing Users:
+
+- **Login notification** if accessing from new device
+- **Security alert** with device and location details
+- **Quick access to security settings**
+
+### Email Templates Include:
+
+- **Branded design** with Medh Learning Platform styling
+- **Security information** (device, location, time)
+- **Action buttons** for account security
+- **Unsubscribe options** for marketing emails
+
 ## Environment Variables
 
 ### Frontend (.env)

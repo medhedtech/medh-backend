@@ -172,6 +172,18 @@ const userActivitySchema = new Schema(
         "mfa_verification_failed",
         "backup_codes_regenerated",
         "mfa_recovery_requested",
+        // 2FA-related actions
+        "2fa_setup_initiated",
+        "2fa_enabled",
+        "2fa_disabled",
+        "2fa_verified",
+        "2fa_backup_codes_regenerated",
+        // Passkey-related actions
+        "passkey_registration_initiated",
+        "passkey_registered",
+        "passkey_login",
+        "passkey_deleted",
+        "passkey_name_updated",
         // Demo user actions
         "demo_register",
         "demo_password_set",
@@ -700,6 +712,106 @@ const userSchema = new Schema(
       default: false,
     },
 
+    // Two-Factor Authentication (2FA)
+    two_factor_enabled: {
+      type: Boolean,
+      default: false,
+    },
+    two_factor_secret: {
+      type: String,
+      select: false, // Don't include in queries by default
+    },
+    two_factor_temp_secret: {
+      type: String,
+      select: false, // Temporary secret during setup
+    },
+    two_factor_method: {
+      type: String,
+      enum: ["totp", "sms", "email"],
+      default: "totp",
+    },
+    two_factor_enabled_at: {
+      type: Date,
+    },
+    two_factor_backup_codes: [
+      {
+        code: {
+          type: String,
+          required: true,
+        },
+        used: {
+          type: Boolean,
+          default: false,
+        },
+        used_at: {
+          type: Date,
+        },
+        created_at: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+
+    // Passkey Authentication (WebAuthn)
+    passkey_enabled: {
+      type: Boolean,
+      default: false,
+    },
+    passkey_enabled_at: {
+      type: Date,
+    },
+    passkeys: [
+      {
+        id: {
+          type: String,
+          required: true,
+        },
+        name: {
+          type: String,
+          required: true,
+        },
+        credential_id: {
+          type: String,
+          required: true,
+          unique: true,
+        },
+        public_key: {
+          type: String,
+          required: true,
+        },
+        counter: {
+          type: Number,
+          default: 0,
+        },
+        device_type: {
+          type: String,
+          enum: ["single_device", "cross_platform"],
+          default: "single_device",
+        },
+        backed_up: {
+          type: Boolean,
+          default: false,
+        },
+        transports: [
+          {
+            type: String,
+            enum: ["ble", "hybrid", "internal", "nfc", "usb"],
+          },
+        ],
+        aaguid: {
+          type: String,
+        },
+        created_at: {
+          type: Date,
+          default: Date.now,
+        },
+        last_used: {
+          type: Date,
+        },
+      },
+    ],
+
     // Demo Session Details
     demo_session: {
       course_category: {
@@ -1072,6 +1184,7 @@ const userSchema = new Schema(
         connected_at: Date,
         last_login: Date,
         last_refresh: Date,
+        expires_at: Date,
       },
       facebook: {
         id: String,
@@ -1081,6 +1194,7 @@ const userSchema = new Schema(
         connected_at: Date,
         last_login: Date,
         last_refresh: Date,
+        expires_at: Date,
       },
       github: {
         id: String,
@@ -1090,6 +1204,7 @@ const userSchema = new Schema(
         connected_at: Date,
         last_login: Date,
         last_refresh: Date,
+        expires_at: Date,
       },
       linkedin: {
         id: String,

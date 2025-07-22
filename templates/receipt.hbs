@@ -1,0 +1,539 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Payment Receipt - Medh Learning Platform</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        margin: 0;
+        padding: 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+      .email-wrapper {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 40px 20px;
+        min-height: 100vh;
+      }
+      .container {
+        max-width: 650px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+      .header {
+        background: linear-gradient(135deg, #4a6cf7 0%, #667eea 100%);
+        color: white;
+        padding: 40px 30px;
+        text-align: center;
+        position: relative;
+      }
+      .header::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><defs><radialGradient id="a" cx=".66" cy=".30" r=".7"><stop offset="0" stop-color="%23ffffff" stop-opacity=".2"/><stop offset=".5" stop-color="%23ffffff" stop-opacity=".05"/><stop offset="1" stop-color="%23ffffff" stop-opacity="0"/></radialGradient></defs><rect width="100" height="20" fill="url(%23a)"/></svg>');
+        opacity: 0.3;
+      }
+      .header-content {
+        position: relative;
+        z-index: 1;
+      }
+      .logo {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 10px;
+        letter-spacing: -0.5px;
+      }
+      .header-subtitle {
+        font-size: 16px;
+        opacity: 0.9;
+        font-weight: 300;
+      }
+      .receipt-icon {
+        font-size: 48px;
+        margin: 20px 0 10px;
+        display: block;
+      }
+      .content {
+        padding: 40px 30px;
+      }
+      .greeting {
+        font-size: 18px;
+        margin-bottom: 25px;
+        color: #2d3748;
+      }
+      .payment-success {
+        background: linear-gradient(135deg, #e8f5e8 0%, #f0fff0 100%);
+        border: 2px solid #4caf50;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 30px;
+        text-align: center;
+      }
+      .payment-success-title {
+        color: #2e7d32;
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0 0 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .payment-success-message {
+        color: #388e3c;
+        font-size: 16px;
+        margin: 0;
+        line-height: 1.5;
+      }
+      .receipt-details {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 25px;
+        margin: 30px 0;
+      }
+      .details-header {
+        color: #2d3748;
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .details-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 15px;
+      }
+      .detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 15px;
+        background: white;
+        border-radius: 8px;
+        border-left: 4px solid #4a6cf7;
+      }
+      .detail-label {
+        font-weight: 600;
+        color: #4a5568;
+        font-size: 14px;
+      }
+      .detail-value {
+        font-weight: 500;
+        color: #2d3748;
+        text-align: right;
+        max-width: 60%;
+        word-break: break-word;
+      }
+      .amount-highlight {
+        background: linear-gradient(135deg, #fef3cd 0%, #fef7e0 100%);
+        border: 2px solid #f59e0b;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 25px 0;
+        text-align: center;
+      }
+      .amount-highlight h3 {
+        color: #92400e;
+        margin: 0 0 10px;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .amount-highlight .amount {
+        color: #b45309;
+        margin: 0;
+        font-size: 32px;
+        font-weight: 700;
+      }
+      .purchase-summary {
+        background: linear-gradient(135deg, #e6f3ff 0%, #f0f8ff 100%);
+        border-radius: 12px;
+        padding: 25px;
+        margin: 30px 0;
+      }
+      .purchase-summary h3 {
+        color: #1e40af;
+        margin: 0 0 15px;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .course-item {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 10px 0;
+      }
+      .course-name {
+        font-weight: 600;
+        color: #1e3a8a;
+        margin-bottom: 5px;
+      }
+      .course-details {
+        color: #64748b;
+        font-size: 14px;
+      }
+      .next-steps {
+        background: #fff5f5;
+        border-left: 4px solid #f56565;
+        border-radius: 0 8px 8px 0;
+        padding: 20px;
+        margin: 25px 0;
+      }
+      .next-steps h4 {
+        color: #c53030;
+        margin: 0 0 15px;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .next-steps ul {
+        margin: 0;
+        padding-left: 20px;
+        color: #744210;
+      }
+      .next-steps li {
+        margin-bottom: 8px;
+        line-height: 1.4;
+      }
+      .action-buttons {
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        margin: 30px 0;
+        flex-wrap: wrap;
+      }
+      .btn {
+        display: inline-block;
+        padding: 14px 28px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 16px;
+        text-align: center;
+        transition: all 0.3s ease;
+        min-width: 150px;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, #4a6cf7 0%, #667eea 100%);
+        color: white;
+        border: 2px solid transparent;
+      }
+      .btn-primary:hover {
+        background: linear-gradient(135deg, #3b5cf0 0%, #5a67d8 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(74, 108, 247, 0.3);
+      }
+      .btn-secondary {
+        background: white;
+        color: #4a6cf7;
+        border: 2px solid #4a6cf7;
+      }
+      .btn-secondary:hover {
+        background: #4a6cf7;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(74, 108, 247, 0.2);
+      }
+      .billing-info {
+        background: #f1f5f9;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 25px 0;
+        font-size: 14px;
+      }
+      .billing-info h4 {
+        color: #334155;
+        margin: 0 0 10px;
+        font-size: 16px;
+      }
+      .billing-info p {
+        margin: 5px 0;
+        color: #64748b;
+      }
+      .footer {
+        background: #f7fafc;
+        padding: 30px;
+        text-align: center;
+        border-top: 1px solid #e2e8f0;
+      }
+      .footer p {
+        margin: 0 0 10px;
+        color: #718096;
+        font-size: 14px;
+      }
+      .footer a {
+        color: #4a6cf7;
+        text-decoration: none;
+      }
+      .footer a:hover {
+        text-decoration: underline;
+      }
+      .social-links {
+        margin: 20px 0;
+      }
+      .social-links a {
+        display: inline-block;
+        margin: 0 10px;
+        color: #718096;
+        font-size: 18px;
+        text-decoration: none;
+        transition: color 0.3s ease;
+      }
+      .social-links a:hover {
+        color: #4a6cf7;
+      }
+      @media (max-width: 600px) {
+        .email-wrapper {
+          padding: 20px 10px;
+        }
+        .container {
+          border-radius: 8px;
+        }
+        .header,
+        .content {
+          padding: 30px 20px;
+        }
+        .action-buttons {
+          flex-direction: column;
+          align-items: center;
+        }
+        .btn {
+          min-width: auto;
+          width: 100%;
+          max-width: 280px;
+        }
+        .detail-item {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 5px;
+        }
+        .detail-value {
+          text-align: left;
+          max-width: 100%;
+        }
+        .amount-highlight .amount {
+          font-size: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-wrapper">
+      <div class="container">
+        <div class="header">
+          <div class="header-content">
+            <div class="logo">🧾 Medh Learning Platform</div>
+            <div class="header-subtitle">Payment Receipt</div>
+            <div class="receipt-icon">✅</div>
+          </div>
+        </div>
+
+        <div class="content">
+          <div class="greeting">Hello {{customer_name}},</div>
+
+          <div class="payment-success">
+            <div class="payment-success-title">
+              <span>🎉</span>
+              Payment Successful!
+            </div>
+            <div class="payment-success-message">
+              Thank you for your
+              {{#if (eq payment_type "subscription")}}subscription{{else}}course
+                enrollment{{/if}}. Your payment has been processed successfully.
+            </div>
+          </div>
+
+          <div class="amount-highlight">
+            <h3>
+              <span>💰</span>
+              Total Amount Paid
+            </h3>
+            <div class="amount">{{currency}} {{amount}}</div>
+          </div>
+
+          <div class="receipt-details">
+            <div class="details-header">
+              <span>📋</span>
+              Payment Details
+            </div>
+            <div class="details-grid">
+              <div class="detail-item">
+                <div class="detail-label">Receipt Number</div>
+                <div class="detail-value">{{receipt_number}}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Payment ID</div>
+                <div class="detail-value">{{payment_id}}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Payment Method</div>
+                <div class="detail-value">{{payment_method}}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Payment Date</div>
+                <div class="detail-value">{{formatDate
+                    payment_date
+                    "full"
+                  }}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Status</div>
+                <div
+                  class="detail-value"
+                  style="color: #059669; font-weight: 600;"
+                >{{payment_status}}</div>
+              </div>
+            </div>
+          </div>
+
+          {{#if (eq payment_type "subscription")}}
+            <div class="purchase-summary">
+              <h3>
+                <span>📅</span>
+                Subscription Details
+              </h3>
+              <div class="course-item">
+                <div class="course-name">{{plan_name}}</div>
+                <div class="course-details">
+                  <strong>Billing Cycle:</strong>
+                  {{billing_cycle}}<br />
+                  <strong>Next Billing Date:</strong>
+                  {{formatDate next_billing_date "short"}}<br />
+                  <strong>Access Level:</strong>
+                  {{access_level}}
+                </div>
+              </div>
+            </div>
+          {{else}}
+            <div class="purchase-summary">
+              <h3>
+                <span>📚</span>
+                Course Details
+              </h3>
+              {{#each courses}}
+                <div class="course-item">
+                  <div class="course-name">{{this.name}}</div>
+                  <div class="course-details">
+                    <strong>Course Type:</strong>
+                    {{this.type}}<br />
+                    <strong>Duration:</strong>
+                    {{this.duration}}<br />
+                    <strong>Access:</strong>
+                    {{this.access_type}}
+                  </div>
+                </div>
+              {{/each}}
+            </div>
+          {{/if}}
+
+          {{#if billing_address}}
+            <div class="billing-info">
+              <h4>💳 Billing Information</h4>
+              <p><strong>{{billing_address.name}}</strong></p>
+              <p>{{billing_address.address_line_1}}</p>
+              {{#if billing_address.address_line_2}}
+                <p>{{billing_address.address_line_2}}</p>
+              {{/if}}
+              <p>{{billing_address.city}},
+                {{billing_address.state}}
+                {{billing_address.postal_code}}</p>
+              <p>{{billing_address.country}}</p>
+            </div>
+          {{/if}}
+
+          <div class="next-steps">
+            <h4>
+              <span>🚀</span>
+              What's Next?
+            </h4>
+            <ul>
+              {{#if (eq payment_type "subscription")}}
+                <li>Your subscription is now active and ready to use</li>
+                <li>Access all premium features from your dashboard</li>
+                <li>You'll receive billing reminders before each payment</li>
+              {{else}}
+                <li>You now have full access to your enrolled course(s)</li>
+                <li>Start learning immediately from your student dashboard</li>
+                <li>Join our community forums to connect with other students</li>
+              {{/if}}
+              <li>Contact support if you have any questions</li>
+            </ul>
+          </div>
+
+          <div class="action-buttons">
+            <a href="{{dashboard_url}}" class="btn btn-primary">Go to Dashboard</a>
+            <a href="{{receipt_pdf_url}}" class="btn btn-secondary">Download PDF
+              Receipt</a>
+          </div>
+
+          <p
+            style="margin-top: 30px; padding: 20px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #4a6cf7;"
+          >
+            <strong>📞 Need Help?</strong>
+            If you have any questions about this payment or need assistance,
+            please contact our support team at
+            <a
+              href="mailto:billing@medh.co"
+              style="color: #4a6cf7;"
+            >billing@medh.co</a>
+            or call
+            <strong>(555) 123-4567</strong>
+          </p>
+
+          <p
+            style="margin-top: 20px; color: #6b7280; font-size: 14px; text-align: center;"
+          >
+            <strong>Important:</strong>
+            Please keep this receipt for your records. You can always download a
+            PDF copy from your account dashboard.
+          </p>
+        </div>
+
+        <div class="footer">
+          <p><strong>Medh Learning Platform</strong></p>
+          <p>Billing Department</p>
+
+          <div class="social-links">
+            <a href="#" title="Facebook">📘</a>
+            <a href="#" title="Twitter">🐦</a>
+            <a href="#" title="LinkedIn">💼</a>
+            <a href="#" title="Instagram">📸</a>
+          </div>
+
+          <p>
+            <a href="{{privacy_url}}">Privacy Policy</a>
+            |
+            <a href="{{terms_url}}">Terms of Service</a>
+            |
+            <a href="{{billing_url}}">Billing Support</a>
+          </p>
+
+          <p>&copy;
+            {{currentYear}}
+            Medh Learning Platform. All rights reserved.</p>
+
+          <p style="margin-top: 15px; font-size: 12px; color: #9ca3af;">
+            This is an automated receipt. Please do not reply to this email.
+          </p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

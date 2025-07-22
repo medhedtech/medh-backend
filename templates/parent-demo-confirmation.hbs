@@ -1,0 +1,479 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Your Child's Demo Session Confirmed - Medh Learning Platform</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        margin: 0;
+        padding: 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+      .email-wrapper {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 40px 20px;
+        min-height: 100vh;
+      }
+      .container {
+        max-width: 650px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        border-radius: 16px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+      .header {
+        background: linear-gradient(135deg, #4a6cf7 0%, #667eea 100%);
+        color: white;
+        padding: 40px 30px;
+        text-align: center;
+        position: relative;
+      }
+      .header::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><defs><radialGradient id="a" cx=".66" cy=".30" r=".7"><stop offset="0" stop-color="%23ffffff" stop-opacity=".2"/><stop offset=".5" stop-color="%23ffffff" stop-opacity=".05"/><stop offset="1" stop-color="%23ffffff" stop-opacity="0"/></radialGradient></defs><rect width="100" height="20" fill="url(%23a)"/></svg>');
+        opacity: 0.3;
+      }
+      .header-content {
+        position: relative;
+        z-index: 1;
+      }
+      .logo {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 10px;
+        letter-spacing: -0.5px;
+      }
+      .header-subtitle {
+        font-size: 16px;
+        opacity: 0.9;
+        font-weight: 300;
+      }
+      .celebration-icon {
+        font-size: 48px;
+        margin: 20px 0 10px;
+        display: block;
+      }
+      .content {
+        padding: 40px 30px;
+      }
+      .greeting {
+        font-size: 18px;
+        margin-bottom: 25px;
+        color: #2d3748;
+      }
+      .confirmation-section {
+        background: linear-gradient(135deg, #e8f5e8 0%, #f0fff0 100%);
+        border: 2px solid #4caf50;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 30px;
+        text-align: center;
+      }
+      .confirmation-title {
+        color: #2e7d32;
+        font-size: 24px;
+        font-weight: 700;
+        margin: 0 0 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .confirmation-message {
+        color: #388e3c;
+        font-size: 16px;
+        margin: 0;
+        line-height: 1.5;
+      }
+      .demo-details {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 25px;
+        margin: 30px 0;
+      }
+      .details-header {
+        color: #2d3748;
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .details-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 15px;
+      }
+      .detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 15px;
+        background: white;
+        border-radius: 8px;
+        border-left: 4px solid #4a6cf7;
+      }
+      .detail-label {
+        font-weight: 600;
+        color: #4a5568;
+        font-size: 14px;
+      }
+      .detail-value {
+        font-weight: 500;
+        color: #2d3748;
+        text-align: right;
+        max-width: 60%;
+        word-break: break-word;
+      }
+      .student-highlight {
+        background: linear-gradient(135deg, #fef3cd 0%, #fef7e0 100%);
+        border: 2px solid #f59e0b;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 25px 0;
+        text-align: center;
+      }
+      .student-highlight h3 {
+        color: #92400e;
+        margin: 0 0 10px;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .student-highlight p {
+        color: #b45309;
+        margin: 0;
+        font-size: 16px;
+      }
+      .parent-access {
+        background: linear-gradient(135deg, #e6f3ff 0%, #f0f8ff 100%);
+        border-radius: 12px;
+        padding: 25px;
+        margin: 30px 0;
+      }
+      .parent-access h3 {
+        color: #1e40af;
+        margin: 0 0 15px;
+        font-size: 18px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .credential-box {
+        background: white;
+        border: 2px solid #3b82f6;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 15px 0;
+      }
+      .credential-box p {
+        margin: 5px 0;
+        color: #1e3a8a;
+      }
+      .credential-box strong {
+        color: #1d4ed8;
+        font-family: monospace;
+        background: #f1f5f9;
+        padding: 2px 6px;
+        border-radius: 4px;
+      }
+      .preparation-tips {
+        background: #fff5f5;
+        border-left: 4px solid #f56565;
+        border-radius: 0 8px 8px 0;
+        padding: 20px;
+        margin: 25px 0;
+      }
+      .preparation-tips h4 {
+        color: #c53030;
+        margin: 0 0 15px;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .preparation-tips ul {
+        margin: 0;
+        padding-left: 20px;
+        color: #744210;
+      }
+      .preparation-tips li {
+        margin-bottom: 8px;
+        line-height: 1.4;
+      }
+      .action-buttons {
+        display: flex;
+        gap: 15px;
+        justify-content: center;
+        margin: 30px 0;
+        flex-wrap: wrap;
+      }
+      .btn {
+        display: inline-block;
+        padding: 14px 28px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 16px;
+        text-align: center;
+        transition: all 0.3s ease;
+        min-width: 150px;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, #4a6cf7 0%, #667eea 100%);
+        color: white;
+        border: 2px solid transparent;
+      }
+      .btn-primary:hover {
+        background: linear-gradient(135deg, #3b5cf0 0%, #5a67d8 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(74, 108, 247, 0.3);
+      }
+      .btn-secondary {
+        background: white;
+        color: #4a6cf7;
+        border: 2px solid #4a6cf7;
+      }
+      .btn-secondary:hover {
+        background: #4a6cf7;
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(74, 108, 247, 0.2);
+      }
+      .footer {
+        background: #f7fafc;
+        padding: 30px;
+        text-align: center;
+        border-top: 1px solid #e2e8f0;
+      }
+      .footer p {
+        margin: 0 0 10px;
+        color: #718096;
+        font-size: 14px;
+      }
+      .footer a {
+        color: #4a6cf7;
+        text-decoration: none;
+      }
+      .footer a:hover {
+        text-decoration: underline;
+      }
+      .social-links {
+        margin: 20px 0;
+      }
+      .social-links a {
+        display: inline-block;
+        margin: 0 10px;
+        color: #718096;
+        font-size: 18px;
+        text-decoration: none;
+        transition: color 0.3s ease;
+      }
+      .social-links a:hover {
+        color: #4a6cf7;
+      }
+      @media (max-width: 600px) {
+        .email-wrapper {
+          padding: 20px 10px;
+        }
+        .container {
+          border-radius: 8px;
+        }
+        .header,
+        .content {
+          padding: 30px 20px;
+        }
+        .action-buttons {
+          flex-direction: column;
+          align-items: center;
+        }
+        .btn {
+          min-width: auto;
+          width: 100%;
+          max-width: 280px;
+        }
+        .detail-item {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 5px;
+        }
+        .detail-value {
+          text-align: left;
+          max-width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-wrapper">
+      <div class="container">
+        <div class="header">
+          <div class="header-content">
+            <div class="logo">🎓 Medh Learning Platform</div>
+            <div class="header-subtitle">Demo Session Confirmation</div>
+            <div class="celebration-icon">🎉</div>
+          </div>
+        </div>
+
+        <div class="content">
+          <div class="greeting">Dear {{parent_name}},</div>
+
+          <div class="confirmation-section">
+            <div class="confirmation-title">
+              <span>✅</span>
+              Demo Session Confirmed!
+            </div>
+            <div class="confirmation-message">
+              We're excited to confirm your child's demo session with Medh
+              Learning Platform. This is a great opportunity for them to explore
+              our interactive learning environment.
+            </div>
+          </div>
+
+          <div class="student-highlight">
+            <h3>
+              <span>👨‍🎓</span>
+              Student:
+              {{student_name}}
+            </h3>
+            <p>Grade Level: {{grade_level}}</p>
+          </div>
+
+          <div class="demo-details">
+            <div class="details-header">
+              <span>📅</span>
+              Demo Session Details
+            </div>
+            <div class="details-grid">
+              <div class="detail-item">
+                <div class="detail-label">Date</div>
+                <div class="detail-value">{{demo_date}}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Time</div>
+                <div class="detail-value">{{demo_time}}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Course Focus</div>
+                <div class="detail-value">{{course}}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Duration</div>
+                <div class="detail-value">45-60 minutes</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Format</div>
+                <div class="detail-value">Interactive Online Session</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="parent-access">
+            <h3>
+              <span>🔐</span>
+              Parent Dashboard Access
+            </h3>
+            <p>We've created a parent account for you to monitor your child's
+              progress and access session details:</p>
+
+            <div class="credential-box">
+              <p><strong>Email:</strong> <strong>{{parent_email}}</strong></p>
+              <p><strong>Temporary Password:</strong>
+                <strong>{{temporary_password}}</strong></p>
+            </div>
+
+            <p style="margin: 15px 0 0; color: #7c3aed; font-size: 14px;">
+              <strong>🔒 Security Note:</strong>
+              Please change this password after your first login for security.
+            </p>
+          </div>
+
+          <div class="preparation-tips">
+            <h4>
+              <span>💡</span>
+              Preparation Tips for Success
+            </h4>
+            <ul>
+              <li><strong>Technical Setup:</strong>
+                Ensure a stable internet connection and a quiet environment</li>
+              <li><strong>Device:</strong>
+                Computer/laptop with camera and microphone (tablets work too)</li>
+              <li><strong>Browser:</strong>
+                Chrome, Firefox, or Safari (latest versions recommended)</li>
+              <li><strong>Parental Support:</strong>
+                Be available to assist if needed, especially for younger
+                students</li>
+              <li><strong>Materials:</strong>
+                Notebook and pen for taking notes during the session</li>
+            </ul>
+          </div>
+
+          <div class="action-buttons">
+            <a href="{{dashboard_url}}" class="btn btn-primary">Access Parent
+              Dashboard</a>
+            <a href="{{support_url}}" class="btn btn-secondary">Contact Support</a>
+          </div>
+
+          <p
+            style="margin-top: 30px; padding: 20px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #4a6cf7;"
+          >
+            <strong>📞 Need Help?</strong>
+            If you have any questions or need to reschedule, please contact our
+            support team at
+            <a
+              href="mailto:demo@medh.co"
+              style="color: #4a6cf7;"
+            >demo@medh.co</a>
+            or call us at
+            <strong>(555) 123-4567</strong>
+          </p>
+
+          <p
+            style="margin-top: 20px; color: #6b7280; font-size: 14px; text-align: center;"
+          >
+            <strong>What to Expect:</strong>
+            Our instructor will guide your child through an interactive learning
+            experience, showcase our platform features, and answer any questions
+            you or your child may have about our programs.
+          </p>
+        </div>
+
+        <div class="footer">
+          <p><strong>Medh Learning Platform</strong></p>
+          <p>Empowering young minds through innovative education</p>
+
+          <div class="social-links">
+            <a href="#" title="Facebook">📘</a>
+            <a href="#" title="Twitter">🐦</a>
+            <a href="#" title="LinkedIn">💼</a>
+            <a href="#" title="Instagram">📸</a>
+          </div>
+
+          <p>
+            <a href="{{privacy_url}}">Privacy Policy</a>
+            |
+            <a href="{{terms_url}}">Terms of Service</a>
+            |
+            <a href="{{unsubscribe_url}}">Unsubscribe</a>
+          </p>
+
+          <p>&copy;
+            {{currentYear}}
+            Medh Learning Platform. All rights reserved.</p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

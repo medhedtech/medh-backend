@@ -1,0 +1,383 @@
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Partnership Inquiry Received - MEDH</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background-color: #f8fafc;
+      }
+
+      .email-container {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .logo {
+        font-size: 28px;
+        font-weight: bold;
+        margin-bottom: 8px;
+      }
+
+      .header-subtitle {
+        font-size: 16px;
+        opacity: 0.9;
+      }
+
+      .content {
+        padding: 40px 30px;
+      }
+
+      .greeting {
+        font-size: 18px;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 20px;
+      }
+
+      .inquiry-details {
+        background-color: #f0fff4;
+        border: 1px solid #9ae6b4;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 25px 0;
+      }
+
+      .detail-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #c6f6d5;
+      }
+
+      .detail-row:last-child {
+        border-bottom: none;
+      }
+
+      .detail-label {
+        font-weight: 600;
+        color: #276749;
+        font-size: 14px;
+      }
+
+      .detail-value {
+        color: #2d3748;
+        font-weight: 500;
+        font-size: 14px;
+      }
+
+      .inquiry-id {
+        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        color: white;
+        padding: 3px 10px;
+        border-radius: 12px;
+        font-family: "Courier New", monospace;
+        font-size: 13px;
+        font-weight: bold;
+      }
+
+      .process-timeline {
+        margin: 30px 0;
+      }
+
+      .timeline-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 15px;
+      }
+
+      .timeline-steps {
+        list-style: none;
+        padding: 0;
+      }
+
+      .timeline-step {
+        padding: 12px 0;
+        border-left: 3px solid #c6f6d5;
+        padding-left: 20px;
+        margin-left: 10px;
+        position: relative;
+      }
+
+      .timeline-step:before {
+        content: "";
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background-color: #48bb78;
+        position: absolute;
+        left: -7px;
+        top: 16px;
+      }
+
+      .step-title {
+        font-weight: 600;
+        color: #2d3748;
+        font-size: 14px;
+      }
+
+      .step-description {
+        color: #4a5568;
+        font-size: 13px;
+        margin-top: 4px;
+      }
+
+      .contact-info {
+        background-color: #edf7ed;
+        border-left: 4px solid #48bb78;
+        padding: 20px;
+        border-radius: 0 8px 8px 0;
+        margin: 25px 0;
+      }
+
+      .contact-title {
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 10px;
+        font-size: 16px;
+      }
+
+      .footer {
+        background-color: #2d3748;
+        color: #a0aec0;
+        text-align: center;
+        padding: 30px;
+        font-size: 14px;
+      }
+
+      .footer-logo {
+        color: white;
+        font-weight: bold;
+        font-size: 18px;
+        margin-bottom: 8px;
+      }
+
+      .footer-links {
+        margin: 15px 0;
+      }
+
+      .footer-links a {
+        color: #48bb78;
+        text-decoration: none;
+        margin: 0 10px;
+      }
+
+      .footer-links a:hover {
+        text-decoration: underline;
+      }
+
+      .disclaimer {
+        margin-top: 20px;
+        font-size: 12px;
+        color: #718096;
+        line-height: 1.5;
+      }
+
+      @media (max-width: 600px) {
+        .email-container {
+          margin: 0;
+          border-radius: 0;
+        }
+
+        .content {
+          padding: 30px 20px;
+        }
+
+        .header {
+          padding: 25px 20px;
+        }
+
+        .detail-row {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 5px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <!-- Header -->
+      <div class="header">
+        <div class="logo">🤝 MEDH</div>
+        <div class="header-subtitle">Educational Partnerships</div>
+      </div>
+
+      <!-- Content -->
+      <div class="content">
+        <div class="greeting">
+          Dear
+          {{representative_name}},
+        </div>
+
+        <p>Thank you for submitting your application to partner with Medh! We
+          are delighted that
+          <strong>{{school_name}}</strong>
+          is interested in collaborating with us to bring innovative skill
+          development programs to your students.</p>
+
+        <!-- Inquiry Details -->
+        <div class="inquiry-details">
+          <div class="detail-row">
+            <div class="detail-label">Inquiry ID:</div>
+            <div class="detail-value">
+              <span class="inquiry-id">{{inquiry_id}}</span>
+            </div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Institution:</div>
+            <div class="detail-value">{{school_name}}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Institution Type:</div>
+            <div class="detail-value">{{institution_type}}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Submission Date:</div>
+            <div class="detail-value">{{formatDate
+                submitted_at
+                "MMMM DD, YYYY"
+              }}</div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Status:</div>
+            <div class="detail-value">Under Review</div>
+          </div>
+        </div>
+
+        <p><strong>Your Inquiry ID: {{inquiry_id}}</strong></p>
+
+        <p>We have successfully received your partnership inquiry submitted
+          through our website. Our educational partnerships team is reviewing
+          your information with great interest, as we are always excited to
+          connect with forward-thinking institutions committed to enhancing
+          student learning experiences.</p>
+
+        <!-- Process Timeline -->
+        <div class="process-timeline">
+          <div class="timeline-title">🚀 Here's what you can expect over the
+            coming weeks:</div>
+          <ul class="timeline-steps">
+            <li class="timeline-step">
+              <div class="step-title">Initial Review (2-3 business days)</div>
+              <div class="step-description">Our partnerships team will evaluate
+                your application and institutional profile</div>
+            </li>
+            <li class="timeline-step">
+              <div class="step-title">Preliminary Discussion (Week 1)</div>
+              <div class="step-description">A partnership coordinator will
+                contact you to schedule an initial conversation about mutual
+                goals and expectations</div>
+            </li>
+            <li class="timeline-step">
+              <div class="step-title">Needs Assessment (Week 2)</div>
+              <div class="step-description">We'll work together to identify
+                specific skill development programs that align with your
+                curriculum and student needs</div>
+            </li>
+            <li class="timeline-step">
+              <div class="step-title">Partnership Proposal (Week 3)</div>
+              <div class="step-description">Our team will develop a customized
+                partnership plan including program offerings, implementation
+                timeline, and resource requirements</div>
+            </li>
+            <li class="timeline-step">
+              <div class="step-title">Agreement Finalization (Week 4-5)</div>
+              <div class="step-description">Review and finalization of
+                partnership terms and operational details</div>
+            </li>
+          </ul>
+        </div>
+
+        <p>We aim to reach out within
+          <strong>2 business days</strong>
+          to schedule the preliminary discussion. This conversation will help us
+          better understand your institution's specific needs and how Medh's
+          programs can complement your educational objectives.</p>
+
+        <p>Our partnerships are built on shared values of educational
+          innovation, practical skill development, and preparing students for
+          future success. We're excited about the possibility of collaborating
+          with your institution to achieve these goals.</p>
+
+        <div class="contact-info">
+          <div class="contact-title">🤝 Educational Partnerships Division</div>
+          <p>If you have any immediate questions or would like to provide
+            additional information about your institution, please contact our
+            Partnerships Team:</p>
+          <p><strong>Email:</strong> partnerships@medh.co</p>
+          <p><strong>Phone:</strong> +91 77108 40696</p>
+          <p><strong>Please reference your Inquiry ID:
+              {{inquiry_id}}
+              in all communications.</strong></p>
+        </div>
+
+        <p>We look forward to exploring this partnership opportunity with you
+          and thank you for considering Medh as your skill development education
+          partner.</p>
+
+        <p style="margin-top: 30px;">
+          <strong>Warm regards,</strong><br />
+          Partnerships Team<br />
+          <strong>MEDH Learning Platform</strong>
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <div class="footer-logo">MEDH</div>
+        <div>Transforming education through innovative partnerships</div>
+
+        <div class="footer-links">
+          <a href="https://www.medh.co/privacy-policy">Privacy Policy</a>
+          |
+          <a href="https://www.medh.co/terms-of-service">Terms of Service</a>
+          |
+          <a href="mailto:partnerships@medh.co">Contact Partnerships</a>
+        </div>
+
+        <div class="disclaimer">
+          <p>&copy;
+            {{currentYear}}
+            MEDH Learning Platform. All rights reserved.</p>
+          <p style="margin-top: 10px;">This email confirms receipt of your
+            partnership inquiry. Our team will be in touch within 2 business
+            days to discuss next steps.</p>
+          <p style="margin-top: 10px;">
+            <strong>MEDH Learning Platform</strong><br />
+            📧 partnerships@medh.co | 📞 +91 77108 40696<br />
+            🌐
+            <a
+              href="https://www.medh.co"
+              style="color: #48bb78;"
+            >www.medh.co</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

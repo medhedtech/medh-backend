@@ -169,6 +169,247 @@ export const submitForm = catchAsync(async (req, res, next) => {
 });
 
 /**
+ * @desc    Submit Career Application Form
+ * @route   POST /api/v1/forms/career-application
+ * @access  Public
+ */
+export const submitCareerApplication = catchAsync(async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: "Validation failed",
+      errors: errors.array(),
+    });
+  }
+
+  // Generate unique reference ID
+  const referenceId = `CAR-${new Date().getFullYear()}${(new Date().getMonth() + 1).toString().padStart(2, "0")}${new Date().getDate().toString().padStart(2, "0")}-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+
+  const formData = {
+    ...req.body,
+    form_type: "career_application",
+    form_id: referenceId,
+    status: "submitted",
+    priority: "medium",
+    submitted_at: new Date(),
+    ip_address: req.ip || req.connection.remoteAddress,
+    user_agent: req.get("User-Agent"),
+  };
+
+  const form = new UniversalForm(formData);
+  await form.save();
+
+  // Send acknowledgment email
+  try {
+    await sendCareerApplicationAcknowledgment(form);
+    logger.info(`Career application acknowledgment sent for ${referenceId}`);
+  } catch (emailError) {
+    logger.error(
+      "Failed to send career application acknowledgment:",
+      emailError,
+    );
+  }
+
+  // Send admin notification
+  try {
+    await sendAdminNotification(form, "New Career Application Received");
+  } catch (emailError) {
+    logger.error("Failed to send admin notification:", emailError);
+  }
+
+  res.status(201).json({
+    success: true,
+    message: "Career application submitted successfully",
+    data: {
+      reference_id: referenceId,
+      status: form.status,
+      submitted_at: form.submitted_at,
+    },
+  });
+});
+
+/**
+ * @desc    Submit Partnership Inquiry Form
+ * @route   POST /api/v1/forms/partnership-inquiry
+ * @access  Public
+ */
+export const submitPartnershipInquiry = catchAsync(async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: "Validation failed",
+      errors: errors.array(),
+    });
+  }
+
+  // Generate unique reference ID
+  const referenceId = `PART-${new Date().getFullYear()}${(new Date().getMonth() + 1).toString().padStart(2, "0")}${new Date().getDate().toString().padStart(2, "0")}-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+
+  const formData = {
+    ...req.body,
+    form_type: "school_institute_partnership_inquiry",
+    form_id: referenceId,
+    status: "submitted",
+    priority: "high",
+    submitted_at: new Date(),
+    ip_address: req.ip || req.connection.remoteAddress,
+    user_agent: req.get("User-Agent"),
+  };
+
+  const form = new UniversalForm(formData);
+  await form.save();
+
+  // Send acknowledgment email
+  try {
+    await sendPartnershipInquiryAcknowledgment(form);
+    logger.info(`Partnership inquiry acknowledgment sent for ${referenceId}`);
+  } catch (emailError) {
+    logger.error(
+      "Failed to send partnership inquiry acknowledgment:",
+      emailError,
+    );
+  }
+
+  // Send admin notification
+  try {
+    await sendAdminNotification(form, "New Partnership Inquiry Received");
+  } catch (emailError) {
+    logger.error("Failed to send admin notification:", emailError);
+  }
+
+  res.status(201).json({
+    success: true,
+    message: "Partnership inquiry submitted successfully",
+    data: {
+      reference_id: referenceId,
+      status: form.status,
+      submitted_at: form.submitted_at,
+    },
+  });
+});
+
+/**
+ * @desc    Submit Educator Application Form
+ * @route   POST /api/v1/forms/educator-application
+ * @access  Public
+ */
+export const submitEducatorApplication = catchAsync(async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: "Validation failed",
+      errors: errors.array(),
+    });
+  }
+
+  // Generate unique reference ID
+  const referenceId = `EDU-${new Date().getFullYear()}${(new Date().getMonth() + 1).toString().padStart(2, "0")}${new Date().getDate().toString().padStart(2, "0")}-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+
+  const formData = {
+    ...req.body,
+    form_type: "educator_application",
+    form_id: referenceId,
+    status: "submitted",
+    priority: "high",
+    submitted_at: new Date(),
+    ip_address: req.ip || req.connection.remoteAddress,
+    user_agent: req.get("User-Agent"),
+  };
+
+  const form = new UniversalForm(formData);
+  await form.save();
+
+  // Send acknowledgment email
+  try {
+    await sendEducatorApplicationAcknowledgment(form);
+    logger.info(`Educator application acknowledgment sent for ${referenceId}`);
+  } catch (emailError) {
+    logger.error(
+      "Failed to send educator application acknowledgment:",
+      emailError,
+    );
+  }
+
+  // Send admin notification
+  try {
+    await sendAdminNotification(form, "New Educator Application Received");
+  } catch (emailError) {
+    logger.error("Failed to send admin notification:", emailError);
+  }
+
+  res.status(201).json({
+    success: true,
+    message: "Educator application submitted successfully",
+    data: {
+      reference_id: referenceId,
+      status: form.status,
+      submitted_at: form.submitted_at,
+    },
+  });
+});
+
+/**
+ * @desc    Submit Contact Us Form
+ * @route   POST /api/v1/forms/contact-us
+ * @access  Public
+ */
+export const submitContactForm = catchAsync(async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: "Validation failed",
+      errors: errors.array(),
+    });
+  }
+
+  // Generate unique reference ID
+  const referenceId = `CONT-${new Date().getFullYear()}${(new Date().getMonth() + 1).toString().padStart(2, "0")}${new Date().getDate().toString().padStart(2, "0")}-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
+
+  const formData = {
+    ...req.body,
+    form_type: "contact_us",
+    form_id: referenceId,
+    status: "submitted",
+    priority: "medium",
+    submitted_at: new Date(),
+    ip_address: req.ip || req.connection.remoteAddress,
+    user_agent: req.get("User-Agent"),
+  };
+
+  const form = new UniversalForm(formData);
+  await form.save();
+
+  // Send acknowledgment email
+  try {
+    await sendContactFormAcknowledgment(form);
+    logger.info(`Contact form acknowledgment sent for ${referenceId}`);
+  } catch (emailError) {
+    logger.error("Failed to send contact form acknowledgment:", emailError);
+  }
+
+  // Send admin notification
+  try {
+    await sendAdminNotification(form, "New Contact Form Submission");
+  } catch (emailError) {
+    logger.error("Failed to send admin notification:", emailError);
+  }
+
+  res.status(201).json({
+    success: true,
+    message: "Contact form submitted successfully",
+    data: {
+      reference_id: referenceId,
+      status: form.status,
+      submitted_at: form.submitted_at,
+    },
+  });
+});
+
+/**
  * @desc    Get all forms with filtering and pagination
  * @route   GET /api/v1/forms
  * @access  Private (Admin)
@@ -666,21 +907,19 @@ function extractUtmParams(query) {
 async function sendFormConfirmationEmail(form) {
   if (!emailService) return;
 
-  const emailData = {
-    to: form.contact_info.email,
-    subject: `Form Submission Confirmation - ${form.form_id}`,
-    template: "form-confirmation",
-    data: {
-      name: form.contact_info.full_name,
-      form_type: form.form_type.replace("_", " ").toUpperCase(),
-      form_id: form.form_id,
-      message:
-        form.message.substring(0, 200) +
-        (form.message.length > 200 ? "..." : ""),
-    },
+  const formData = {
+    name: form.contact_info.full_name,
+    form_type: form.form_type.replace("_", " ").toUpperCase(),
+    form_id: form.form_id,
+    message:
+      form.message.substring(0, 200) + (form.message.length > 200 ? "..." : ""),
+    submitted_at: form.submitted_at || new Date(),
   };
 
-  await emailService.sendEmail(emailData);
+  await emailService.sendFormConfirmationEmail(
+    form.contact_info.email,
+    formData,
+  );
 }
 
 async function sendFormNotificationEmail(form) {
@@ -820,8 +1059,6 @@ async function sendDemoConfirmationEmail(
   const studentGrade = form.student_details?.grade || "N/A";
 
   if (isUnder16) {
-    subject = "Your Child's Medh Demo Session is Confirmed!";
-    template = "parent-demo-confirmation"; // New template for parents
     emailData = {
       parent_name: recipientName,
       student_name: studentName,
@@ -832,9 +1069,11 @@ async function sendDemoConfirmationEmail(
       parent_email: recipientEmail,
       temporary_password: temporaryPassword,
     };
+    await emailService.sendParentDemoConfirmationEmail(
+      recipientEmail,
+      emailData,
+    );
   } else {
-    subject = "Your Medh Demo Session is Confirmed!";
-    template = "student-demo-confirmation"; // New template for students 16+
     emailData = {
       name: recipientName,
       demo_date: demoDate,
@@ -843,15 +1082,11 @@ async function sendDemoConfirmationEmail(
       email: recipientEmail,
       temporary_password: temporaryPassword,
     };
+    await emailService.sendStudentDemoConfirmationEmail(
+      recipientEmail,
+      emailData,
+    );
   }
-
-  await emailService.sendEmail({
-    to: recipientEmail,
-    from: "demo@medh.co", // As per requirement
-    subject: subject,
-    template: template,
-    data: emailData,
-  });
   logger.info(
     `Demo confirmation email sent to ${recipientEmail} for form ${form.form_id}`,
   );
@@ -885,6 +1120,148 @@ async function createCalendarInvite(form) {
     `Placeholder: Creating calendar invite for form ${form.form_id}.`,
   );
   // Implement actual calendar invite creation logic here (e.g., using Google Calendar API, Outlook Calendar API)
+}
+
+// Email service functions for new form types
+async function sendCareerApplicationAcknowledgment(form) {
+  if (!emailService) return;
+
+  const emailData = {
+    applicant_name: form.contact_info.full_name,
+    reference_id: form.form_id,
+    position: form.post_applying_for || "General Application",
+    application_date: form.submitted_at.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }),
+    email: form.contact_info.email,
+    phone: form.contact_info.phone_number,
+    experience: form.employment_info?.has_work_experience ? "Yes" : "No",
+    work_preference:
+      form.employment_info?.work_location_preference || "Not specified",
+  };
+
+  await emailService.sendCareerApplicationAcknowledgment(
+    form.contact_info.email,
+    emailData,
+  );
+}
+
+async function sendPartnershipInquiryAcknowledgment(form) {
+  if (!emailService) return;
+
+  const emailData = {
+    representative_name: form.contact_info.full_name,
+    reference_id: form.form_id,
+    institution_name:
+      form.school_info?.school_name ||
+      form.professional_info?.company_name ||
+      "Not specified",
+    institution_type: form.school_info?.school_type || "Not specified",
+    location:
+      form.school_info?.city_state || form.contact_info.city || "Not specified",
+    student_count: form.school_info?.student_count || "Not specified",
+    services_interested:
+      form.partnership_info?.services_of_interest?.join(", ") ||
+      "Not specified",
+    inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }),
+    email: form.contact_info.email,
+    phone: form.contact_info.phone_number,
+  };
+
+  await emailService.sendPartnershipInquiryAcknowledgment(
+    form.contact_info.email,
+    emailData,
+  );
+}
+
+async function sendEducatorApplicationAcknowledgment(form) {
+  if (!emailService) return;
+
+  const emailData = {
+    educator_name: form.contact_info.full_name,
+    reference_id: form.form_id,
+    teaching_subjects:
+      form.subject_areas?.primary_subjects?.join(", ") || "Not specified",
+    grade_levels:
+      form.subject_areas?.grade_levels?.join(", ") || "Not specified",
+    teaching_mode: form.preferred_teaching_mode || "Not specified",
+    availability: form.availability?.hours_per_week || "Not specified",
+    application_date: form.submitted_at.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }),
+    email: form.contact_info.email,
+    phone: form.contact_info.phone_number,
+    experience: form.professional_info?.experience_level || "Not specified",
+  };
+
+  await emailService.sendEducatorApplicationAcknowledgment(
+    form.contact_info.email,
+    emailData,
+  );
+}
+
+async function sendContactFormAcknowledgment(form) {
+  if (!emailService) return;
+
+  const emailData = {
+    name: form.contact_info.full_name,
+    reference_id: form.form_id,
+    subject: form.subject || "General Inquiry",
+    inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }),
+    email: form.contact_info.email,
+    phone: form.contact_info.phone_number,
+    message_preview:
+      form.message.substring(0, 150) + (form.message.length > 150 ? "..." : ""),
+  };
+
+  await emailService.sendContactFormAcknowledgment(
+    form.contact_info.email,
+    emailData,
+  );
+}
+
+async function sendAdminNotification(form, subject) {
+  if (!emailService) return;
+
+  const adminEmail = process.env.ADMIN_EMAIL || "admin@medh.com";
+
+  const emailData = {
+    to: adminEmail,
+    subject: `${subject} - ${form.form_id}`,
+    template: "admin-notification",
+    data: {
+      form_type: form.form_type.replace(/_/g, " ").toUpperCase(),
+      reference_id: form.form_id,
+      applicant_name: form.contact_info.full_name,
+      email: form.contact_info.email,
+      phone: form.contact_info.phone_number || "Not provided",
+      submitted_date: form.submitted_at.toLocaleString(),
+      message_preview: form.message
+        ? form.message.substring(0, 200) +
+          (form.message.length > 200 ? "..." : "")
+        : "No message provided",
+      priority: form.priority,
+      status: form.status,
+    },
+  };
+
+  await emailService.sendEmail(emailData);
 }
 
 /**
