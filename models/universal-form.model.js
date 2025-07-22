@@ -601,6 +601,31 @@ const studentDetailsSchema = new mongoose.Schema(
       required: function () {
         return !this.parent().is_student_under_16;
       },
+      // ✅ NEW: Normalize value to underscore format
+      set: function (value) {
+        if (!value) return value;
+
+        // Replace spaces with underscores and lowercase
+        const normalized = value.toLowerCase().replace(/\s+/g, "_");
+
+        // Handle special cases
+        if (normalized === "post-graduate" || normalized === "post_graduate") {
+          return "post_graduate";
+        }
+        if (normalized === "undergraduate") {
+          return "undergraduate";
+        }
+        if (normalized === "graduate") {
+          return "graduate";
+        }
+        if (normalized === "10th_passed" || normalized === "10th") {
+          return "10th_passed";
+        }
+        if (normalized === "12th_passed" || normalized === "12th") {
+          return "12th_passed";
+        }
+        return normalized;
+      },
     },
     currently_studying: {
       type: Boolean,
