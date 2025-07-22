@@ -39,134 +39,954 @@ export const submitForm = catchAsync(async (req, res, next) => {
     ...req.body,
     ip_address: ipAddress,
     user_agent: userAgent,
-    device_info: deviceInfo,
+    browser_info: deviceInfo,
     ...utmParams,
     source: req.body.source || "website",
     submitted_at: new Date(),
   };
 
-  // If user is authenticated, add user_id
+  // If user is authenticated, add user_id for auto-fill
   if (req.user) {
     formData.user_id = req.user._id;
   }
 
-  // Create the form
-  const form = new UniversalForm(formData);
-  await form.save();
+  // Create the form with auto-fill if user is logged in
+  const form = await UniversalForm.createWithAutoFill(formData, req.user?._id);
 
   // Handle post-submission actions based on form_type
-  if (form.form_type === "book_a_free_demo_session") {
-    let userEmail = "";
-    let userName = "";
-    let temporaryPassword = "";
-    let createdUser = null;
+  switch (form.form_type) {
+    case "candidate_application":
+      await handleCandidateApplication(form);
+      break;
+    case "school_partnership":
+      await handleSchoolPartnership(form);
+      break;
+    case "educator_application":
+      await handleEducatorApplication(form);
+      break;
+    case "general_contact":
+      await handleGeneralContact(form);
+      break;
+    // Enhanced contact form types
+    case "corporate_training_inquiry":
+      await handleCorporateTrainingInquiry(form);
+      break;
+    case "membership_inquiry":
+      await handleMembershipInquiry(form);
+      break;
+    case "hire_from_medh_inquiry":
+      await handleHireFromMedhInquiry(form);
+      break;
+    case "course_inquiry":
+      await handleCourseInquiry(form);
+      break;
+    case "support_request":
+      await handleSupportRequest(form);
+      break;
+    case "partnership_inquiry":
+      await handlePartnershipInquiry(form);
+      break;
+    case "media_inquiry":
+      await handleMediaInquiry(form);
+      break;
+    case "technical_support":
+      await handleTechnicalSupport(form);
+      break;
+    case "billing_inquiry":
+      await handleBillingInquiry(form);
+      break;
+    case "feedback_submission":
+      await handleFeedbackSubmission(form);
+      break;
+    case "book_a_free_demo_session":
+      // Keep existing demo session logic
+      await handleDemoSession(form);
+      break;
+    default:
+      // Handle other form types with original logic
+      await handleGenericForm(form);
+      break;
+  }
 
-    if (form.is_student_under_16) {
-      userEmail = form.parent_details.email;
-      userName = form.parent_details.name;
-    } else {
-      userEmail = form.student_details.email;
-      userName = form.student_details.name;
-    }
+  // Prepare response data
+  const responseData = {
+    application_id: form.application_id,
+    form_type: form.form_type,
+    status: form.status,
+    submitted_at: form.submitted_at,
+    acknowledgment_sent: form.acknowledgment_sent,
+  };
 
-    try {
-      createdUser = await createTemporaryUser({
-        email: userEmail,
-        full_name: userName,
-        role: form.is_student_under_16
-          ? "parent_demo_user"
-          : "student_demo_user",
-      });
-      temporaryPassword = createdUser.temporaryPassword;
-      // Optionally update form with created user ID
-      form.user_id = createdUser.user._id;
-      await form.save(); // Save again to link user_id
-    } catch (userCreateError) {
-      logger.error(
-        "Failed to create temporary user for demo session:",
-        userCreateError,
-      );
-      // Don't fail the request if user creation fails, but log it.
-    }
-
-    // Send demo confirmation email
-    try {
-      await sendDemoConfirmationEmail(
-        form,
-        temporaryPassword,
-        createdUser ? createdUser.user.email : userEmail,
-        createdUser ? createdUser.user.full_name : userName,
-      );
-    } catch (emailError) {
-      logger.error("Failed to send demo confirmation email:", emailError);
-    }
-
-    // Send WhatsApp confirmation (placeholder)
-    try {
-      await sendWhatsAppConfirmation(form, temporaryPassword);
-    } catch (waError) {
-      logger.error("Failed to send WhatsApp confirmation:", waError);
-    }
-
-    // Integrate with CRM (placeholder)
-    try {
-      await integrateWithCRM(form);
-    } catch (crmError) {
-      logger.error("Failed to integrate with CRM:", crmError);
-    }
-
-    // Create calendar invite (placeholder)
-    try {
-      await createCalendarInvite(form);
-    } catch (calendarError) {
-      logger.error("Failed to create calendar invite:", calendarError);
-    }
-
-    // Send notification email to admin about new demo booking
-    try {
-      await sendFormNotificationEmail(form);
-    } catch (emailError) {
-      logger.error("Failed to send notification email to admin:", emailError);
-    }
-
-    logger.info(`Demo Session Form submitted: ${form.form_id}`, {
-      formId: form._id,
-      email: userEmail,
-      isStudentUnder16: form.is_student_under_16,
-    });
-  } else {
-    // Original logic for other form types
-    // Send confirmation email to user
-    try {
-      await sendFormConfirmationEmail(form);
-    } catch (emailError) {
-      logger.error("Failed to send confirmation email:", emailError);
-    }
-
-    // Send notification email to admin
-    try {
-      await sendFormNotificationEmail(form);
-    } catch (emailError) {
-      logger.error("Failed to send notification email:", emailError);
-    }
-
-    logger.info(`Form submitted: ${form.form_type} - ${form.form_id}`, {
-      formId: form._id,
-      formType: form.form_type,
-      email: form.contact_info.email,
-    });
+  // Add auto-fill information if applicable
+  if (form.auto_filled) {
+    responseData.auto_filled = true;
+    responseData.auto_fill_source = form.auto_fill_source;
+    responseData.auto_filled_fields = form.auto_filled_fields;
   }
 
   res.status(201).json({
     success: true,
-    message: "Form submitted successfully",
-    data: {
-      form_id: form.form_id,
-      status: form.status,
-      submitted_at: form.submitted_at,
-    },
+    message: getSuccessMessage(form.form_type),
+    data: responseData,
   });
 });
+
+/**
+ * @desc    Get auto-fill data for logged-in users
+ * @route   GET /api/v1/forms/auto-fill
+ * @access  Private
+ */
+export const getAutoFillData = catchAsync(async (req, res, next) => {
+  if (!req.user?.id) {
+    return res.status(401).json({
+      success: false,
+      message: "Authentication required for auto-fill",
+    });
+  }
+
+  const autoFillData = await UniversalForm.getAutoFillData(req.user.id);
+
+  if (!autoFillData) {
+    return res.status(404).json({
+      success: false,
+      message: "User profile not found",
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "Auto-fill data retrieved successfully",
+    data: autoFillData,
+  });
+});
+
+/**
+ * @desc    Get countries list with phone codes and enhanced data
+ * @route   GET /api/v1/forms/countries
+ * @access  Public
+ */
+export const getCountries = catchAsync(async (req, res, next) => {
+  const {
+    format = "full",
+    search,
+    continent,
+    popular,
+    phone_codes_only,
+  } = req.query;
+
+  let countries;
+
+  try {
+    // Import the country service
+    const countryService = (await import("../utils/countryService.js")).default;
+
+    switch (format) {
+      case "dropdown":
+        countries = countryService.getCountriesForDropdown();
+        break;
+      case "phone":
+        countries = countryService.getCountriesWithPhoneCodes();
+        break;
+      case "popular":
+        countries = countryService.getPopularCountries();
+        break;
+      default:
+        countries = countryService.getAllCountries();
+    }
+
+    // Apply filters
+    if (search) {
+      countries = countryService.searchCountries(search);
+    }
+
+    if (continent) {
+      countries = countryService.getCountriesByContinent(continent);
+    }
+
+    if (popular === "true") {
+      countries = countries.filter((country) => country.priority >= 25);
+    }
+
+    if (phone_codes_only === "true") {
+      countries = countries.filter((country) => country.phone);
+    }
+
+    // Limit results for performance (max 250 countries)
+    const limitedCountries = countries.slice(0, 250);
+
+    res.status(200).json({
+      success: true,
+      data: limitedCountries,
+      meta: {
+        total: countries.length,
+        returned: limitedCountries.length,
+        format: format,
+        filters: {
+          search: search || null,
+          continent: continent || null,
+          popular: popular === "true",
+          phone_codes_only: phone_codes_only === "true",
+        },
+      },
+    });
+  } catch (error) {
+    // Fallback to basic countries list if service fails
+    console.warn(
+      "Country service failed, falling back to basic list:",
+      error.message,
+    );
+
+    const { countries: basicCountries } = await import("countries-list");
+    const countryList = Object.entries(basicCountries).map(
+      ([code, country]) => ({
+        code: code,
+        name: country.name,
+        phone: country.phone ? `+${country.phone}` : null,
+        emoji: country.emoji,
+        flag: country.emoji,
+      }),
+    );
+
+    res.status(200).json({
+      success: true,
+      data: countryList,
+      meta: {
+        total: countryList.length,
+        returned: countryList.length,
+        format: "fallback",
+        note: "Using fallback country data",
+      },
+    });
+  }
+});
+
+/**
+ * @desc    Get live courses for demo session booking
+ * @route   GET /api/v1/forms/live-courses
+ * @access  Public
+ */
+export const getLiveCourses = catchAsync(async (req, res, next) => {
+  const liveCourses = await LiveCourse.find({
+    status: "published",
+    is_active: true,
+  }).select("title description course_type category");
+
+  res.status(200).json({
+    success: true,
+    data: liveCourses,
+  });
+});
+
+// Handler for candidate applications
+const handleCandidateApplication = async (form) => {
+  try {
+    // Send acknowledgment email using existing email service
+    await emailService.sendCareerApplicationAcknowledgment(
+      form.contact_info.email,
+      {
+        applicant_name: form.contact_info.full_name,
+        reference_id: form.application_id,
+        position: form.post_applying_for || "General Application",
+        application_date: form.submitted_at.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        email: form.contact_info.email,
+        phone:
+          form.contact_info.mobile_number?.formatted ||
+          form.contact_info.mobile_number?.number,
+        experience: form.employment_info?.has_work_experience ? "Yes" : "No",
+        work_preference:
+          form.employment_info?.preferred_work_mode || "Not specified",
+      },
+    );
+
+    // Send admin notification
+    await sendAdminNotification(form, "New Career Application Received");
+
+    // Mark acknowledgment as sent
+    await form.markAcknowledged();
+
+    logger.info(`Career application submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+      position: form.post_applying_for,
+    });
+  } catch (error) {
+    logger.error("Error handling candidate application:", error);
+  }
+};
+
+// Handler for school partnerships
+const handleSchoolPartnership = async (form) => {
+  try {
+    // Send acknowledgment email using existing email service
+    await emailService.sendPartnershipInquiryAcknowledgment(
+      form.contact_info.email,
+      {
+        representative_name: form.contact_info.full_name,
+        reference_id: form.application_id,
+        institution_name: form.institution_info?.name || "Not specified",
+        institution_type: form.institution_info?.type || "Not specified",
+        location: form.contact_info.city || "Not specified",
+        services_interested:
+          form.partnership_details?.program_interests?.join(", ") ||
+          "Not specified",
+        inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        email: form.contact_info.email,
+        phone:
+          form.contact_info.mobile_number?.formatted ||
+          form.contact_info.mobile_number?.number,
+      },
+    );
+
+    // Send admin notification
+    await sendAdminNotification(form, "New Partnership Inquiry Received");
+
+    // Mark acknowledgment as sent
+    await form.markAcknowledged();
+
+    logger.info(`Partnership inquiry submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+      institution: form.institution_info?.name,
+    });
+  } catch (error) {
+    logger.error("Error handling school partnership:", error);
+  }
+};
+
+// Handler for educator applications
+const handleEducatorApplication = async (form) => {
+  try {
+    // Send acknowledgment email using existing email service
+    await emailService.sendEducatorApplicationAcknowledgment(
+      form.contact_info.email,
+      {
+        educator_name: form.contact_info.full_name,
+        reference_id: form.application_id,
+        teaching_subjects:
+          form.teaching_info?.subject_areas?.join(", ") || "Not specified",
+        grade_levels:
+          form.teaching_info?.grade_levels?.join(", ") || "Not specified",
+        teaching_mode:
+          form.teaching_info?.preferred_teaching_mode || "Not specified",
+        availability:
+          form.teaching_info?.availability?.weekly_hours || "Not specified",
+        application_date: form.submitted_at.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        email: form.contact_info.email,
+        phone:
+          form.contact_info.mobile_number?.formatted ||
+          form.contact_info.mobile_number?.number,
+        experience: form.education_info?.years_of_experience || "Not specified",
+      },
+    );
+
+    // Send admin notification
+    await sendAdminNotification(form, "New Educator Application Received");
+
+    // Mark acknowledgment as sent
+    await form.markAcknowledged();
+
+    logger.info(`Educator application submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+      subjects: form.teaching_info?.subject_areas,
+    });
+  } catch (error) {
+    logger.error("Error handling educator application:", error);
+  }
+};
+
+// Handler for general contact
+const handleGeneralContact = async (form) => {
+  try {
+    // Send acknowledgment email using existing email service
+    await emailService.sendContactFormAcknowledgment(form.contact_info.email, {
+      name: form.contact_info.full_name,
+      reference_id: form.application_id,
+      subject: form.subject || "General Inquiry",
+      inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+      email: form.contact_info.email,
+      phone:
+        form.contact_info.mobile_number?.formatted ||
+        form.contact_info.mobile_number?.number,
+      message_preview:
+        form.message.substring(0, 150) +
+        (form.message.length > 150 ? "..." : ""),
+    });
+
+    // Send admin notification
+    await sendAdminNotification(form, "New Contact Form Submission");
+
+    // Mark acknowledgment as sent
+    await form.markAcknowledged();
+
+    logger.info(`Contact form submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+      subject: form.subject,
+    });
+  } catch (error) {
+    logger.error("Error handling general contact:", error);
+  }
+};
+
+// Enhanced contact form handlers
+
+// Handler for corporate training inquiries
+const handleCorporateTrainingInquiry = async (form) => {
+  try {
+    await emailService.sendCorporateTrainingInquiryAcknowledgment(
+      form.contact_info.email,
+      {
+        contact_name: form.contact_info.full_name,
+        reference_id: form.application_id,
+        designation: form.professional_info?.designation || "Not specified",
+        company_name: form.professional_info?.company_name || "Not specified",
+        company_website:
+          form.professional_info?.company_website || "Not provided",
+        company_size:
+          form.professional_info?.company_size ||
+          form.inquiry_details?.company_size ||
+          "Not specified",
+        industry: form.professional_info?.industry || "Not specified",
+        training_type:
+          form.training_requirements?.training_type || "Not specified",
+        training_mode: form.training_requirements?.training_mode || "Flexible",
+        participants_count:
+          form.training_requirements?.participants_count || "Not specified",
+        duration_preference:
+          form.training_requirements?.duration_preference || "Not specified",
+        budget_range:
+          form.training_requirements?.budget_range ||
+          form.inquiry_details?.budget_range ||
+          "Not disclosed",
+        timeline:
+          form.training_requirements?.timeline ||
+          form.inquiry_details?.timeline ||
+          "Flexible",
+        specific_skills:
+          form.training_requirements?.specific_skills?.join(", ") ||
+          "Not specified",
+        custom_requirements:
+          form.training_requirements?.custom_requirements ||
+          form.message ||
+          "Not specified",
+        inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        email: form.contact_info.email,
+        phone:
+          form.contact_info.mobile_number?.formatted ||
+          form.contact_info.mobile_number?.number,
+      },
+    );
+
+    await sendAdminNotification(form, "New Corporate Training Inquiry");
+    await form.markAcknowledged();
+
+    logger.info(
+      `Corporate training inquiry submitted: ${form.application_id}`,
+      {
+        formId: form._id,
+        email: form.contact_info.email,
+        company: form.professional_info?.company_name,
+        designation: form.professional_info?.designation,
+        trainingType: form.training_requirements?.training_type,
+        participantsCount: form.training_requirements?.participants_count,
+      },
+    );
+  } catch (error) {
+    logger.error("Error handling corporate training inquiry:", error);
+  }
+};
+
+// Handler for membership inquiries
+const handleMembershipInquiry = async (form) => {
+  try {
+    await emailService.sendMembershipInquiryAcknowledgment(
+      form.contact_info.email,
+      {
+        member_name: form.contact_info.full_name,
+        reference_id: form.application_id,
+        inquiry_type: form.inquiry_details?.inquiry_type || "membership_plans",
+        preferred_contact:
+          form.inquiry_details?.preferred_contact_method || "email",
+        inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        email: form.contact_info.email,
+        phone:
+          form.contact_info.mobile_number?.formatted ||
+          form.contact_info.mobile_number?.number,
+      },
+    );
+
+    await sendAdminNotification(form, "New Membership Inquiry");
+    await form.markAcknowledged();
+
+    logger.info(`Membership inquiry submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+    });
+  } catch (error) {
+    logger.error("Error handling membership inquiry:", error);
+  }
+};
+
+// Handler for hire from Medh inquiries
+const handleHireFromMedhInquiry = async (form) => {
+  try {
+    await emailService.sendHireFromMedhInquiryAcknowledgment(
+      form.contact_info.email,
+      {
+        hr_name: form.contact_info.full_name,
+        reference_id: form.application_id,
+        company_size: form.inquiry_details?.company_size || "Not specified",
+        timeline: form.inquiry_details?.timeline || "Not specified",
+        additional_requirements:
+          form.inquiry_details?.additional_requirements || "None specified",
+        inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        email: form.contact_info.email,
+        phone:
+          form.contact_info.mobile_number?.formatted ||
+          form.contact_info.mobile_number?.number,
+      },
+    );
+
+    await sendAdminNotification(form, "New Hire from Medh Inquiry");
+    await form.markAcknowledged();
+
+    logger.info(`Hire from Medh inquiry submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+    });
+  } catch (error) {
+    logger.error("Error handling hire from Medh inquiry:", error);
+  }
+};
+
+// Handler for course inquiries
+const handleCourseInquiry = async (form) => {
+  try {
+    await emailService.sendCourseInquiryAcknowledgment(
+      form.contact_info.email,
+      {
+        student_name: form.contact_info.full_name,
+        reference_id: form.application_id,
+        course_interests:
+          form.inquiry_details?.course_interest?.join(", ") ||
+          "General inquiry",
+        preferred_contact:
+          form.inquiry_details?.preferred_contact_method || "email",
+        timeline: form.inquiry_details?.timeline || "Not specified",
+        inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        email: form.contact_info.email,
+        phone:
+          form.contact_info.mobile_number?.formatted ||
+          form.contact_info.mobile_number?.number,
+      },
+    );
+
+    await sendAdminNotification(form, "New Course Inquiry");
+    await form.markAcknowledged();
+
+    logger.info(`Course inquiry submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+      courses: form.inquiry_details?.course_interest,
+    });
+  } catch (error) {
+    logger.error("Error handling course inquiry:", error);
+  }
+};
+
+// Handler for support requests
+const handleSupportRequest = async (form) => {
+  try {
+    await emailService.sendSupportRequestAcknowledgment(
+      form.contact_info.email,
+      {
+        user_name: form.contact_info.full_name,
+        reference_id: form.application_id,
+        inquiry_type: form.inquiry_details?.inquiry_type || "general_inquiry",
+        urgency_level: form.inquiry_details?.urgency_level || "medium",
+        subject: form.subject || "Support Request",
+        inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        email: form.contact_info.email,
+        phone:
+          form.contact_info.mobile_number?.formatted ||
+          form.contact_info.mobile_number?.number,
+      },
+    );
+
+    await sendAdminNotification(form, "New Support Request");
+    await form.markAcknowledged();
+
+    logger.info(`Support request submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+      urgency: form.inquiry_details?.urgency_level,
+    });
+  } catch (error) {
+    logger.error("Error handling support request:", error);
+  }
+};
+
+// Handler for partnership inquiries (different from school partnerships)
+const handlePartnershipInquiry = async (form) => {
+  try {
+    await emailService.sendBusinessPartnershipInquiryAcknowledgment(
+      form.contact_info.email,
+      {
+        partner_name: form.contact_info.full_name,
+        reference_id: form.application_id,
+        inquiry_type:
+          form.inquiry_details?.inquiry_type || "partnership_opportunities",
+        company_size: form.inquiry_details?.company_size || "Not specified",
+        timeline: form.inquiry_details?.timeline || "Not specified",
+        inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        email: form.contact_info.email,
+        phone:
+          form.contact_info.mobile_number?.formatted ||
+          form.contact_info.mobile_number?.number,
+      },
+    );
+
+    await sendAdminNotification(form, "New Business Partnership Inquiry");
+    await form.markAcknowledged();
+
+    logger.info(`Partnership inquiry submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+    });
+  } catch (error) {
+    logger.error("Error handling partnership inquiry:", error);
+  }
+};
+
+// Handler for media inquiries
+const handleMediaInquiry = async (form) => {
+  try {
+    await emailService.sendMediaInquiryAcknowledgment(form.contact_info.email, {
+      journalist_name: form.contact_info.full_name,
+      reference_id: form.application_id,
+      inquiry_type: form.inquiry_details?.inquiry_type || "media_press",
+      subject: form.subject || "Media Inquiry",
+      inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+      email: form.contact_info.email,
+      phone:
+        form.contact_info.mobile_number?.formatted ||
+        form.contact_info.mobile_number?.number,
+    });
+
+    await sendAdminNotification(form, "New Media Inquiry");
+    await form.markAcknowledged();
+
+    logger.info(`Media inquiry submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+    });
+  } catch (error) {
+    logger.error("Error handling media inquiry:", error);
+  }
+};
+
+// Handler for technical support
+const handleTechnicalSupport = async (form) => {
+  try {
+    await emailService.sendTechnicalSupportAcknowledgment(
+      form.contact_info.email,
+      {
+        user_name: form.contact_info.full_name,
+        reference_id: form.application_id,
+        urgency_level: form.inquiry_details?.urgency_level || "medium",
+        subject: form.subject || "Technical Support Request",
+        inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        email: form.contact_info.email,
+        phone:
+          form.contact_info.mobile_number?.formatted ||
+          form.contact_info.mobile_number?.number,
+      },
+    );
+
+    await sendAdminNotification(form, "New Technical Support Request");
+    await form.markAcknowledged();
+
+    logger.info(`Technical support request submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+      urgency: form.inquiry_details?.urgency_level,
+    });
+  } catch (error) {
+    logger.error("Error handling technical support:", error);
+  }
+};
+
+// Handler for billing inquiries
+const handleBillingInquiry = async (form) => {
+  try {
+    await emailService.sendBillingInquiryAcknowledgment(
+      form.contact_info.email,
+      {
+        customer_name: form.contact_info.full_name,
+        reference_id: form.application_id,
+        inquiry_type: form.inquiry_details?.inquiry_type || "billing_payment",
+        urgency_level: form.inquiry_details?.urgency_level || "medium",
+        subject: form.subject || "Billing Inquiry",
+        inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        email: form.contact_info.email,
+        phone:
+          form.contact_info.mobile_number?.formatted ||
+          form.contact_info.mobile_number?.number,
+      },
+    );
+
+    await sendAdminNotification(form, "New Billing Inquiry");
+    await form.markAcknowledged();
+
+    logger.info(`Billing inquiry submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+    });
+  } catch (error) {
+    logger.error("Error handling billing inquiry:", error);
+  }
+};
+
+// Handler for feedback submissions
+const handleFeedbackSubmission = async (form) => {
+  try {
+    await emailService.sendFeedbackSubmissionAcknowledgment(
+      form.contact_info.email,
+      {
+        user_name: form.contact_info.full_name,
+        reference_id: form.application_id,
+        feedback_type:
+          form.inquiry_details?.inquiry_type || "feedback_complaint",
+        subject: form.subject || "Feedback Submission",
+        inquiry_date: form.submitted_at.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        }),
+        email: form.contact_info.email,
+        phone:
+          form.contact_info.mobile_number?.formatted ||
+          form.contact_info.mobile_number?.number,
+      },
+    );
+
+    await sendAdminNotification(form, "New Feedback Submission");
+    await form.markAcknowledged();
+
+    logger.info(`Feedback submission submitted: ${form.application_id}`, {
+      formId: form._id,
+      email: form.contact_info.email,
+    });
+  } catch (error) {
+    logger.error("Error handling feedback submission:", error);
+  }
+};
+
+// Handler for demo sessions (keep existing logic)
+const handleDemoSession = async (form) => {
+  let userEmail = "";
+  let userName = "";
+  let temporaryPassword = "";
+  let createdUser = null;
+
+  // Use the main contact_info for email and name (DRY approach)
+  userEmail = form.contact_info.email;
+  userName = form.contact_info.full_name;
+
+  try {
+    createdUser = await createTemporaryUser({
+      email: userEmail,
+      full_name: userName,
+      role: form.is_student_under_16 ? "parent_demo_user" : "student_demo_user",
+    });
+    temporaryPassword = createdUser.temporaryPassword;
+    // Optionally update form with created user ID
+    form.user_id = createdUser.user._id;
+    await form.save(); // Save again to link user_id
+  } catch (userCreateError) {
+    logger.error(
+      "Failed to create temporary user for demo session:",
+      userCreateError,
+    );
+    // Don't fail the request if user creation fails, but log it.
+  }
+
+  // Send demo confirmation email
+  try {
+    await sendDemoConfirmationEmail(
+      form,
+      temporaryPassword,
+      userEmail,
+      userName,
+    );
+  } catch (emailError) {
+    logger.error("Failed to send demo confirmation email:", emailError);
+  }
+
+  // Send WhatsApp confirmation (placeholder)
+  try {
+    await sendWhatsAppConfirmation(form, temporaryPassword);
+  } catch (waError) {
+    logger.error("Failed to send WhatsApp confirmation:", waError);
+  }
+
+  // Integrate with CRM (placeholder)
+  try {
+    await integrateWithCRM(form);
+  } catch (crmError) {
+    logger.error("Failed to integrate with CRM:", crmError);
+  }
+
+  // Create calendar invite (placeholder)
+  try {
+    await createCalendarInvite(form);
+  } catch (calendarError) {
+    logger.error("Failed to create calendar invite:", calendarError);
+  }
+
+  // Send notification email to admin about new demo booking
+  try {
+    await sendFormNotificationEmail(form);
+  } catch (emailError) {
+    logger.error("Failed to send notification email to admin:", emailError);
+  }
+
+  logger.info(`Demo Session Form submitted: ${form.application_id}`, {
+    formId: form._id,
+    email: userEmail,
+    isStudentUnder16: form.is_student_under_16,
+  });
+};
+
+// Handler for generic forms (keep existing logic)
+const handleGenericForm = async (form) => {
+  // Original logic for other form types
+  // Send confirmation email to user
+  try {
+    await sendFormConfirmationEmail(form);
+  } catch (emailError) {
+    logger.error("Failed to send confirmation email:", emailError);
+  }
+
+  // Send notification email to admin
+  try {
+    await sendFormNotificationEmail(form);
+  } catch (emailError) {
+    logger.error("Failed to send notification email:", emailError);
+  }
+
+  logger.info(`Form submitted: ${form.form_type} - ${form.application_id}`, {
+    formId: form._id,
+    formType: form.form_type,
+    email: form.contact_info.email,
+  });
+};
+
+// Helper function to get success message
+const getSuccessMessage = (formType) => {
+  const messages = {
+    candidate_application:
+      "Your job application has been submitted successfully. We'll review your application and get back to you soon.",
+    educator_application:
+      "Your educator application has been submitted successfully. Our academic team will review your qualifications and contact you within 2-3 business days.",
+    school_partnership:
+      "Your partnership inquiry has been submitted successfully. Our partnerships team will reach out to discuss collaboration opportunities.",
+    general_contact:
+      "Your message has been sent successfully. We'll respond to your inquiry within 24-48 hours.",
+    book_a_free_demo_session:
+      "Your demo session has been booked successfully. Check your email for login credentials and session details.",
+    // Enhanced contact form messages
+    corporate_training_inquiry:
+      "Thank you for your interest in our corporate training programs. Our sales team will contact you within 24 hours to discuss your requirements.",
+    membership_inquiry:
+      "Thank you for your interest in Medh Membership. Our team will reach out with detailed information and pricing within 24 hours.",
+    hire_from_medh_inquiry:
+      "Thank you for considering Medh for your hiring needs. Our partnerships team will contact you to discuss how we can help you find the right talent.",
+    course_inquiry:
+      "Thank you for your interest in our courses. Our admissions team will provide you with detailed course information and enrollment assistance.",
+    support_request:
+      "Your support request has been received. Our support team will assist you within 24 hours during business days.",
+    partnership_inquiry:
+      "Thank you for your partnership inquiry. Our business development team will review your proposal and respond within 2-3 business days.",
+    media_inquiry:
+      "Thank you for your media inquiry. Our communications team will respond with the requested information within 24-48 hours.",
+    technical_support:
+      "Your technical support request has been logged. Our technical team will investigate and respond within 4-6 hours during business hours.",
+    billing_inquiry:
+      "Your billing inquiry has been received. Our billing team will review your account and respond within 24 hours.",
+    feedback_submission:
+      "Thank you for your valuable feedback. We appreciate your input and will use it to improve our services.",
+  };
+
+  return messages[formType] || "Form submitted successfully.";
+};
 
 /**
  * @desc    Submit Career Application Form
@@ -407,6 +1227,147 @@ export const submitContactForm = catchAsync(async (req, res, next) => {
       submitted_at: form.submitted_at,
     },
   });
+});
+
+/**
+ * @desc    Submit Corporate Training Inquiry Form (Dedicated endpoint)
+ * @route   POST /api/v1/forms/corporate-training
+ * @access  Public
+ */
+export const submitCorporateTraining = catchAsync(async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      success: false,
+      message: "Validation failed",
+      errors: errors.array(),
+    });
+  }
+
+  // Extract IP and device information
+  const ipAddress = req.ip || req.connection.remoteAddress;
+  const userAgent = req.get("User-Agent");
+  const deviceInfo = parseUserAgent(userAgent);
+
+  // Transform frontend data to match Universal Form Model
+  const {
+    full_name,
+    email,
+    country,
+    phone_number,
+    designation,
+    company_name,
+    company_website,
+    training_requirements,
+    terms_accepted,
+    // Optional additional fields
+    company_size,
+    industry,
+    training_type,
+    training_mode,
+    participants_count,
+    duration_preference,
+    budget_range,
+    timeline,
+    specific_skills,
+  } = req.body;
+
+  // Parse phone number if it's a string format
+  let formattedPhone = phone_number;
+  if (typeof phone_number === "string") {
+    // Assume it's already formatted like "+919876543210"
+    formattedPhone = {
+      country_code: phone_number.substring(0, phone_number.length - 10),
+      number: phone_number.substring(phone_number.length - 10),
+    };
+  }
+
+  // Create form data structure matching Universal Form Model
+  const formData = {
+    form_type: "corporate_training_inquiry",
+
+    // Contact information
+    contact_info: {
+      first_name: full_name.split(" ")[0] || "",
+      last_name: full_name.split(" ").slice(1).join(" ") || "",
+      full_name: full_name,
+      email: email.toLowerCase().trim(),
+      mobile_number: formattedPhone,
+      city: "", // Not provided in frontend form
+      country: country || "IN",
+    },
+
+    // Professional information
+    professional_info: {
+      designation: designation.trim(),
+      company_name: company_name.trim(),
+      company_website: company_website?.trim() || null,
+      industry: industry || null,
+      company_size: company_size || null,
+    },
+
+    // Training requirements (store main message + structured data)
+    training_requirements: {
+      training_type: training_type || "other",
+      training_mode: training_mode || "flexible",
+      participants_count: participants_count || null,
+      duration_preference: duration_preference || null,
+      budget_range: budget_range || "not_disclosed",
+      timeline: timeline || "flexible",
+      specific_skills: specific_skills || [],
+      custom_requirements: training_requirements.trim(),
+    },
+
+    // For backward compatibility, also store in message field
+    subject: "Corporate Training Inquiry",
+    message: training_requirements.trim(),
+
+    // Consent and metadata
+    consent: {
+      terms_and_privacy: terms_accepted === true,
+      data_collection_consent: terms_accepted === true,
+      marketing_consent: false,
+    },
+
+    // System metadata
+    ip_address: ipAddress,
+    user_agent: userAgent,
+    browser_info: deviceInfo,
+    source: "website_form",
+    submitted_at: new Date(),
+  };
+
+  // If user is authenticated, add user_id for auto-fill
+  if (req.user) {
+    formData.user_id = req.user._id;
+  }
+
+  // Create the form
+  const form = await UniversalForm.createWithAutoFill(formData, req.user?._id);
+
+  // Handle corporate training specific processing
+  await handleCorporateTrainingInquiry(form);
+
+  // Prepare response
+  const responseData = {
+    success: true,
+    message:
+      "Corporate training inquiry submitted successfully. Our partnerships team will contact you within 24 hours.",
+    data: {
+      form_id: form.application_id,
+      submission_date: form.submitted_at,
+      status: form.status,
+      priority: form.priority,
+    },
+  };
+
+  // Add auto-fill information if applicable
+  if (form.auto_filled) {
+    responseData.data.auto_filled = true;
+    responseData.data.auto_fill_source = form.auto_fill_source;
+  }
+
+  res.status(201).json(responseData);
 });
 
 /**
@@ -1088,7 +2049,7 @@ async function sendDemoConfirmationEmail(
     );
   }
   logger.info(
-    `Demo confirmation email sent to ${recipientEmail} for form ${form.form_id}`,
+    `Demo confirmation email sent to ${recipientEmail} for form ${form.application_id}`,
   );
 }
 
@@ -1263,18 +2224,3 @@ async function sendAdminNotification(form, subject) {
 
   await emailService.sendEmail(emailData);
 }
-
-/**
- * @desc    Get all live courses
- * @route   GET /api/v1/courses/live
- * @access  Public
- */
-export const getLiveCourses = catchAsync(async (req, res, next) => {
-  const liveCourses = await LiveCourse.find({ status: "published" }).select(
-    "title description",
-  );
-  res.status(200).json({
-    success: true,
-    data: liveCourses,
-  });
-});

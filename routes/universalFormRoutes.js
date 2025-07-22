@@ -13,21 +13,43 @@ import {
   getPendingForms,
   getFormAnalytics,
   exportForms,
-  getLiveCourses,
   submitCareerApplication,
   submitPartnershipInquiry,
   submitEducatorApplication,
   submitContactForm,
+  submitCorporateTraining,
+  getAutoFillData,
+  getCountries,
+  getLiveCourses,
 } from "../controllers/universalFormController.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { validateFormSubmission } from "../middleware/validators/universalFormValidator.js";
+import { validateCorporateTrainingForm } from "../middleware/validators/corporateTrainingValidator.js";
 
 const router = express.Router();
 
 // Public routes
-router.post("/submit", validateFormSubmission, submitForm);
+router.get("/countries", getCountries);
+router.get("/countries/search", getCountries); // Same endpoint with search support
+router.get("/countries/popular", (req, res, next) => {
+  req.query.popular = "true";
+  getCountries(req, res, next);
+});
+router.get("/countries/phone-codes", (req, res, next) => {
+  req.query.format = "phone";
+  getCountries(req, res, next);
+});
+router.get("/live-courses", getLiveCourses);
+router.post("/submit", submitForm);
+router.post(
+  "/corporate-training",
+  validateCorporateTrainingForm,
+  submitCorporateTraining,
+);
 router.get("/lookup/:formId", getFormByFormId);
-router.get("/courses/live", getLiveCourses);
+
+// Auto-fill route (requires authentication)
+router.get("/auto-fill", authenticateToken, getAutoFillData);
 
 // Specific form submission routes
 router.post(
