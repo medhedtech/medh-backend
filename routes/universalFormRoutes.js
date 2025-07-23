@@ -18,6 +18,8 @@ import {
   submitEducatorApplication,
   submitContactForm,
   submitCorporateTraining,
+  submitFormById,
+  getFormDashboardStats,
   getAutoFillData,
   getCountries,
   getLiveCourses,
@@ -261,12 +263,18 @@ router.post(
 
 // Admin routes (require authentication)
 router.use(authenticateToken);
+
 router.get("/", getAllForms);
+router.get("/dashboard-stats", getFormDashboardStats);
 router.get("/analytics", getFormAnalytics);
 router.get("/pending", getPendingForms);
 router.get("/export", exportForms);
 router.get("/type/:formType", getFormsByType);
+
+// Form ID routes - these handle both MongoDB ObjectId and custom form_id
 router.get("/:id", getFormById);
+router.post("/:id", submitFormById); // NEW: Handle form submission by ID
+router.post("/:id/submit", submitFormById); // NEW: Alternative submission endpoint
 router.put("/:id", updateForm);
 router.put("/:id/assign", assignForm);
 router.post("/:id/notes", addInternalNote);

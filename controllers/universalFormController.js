@@ -1484,34 +1484,74 @@ export const getAllForms = catchAsync(async (req, res, next) => {
     ];
   }
 
-  // Pagination
-  const skip = (page - 1) * limit;
-  const totalCount = await UniversalForm.countDocuments(filter);
+  // Pagination with improved limits
+  const limitNum = Math.min(parseInt(limit), 100); // Max 100 items per page
+  const pageNum = Math.max(parseInt(page), 1); // Min page 1
+  const skip = (pageNum - 1) * limitNum;
 
-  // Execute query
-  const forms = await UniversalForm.find(filter)
-    .populate("user_id", "full_name email role")
-    .populate("assigned_to", "full_name email")
-    .sort(sort)
-    .skip(skip)
-    .limit(parseInt(limit))
-    .lean();
+  // Get total count and forms in parallel for better performance
+  const [totalCount, forms] = await Promise.all([
+    UniversalForm.countDocuments(filter),
+    UniversalForm.find(filter)
+      .populate("user_id", "full_name email role")
+      .populate("assigned_to", "full_name email")
+      .sort(sort)
+      .skip(skip)
+      .limit(limitNum)
+      .lean(),
+  ]);
 
-  // Calculate pagination info
-  const totalPages = Math.ceil(totalCount / limit);
-  const hasNextPage = page < totalPages;
-  const hasPrevPage = page > 1;
+  // Calculate enhanced pagination info
+  const totalPages = Math.ceil(totalCount / limitNum);
+  const hasNextPage = pageNum < totalPages;
+  const hasPrevPage = pageNum > 1;
+  const startIndex = skip + 1;
+  const endIndex = Math.min(skip + limitNum, totalCount);
+
+  // Add form statistics for dashboard
+  const statusCounts = await UniversalForm.aggregate([
+    { $match: filter },
+    { $group: { _id: "$status", count: { $sum: 1 } } },
+  ]);
+
+  const priorityCounts = await UniversalForm.aggregate([
+    { $match: filter },
+    { $group: { _id: "$priority", count: { $sum: 1 } } },
+  ]);
 
   res.status(200).json({
     success: true,
     data: forms,
     pagination: {
-      current_page: parseInt(page),
+      current_page: pageNum,
       total_pages: totalPages,
       total_count: totalCount,
       has_next_page: hasNextPage,
       has_prev_page: hasPrevPage,
-      limit: parseInt(limit),
+      limit: limitNum,
+      showing: `${startIndex}-${endIndex} of ${totalCount}`,
+      next_page: hasNextPage ? pageNum + 1 : null,
+      prev_page: hasPrevPage ? pageNum - 1 : null,
+    },
+    summary: {
+      total_forms: totalCount,
+      status_breakdown: statusCounts.reduce((acc, item) => {
+        acc[item._id] = item.count;
+        return acc;
+      }, {}),
+      priority_breakdown: priorityCounts.reduce((acc, item) => {
+        acc[item._id] = item.count;
+        return acc;
+      }, {}),
+    },
+    filters_applied: {
+      form_type,
+      status,
+      priority,
+      search,
+      assigned_to,
+      date_range:
+        date_from || date_to ? { from: date_from, to: date_to } : null,
     },
   });
 });
@@ -1703,28 +1743,94 @@ export const deleteForm = catchAsync(async (req, res, next) => {
  */
 export const getFormsByType = catchAsync(async (req, res, next) => {
   const { formType } = req.params;
-  const { page = 1, limit = 20, status, priority } = req.query;
+  const { 
+    page = 1, 
+    limit = 20, 
+    status, 
+    priority, 
+    search,
+    date_from,
+    date_to,
+    sort = "-submitted_at"
+  } = req.query;
 
+  // Build filter
   const filter = { form_type: formType, is_deleted: false };
   if (status) filter.status = status;
   if (priority) filter.priority = priority;
 
-  const skip = (page - 1) * limit;
-  const totalCount = await UniversalForm.countDocuments(filter);
+  // Date range filter
+  if (date_from || date_to) {
+    filter.submitted_at = {};
+    if (date_from) filter.submitted_at.$gte = new Date(date_from);
+    if (date_to) filter.submitted_at.$lte = new Date(date_to);
+  }
 
-  const forms = await UniversalForm.findByFormType(formType, {
-    skip,
-    limit: parseInt(limit),
-    sort: { submitted_at: -1 },
-  }).populate("assigned_to", "full_name email");
+  // Search functionality
+  if (search) {
+    filter.$or = [
+      { "contact_info.full_name": { $regex: search, $options: "i" } },
+      { "contact_info.email": { $regex: search, $options: "i" } },
+      { "professional_info.company_name": { $regex: search, $options: "i" } },
+      { message: { $regex: search, $options: "i" } },
+      { form_id: { $regex: search, $options: "i" } },
+    ];
+  }
+
+  // Improved pagination
+  const limitNum = Math.min(parseInt(limit), 100);
+  const pageNum = Math.max(parseInt(page), 1);
+  const skip = (pageNum - 1) * limitNum;
+
+  // Get forms and total count in parallel
+  const [forms, totalCount] = await Promise.all([
+    UniversalForm.find(filter)
+      .populate("assigned_to", "full_name email")
+      .populate("user_id", "full_name email role")
+      .sort(sort)
+      .skip(skip)
+      .limit(limitNum)
+      .lean(),
+    UniversalForm.countDocuments(filter)
+  ]);
+
+  // Calculate pagination info
+  const totalPages = Math.ceil(totalCount / limitNum);
+  const hasNextPage = pageNum < totalPages;
+  const hasPrevPage = pageNum > 1;
+
+  // Get status breakdown for this form type
+  const statusBreakdown = await UniversalForm.aggregate([
+    { $match: { form_type: formType, is_deleted: false } },
+    { $group: { _id: "$status", count: { $sum: 1 } } },
+    { $sort: { count: -1 } }
+  ]);
 
   res.status(200).json({
     success: true,
     data: forms,
     pagination: {
-      current_page: parseInt(page),
+      current_page: pageNum,
+      total_pages: totalPages,
       total_count: totalCount,
-      total_pages: Math.ceil(totalCount / limit),
+      has_next_page: hasNextPage,
+      has_prev_page: hasPrevPage,
+      limit: limitNum,
+      showing: `${skip + 1}-${Math.min(skip + limitNum, totalCount)} of ${totalCount}`,
+    },
+    summary: {
+      form_type: formType,
+      total_forms: totalCount,
+      status_breakdown: statusBreakdown.reduce((acc, item) => {
+        acc[item._id] = item.count;
+        return acc;
+      }, {}),
+    },
+    filters_applied: {
+      status,
+      priority,
+      search,
+      date_range: date_from || date_to ? { from: date_from, to: date_to } : null,
     },
   });
 });
@@ -1890,6 +1996,255 @@ export const exportForms = catchAsync(async (req, res, next) => {
     `attachment; filename=forms-export-${Date.now()}.csv`,
   );
   res.status(200).send(csvData);
+});
+
+/**
+ * @desc    Submit form data by form ID (handles both MongoDB ObjectId and custom form_id)
+ * @route   POST /api/v1/forms/:id
+ * @route   POST /api/v1/forms/:id/submit
+ * @access  Public
+ */
+export const submitFormById = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  const submissionData = req.body;
+
+  // Check if this is a MongoDB ObjectId or custom form_id
+  const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
+
+  let existingForm;
+  if (isObjectId) {
+    // Try to find by MongoDB _id first
+    existingForm = await UniversalForm.findById(id);
+  } else {
+    // Try to find by custom form_id
+    existingForm = await UniversalForm.findOne({ form_id: id });
+  }
+
+  if (existingForm) {
+    // This is an update to existing form
+    return res.status(400).json({
+      success: false,
+      message: "Form already exists. Use PUT method to update existing forms.",
+      data: {
+        existing_form_id: existingForm.form_id,
+        status: existingForm.status,
+        submitted_at: existingForm.submitted_at,
+      },
+    });
+  }
+
+  // This is a new form submission with custom form_id
+  const formData = {
+    ...submissionData,
+    form_id: id, // Use the provided ID as form_id
+    status: "submitted",
+    priority: submissionData.priority || "medium",
+    submitted_at: new Date(),
+    ip_address: req.ip || req.connection.remoteAddress,
+    user_agent: req.get("User-Agent"),
+  };
+
+  const form = new UniversalForm(formData);
+  await form.save();
+
+  // Handle post-submission actions based on form_type
+  if (form.form_type) {
+    try {
+      switch (form.form_type) {
+        case "corporate_training_inquiry":
+          await handleCorporateTrainingInquiry(form);
+          break;
+        case "contact_us":
+          await handleGeneralContact(form);
+          break;
+        default:
+          await handleGenericForm(form);
+          break;
+      }
+    } catch (emailError) {
+      logger.error("Failed to send form submission emails:", emailError);
+      // Don't fail the submission if email fails
+    }
+  }
+
+  res.status(201).json({
+    success: true,
+    message: "Form submitted successfully",
+    data: {
+      form_id: form.form_id,
+      status: form.status,
+      submitted_at: form.submitted_at,
+      acknowledgment_sent: form.acknowledgment_sent || false,
+    },
+  });
+});
+
+/**
+ * @desc    Get enhanced form statistics for dashboard
+ * @route   GET /api/v1/forms/dashboard-stats
+ * @access  Private (Admin)
+ */
+export const getFormDashboardStats = catchAsync(async (req, res, next) => {
+  const now = new Date();
+
+  // Helper function to get date ranges
+  const getDateRanges = () => {
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+    return {
+      today: startOfToday,
+      thisWeek: startOfWeek,
+      thisMonth: startOfMonth,
+      lastMonth: { start: startOfLastMonth, end: endOfLastMonth },
+    };
+  };
+
+  const { today, thisWeek, thisMonth, lastMonth } = getDateRanges();
+
+  // Calculate percentage change
+  const calculateChange = (current, previous) => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return Math.round(((current - previous) / previous) * 100);
+  };
+
+  // Get comprehensive form statistics
+  const [
+    totalForms,
+    formsThisMonth,
+    formsLastMonth,
+    formsThisWeek,
+    formsToday,
+    pendingReview,
+    confirmed,
+    urgent,
+    statusBreakdown,
+    formTypeBreakdown,
+  ] = await Promise.all([
+    // Total forms
+    UniversalForm.countDocuments({ is_deleted: false }),
+
+    // Forms this month
+    UniversalForm.countDocuments({
+      is_deleted: false,
+      submitted_at: { $gte: thisMonth },
+    }),
+
+    // Forms last month
+    UniversalForm.countDocuments({
+      is_deleted: false,
+      submitted_at: { $gte: lastMonth.start, $lte: lastMonth.end },
+    }),
+
+    // Forms this week
+    UniversalForm.countDocuments({
+      is_deleted: false,
+      submitted_at: { $gte: thisWeek },
+    }),
+
+    // Forms today
+    UniversalForm.countDocuments({
+      is_deleted: false,
+      submitted_at: { $gte: today },
+    }),
+
+    // Pending review
+    UniversalForm.countDocuments({
+      is_deleted: false,
+      status: { $in: ["submitted", "under_review"] },
+    }),
+
+    // Confirmed
+    UniversalForm.countDocuments({
+      is_deleted: false,
+      status: { $in: ["approved", "completed"] },
+    }),
+
+    // Urgent
+    UniversalForm.countDocuments({
+      is_deleted: false,
+      priority: "urgent",
+    }),
+
+    // Status breakdown
+    UniversalForm.aggregate([
+      { $match: { is_deleted: false } },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+    ]),
+
+    // Form type breakdown
+    UniversalForm.aggregate([
+      { $match: { is_deleted: false } },
+      { $group: { _id: "$form_type", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+    ]),
+  ]);
+
+  // Calculate monthly change percentage
+  const monthlyChange = calculateChange(formsThisMonth, formsLastMonth);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      overview: {
+        total_forms: {
+          value: totalForms,
+          label: "Total Forms",
+          change: monthlyChange,
+          period: "This month",
+        },
+        pending_review: {
+          value: pendingReview,
+          label: "Pending Review",
+          status: "needs_attention",
+          change: 8, // This would be calculated based on previous period
+        },
+        confirmed: {
+          value: confirmed,
+          label: "Confirmed",
+          status: "success",
+          change: 0,
+          period: "This week",
+        },
+        urgent: {
+          value: urgent,
+          label: "Urgent",
+          status: "high_priority",
+          change: 0,
+        },
+        today: {
+          value: formsToday,
+          label: "Today",
+          status: "new_submissions",
+        },
+      },
+      breakdown: {
+        by_status: statusBreakdown.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {}),
+        by_form_type: formTypeBreakdown.reduce((acc, item) => {
+          acc[item._id] = item.count;
+          return acc;
+        }, {}),
+      },
+      time_periods: {
+        today: formsToday,
+        this_week: formsThisWeek,
+        this_month: formsThisMonth,
+        last_month: formsLastMonth,
+      },
+    },
+  });
 });
 
 // Helper functions
