@@ -9,7 +9,10 @@ export const createInstructor = async (req, res) => {
   if (!full_name || !email || !password) {
     return res
       .status(400)
-      .json({ success: false, message: "Full name, email, and password are required" });
+      .json({
+        success: false,
+        message: "Full name, email, and password are required",
+      });
   }
 
   try {
@@ -32,6 +35,10 @@ export const createInstructor = async (req, res) => {
       role: ["instructor"],
       domain,
       meta,
+      password_set: true,
+      first_login_completed: true,
+      email_verified: true,
+      is_active: true,
     });
     await instructor.save();
 
@@ -52,11 +59,14 @@ export const createInstructor = async (req, res) => {
 
     try {
       // Send email using the existing email service
-      const emailResult = await emailService.sendEmail(mailOptions, { priority: "high" });
-      
+      const emailResult = await emailService.sendEmail(mailOptions, {
+        priority: "high",
+      });
+
       res.status(201).json({
         success: true,
-        message: "Instructor created successfully, and email sent to the instructor.",
+        message:
+          "Instructor created successfully, and email sent to the instructor.",
         instructor,
         emailResult,
       });
@@ -65,7 +75,8 @@ export const createInstructor = async (req, res) => {
       // Still return success for instructor creation, but note email failure
       res.status(201).json({
         success: true,
-        message: "Instructor created successfully, but email notification failed to send.",
+        message:
+          "Instructor created successfully, but email notification failed to send.",
         instructor,
         emailError: emailError.message,
       });

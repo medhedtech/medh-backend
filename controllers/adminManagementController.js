@@ -19,7 +19,7 @@ export const bulkUserOperations = async (req, res) => {
     if (!operation || !userIds || !Array.isArray(userIds)) {
       return res.status(400).json({
         success: false,
-        message: "Operation and userIds array are required"
+        message: "Operation and userIds array are required",
       });
     }
 
@@ -30,40 +30,40 @@ export const bulkUserOperations = async (req, res) => {
         if (!data?.status) {
           return res.status(400).json({
             success: false,
-            message: "Status is required for status update operation"
+            message: "Status is required for status update operation",
           });
         }
         result = await User.updateMany(
           { _id: { $in: userIds } },
-          { status: data.status, updatedAt: new Date() }
+          { status: data.status, updatedAt: new Date() },
         );
         break;
 
       case "delete":
         result = await User.updateMany(
           { _id: { $in: userIds } },
-          { status: "deleted", deletedAt: new Date(), updatedAt: new Date() }
+          { status: "deleted", deletedAt: new Date(), updatedAt: new Date() },
         );
         break;
 
       case "activate":
         result = await User.updateMany(
           { _id: { $in: userIds } },
-          { status: "active", updatedAt: new Date() }
+          { status: "active", updatedAt: new Date() },
         );
         break;
 
       case "suspend":
         result = await User.updateMany(
           { _id: { $in: userIds } },
-          { status: "suspended", updatedAt: new Date() }
+          { status: "suspended", updatedAt: new Date() },
         );
         break;
 
       default:
         return res.status(400).json({
           success: false,
-          message: "Invalid operation"
+          message: "Invalid operation",
         });
     }
 
@@ -72,15 +72,15 @@ export const bulkUserOperations = async (req, res) => {
       message: `Bulk ${operation} completed successfully`,
       data: {
         matchedCount: result.matchedCount,
-        modifiedCount: result.modifiedCount
-      }
+        modifiedCount: result.modifiedCount,
+      },
     });
   } catch (error) {
     console.error("Error in bulk user operations:", error);
     res.status(500).json({
       success: false,
       message: "Server error while performing bulk operation",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -93,7 +93,7 @@ export const bulkUserOperations = async (req, res) => {
 export const createCourse = async (req, res) => {
   try {
     const courseData = req.body;
-    
+
     // Add creation metadata
     courseData.createdAt = new Date();
     courseData.updatedAt = new Date();
@@ -104,19 +104,22 @@ export const createCourse = async (req, res) => {
 
     const populatedCourse = await Course.findById(course._id)
       .populate("category", "name")
-      .populate("createdBy", "personalInfo.firstName personalInfo.lastName email");
+      .populate(
+        "createdBy",
+        "personalInfo.firstName personalInfo.lastName email",
+      );
 
     res.status(201).json({
       success: true,
       message: "Course created successfully",
-      data: populatedCourse
+      data: populatedCourse,
     });
   } catch (error) {
     console.error("Error creating course:", error);
     res.status(500).json({
       success: false,
       message: "Server error while creating course",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -134,39 +137,41 @@ export const updateCourse = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid course ID format"
+        message: "Invalid course ID format",
       });
     }
 
     updateData.updatedAt = new Date();
     updateData.updatedBy = req.user.id;
 
-    const course = await Course.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    )
+    const course = await Course.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    })
       .populate("category", "name")
-      .populate("createdBy", "personalInfo.firstName personalInfo.lastName email");
+      .populate(
+        "createdBy",
+        "personalInfo.firstName personalInfo.lastName email",
+      );
 
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: "Course not found"
+        message: "Course not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Course updated successfully",
-      data: course
+      data: course,
     });
   } catch (error) {
     console.error("Error updating course:", error);
     res.status(500).json({
       success: false,
       message: "Server error while updating course",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -183,52 +188,52 @@ export const deleteCourse = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid course ID format"
+        message: "Invalid course ID format",
       });
     }
 
     // Check if course has active enrollments
     const activeEnrollments = await Enrollment.countDocuments({
       course_id: id,
-      status: "active"
+      status: "active",
     });
 
     if (activeEnrollments > 0) {
       return res.status(400).json({
         success: false,
-        message: `Cannot delete course with ${activeEnrollments} active enrollments`
+        message: `Cannot delete course with ${activeEnrollments} active enrollments`,
       });
     }
 
     const course = await Course.findByIdAndUpdate(
       id,
-      { 
+      {
         status: "deleted",
         deletedAt: new Date(),
         updatedAt: new Date(),
-        deletedBy: req.user.id
+        deletedBy: req.user.id,
       },
-      { new: true }
+      { new: true },
     );
 
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: "Course not found"
+        message: "Course not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Course deleted successfully",
-      data: course
+      data: course,
     });
   } catch (error) {
     console.error("Error deleting course:", error);
     res.status(500).json({
       success: false,
       message: "Server error while deleting course",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -245,7 +250,7 @@ export const bulkCourseOperations = async (req, res) => {
     if (!operation || !courseIds || !Array.isArray(courseIds)) {
       return res.status(400).json({
         success: false,
-        message: "Operation and courseIds array are required"
+        message: "Operation and courseIds array are required",
       });
     }
 
@@ -257,12 +262,12 @@ export const bulkCourseOperations = async (req, res) => {
         if (!data?.status) {
           return res.status(400).json({
             success: false,
-            message: "Status is required for status update operation"
+            message: "Status is required for status update operation",
           });
         }
         result = await Course.updateMany(
           { _id: { $in: courseIds } },
-          { ...updateData, status: data.status }
+          { ...updateData, status: data.status },
         );
         break;
 
@@ -270,12 +275,12 @@ export const bulkCourseOperations = async (req, res) => {
         if (!data?.category) {
           return res.status(400).json({
             success: false,
-            message: "Category is required for category update operation"
+            message: "Category is required for category update operation",
           });
         }
         result = await Course.updateMany(
           { _id: { $in: courseIds } },
-          { ...updateData, category: data.category }
+          { ...updateData, category: data.category },
         );
         break;
 
@@ -283,40 +288,40 @@ export const bulkCourseOperations = async (req, res) => {
         if (data?.price === undefined) {
           return res.status(400).json({
             success: false,
-            message: "Price is required for price update operation"
+            message: "Price is required for price update operation",
           });
         }
         result = await Course.updateMany(
           { _id: { $in: courseIds } },
-          { ...updateData, price: data.price }
+          { ...updateData, price: data.price },
         );
         break;
 
       case "publish":
         result = await Course.updateMany(
           { _id: { $in: courseIds } },
-          { ...updateData, status: "published" }
+          { ...updateData, status: "published" },
         );
         break;
 
       case "unpublish":
         result = await Course.updateMany(
           { _id: { $in: courseIds } },
-          { ...updateData, status: "draft" }
+          { ...updateData, status: "draft" },
         );
         break;
 
       case "delete":
         result = await Course.updateMany(
           { _id: { $in: courseIds } },
-          { ...updateData, status: "deleted", deletedAt: new Date() }
+          { ...updateData, status: "deleted", deletedAt: new Date() },
         );
         break;
 
       default:
         return res.status(400).json({
           success: false,
-          message: "Invalid operation"
+          message: "Invalid operation",
         });
     }
 
@@ -325,15 +330,15 @@ export const bulkCourseOperations = async (req, res) => {
       message: `Bulk ${operation} completed successfully`,
       data: {
         matchedCount: result.matchedCount,
-        modifiedCount: result.modifiedCount
-      }
+        modifiedCount: result.modifiedCount,
+      },
     });
   } catch (error) {
     console.error("Error in bulk course operations:", error);
     res.status(500).json({
       success: false,
       message: "Server error while performing bulk course operation",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -346,7 +351,7 @@ export const bulkCourseOperations = async (req, res) => {
 export const createBatch = async (req, res) => {
   try {
     const batchData = req.body;
-    
+
     // Add creation metadata
     batchData.createdAt = new Date();
     batchData.updatedAt = new Date();
@@ -357,19 +362,22 @@ export const createBatch = async (req, res) => {
 
     const populatedBatch = await Batch.findById(batch._id)
       .populate("course", "title")
-      .populate("instructor", "personalInfo.firstName personalInfo.lastName email");
+      .populate(
+        "instructor",
+        "personalInfo.firstName personalInfo.lastName email",
+      );
 
     res.status(201).json({
       success: true,
       message: "Batch created successfully",
-      data: populatedBatch
+      data: populatedBatch,
     });
   } catch (error) {
     console.error("Error creating batch:", error);
     res.status(500).json({
       success: false,
       message: "Server error while creating batch",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -387,39 +395,41 @@ export const updateBatch = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid batch ID format"
+        message: "Invalid batch ID format",
       });
     }
 
     updateData.updatedAt = new Date();
     updateData.updatedBy = req.user.id;
 
-    const batch = await Batch.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    )
+    const batch = await Batch.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    })
       .populate("course", "title")
-      .populate("instructor", "personalInfo.firstName personalInfo.lastName email");
+      .populate(
+        "instructor",
+        "personalInfo.firstName personalInfo.lastName email",
+      );
 
     if (!batch) {
       return res.status(404).json({
         success: false,
-        message: "Batch not found"
+        message: "Batch not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Batch updated successfully",
-      data: batch
+      data: batch,
     });
   } catch (error) {
     console.error("Error updating batch:", error);
     res.status(500).json({
       success: false,
       message: "Server error while updating batch",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -437,54 +447,61 @@ export const updateEnrollmentStatus = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid enrollment ID format"
+        message: "Invalid enrollment ID format",
       });
     }
 
-    if (!status || !["active", "inactive", "completed", "cancelled", "suspended"].includes(status)) {
+    if (
+      !status ||
+      !["active", "inactive", "completed", "cancelled", "suspended"].includes(
+        status,
+      )
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid status. Must be active, inactive, completed, cancelled, or suspended"
+        message:
+          "Invalid status. Must be active, inactive, completed, cancelled, or suspended",
       });
     }
 
     const updateData = {
       status,
       updatedAt: new Date(),
-      updatedBy: req.user.id
+      updatedBy: req.user.id,
     };
 
     if (reason) {
       updateData.statusReason = reason;
     }
 
-    const enrollment = await Enrollment.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true }
-    )
-      .populate("student_id", "personalInfo.firstName personalInfo.lastName email")
+    const enrollment = await Enrollment.findByIdAndUpdate(id, updateData, {
+      new: true,
+    })
+      .populate(
+        "student_id",
+        "personalInfo.firstName personalInfo.lastName email",
+      )
       .populate("course_id", "title")
       .populate("batch_id", "name");
 
     if (!enrollment) {
       return res.status(404).json({
         success: false,
-        message: "Enrollment not found"
+        message: "Enrollment not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Enrollment status updated successfully",
-      data: enrollment
+      data: enrollment,
     });
   } catch (error) {
     console.error("Error updating enrollment status:", error);
     res.status(500).json({
       success: false,
       message: "Server error while updating enrollment status",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -497,7 +514,7 @@ export const updateEnrollmentStatus = async (req, res) => {
 export const createAnnouncement = async (req, res) => {
   try {
     const announcementData = req.body;
-    
+
     // Add creation metadata
     announcementData.createdAt = new Date();
     announcementData.updatedAt = new Date();
@@ -506,20 +523,24 @@ export const createAnnouncement = async (req, res) => {
     const announcement = new Announcement(announcementData);
     await announcement.save();
 
-    const populatedAnnouncement = await Announcement.findById(announcement._id)
-      .populate("createdBy", "personalInfo.firstName personalInfo.lastName email");
+    const populatedAnnouncement = await Announcement.findById(
+      announcement._id,
+    ).populate(
+      "createdBy",
+      "personalInfo.firstName personalInfo.lastName email",
+    );
 
     res.status(201).json({
       success: true,
       message: "Announcement created successfully",
-      data: populatedAnnouncement
+      data: populatedAnnouncement,
     });
   } catch (error) {
     console.error("Error creating announcement:", error);
     res.status(500).json({
       success: false,
       message: "Server error while creating announcement",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -537,37 +558,39 @@ export const updateAnnouncement = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid announcement ID format"
+        message: "Invalid announcement ID format",
       });
     }
 
     updateData.updatedAt = new Date();
     updateData.updatedBy = req.user.id;
 
-    const announcement = await Announcement.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    ).populate("createdBy", "personalInfo.firstName personalInfo.lastName email");
+    const announcement = await Announcement.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    }).populate(
+      "createdBy",
+      "personalInfo.firstName personalInfo.lastName email",
+    );
 
     if (!announcement) {
       return res.status(404).json({
         success: false,
-        message: "Announcement not found"
+        message: "Announcement not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Announcement updated successfully",
-      data: announcement
+      data: announcement,
     });
   } catch (error) {
     console.error("Error updating announcement:", error);
     res.status(500).json({
       success: false,
       message: "Server error while updating announcement",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -591,7 +614,7 @@ export const getAdminOverview = async (req, res) => {
       monthlyRevenue,
       recentUsers,
       recentEnrollments,
-      topCourses
+      topCourses,
     ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ status: "active" }),
@@ -601,21 +624,26 @@ export const getAdminOverview = async (req, res) => {
       Enrollment.countDocuments({ status: "active" }),
       Order.aggregate([
         { $match: { status: "paid" } },
-        { $group: { _id: null, total: { $sum: "$amount" } } }
-      ]).then(r => r[0]?.total || 0),
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]).then((r) => r[0]?.total || 0),
       Order.aggregate([
-        { 
-          $match: { 
+        {
+          $match: {
             status: "paid",
-            createdAt: { 
-              $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) 
-            }
-          } 
+            createdAt: {
+              $gte: new Date(
+                new Date().getFullYear(),
+                new Date().getMonth(),
+                1,
+              ),
+            },
+          },
         },
-        { $group: { _id: null, total: { $sum: "$amount" } } }
-      ]).then(r => r[0]?.total || 0),
-      User.find({}, null, { sort: { createdAt: -1 }, limit: 5 })
-        .select("personalInfo.firstName personalInfo.lastName email role createdAt"),
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ]).then((r) => r[0]?.total || 0),
+      User.find({}, null, { sort: { createdAt: -1 }, limit: 5 }).select(
+        "personalInfo.firstName personalInfo.lastName email role createdAt",
+      ),
       Enrollment.find({}, null, { sort: { enrollment_date: -1 }, limit: 5 })
         .populate("student_id", "personalInfo.firstName personalInfo.lastName")
         .populate("course_id", "title"),
@@ -623,8 +651,8 @@ export const getAdminOverview = async (req, res) => {
         {
           $group: {
             _id: "$course_id",
-            enrollmentCount: { $sum: 1 }
-          }
+            enrollmentCount: { $sum: 1 },
+          },
         },
         { $sort: { enrollmentCount: -1 } },
         { $limit: 5 },
@@ -633,10 +661,10 @@ export const getAdminOverview = async (req, res) => {
             from: "courses",
             localField: "_id",
             foreignField: "_id",
-            as: "courseInfo"
-          }
-        }
-      ])
+            as: "courseInfo",
+          },
+        },
+      ]),
     ]);
 
     res.status(200).json({
@@ -646,43 +674,56 @@ export const getAdminOverview = async (req, res) => {
           users: {
             total: totalUsers,
             active: activeUsers,
-            inactiveRate: totalUsers > 0 ? ((totalUsers - activeUsers) / totalUsers * 100).toFixed(2) : 0
+            inactiveRate:
+              totalUsers > 0
+                ? (((totalUsers - activeUsers) / totalUsers) * 100).toFixed(2)
+                : 0,
           },
           courses: {
             total: totalCourses,
             published: publishedCourses,
-            publishRate: totalCourses > 0 ? (publishedCourses / totalCourses * 100).toFixed(2) : 0
+            publishRate:
+              totalCourses > 0
+                ? ((publishedCourses / totalCourses) * 100).toFixed(2)
+                : 0,
           },
           enrollments: {
             total: totalEnrollments,
             active: activeEnrollments,
-            completionRate: totalEnrollments > 0 ? (activeEnrollments / totalEnrollments * 100).toFixed(2) : 0
+            completionRate:
+              totalEnrollments > 0
+                ? ((activeEnrollments / totalEnrollments) * 100).toFixed(2)
+                : 0,
           },
           revenue: {
             total: totalRevenue,
             monthly: monthlyRevenue,
-            growth: 0 // Can be calculated with previous month data
-          }
+            growth: 0, // Can be calculated with previous month data
+          },
         },
         recentActivity: {
           newUsers: recentUsers,
           newEnrollments: recentEnrollments,
-          topCourses: topCourses
+          topCourses: topCourses,
         },
         quickActions: [
           { name: "Create Course", endpoint: "/admin/courses", method: "POST" },
           { name: "Create Batch", endpoint: "/admin/batches", method: "POST" },
-          { name: "Create Announcement", endpoint: "/admin/announcements", method: "POST" },
-          { name: "View Reports", endpoint: "/admin/reports", method: "GET" }
-        ]
-      }
+          {
+            name: "Create Announcement",
+            endpoint: "/admin/announcements",
+            method: "POST",
+          },
+          { name: "View Reports", endpoint: "/admin/reports", method: "GET" },
+        ],
+      },
     });
   } catch (error) {
     console.error("Error fetching admin overview:", error);
     res.status(500).json({
       success: false,
       message: "Server error while fetching admin overview",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -699,52 +740,52 @@ export const deleteBatch = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid batch ID format"
+        message: "Invalid batch ID format",
       });
     }
 
     // Check if batch has active enrollments
     const activeEnrollments = await Enrollment.countDocuments({
       batch_id: id,
-      status: "active"
+      status: "active",
     });
 
     if (activeEnrollments > 0) {
       return res.status(400).json({
         success: false,
-        message: `Cannot delete batch with ${activeEnrollments} active enrollments`
+        message: `Cannot delete batch with ${activeEnrollments} active enrollments`,
       });
     }
 
     const batch = await Batch.findByIdAndUpdate(
       id,
-      { 
+      {
         status: "deleted",
         deletedAt: new Date(),
         updatedAt: new Date(),
-        deletedBy: req.user.id
+        deletedBy: req.user.id,
       },
-      { new: true }
+      { new: true },
     );
 
     if (!batch) {
       return res.status(404).json({
         success: false,
-        message: "Batch not found"
+        message: "Batch not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Batch deleted successfully",
-      data: batch
+      data: batch,
     });
   } catch (error) {
     console.error("Error deleting batch:", error);
     res.status(500).json({
       success: false,
       message: "Server error while deleting batch",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -761,39 +802,39 @@ export const deleteAnnouncement = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid announcement ID format"
+        message: "Invalid announcement ID format",
       });
     }
 
     const announcement = await Announcement.findByIdAndUpdate(
       id,
-      { 
+      {
         status: "deleted",
         deletedAt: new Date(),
         updatedAt: new Date(),
-        deletedBy: req.user.id
+        deletedBy: req.user.id,
       },
-      { new: true }
+      { new: true },
     );
 
     if (!announcement) {
       return res.status(404).json({
         success: false,
-        message: "Announcement not found"
+        message: "Announcement not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Announcement deleted successfully",
-      data: announcement
+      data: announcement,
     });
   } catch (error) {
     console.error("Error deleting announcement:", error);
     res.status(500).json({
       success: false,
       message: "Server error while deleting announcement",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -810,7 +851,7 @@ export const bulkBatchOperations = async (req, res) => {
     if (!operation || !batchIds || !Array.isArray(batchIds)) {
       return res.status(400).json({
         success: false,
-        message: "Operation and batchIds array are required"
+        message: "Operation and batchIds array are required",
       });
     }
 
@@ -822,12 +863,12 @@ export const bulkBatchOperations = async (req, res) => {
         if (!data?.status) {
           return res.status(400).json({
             success: false,
-            message: "Status is required for status update operation"
+            message: "Status is required for status update operation",
           });
         }
         result = await Batch.updateMany(
           { _id: { $in: batchIds } },
-          { ...updateData, status: data.status }
+          { ...updateData, status: data.status },
         );
         break;
 
@@ -835,12 +876,12 @@ export const bulkBatchOperations = async (req, res) => {
         if (!data?.instructor) {
           return res.status(400).json({
             success: false,
-            message: "Instructor is required for instructor update operation"
+            message: "Instructor is required for instructor update operation",
           });
         }
         result = await Batch.updateMany(
           { _id: { $in: batchIds } },
-          { ...updateData, instructor: data.instructor }
+          { ...updateData, instructor: data.instructor },
         );
         break;
 
@@ -848,40 +889,40 @@ export const bulkBatchOperations = async (req, res) => {
         if (!data?.capacity) {
           return res.status(400).json({
             success: false,
-            message: "Capacity is required for capacity update operation"
+            message: "Capacity is required for capacity update operation",
           });
         }
         result = await Batch.updateMany(
           { _id: { $in: batchIds } },
-          { ...updateData, capacity: data.capacity }
+          { ...updateData, capacity: data.capacity },
         );
         break;
 
       case "activate":
         result = await Batch.updateMany(
           { _id: { $in: batchIds } },
-          { ...updateData, status: "active" }
+          { ...updateData, status: "active" },
         );
         break;
 
       case "deactivate":
         result = await Batch.updateMany(
           { _id: { $in: batchIds } },
-          { ...updateData, status: "inactive" }
+          { ...updateData, status: "inactive" },
         );
         break;
 
       case "delete":
         result = await Batch.updateMany(
           { _id: { $in: batchIds } },
-          { ...updateData, status: "deleted", deletedAt: new Date() }
+          { ...updateData, status: "deleted", deletedAt: new Date() },
         );
         break;
 
       default:
         return res.status(400).json({
           success: false,
-          message: "Invalid operation"
+          message: "Invalid operation",
         });
     }
 
@@ -890,15 +931,15 @@ export const bulkBatchOperations = async (req, res) => {
       message: `Bulk ${operation} completed successfully`,
       data: {
         matchedCount: result.matchedCount,
-        modifiedCount: result.modifiedCount
-      }
+        modifiedCount: result.modifiedCount,
+      },
     });
   } catch (error) {
     console.error("Error in bulk batch operations:", error);
     res.status(500).json({
       success: false,
       message: "Server error while performing bulk batch operation",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -915,7 +956,7 @@ export const bulkEnrollmentOperations = async (req, res) => {
     if (!operation || !enrollmentIds || !Array.isArray(enrollmentIds)) {
       return res.status(400).json({
         success: false,
-        message: "Operation and enrollmentIds array are required"
+        message: "Operation and enrollmentIds array are required",
       });
     }
 
@@ -927,40 +968,40 @@ export const bulkEnrollmentOperations = async (req, res) => {
         if (!data?.status) {
           return res.status(400).json({
             success: false,
-            message: "Status is required for status update operation"
+            message: "Status is required for status update operation",
           });
         }
         result = await Enrollment.updateMany(
           { _id: { $in: enrollmentIds } },
-          { ...updateData, status: data.status }
+          { ...updateData, status: data.status },
         );
         break;
 
       case "activate":
         result = await Enrollment.updateMany(
           { _id: { $in: enrollmentIds } },
-          { ...updateData, status: "active" }
+          { ...updateData, status: "active" },
         );
         break;
 
       case "suspend":
         result = await Enrollment.updateMany(
           { _id: { $in: enrollmentIds } },
-          { ...updateData, status: "suspended" }
+          { ...updateData, status: "suspended" },
         );
         break;
 
       case "complete":
         result = await Enrollment.updateMany(
           { _id: { $in: enrollmentIds } },
-          { ...updateData, status: "completed", completion_date: new Date() }
+          { ...updateData, status: "completed", completion_date: new Date() },
         );
         break;
 
       case "cancel":
         result = await Enrollment.updateMany(
           { _id: { $in: enrollmentIds } },
-          { ...updateData, status: "cancelled", cancellation_date: new Date() }
+          { ...updateData, status: "cancelled", cancellation_date: new Date() },
         );
         break;
 
@@ -968,19 +1009,19 @@ export const bulkEnrollmentOperations = async (req, res) => {
         if (!data?.batchId) {
           return res.status(400).json({
             success: false,
-            message: "Batch ID is required for batch transfer operation"
+            message: "Batch ID is required for batch transfer operation",
           });
         }
         result = await Enrollment.updateMany(
           { _id: { $in: enrollmentIds } },
-          { ...updateData, batch_id: data.batchId }
+          { ...updateData, batch_id: data.batchId },
         );
         break;
 
       default:
         return res.status(400).json({
           success: false,
-          message: "Invalid operation"
+          message: "Invalid operation",
         });
     }
 
@@ -989,15 +1030,15 @@ export const bulkEnrollmentOperations = async (req, res) => {
       message: `Bulk ${operation} completed successfully`,
       data: {
         matchedCount: result.matchedCount,
-        modifiedCount: result.modifiedCount
-      }
+        modifiedCount: result.modifiedCount,
+      },
     });
   } catch (error) {
     console.error("Error in bulk enrollment operations:", error);
     res.status(500).json({
       success: false,
       message: "Server error while performing bulk enrollment operation",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1014,7 +1055,7 @@ export const bulkAnnouncementOperations = async (req, res) => {
     if (!operation || !announcementIds || !Array.isArray(announcementIds)) {
       return res.status(400).json({
         success: false,
-        message: "Operation and announcementIds array are required"
+        message: "Operation and announcementIds array are required",
       });
     }
 
@@ -1026,12 +1067,12 @@ export const bulkAnnouncementOperations = async (req, res) => {
         if (!data?.status) {
           return res.status(400).json({
             success: false,
-            message: "Status is required for status update operation"
+            message: "Status is required for status update operation",
           });
         }
         result = await Announcement.updateMany(
           { _id: { $in: announcementIds } },
-          { ...updateData, status: data.status }
+          { ...updateData, status: data.status },
         );
         break;
 
@@ -1039,47 +1080,47 @@ export const bulkAnnouncementOperations = async (req, res) => {
         if (!data?.priority) {
           return res.status(400).json({
             success: false,
-            message: "Priority is required for priority update operation"
+            message: "Priority is required for priority update operation",
           });
         }
         result = await Announcement.updateMany(
           { _id: { $in: announcementIds } },
-          { ...updateData, priority: data.priority }
+          { ...updateData, priority: data.priority },
         );
         break;
 
       case "publish":
         result = await Announcement.updateMany(
           { _id: { $in: announcementIds } },
-          { ...updateData, status: "published", publishedAt: new Date() }
+          { ...updateData, status: "published", publishedAt: new Date() },
         );
         break;
 
       case "unpublish":
         result = await Announcement.updateMany(
           { _id: { $in: announcementIds } },
-          { ...updateData, status: "draft" }
+          { ...updateData, status: "draft" },
         );
         break;
 
       case "archive":
         result = await Announcement.updateMany(
           { _id: { $in: announcementIds } },
-          { ...updateData, status: "archived", archivedAt: new Date() }
+          { ...updateData, status: "archived", archivedAt: new Date() },
         );
         break;
 
       case "delete":
         result = await Announcement.updateMany(
           { _id: { $in: announcementIds } },
-          { ...updateData, status: "deleted", deletedAt: new Date() }
+          { ...updateData, status: "deleted", deletedAt: new Date() },
         );
         break;
 
       default:
         return res.status(400).json({
           success: false,
-          message: "Invalid operation"
+          message: "Invalid operation",
         });
     }
 
@@ -1088,15 +1129,15 @@ export const bulkAnnouncementOperations = async (req, res) => {
       message: `Bulk ${operation} completed successfully`,
       data: {
         matchedCount: result.matchedCount,
-        modifiedCount: result.modifiedCount
-      }
+        modifiedCount: result.modifiedCount,
+      },
     });
   } catch (error) {
     console.error("Error in bulk announcement operations:", error);
     res.status(500).json({
       success: false,
       message: "Server error while performing bulk announcement operation",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1109,13 +1150,29 @@ export const bulkAnnouncementOperations = async (req, res) => {
 export const createUser = async (req, res) => {
   try {
     const userData = req.body;
-    
+
     // Check if user already exists
     const existingUser = await User.findOne({ email: userData.email });
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: "User with this email already exists"
+        message: "User with this email already exists",
+      });
+    }
+
+    // Validate required fields
+    if (!userData.full_name || !userData.email) {
+      return res.status(400).json({
+        success: false,
+        message: "Full name and email are required",
+      });
+    }
+
+    // For non-demo users, password is required
+    if (!userData.is_demo && !userData.password) {
+      return res.status(400).json({
+        success: false,
+        message: "Password is required for regular users",
       });
     }
 
@@ -1124,6 +1181,23 @@ export const createUser = async (req, res) => {
     userData.updatedAt = new Date();
     userData.createdBy = req.user.id;
     userData.status = userData.status || "active";
+
+    // Set password_set correctly based on user type
+    if (userData.password && !userData.is_demo) {
+      userData.password_set = true;
+      userData.first_login_completed = true;
+    } else if (userData.is_demo) {
+      userData.password_set = !!userData.password;
+      userData.first_login_completed = false;
+    }
+
+    // Ensure email is lowercase
+    userData.email = userData.email.toLowerCase();
+
+    // Set default role if not provided
+    if (!userData.role) {
+      userData.role = "student";
+    }
 
     const user = new User(userData);
     await user.save();
@@ -1137,14 +1211,14 @@ export const createUser = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "User created successfully",
-      data: userResponse
+      data: userResponse,
     });
   } catch (error) {
     console.error("Error creating user:", error);
     res.status(500).json({
       success: false,
       message: "Server error while creating user",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1162,7 +1236,7 @@ export const updateUser = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid user ID format"
+        message: "Invalid user ID format",
       });
     }
 
@@ -1174,30 +1248,30 @@ export const updateUser = async (req, res) => {
     updateData.updatedAt = new Date();
     updateData.updatedBy = req.user.id;
 
-    const user = await User.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true, select: "-password -refreshTokens -mfa.backupCodes" }
-    );
+    const user = await User.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+      select: "-password -refreshTokens -mfa.backupCodes",
+    });
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found"
+        message: "User not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "User updated successfully",
-      data: user
+      data: user,
     });
   } catch (error) {
     console.error("Error updating user:", error);
     res.status(500).json({
       success: false,
       message: "Server error while updating user",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1210,7 +1284,7 @@ export const updateUser = async (req, res) => {
 export const createBlog = async (req, res) => {
   try {
     const blogData = req.body;
-    
+
     // Add creation metadata
     blogData.createdAt = new Date();
     blogData.updatedAt = new Date();
@@ -1220,20 +1294,22 @@ export const createBlog = async (req, res) => {
     const blog = new Blog(blogData);
     await blog.save();
 
-    const populatedBlog = await Blog.findById(blog._id)
-      .populate("author", "personalInfo.firstName personalInfo.lastName email");
+    const populatedBlog = await Blog.findById(blog._id).populate(
+      "author",
+      "personalInfo.firstName personalInfo.lastName email",
+    );
 
     res.status(201).json({
       success: true,
       message: "Blog post created successfully",
-      data: populatedBlog
+      data: populatedBlog,
     });
   } catch (error) {
     console.error("Error creating blog post:", error);
     res.status(500).json({
       success: false,
       message: "Server error while creating blog post",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1251,37 +1327,36 @@ export const updateBlog = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid blog ID format"
+        message: "Invalid blog ID format",
       });
     }
 
     updateData.updatedAt = new Date();
     updateData.updatedBy = req.user.id;
 
-    const blog = await Blog.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    ).populate("author", "personalInfo.firstName personalInfo.lastName email");
+    const blog = await Blog.findByIdAndUpdate(id, updateData, {
+      new: true,
+      runValidators: true,
+    }).populate("author", "personalInfo.firstName personalInfo.lastName email");
 
     if (!blog) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Blog post updated successfully",
-      data: blog
+      data: blog,
     });
   } catch (error) {
     console.error("Error updating blog post:", error);
     res.status(500).json({
       success: false,
       message: "Server error while updating blog post",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1298,39 +1373,39 @@ export const deleteBlog = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid blog ID format"
+        message: "Invalid blog ID format",
       });
     }
 
     const blog = await Blog.findByIdAndUpdate(
       id,
-      { 
+      {
         status: "deleted",
         deletedAt: new Date(),
         updatedAt: new Date(),
-        deletedBy: req.user.id
+        deletedBy: req.user.id,
       },
-      { new: true }
+      { new: true },
     );
 
     if (!blog) {
       return res.status(404).json({
         success: false,
-        message: "Blog post not found"
+        message: "Blog post not found",
       });
     }
 
     res.status(200).json({
       success: true,
       message: "Blog post deleted successfully",
-      data: blog
+      data: blog,
     });
   } catch (error) {
     console.error("Error deleting blog post:", error);
     res.status(500).json({
       success: false,
       message: "Server error while deleting blog post",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -1347,7 +1422,7 @@ export const bulkBlogOperations = async (req, res) => {
     if (!operation || !blogIds || !Array.isArray(blogIds)) {
       return res.status(400).json({
         success: false,
-        message: "Operation and blogIds array are required"
+        message: "Operation and blogIds array are required",
       });
     }
 
@@ -1359,12 +1434,12 @@ export const bulkBlogOperations = async (req, res) => {
         if (!data?.status) {
           return res.status(400).json({
             success: false,
-            message: "Status is required for status update operation"
+            message: "Status is required for status update operation",
           });
         }
         result = await Blog.updateMany(
           { _id: { $in: blogIds } },
-          { ...updateData, status: data.status }
+          { ...updateData, status: data.status },
         );
         break;
 
@@ -1372,54 +1447,54 @@ export const bulkBlogOperations = async (req, res) => {
         if (!data?.category) {
           return res.status(400).json({
             success: false,
-            message: "Category is required for category update operation"
+            message: "Category is required for category update operation",
           });
         }
         result = await Blog.updateMany(
           { _id: { $in: blogIds } },
-          { ...updateData, category: data.category }
+          { ...updateData, category: data.category },
         );
         break;
 
       case "publish":
         result = await Blog.updateMany(
           { _id: { $in: blogIds } },
-          { ...updateData, status: "published", publishedAt: new Date() }
+          { ...updateData, status: "published", publishedAt: new Date() },
         );
         break;
 
       case "unpublish":
         result = await Blog.updateMany(
           { _id: { $in: blogIds } },
-          { ...updateData, status: "draft" }
+          { ...updateData, status: "draft" },
         );
         break;
 
       case "feature":
         result = await Blog.updateMany(
           { _id: { $in: blogIds } },
-          { ...updateData, featured: true }
+          { ...updateData, featured: true },
         );
         break;
 
       case "unfeature":
         result = await Blog.updateMany(
           { _id: { $in: blogIds } },
-          { ...updateData, featured: false }
+          { ...updateData, featured: false },
         );
         break;
 
       case "delete":
         result = await Blog.updateMany(
           { _id: { $in: blogIds } },
-          { ...updateData, status: "deleted", deletedAt: new Date() }
+          { ...updateData, status: "deleted", deletedAt: new Date() },
         );
         break;
 
       default:
         return res.status(400).json({
           success: false,
-          message: "Invalid operation"
+          message: "Invalid operation",
         });
     }
 
@@ -1428,15 +1503,15 @@ export const bulkBlogOperations = async (req, res) => {
       message: `Bulk ${operation} completed successfully`,
       data: {
         matchedCount: result.matchedCount,
-        modifiedCount: result.modifiedCount
-      }
+        modifiedCount: result.modifiedCount,
+      },
     });
   } catch (error) {
     console.error("Error in bulk blog operations:", error);
     res.status(500).json({
       success: false,
       message: "Server error while performing bulk blog operation",
-      error: error.message
+      error: error.message,
     });
   }
 };

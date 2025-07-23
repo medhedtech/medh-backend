@@ -21,6 +21,9 @@ export const createStudent = async (req, res) => {
       role: [USER_ROLES.STUDENT],
       email_verified: true,
       identity_verified: true,
+      password_set: true,
+      first_login_completed: true,
+      is_active: true,
     });
     await newUser.save();
     res
@@ -39,13 +42,11 @@ export const getAllStudents = async (req, res) => {
       role: USER_ROLES.STUDENT,
       is_active: true,
     });
-    res
-      .status(200)
-      .json({
-        message: "Students fetched successfully",
-        students,
-        totalStudents,
-      });
+    res.status(200).json({
+      message: "Students fetched successfully",
+      students,
+      totalStudents,
+    });
   } catch (error) {
     res.status(500).json({ message: "Error fetching students", error });
   }
@@ -114,24 +115,20 @@ export const toggleStudentStatus = async (req, res) => {
     const newStatus = student.status === "Active" ? "Inactive" : "Active";
     student.status = newStatus;
     await student.save();
-    res
-      .status(200)
-      .json({
-        message: `Student status updated to ${newStatus}`,
-        student: {
-          id: student._id,
-          status: student.status,
-          full_name: student.full_name,
-        },
-      });
+    res.status(200).json({
+      message: `Student status updated to ${newStatus}`,
+      student: {
+        id: student._id,
+        status: student.status,
+        full_name: student.full_name,
+      },
+    });
   } catch (error) {
     console.error("Error toggling student status:", error);
-    res
-      .status(500)
-      .json({
-        message: "Error toggling student status. Please try again later.",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Error toggling student status. Please try again later.",
+      error: error.message,
+    });
   }
 };
 

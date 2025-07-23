@@ -48,6 +48,10 @@ export const createCorporateStudent = async (req, res) => {
       role: ["coorporate-student"],
       meta,
       corporate_id: meta.corporate_id,
+      password_set: true,
+      first_login_completed: true,
+      email_verified: true,
+      is_active: true,
     });
 
     // Save user
@@ -225,7 +229,7 @@ export const toggleCorporateStudentStatus = async (req, res) => {
     await corporateUser.save();
 
     res.status(200).json({
-      message: `Corporate user status updated to ${corporateUser.is_active ? 'active' : 'inactive'}`,
+      message: `Corporate user status updated to ${corporateUser.is_active ? "active" : "inactive"}`,
       data: corporateUser,
     });
   } catch (error) {
