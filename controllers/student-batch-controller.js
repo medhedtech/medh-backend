@@ -37,7 +37,7 @@ export const enrollStudentInBatch = async (req, res) => {
     }
 
     // Check if student is active
-    if (student.status === "Inactive") {
+    if (!student.is_active) {
       return res.status(400).json({
         success: false,
         message: "Student account is inactive. Please contact administrator.",

@@ -6746,8 +6746,8 @@ class AuthController {
       }
 
       // Activate account if it was inactive
-      if (user.status === "Inactive") {
-        user.status = "Active";
+      if (!user.is_active) {
+        user.is_active = true;
       }
 
       // Update login tracking

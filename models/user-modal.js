@@ -1826,7 +1826,7 @@ userSchema.methods.isSupportAdmin = function () {
 
 // Add a method to check if user is active
 userSchema.methods.isActive = function () {
-  return this.status === "Active";
+  return this.is_active === true;
 };
 
 // Add a method to get user's primary role
