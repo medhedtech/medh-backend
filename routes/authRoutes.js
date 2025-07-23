@@ -237,28 +237,7 @@ router.post(
  * @desc    Unified login for both regular and demo users
  * @access  Public
  */
-router.post(
-  "/login",
-  [
-    body("email")
-      .isEmail()
-      .normalizeEmail()
-      .withMessage("Please provide a valid email address"),
-    body("password")
-      .optional()
-      .isLength({ min: 8 })
-      .withMessage("Password must be at least 8 characters"),
-    body("quick_login_key")
-      .optional()
-      .isString()
-      .withMessage("Quick login key must be a string"),
-    body("remember_me")
-      .optional()
-      .isBoolean()
-      .withMessage("Remember me must be a boolean"),
-  ],
-  authController.login.bind(authController),
-);
+router.post("/login", authController.login.bind(authController));
 
 /**
  * @route   POST /api/v1/auth/complete-mfa-login
