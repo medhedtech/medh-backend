@@ -1492,7 +1492,6 @@ export const getAllForms = catchAsync(async (req, res, next) => {
   const forms = await UniversalForm.find(filter)
     .populate("user_id", "full_name email role")
     .populate("assigned_to", "full_name email")
-    .populate("handled_by", "full_name email")
     .sort(sort)
     .skip(skip)
     .limit(parseInt(limit))
@@ -1526,7 +1525,6 @@ export const getFormById = catchAsync(async (req, res, next) => {
   const form = await UniversalForm.findById(req.params.id)
     .populate("user_id", "full_name email role")
     .populate("assigned_to", "full_name email")
-    .populate("handled_by", "full_name email")
     .populate("internal_notes.added_by", "full_name email");
 
   if (!form || form.is_deleted) {
@@ -1598,9 +1596,6 @@ export const updateForm = catchAsync(async (req, res, next) => {
     form.follow_up_required = follow_up_required;
   if (follow_up_date) form.follow_up_date = follow_up_date;
 
-  // Set handled_by to current user
-  form.handled_by = req.user._id;
-
   // Add internal note if provided
   if (internal_note) {
     form.internal_notes.push({
@@ -1613,10 +1608,7 @@ export const updateForm = catchAsync(async (req, res, next) => {
   await form.save();
 
   // Populate for response
-  await form.populate([
-    { path: "assigned_to", select: "full_name email" },
-    { path: "handled_by", select: "full_name email" },
-  ]);
+  await form.populate([{ path: "assigned_to", select: "full_name email" }]);
 
   // Send notification email if status changed to important states
   if (status && ["approved", "rejected", "completed"].includes(status)) {

@@ -163,11 +163,12 @@ export const toggleInstructorStatus = async (req, res) => {
       return res.status(404).json({ message: "Instructor not found" });
     }
 
-    instructor.status = instructor.status === "Active" ? "Inactive" : "Active";
+    const newStatus = instructor.is_active ? false : true;
+    instructor.is_active = newStatus;
     await instructor.save();
 
     res.status(200).json({
-      message: `Instructor status updated to ${instructor.status}`,
+      message: `Instructor status updated to ${newStatus ? 'Active' : 'Inactive'}`,
       data: instructor,
     });
   } catch (error) {

@@ -71,7 +71,7 @@ export const createBatch = async (req, res) => {
         });
       }
 
-      if (student.status !== "Active") {
+      if (!student.is_active) {
         return res.status(400).json({
           success: false,
           message: "Student account is inactive",
@@ -1841,7 +1841,12 @@ export const getRecordedLessonsForStudent = async (req, res) => {
           const sessionIds = s3VideosData.map((video) => video.id);
           const ratings = await SessionRating.aggregate([
             { $match: { session_id: { $in: sessionIds } } },
-            { $group: { _id: "$session_id", averageRating: { $avg: "$rating" } } },
+            {
+              $group: {
+                _id: "$session_id",
+                averageRating: { $avg: "$rating" },
+              },
+            },
           ]);
 
           const ratingMap = new Map();

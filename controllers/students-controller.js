@@ -112,14 +112,15 @@ export const toggleStudentStatus = async (req, res) => {
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
-    const newStatus = student.status === "Active" ? "Inactive" : "Active";
-    student.status = newStatus;
+    const newStatus = student.is_active ? false : true;
+    student.is_active = newStatus;
     await student.save();
     res.status(200).json({
-      message: `Student status updated to ${newStatus}`,
+      message: `Student status updated to ${newStatus ? 'Active' : 'Inactive'}`,
       student: {
         id: student._id,
-        status: student.status,
+        is_active: student.is_active,
+        status: student.is_active ? 'Active' : 'Inactive', // For backward compatibility
         full_name: student.full_name,
       },
     });

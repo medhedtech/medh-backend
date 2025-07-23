@@ -191,7 +191,7 @@ parentChildSchema.statics.getParentDashboardData = async function(parentId) {
     };
   }
 
-  const activeChildren = children.filter(rel => rel.child_id.status === 'Active');
+  const activeChildren = children.filter(rel => rel.child_id.is_active === true);
   
   // Aggregate permissions
   const hasPermissions = {

@@ -371,8 +371,8 @@ const updateExistingUserEnhanced = async (
     user.is_online = true;
 
     // If this was a direct registration account without OAuth, activate it
-    if (!hadOAuthBefore && user.status === "Inactive") {
-      user.status = "Active";
+    if (!hadOAuthBefore && !user.is_active) {
+      user.is_active = true;
       user.email_verified = true;
       profileUpdated = true;
       logger.info(`Activated account through ${provider} OAuth: ${user.email}`);
