@@ -676,6 +676,10 @@ const demoSessionDetailsSchema = new mongoose.Schema(
         "morning 9-12",
         "afternoon 12-5",
         "evening 5-10",
+        // ✅ BACKWARD COMPATIBILITY: Support partial values
+        "morning",
+        "afternoon",
+        "evening",
         // ✅ EXISTING: Hourly time slots (for backward compatibility)
         "09:00-10:00",
         "10:00-11:00",
@@ -690,6 +694,13 @@ const demoSessionDetailsSchema = new mongoose.Schema(
         "19:00-20:00",
         "20:00-21:00",
       ],
+      // Auto-normalize partial values to full format
+      set: function (value) {
+        if (value === "morning") return "morning 9-12";
+        if (value === "afternoon") return "afternoon 12-5";
+        if (value === "evening") return "evening 5-10";
+        return value;
+      },
     },
     timezone: {
       type: String,

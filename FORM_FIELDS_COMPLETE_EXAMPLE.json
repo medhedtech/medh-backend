@@ -1,0 +1,85 @@
+{
+  "form_type": "book_a_free_demo_session",
+  "captcha_token": "development_token",
+  "is_student_under_16": false,
+  "contact_info": {
+    "first_name": "John",
+    "middle_name": "William",
+    "last_name": "Doe",
+    "email": "john.doe@example.com",
+    "mobile_number": {
+      "country_code": "+91",
+      "number": "9876543210"
+    },
+    "city": "Mumbai",
+    "country": "India",
+    "address": "123 Main Street, Suburb Area",
+    "social_profiles": {
+      "linkedin": "https://linkedin.com/in/johndoe",
+      "portfolio": "https://johndoe.dev"
+    }
+  },
+  "parent_details": {
+    "relationship": "father",
+    "preferred_timings": "evening after 6 PM"
+  },
+  "student_details": {
+    "name": "John Doe",
+    "email": "john.doe@example.com",
+    "grade": "grade_9-10",
+    "school_name": "ABC High School",
+    "city": "Mumbai",
+    "state": "Maharashtra",
+    "country": "India",
+    "parent_mobile_access": true,
+    "learning_style_preference": "mixed",
+    "know_medh_from": "social_media",
+    "highest_qualification": "12th passed",
+    "currently_studying": true,
+    "currently_working": false,
+    "education_institute_name": "XYZ College",
+    "preferred_course": ["AI and Data Science", "Python Programming"],
+    "preferred_timings": "Weekends preferred"
+  },
+  "demo_session_details": {
+    "preferred_date": "2025-01-25T00:00:00.000Z",
+    "preferred_time_slot": "morning 9-12",
+    "timezone": "Asia/Kolkata",
+    "session_duration_preference": "45min",
+    "device_preference": "computer",
+    "internet_quality": "good",
+    "language_preference": "english",
+    "previous_demo_attended": false
+  },
+  "consent": {
+    "terms_and_privacy": true,
+    "data_collection_consent": true,
+    "marketing_consent": false,
+    "gdpr_consent": true,
+    "communication_consent": true
+  },
+  "marketing_preferences": {
+    "email_notifications": true,
+    "sms_notifications": false,
+    "whatsapp_updates": true,
+    "course_recommendations": true
+  },
+  "form_config": {
+    "form_type": "book_a_free_demo_session",
+    "form_version": "2.1",
+    "submission_id": "sub_1234567890_abc123"
+  },
+  "submission_metadata": {
+    "timestamp": "2025-01-23T10:30:00.000Z",
+    "form_version": "2.1",
+    "device_info": {
+      "type": "desktop",
+      "os": "MacIntel",
+      "browser": "Chrome",
+      "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+      "screen_resolution": "1920x1080"
+    },
+    "validation_passed": true,
+    "form_interaction_time": 180
+  }
+}

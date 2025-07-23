@@ -34,14 +34,83 @@ export const submitForm = catchAsync(async (req, res, next) => {
   // Extract UTM parameters
   const utmParams = extractUtmParams(req.query);
 
+  // ✅ NEW: Auto-extract names from student details if contact info is empty
+  let processedBody = { ...req.body };
+
+  if (processedBody.form_type === "book_a_free_demo_session") {
+    // Extract first/last name from student name if contact info names are empty
+    if (
+      processedBody.student_details?.name &&
+      (!processedBody.contact_info?.first_name ||
+        !processedBody.contact_info?.last_name)
+    ) {
+      const studentName = processedBody.student_details.name.trim();
+      const nameParts = studentName.split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || nameParts[0] || ""; // Use first name as last name if only one name
+
+      // Update contact_info with extracted names
+      processedBody.contact_info = {
+        ...processedBody.contact_info,
+        first_name: processedBody.contact_info?.first_name || firstName,
+        last_name: processedBody.contact_info?.last_name || lastName,
+        full_name: processedBody.contact_info?.full_name || studentName,
+      };
+
+      // Also use student email if contact email is empty
+      if (
+        processedBody.student_details?.email &&
+        !processedBody.contact_info?.email
+      ) {
+        processedBody.contact_info.email = processedBody.student_details.email;
+      }
+    }
+
+    // Use student email if contact email is empty (even if names weren't extracted)
+    if (
+      processedBody.student_details?.email &&
+      !processedBody.contact_info?.email
+    ) {
+      processedBody.contact_info.email = processedBody.student_details.email;
+    }
+
+    // If both contact_info.email and student_details.email are empty, generate a placeholder
+    if (!processedBody.contact_info?.email) {
+      // Generate a temporary email based on student name and timestamp
+      const studentName = processedBody.student_details?.name || "student";
+      const cleanName = studentName.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const timestamp = Date.now();
+      processedBody.contact_info = {
+        ...processedBody.contact_info,
+        email: `temp_${cleanName}_${timestamp}@medh-demo.temp`,
+      };
+
+      // Log this for admin review
+      console.log("⚠️  Generated temporary email for demo booking:", {
+        original_name: studentName,
+        generated_email: processedBody.contact_info.email,
+        form_type: processedBody.form_type,
+      });
+    }
+
+    // Ensure full_name is always set
+    if (
+      processedBody.contact_info?.first_name &&
+      processedBody.contact_info?.last_name
+    ) {
+      processedBody.contact_info.full_name =
+        `${processedBody.contact_info.first_name} ${processedBody.contact_info.last_name}`.trim();
+    }
+  }
+
   // Create form data
   const formData = {
-    ...req.body,
+    ...processedBody,
     ip_address: ipAddress,
     user_agent: userAgent,
     browser_info: deviceInfo,
     ...utmParams,
-    source: req.body.source || "website",
+    source: processedBody.source || "website",
     submitted_at: new Date(),
   };
 
