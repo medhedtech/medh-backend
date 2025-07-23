@@ -267,6 +267,10 @@ const inquiryDetailsSchema = new mongoose.Schema(
         "general_inquiry",
         "feedback_complaint",
       ],
+      // ✅ FIX: Convert empty strings to null to make field truly optional
+      set: function (value) {
+        return value === "" ? null : value;
+      },
     },
     preferred_contact_method: {
       type: String,
@@ -444,10 +448,18 @@ const professionalInfoSchema = new mongoose.Schema(
         "non_profit",
         "other",
       ],
+      // ✅ FIX: Convert empty strings to null to make field truly optional
+      set: function (value) {
+        return value === "" ? null : value;
+      },
     },
     company_size: {
       type: String,
       enum: ["1-10", "11-50", "51-200", "201-500", "500+"],
+      // ✅ FIX: Convert empty strings to null to make field truly optional
+      set: function (value) {
+        return value === "" ? null : value;
+      },
     },
     department: {
       type: String,
@@ -457,6 +469,10 @@ const professionalInfoSchema = new mongoose.Schema(
     experience_level: {
       type: String,
       enum: ["entry", "mid", "senior", "executive"],
+      // ✅ FIX: Convert empty strings to null to make field truly optional
+      set: function (value) {
+        return value === "" ? null : value;
+      },
     },
   },
   { _id: false },
@@ -478,6 +494,10 @@ const trainingRequirementsSchema = new mongoose.Schema(
         "digital_transformation",
         "other",
       ],
+      // ✅ FIX: Convert empty strings to null to make field truly optional
+      set: function (value) {
+        return value === "" ? null : value;
+      },
     },
     training_mode: {
       type: String,
@@ -499,6 +519,10 @@ const trainingRequirementsSchema = new mongoose.Schema(
         "1-3_months",
         "ongoing",
       ],
+      // ✅ FIX: Convert empty strings to null to make field truly optional
+      set: function (value) {
+        return value === "" ? null : value;
+      },
     },
     budget_range: {
       type: String,
@@ -511,6 +535,10 @@ const trainingRequirementsSchema = new mongoose.Schema(
         "50l_plus",
         "not_disclosed",
       ],
+      // ✅ FIX: Convert empty strings to null to make field truly optional
+      set: function (value) {
+        return value === "" ? null : value;
+      },
     },
     timeline: {
       type: String,
@@ -521,6 +549,10 @@ const trainingRequirementsSchema = new mongoose.Schema(
         "within_6months",
         "flexible",
       ],
+      // ✅ FIX: Convert empty strings to null to make field truly optional
+      set: function (value) {
+        return value === "" ? null : value;
+      },
     },
     specific_skills: [String],
     custom_requirements: {
