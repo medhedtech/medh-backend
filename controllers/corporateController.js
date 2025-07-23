@@ -60,6 +60,10 @@ export const createCorporate = async (req, res) => {
       meta: {
         upload_resume: upload_resume || [],
       },
+      password_set: true,
+      first_login_completed: true,
+      email_verified: true,
+      is_active: true,
     });
 
     // Save user
