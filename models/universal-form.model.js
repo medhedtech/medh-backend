@@ -77,39 +77,95 @@ const contactInfoSchema = new mongoose.Schema(
       number: {
         type: String,
         required: true,
-        // ✅ ADD: Normalize phone number format
+        // ✅ ENHANCED: Normalize phone number format with better logic
         set: function (value) {
           if (!value) return value;
 
-          // Remove all non-digit characters
+          // Convert to string and remove all non-digit characters
           const cleanNumber = value.toString().replace(/\D/g, "");
 
-          // If number starts with country code digits, remove them
+          // If empty after cleaning, return as-is
+          if (!cleanNumber) return value;
+
+          // Get country code from this document or parent
           const countryCode = this.country_code || this.parent()?.country_code;
+
           if (countryCode) {
             const countryDigits = countryCode.replace(/\D/g, "");
+
+            // If number starts with country code digits, remove them
             if (cleanNumber.startsWith(countryDigits)) {
-              return cleanNumber.substring(countryDigits.length);
+              const withoutCountryCode = cleanNumber.substring(
+                countryDigits.length,
+              );
+              // Only remove country code if it leaves a reasonable number length
+              if (
+                withoutCountryCode.length >= 7 &&
+                withoutCountryCode.length <= 15
+              ) {
+                return withoutCountryCode;
+              }
             }
           }
 
-          // Handle common country code patterns
-          if (cleanNumber.startsWith("91") && cleanNumber.length === 12) {
-            // Indian numbers: 91XXXXXXXXXX -> XXXXXXXXXX
-            return cleanNumber.substring(2);
-          }
-          if (cleanNumber.startsWith("1") && cleanNumber.length === 11) {
-            // US numbers: 1XXXXXXXXXX -> XXXXXXXXXX
-            return cleanNumber.substring(1);
+          // Handle common country code patterns more intelligently
+          if (countryCode === "+91") {
+            // Indian numbers: Handle various formats
+            if (cleanNumber.startsWith("91") && cleanNumber.length >= 12) {
+              // 91XXXXXXXXXX -> XXXXXXXXXX (remove country code)
+              return cleanNumber.substring(2);
+            }
+            if (cleanNumber.startsWith("0") && cleanNumber.length === 11) {
+              // 0XXXXXXXXXX -> XXXXXXXXXX (remove leading 0)
+              return cleanNumber.substring(1);
+            }
           }
 
+          if (countryCode === "+1") {
+            // US/Canada numbers
+            if (cleanNumber.startsWith("1") && cleanNumber.length === 11) {
+              // 1XXXXXXXXXX -> XXXXXXXXXX
+              return cleanNumber.substring(1);
+            }
+          }
+
+          // Return cleaned number as-is for other cases
           return cleanNumber;
         },
         validate: {
           validator: function (number) {
-            // Should be 10 digits for most countries after normalization
-            const cleanNumber = number.replace(/\D/g, "");
-            return /^\d{10}$/.test(cleanNumber);
+            if (!number) return false;
+
+            // Clean the number for validation
+            const cleanNumber = number.toString().replace(/\D/g, "");
+
+            // Get country code for country-specific validation
+            const countryCode =
+              this.country_code || this.parent()?.country_code;
+
+            // Country-specific length validation
+            if (countryCode === "+91") {
+              // India: 10 digits
+              return /^\d{10}$/.test(cleanNumber);
+            } else if (countryCode === "+1") {
+              // US/Canada: 10 digits
+              return /^\d{10}$/.test(cleanNumber);
+            } else if (countryCode === "+44") {
+              // UK: 10-11 digits (without country code)
+              return /^\d{10,11}$/.test(cleanNumber);
+            } else if (countryCode === "+86") {
+              // China: 11 digits
+              return /^\d{11}$/.test(cleanNumber);
+            } else if (countryCode === "+33") {
+              // France: 9-10 digits
+              return /^\d{9,10}$/.test(cleanNumber);
+            } else if (countryCode === "+49") {
+              // Germany: 10-12 digits
+              return /^\d{10,12}$/.test(cleanNumber);
+            } else {
+              // Generic validation: 7-15 digits (ITU-T E.164 standard)
+              return /^\d{7,15}$/.test(cleanNumber);
+            }
           },
           message: "Please enter a valid mobile number",
         },
@@ -1448,20 +1504,40 @@ universalFormSchema.pre("save", async function (next) {
       .join(" ");
   }
 
-  // Format and validate phone number
+  // Format and validate phone number with enhanced error handling
   if (this.contact_info?.mobile_number) {
     try {
       const { country_code, number } = this.contact_info.mobile_number;
+
+      // Skip if essential data is missing
+      if (!country_code || !number) {
+        console.warn(
+          "Phone number formatting skipped: missing country_code or number",
+        );
+        return next();
+      }
+
       const fullNumber = `${country_code}${number}`;
+
+      // Try to parse and validate the phone number
       const phoneNumber = parsePhoneNumber(fullNumber);
 
       if (phoneNumber && phoneNumber.isValid()) {
         this.contact_info.mobile_number.formatted =
           phoneNumber.formatInternational();
         this.contact_info.mobile_number.is_validated = true;
+      } else {
+        // If libphonenumber-js validation fails, still allow the number if it passes basic validation
+        console.warn(
+          `Phone number validation warning for ${fullNumber}: libphonenumber-js validation failed, but allowing based on basic validation`,
+        );
+        this.contact_info.mobile_number.formatted = `${country_code} ${number}`;
+        this.contact_info.mobile_number.is_validated = false;
       }
     } catch (error) {
+      // Don't fail the entire form submission due to phone formatting issues
       console.warn("Phone number formatting failed:", error.message);
+      this.contact_info.mobile_number.is_validated = false;
     }
   }
 
