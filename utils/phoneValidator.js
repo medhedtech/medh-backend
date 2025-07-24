@@ -3,147 +3,592 @@ import countryService from "./countryService.js";
 import logger from "./logger.js";
 
 /**
- * Enhanced Phone Number Validator
- * Handles all edge cases including multiple formats, invalid inputs, and country-specific validation
+ * Enhanced Phone Number Validator with Comprehensive Country Support
+ * Handles normalization and validation for major countries worldwide
  */
 export class PhoneValidator {
   /**
-   * Normalize phone number from various input formats
-   * @param {string|object} phoneInput - Phone input in various formats
-   * @returns {string|null} Normalized phone number or null if invalid
+   * Comprehensive country-specific phone number configurations
    */
-  static normalizePhoneNumber(phoneInput) {
-    if (!phoneInput) return null;
+  static COUNTRY_CONFIGS = {
+    // Asia Pacific
+    IN: {
+      code: "91",
+      length: 10,
+      pattern: /^[6-9]\d{9}$/,
+      name: "India",
+      format: (num) => num.replace(/(\d{5})(\d{5})/, "$1 $2"),
+    },
+    CN: {
+      code: "86",
+      length: 11,
+      pattern: /^1[3-9]\d{9}$/,
+      name: "China",
+      format: (num) => num.replace(/(\d{3})(\d{4})(\d{4})/, "$1 $2 $3"),
+    },
+    JP: {
+      code: "81",
+      length: [10, 11],
+      pattern: /^[7-9]\d{9,10}$/,
+      name: "Japan",
+      format: (num) =>
+        num.length === 10
+          ? num.replace(/(\d{3})(\d{3})(\d{4})/, "$1-$2-$3")
+          : num.replace(/(\d{3})(\d{4})(\d{4})/, "$1-$2-$3"),
+    },
+    KR: {
+      code: "82",
+      length: [10, 11],
+      pattern: /^1[0-9]\d{8,9}$/,
+      name: "South Korea",
+      format: (num) => num.replace(/(\d{3})(\d{3,4})(\d{4})/, "$1-$2-$3"),
+    },
+    SG: {
+      code: "65",
+      length: 8,
+      pattern: /^[89]\d{7}$/,
+      name: "Singapore",
+      format: (num) => num.replace(/(\d{4})(\d{4})/, "$1 $2"),
+    },
+    AU: {
+      code: "61",
+      length: 9,
+      pattern: /^4\d{8}$/,
+      name: "Australia",
+      format: (num) => num.replace(/(\d{4})(\d{3})(\d{3})/, "$1 $2 $3"),
+    },
+    MY: {
+      code: "60",
+      length: [9, 10],
+      pattern: /^1[1-9]\d{7,8}$/,
+      name: "Malaysia",
+      format: (num) => num.replace(/(\d{2})(\d{3,4})(\d{4})/, "$1-$2-$3"),
+    },
+    TH: {
+      code: "66",
+      length: 9,
+      pattern: /^[689]\d{8}$/,
+      name: "Thailand",
+      format: (num) => num.replace(/(\d{2})(\d{3})(\d{4})/, "$1 $2 $3"),
+    },
+    ID: {
+      code: "62",
+      length: [10, 11, 12],
+      pattern: /^8\d{9,11}$/,
+      name: "Indonesia",
+      format: (num) => num.replace(/(\d{3})(\d{3,4})(\d{4,5})/, "$1-$2-$3"),
+    },
+    PH: {
+      code: "63",
+      length: 10,
+      pattern: /^9\d{9}$/,
+      name: "Philippines",
+      format: (num) => num.replace(/(\d{4})(\d{3})(\d{3})/, "$1 $2 $3"),
+    },
+    VN: {
+      code: "84",
+      length: [9, 10],
+      pattern: /^[3-9]\d{8,9}$/,
+      name: "Vietnam",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{3,4})/, "$1 $2 $3"),
+    },
+
+    // North America
+    US: {
+      code: "1",
+      length: 10,
+      pattern: /^[2-9]\d{2}[2-9]\d{2}\d{4}$/,
+      name: "United States",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3"),
+    },
+    CA: {
+      code: "1",
+      length: 10,
+      pattern: /^[2-9]\d{2}[2-9]\d{2}\d{4}$/,
+      name: "Canada",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{4})/, "($1) $2-$3"),
+    },
+    MX: {
+      code: "52",
+      length: 10,
+      pattern: /^[1-9]\d{9}$/,
+      name: "Mexico",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3"),
+    },
+
+    // Europe
+    GB: {
+      code: "44",
+      length: [10, 11],
+      pattern: /^[1-9]\d{8,9}$/,
+      name: "United Kingdom",
+      format: (num) =>
+        num.length === 10
+          ? num.replace(/(\d{2})(\d{4})(\d{4})/, "$1 $2 $3")
+          : num.replace(/(\d{5})(\d{6})/, "$1 $2"),
+    },
+    DE: {
+      code: "49",
+      length: [10, 11, 12],
+      pattern: /^1[5-7]\d{9,11}$/,
+      name: "Germany",
+      format: (num) => num.replace(/(\d{3})(\d{3,4})(\d{4,5})/, "$1 $2 $3"),
+    },
+    FR: {
+      code: "33",
+      length: 9,
+      pattern: /^[67]\d{8}$/,
+      name: "France",
+      format: (num) =>
+        num.replace(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{1})/, "$1 $2 $3 $4 $5"),
+    },
+    IT: {
+      code: "39",
+      length: [9, 10],
+      pattern: /^3\d{8,9}$/,
+      name: "Italy",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{3,4})/, "$1 $2 $3"),
+    },
+    ES: {
+      code: "34",
+      length: 9,
+      pattern: /^[67]\d{8}$/,
+      name: "Spain",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3"),
+    },
+    NL: {
+      code: "31",
+      length: 9,
+      pattern: /^6\d{8}$/,
+      name: "Netherlands",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3"),
+    },
+    BE: {
+      code: "32",
+      length: 9,
+      pattern: /^4\d{8}$/,
+      name: "Belgium",
+      format: (num) =>
+        num.replace(/(\d{3})(\d{2})(\d{2})(\d{2})/, "$1 $2 $3 $4"),
+    },
+    CH: {
+      code: "41",
+      length: 9,
+      pattern: /^7[5-9]\d{7}$/,
+      name: "Switzerland",
+      format: (num) =>
+        num.replace(/(\d{2})(\d{3})(\d{2})(\d{2})/, "$1 $2 $3 $4"),
+    },
+    AT: {
+      code: "43",
+      length: [10, 11],
+      pattern: /^6\d{9,10}$/,
+      name: "Austria",
+      format: (num) => num.replace(/(\d{3})(\d{3,4})(\d{4})/, "$1 $2 $3"),
+    },
+    SE: {
+      code: "46",
+      length: 9,
+      pattern: /^7[0-9]\d{7}$/,
+      name: "Sweden",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{3})/, "$1-$2-$3"),
+    },
+    NO: {
+      code: "47",
+      length: 8,
+      pattern: /^[49]\d{7}$/,
+      name: "Norway",
+      format: (num) => num.replace(/(\d{3})(\d{2})(\d{3})/, "$1 $2 $3"),
+    },
+    DK: {
+      code: "45",
+      length: 8,
+      pattern: /^[2-9]\d{7}$/,
+      name: "Denmark",
+      format: (num) =>
+        num.replace(/(\d{2})(\d{2})(\d{2})(\d{2})/, "$1 $2 $3 $4"),
+    },
+    FI: {
+      code: "358",
+      length: 9,
+      pattern: /^4\d{8}$/,
+      name: "Finland",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3"),
+    },
+    PL: {
+      code: "48",
+      length: 9,
+      pattern: /^[5-8]\d{8}$/,
+      name: "Poland",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3"),
+    },
+    RU: {
+      code: "7",
+      length: 10,
+      pattern: /^9\d{9}$/,
+      name: "Russia",
+      format: (num) =>
+        num.replace(/(\d{3})(\d{3})(\d{2})(\d{2})/, "$1 $2-$3-$4"),
+    },
+
+    // Middle East & Africa
+    AE: {
+      code: "971",
+      length: 9,
+      pattern: /^5[0-9]\d{7}$/,
+      name: "United Arab Emirates",
+      format: (num) => num.replace(/(\d{2})(\d{3})(\d{4})/, "$1 $2 $3"),
+    },
+    SA: {
+      code: "966",
+      length: 9,
+      pattern: /^5[0-9]\d{7}$/,
+      name: "Saudi Arabia",
+      format: (num) => num.replace(/(\d{2})(\d{3})(\d{4})/, "$1 $2 $3"),
+    },
+    QA: {
+      code: "974",
+      length: 8,
+      pattern: /^[3567]\d{7}$/,
+      name: "Qatar",
+      format: (num) => num.replace(/(\d{4})(\d{4})/, "$1 $2"),
+    },
+    KW: {
+      code: "965",
+      length: 8,
+      pattern: /^[569]\d{7}$/,
+      name: "Kuwait",
+      format: (num) => num.replace(/(\d{4})(\d{4})/, "$1 $2"),
+    },
+    OM: {
+      code: "968",
+      length: 8,
+      pattern: /^[79]\d{7}$/,
+      name: "Oman",
+      format: (num) => num.replace(/(\d{4})(\d{4})/, "$1 $2"),
+    },
+    BH: {
+      code: "973",
+      length: 8,
+      pattern: /^[36]\d{7}$/,
+      name: "Bahrain",
+      format: (num) => num.replace(/(\d{4})(\d{4})/, "$1 $2"),
+    },
+    IL: {
+      code: "972",
+      length: 9,
+      pattern: /^5[0-9]\d{7}$/,
+      name: "Israel",
+      format: (num) => num.replace(/(\d{2})(\d{3})(\d{4})/, "$1-$2-$3"),
+    },
+    TR: {
+      code: "90",
+      length: 10,
+      pattern: /^5\d{9}$/,
+      name: "Turkey",
+      format: (num) =>
+        num.replace(/(\d{3})(\d{3})(\d{2})(\d{2})/, "$1 $2 $3 $4"),
+    },
+    ZA: {
+      code: "27",
+      length: 9,
+      pattern: /^[67]\d{8}$/,
+      name: "South Africa",
+      format: (num) => num.replace(/(\d{2})(\d{3})(\d{4})/, "$1 $2 $3"),
+    },
+    NG: {
+      code: "234",
+      length: 10,
+      pattern: /^[78]\d{9}$/,
+      name: "Nigeria",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3"),
+    },
+    KE: {
+      code: "254",
+      length: 9,
+      pattern: /^7\d{8}$/,
+      name: "Kenya",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3"),
+    },
+    EG: {
+      code: "20",
+      length: 10,
+      pattern: /^1[0-5]\d{8}$/,
+      name: "Egypt",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3"),
+    },
+
+    // South America
+    BR: {
+      code: "55",
+      length: 11,
+      pattern: /^[1-9]\d{10}$/,
+      name: "Brazil",
+      format: (num) => num.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3"),
+    },
+    AR: {
+      code: "54",
+      length: [10, 11],
+      pattern: /^9\d{9,10}$/,
+      name: "Argentina",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{4,5})/, "$1 $2 $3"),
+    },
+    CL: {
+      code: "56",
+      length: 8,
+      pattern: /^[89]\d{7}$/,
+      name: "Chile",
+      format: (num) => num.replace(/(\d{1})(\d{4})(\d{3})/, "$1 $2 $3"),
+    },
+    CO: {
+      code: "57",
+      length: 10,
+      pattern: /^3\d{9}$/,
+      name: "Colombia",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3"),
+    },
+    PE: {
+      code: "51",
+      length: 9,
+      pattern: /^9\d{8}$/,
+      name: "Peru",
+      format: (num) => num.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3"),
+    },
+  };
+
+  /**
+   * Get country ISO code from country calling code
+   * @param {string} countryDigits - Country code digits (91, 1, 44, etc.)
+   * @returns {string} ISO country code or 'GENERIC'
+   */
+  static getCountryISOFromCode(countryDigits) {
+    // Find country by matching code
+    for (const [iso, config] of Object.entries(this.COUNTRY_CONFIGS)) {
+      if (config.code === countryDigits) {
+        return iso;
+      }
+    }
+    return "GENERIC";
+  }
+
+  /**
+   * Normalize phone number with country-specific logic
+   * @param {string|object} phoneInput - Phone input in various formats
+   * @param {string} countryCode - Country code (+91, +1, +44, etc.)
+   * @returns {object} Normalized result with country code and number
+   */
+  static normalizePhoneNumber(phoneInput, countryCode = "+91") {
+    if (!phoneInput) return { error: "Phone number is required" };
 
     try {
-      // Handle object format { country: "91", number: "9876543210" }
-      if (
-        typeof phoneInput === "object" &&
-        phoneInput.country &&
-        phoneInput.number
-      ) {
-        const countryCode = phoneInput.country.toString().replace(/^\+/, "");
-        const number = phoneInput.number.toString().replace(/\D/g, ""); // Remove non-digits
+      let rawNumber = "";
+      let detectedCountryCode = countryCode;
 
-        if (!countryCode || !number) return null;
-
-        return `+${countryCode}${number}`;
+      // Handle object format { country_code: "+91", number: "9876543210" }
+      if (typeof phoneInput === "object") {
+        if (phoneInput.country_code && phoneInput.number) {
+          detectedCountryCode = phoneInput.country_code.startsWith("+")
+            ? phoneInput.country_code
+            : `+${phoneInput.country_code}`;
+          rawNumber = phoneInput.number.toString();
+        } else {
+          return { error: "Invalid phone object format" };
+        }
       }
-
       // Handle string format
-      if (typeof phoneInput === "string") {
-        let cleaned = phoneInput.trim();
-
-        // Handle empty string
-        if (!cleaned) return null;
-
-        // Remove all non-digit characters except +
-        cleaned = cleaned.replace(/[^\d+]/g, "");
-
-        // Handle double plus (++91...)
-        cleaned = cleaned.replace(/^\+\+/, "+");
-
-        // Handle missing + prefix for international numbers
-        if (!cleaned.startsWith("+") && cleaned.length > 10) {
-          cleaned = `+${cleaned}`;
-        }
-
-        // Handle leading zero instead of + (0919876543210 -> +919876543210)
-        if (cleaned.startsWith("0") && cleaned.length > 11) {
-          cleaned = `+${cleaned.substring(1)}`;
-        }
-
-        // Validate length (international format should be 7-15 digits + country code)
-        const digitsOnly = cleaned.replace(/^\+/, "");
-        if (digitsOnly.length < 7 || digitsOnly.length > 15) {
-          return null;
-        }
-
-        return cleaned;
+      else if (typeof phoneInput === "string") {
+        rawNumber = phoneInput.trim();
+      } else {
+        return { error: "Invalid phone number format" };
       }
 
-      return null;
+      // Clean the number - remove all non-digits
+      const cleanNumber = rawNumber.replace(/\D/g, "");
+
+      if (!cleanNumber) {
+        return { error: "Phone number cannot be empty" };
+      }
+
+      // Get country code without the "+" for processing
+      const countryDigits = detectedCountryCode.replace(/^\+/, "");
+      const countryISO = this.getCountryISOFromCode(countryDigits);
+
+      // Apply country-specific normalization
+      const normalized = this.applyCountrySpecificNormalization(
+        cleanNumber,
+        countryISO,
+        countryDigits,
+      );
+
+      if (normalized.error) {
+        return normalized;
+      }
+
+      return {
+        country_code: detectedCountryCode,
+        number: normalized.number,
+        country_iso: countryISO,
+        original: phoneInput,
+      };
     } catch (error) {
       logger.warn("Phone number normalization failed", {
         phoneInput,
         error: error.message,
       });
-      return null;
+      return { error: "Failed to normalize phone number" };
     }
+  }
+
+  /**
+   * Apply country-specific normalization rules
+   * @param {string} cleanNumber - Clean digits-only number
+   * @param {string} countryISO - Country ISO code
+   * @param {string} countryDigits - Country code digits
+   * @returns {object} Normalized number or error
+   */
+  static applyCountrySpecificNormalization(
+    cleanNumber,
+    countryISO,
+    countryDigits,
+  ) {
+    const config = this.COUNTRY_CONFIGS[countryISO];
+    if (!config) {
+      // Generic handling for other countries - just validate length
+      if (cleanNumber.length >= 7 && cleanNumber.length <= 15) {
+        return { number: cleanNumber };
+      }
+      return { error: "Phone number must be 7-15 digits" };
+    }
+
+    // Get expected length(s)
+    const expectedLengths = Array.isArray(config.length)
+      ? config.length
+      : [config.length];
+
+    // Remove country code if it appears at the beginning
+    let processedNumber = cleanNumber;
+    if (cleanNumber.startsWith(countryDigits)) {
+      const withoutCountryCode = cleanNumber.substring(countryDigits.length);
+      // Only remove if the remaining length makes sense
+      if (expectedLengths.some((len) => withoutCountryCode.length === len)) {
+        processedNumber = withoutCountryCode;
+      }
+    }
+
+    // Handle leading zeros (common in many countries)
+    if (
+      processedNumber.startsWith("0") &&
+      processedNumber.length > expectedLengths[0]
+    ) {
+      const withoutZero = processedNumber.substring(1);
+      if (expectedLengths.includes(withoutZero.length)) {
+        processedNumber = withoutZero;
+      }
+    }
+
+    // Validate length
+    if (!expectedLengths.includes(processedNumber.length)) {
+      const lengthStr =
+        expectedLengths.length === 1
+          ? `${expectedLengths[0]} digits`
+          : `${expectedLengths.join(" or ")} digits`;
+      return {
+        error: `${config.name} phone numbers must be ${lengthStr}. Received ${processedNumber.length} digits.`,
+      };
+    }
+
+    // Validate pattern
+    if (config.pattern && !config.pattern.test(processedNumber)) {
+      return {
+        error: `Invalid ${config.name} phone number format`,
+      };
+    }
+
+    return { number: processedNumber };
   }
 
   /**
    * Validate phone number with comprehensive checks
    * @param {string|object} phoneInput - Phone input to validate
-   * @param {string} defaultCountry - Default country code (ISO 2-letter)
-   * @returns {object} Validation result with details
+   * @param {string} countryCode - Country code (+91, +1, +44, etc.)
+   * @returns {object} Validation result with normalized data
    */
-  static validatePhoneNumber(phoneInput, defaultCountry = "IN") {
+  static validatePhoneNumber(phoneInput, countryCode = "+91") {
     try {
       // Step 1: Normalize the input
-      const normalized = this.normalizePhoneNumber(phoneInput);
-      if (!normalized) {
+      const normalized = this.normalizePhoneNumber(phoneInput, countryCode);
+      if (normalized.error) {
         return {
           isValid: false,
-          error: "Invalid phone number format",
-          errorCode: "INVALID_FORMAT",
+          error: normalized.error,
+          errorCode: "NORMALIZATION_ERROR",
           raw: phoneInput,
         };
       }
 
-      // Step 2: Parse with libphonenumber-js
-      const phoneNumber = parsePhoneNumber(normalized, defaultCountry);
+      // Step 2: Create full international number
+      const fullNumber = `${normalized.country_code}${normalized.number}`;
 
-      if (!phoneNumber) {
-        return {
-          isValid: false,
-          error: "Unable to parse phone number",
-          errorCode: "PARSE_ERROR",
-          raw: phoneInput,
-          normalized,
-        };
-      }
+      // Step 3: Parse with libphonenumber-js for additional validation
+      try {
+        const phoneNumber = parsePhoneNumber(fullNumber);
 
-      // Step 3: Validate the parsed number
-      if (!phoneNumber.isValid()) {
+        if (!phoneNumber || !phoneNumber.isValid()) {
+          return {
+            isValid: false,
+            error: `Invalid ${this.COUNTRY_CONFIGS[normalized.country_iso]?.name || "phone"} number`,
+            errorCode: "INVALID_NUMBER",
+            raw: phoneInput,
+            normalized: normalized.number,
+            country: normalized.country_iso,
+            countryCode: normalized.country_code,
+          };
+        }
+
+        // Step 4: Return successful validation
         return {
-          isValid: false,
-          error: "Invalid phone number for the detected country",
-          errorCode: "INVALID_NUMBER",
-          raw: phoneInput,
-          normalized,
-          country: phoneNumber.country,
+          isValid: true,
+          formatted: phoneNumber.formatInternational(),
+          national: phoneNumber.formatNational(),
+          e164: phoneNumber.format("E.164"),
           countryCode: phoneNumber.countryCallingCode,
-        };
-      }
-
-      // Step 4: Additional country-specific validations
-      const countrySpecificValidation =
-        this.validateCountrySpecific(phoneNumber);
-      if (!countrySpecificValidation.isValid) {
-        return {
-          ...countrySpecificValidation,
+          country: phoneNumber.country,
+          type: phoneNumber.getType(),
           raw: phoneInput,
-          normalized,
+          normalized: normalized.number,
+          fullNumber: fullNumber,
+        };
+      } catch (libPhoneError) {
+        // If libphonenumber-js fails, use our basic validation
+        logger.warn(
+          "libphonenumber-js validation failed, using basic validation",
+          {
+            phoneInput,
+            error: libPhoneError.message,
+          },
+        );
+
+        return {
+          isValid: true,
+          formatted: `${normalized.country_code} ${this.formatNumber(normalized.number, normalized.country_iso)}`,
+          national: this.formatNumber(
+            normalized.number,
+            normalized.country_iso,
+          ),
+          e164: fullNumber.startsWith("+") ? fullNumber : `+${fullNumber}`,
+          countryCode: normalized.country_code.replace("+", ""),
+          country: normalized.country_iso,
+          type: "MOBILE",
+          raw: phoneInput,
+          normalized: normalized.number,
+          fullNumber: fullNumber,
+          basicValidation: true,
         };
       }
-
-      // Step 5: Return successful validation
-      return {
-        isValid: true,
-        formatted: phoneNumber.formatInternational(),
-        national: phoneNumber.formatNational(),
-        e164: phoneNumber.format("E.164"),
-        countryCode: phoneNumber.countryCallingCode,
-        country: phoneNumber.country,
-        type: phoneNumber.getType(),
-        possibleCountries: phoneNumber.getPossibleCountries(),
-        raw: phoneInput,
-        normalized,
-      };
     } catch (error) {
       logger.error("Phone number validation error", {
         phoneInput,
+        countryCode,
         error: error.message,
         stack: error.stack,
       });
@@ -158,122 +603,58 @@ export class PhoneValidator {
   }
 
   /**
-   * Country-specific validation rules
-   * @param {PhoneNumber} phoneNumber - Parsed phone number object
-   * @returns {object} Country-specific validation result
+   * Format number for display based on country
+   * @param {string} number - Clean phone number
+   * @param {string} countryISO - Country ISO code
+   * @returns {string} Formatted number
    */
-  static validateCountrySpecific(phoneNumber) {
-    const country = phoneNumber.country;
-    const nationalNumber = phoneNumber.nationalNumber;
-
-    try {
-      switch (country) {
-        case "IN": // India
-          // Indian mobile numbers should be 10 digits
-          if (nationalNumber.length !== 10) {
-            return {
-              isValid: false,
-              error: "Indian phone numbers must be exactly 10 digits",
-              errorCode: "INVALID_LENGTH_IN",
-            };
-          }
-
-          // Indian mobile numbers start with 6, 7, 8, or 9
-          const firstDigit = nationalNumber.charAt(0);
-          if (!["6", "7", "8", "9"].includes(firstDigit)) {
-            return {
-              isValid: false,
-              error: "Indian mobile numbers must start with 6, 7, 8, or 9",
-              errorCode: "INVALID_PREFIX_IN",
-            };
-          }
-          break;
-
-        case "US": // United States
-        case "CA": // Canada (same format as US)
-          // North American numbers should be 10 digits
-          if (nationalNumber.length !== 10) {
-            return {
-              isValid: false,
-              error: "US/Canadian phone numbers must be exactly 10 digits",
-              errorCode: "INVALID_LENGTH_US",
-            };
-          }
-
-          // Area code cannot start with 0 or 1
-          const areaCode = nationalNumber.substring(0, 3);
-          if (areaCode.startsWith("0") || areaCode.startsWith("1")) {
-            return {
-              isValid: false,
-              error: "US/Canadian area codes cannot start with 0 or 1",
-              errorCode: "INVALID_AREA_CODE_US",
-            };
-          }
-          break;
-
-        case "GB": // United Kingdom
-          // UK mobile numbers are typically 11 digits (including leading 0)
-          if (nationalNumber.length < 10 || nationalNumber.length > 11) {
-            return {
-              isValid: false,
-              error: "UK phone numbers must be 10-11 digits",
-              errorCode: "INVALID_LENGTH_GB",
-            };
-          }
-          break;
-
-        case "AU": // Australia
-          // Australian mobile numbers are 9 digits (after country code)
-          if (nationalNumber.length !== 9) {
-            return {
-              isValid: false,
-              error: "Australian mobile numbers must be exactly 9 digits",
-              errorCode: "INVALID_LENGTH_AU",
-            };
-          }
-
-          // Australian mobiles start with 4
-          if (!nationalNumber.startsWith("4")) {
-            return {
-              isValid: false,
-              error: "Australian mobile numbers must start with 4",
-              errorCode: "INVALID_PREFIX_AU",
-            };
-          }
-          break;
-
-        default:
-          // For other countries, rely on libphonenumber-js validation
-          break;
+  static formatNumber(number, countryISO) {
+    const config = this.COUNTRY_CONFIGS[countryISO];
+    if (config && config.format) {
+      try {
+        return config.format(number);
+      } catch (error) {
+        logger.warn("Custom formatting failed, using default", {
+          countryISO,
+          number,
+          error: error.message,
+        });
       }
-
-      return { isValid: true };
-    } catch (error) {
-      logger.warn("Country-specific validation failed", {
-        country,
-        nationalNumber,
-        error: error.message,
-      });
-
-      // Don't fail validation for country-specific rules if there's an error
-      return { isValid: true };
     }
+
+    // Default formatting for unknown countries
+    if (number.length === 10) {
+      return number.replace(/(\d{3})(\d{3})(\d{4})/, "$1 $2 $3");
+    } else if (number.length === 11) {
+      return number.replace(/(\d{3})(\d{4})(\d{4})/, "$1 $2 $3");
+    } else if (number.length === 8) {
+      return number.replace(/(\d{4})(\d{4})/, "$1 $2");
+    } else if (number.length === 9) {
+      return number.replace(/(\d{3})(\d{3})(\d{3})/, "$1 $2 $3");
+    }
+
+    return number;
   }
 
   /**
-   * Validate phone number for form submission
+   * Validate phone number for form submission with user-friendly messages
    * @param {string|object} phoneInput - Phone input from form
-   * @param {string} country - User's selected country
+   * @param {string} countryCode - Country code (+91, +1, +44, etc.)
    * @returns {object} Validation result suitable for form validation
    */
-  static validateForForm(phoneInput, country = "IN") {
-    const result = this.validatePhoneNumber(phoneInput, country);
+  static validateForForm(phoneInput, countryCode = "+91") {
+    const result = this.validatePhoneNumber(phoneInput, countryCode);
 
     if (!result.isValid) {
       return {
         valid: false,
-        message: this.getHumanReadableError(result.errorCode, result.error),
+        message: this.getHumanReadableError(
+          result.errorCode,
+          result.error,
+          countryCode,
+        ),
         errorCode: result.errorCode,
+        field: "mobile_number",
       };
     }
 
@@ -283,97 +664,124 @@ export class PhoneValidator {
       e164: result.e164,
       country: result.country,
       countryCode: result.countryCode,
+      normalized: result.normalized,
     };
   }
 
   /**
    * Get human-readable error messages
-   * @param {string} errorCode - Error code from validation
-   * @param {string} defaultMessage - Default error message
+   * @param {string} errorCode - Error code
+   * @param {string} originalError - Original error message
+   * @param {string} countryCode - Country code for context
    * @returns {string} Human-readable error message
    */
-  static getHumanReadableError(errorCode, defaultMessage) {
-    const errorMessages = {
-      INVALID_FORMAT: "Please enter a valid phone number format",
-      PARSE_ERROR: "Unable to recognize this phone number format",
-      INVALID_NUMBER: "This phone number is not valid for the selected country",
-      INVALID_LENGTH_IN: "Indian mobile numbers must be exactly 10 digits",
-      INVALID_PREFIX_IN: "Indian mobile numbers must start with 6, 7, 8, or 9",
-      INVALID_LENGTH_US: "US phone numbers must be exactly 10 digits",
-      INVALID_AREA_CODE_US: "Invalid US area code",
-      INVALID_LENGTH_GB: "UK phone numbers must be 10-11 digits",
-      INVALID_LENGTH_AU: "Australian mobile numbers must be exactly 9 digits",
-      INVALID_PREFIX_AU: "Australian mobile numbers must start with 4",
-      VALIDATION_ERROR: "Phone number validation failed",
-    };
+  static getHumanReadableError(errorCode, originalError, countryCode = "+91") {
+    const countryDigits = countryCode.replace("+", "");
+    const countryISO = this.getCountryISOFromCode(countryDigits);
+    const config = this.COUNTRY_CONFIGS[countryISO];
+    const countryName = config?.name || "phone";
 
-    return errorMessages[errorCode] || defaultMessage || "Invalid phone number";
-  }
-
-  /**
-   * Check if two phone numbers are equivalent
-   * @param {string|object} phone1 - First phone number
-   * @param {string|object} phone2 - Second phone number
-   * @returns {boolean} Whether the phone numbers are equivalent
-   */
-  static areEquivalent(phone1, phone2) {
-    try {
-      const result1 = this.validatePhoneNumber(phone1);
-      const result2 = this.validatePhoneNumber(phone2);
-
-      if (!result1.isValid || !result2.isValid) {
-        return false;
-      }
-
-      return result1.e164 === result2.e164;
-    } catch (error) {
-      logger.warn("Phone number comparison failed", {
-        phone1,
-        phone2,
-        error: error.message,
-      });
-      return false;
+    switch (errorCode) {
+      case "NORMALIZATION_ERROR":
+        return originalError;
+      case "INVALID_NUMBER":
+        if (config) {
+          const lengthStr = Array.isArray(config.length)
+            ? `${config.length.join(" or ")} digits`
+            : `${config.length} digits`;
+          return `Please enter a valid ${lengthStr} ${countryName} phone number`;
+        }
+        return `Please enter a valid ${countryName.toLowerCase()} number`;
+      case "VALIDATION_ERROR":
+        return "Unable to validate phone number. Please check the format and try again.";
+      default:
+        return originalError || "Invalid phone number format";
     }
   }
 
   /**
-   * Extract country code from phone number
+   * Quick validation check for common use cases
    * @param {string|object} phoneInput - Phone input
-   * @returns {string|null} Country code or null if not found
+   * @param {string} countryCode - Country code
+   * @returns {boolean} True if valid
    */
-  static extractCountryCode(phoneInput) {
-    try {
-      const result = this.validatePhoneNumber(phoneInput);
-      return result.isValid ? result.countryCode : null;
-    } catch (error) {
-      return null;
-    }
+  static isValid(phoneInput, countryCode = "+91") {
+    const result = this.validatePhoneNumber(phoneInput, countryCode);
+    return result.isValid;
   }
 
   /**
-   * Format phone number for display
-   * @param {string|object} phoneInput - Phone input
-   * @param {string} format - Format type ('international', 'national', 'e164')
-   * @returns {string|null} Formatted phone number or null if invalid
+   * Extract country code from international phone number
+   * @param {string} phoneNumber - International phone number
+   * @returns {string|null} Country code or null
    */
-  static format(phoneInput, format = "international") {
-    try {
-      const result = this.validatePhoneNumber(phoneInput);
-      if (!result.isValid) return null;
+  static extractCountryCode(phoneNumber) {
+    if (!phoneNumber || typeof phoneNumber !== "string") return null;
 
-      switch (format) {
-        case "national":
-          return result.national;
-        case "e164":
-          return result.e164;
-        case "international":
-        default:
-          return result.formatted;
+    const cleaned = phoneNumber.replace(/\D/g, "");
+
+    // Check all configured country codes (sorted by length desc to match longer codes first)
+    const codes = Object.values(this.COUNTRY_CONFIGS)
+      .map((config) => config.code)
+      .sort((a, b) => b.length - a.length);
+
+    for (const code of codes) {
+      if (cleaned.startsWith(code)) {
+        const withoutCode = cleaned.substring(code.length);
+        const countryISO = this.getCountryISOFromCode(code);
+        const config = this.COUNTRY_CONFIGS[countryISO];
+
+        if (config) {
+          const expectedLengths = Array.isArray(config.length)
+            ? config.length
+            : [config.length];
+          if (expectedLengths.includes(withoutCode.length)) {
+            return `+${code}`;
+          }
+        }
       }
-    } catch (error) {
-      return null;
     }
+
+    return null;
+  }
+
+  /**
+   * Get list of supported countries
+   * @returns {Array} Array of supported countries with their details
+   */
+  static getSupportedCountries() {
+    return Object.entries(this.COUNTRY_CONFIGS).map(([iso, config]) => ({
+      iso,
+      name: config.name,
+      code: `+${config.code}`,
+      expectedLength: config.length,
+      pattern: config.pattern.toString(),
+    }));
+  }
+
+  /**
+   * Detect country from phone number
+   * @param {string|object} phoneInput - Phone input
+   * @returns {object|null} Country information or null
+   */
+  static detectCountry(phoneInput) {
+    const countryCode = this.extractCountryCode(phoneInput);
+    if (!countryCode) return null;
+
+    const countryDigits = countryCode.replace("+", "");
+    const countryISO = this.getCountryISOFromCode(countryDigits);
+    const config = this.COUNTRY_CONFIGS[countryISO];
+
+    return config
+      ? {
+          iso: countryISO,
+          name: config.name,
+          code: countryCode,
+          expectedLength: config.length,
+        }
+      : null;
   }
 }
 
+// Export for backward compatibility
 export default PhoneValidator;

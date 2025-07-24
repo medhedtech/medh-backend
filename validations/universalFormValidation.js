@@ -1,6 +1,7 @@
 import Joi from "joi";
 import { AppError } from "../utils/errorHandler.js"; // Corrected import path for AppError
 import { body, validationResult } from "express-validator";
+import { PhoneValidator } from "../utils/phoneValidator.js"; // Import enhanced phone validator
 
 // Common validation patterns
 const patterns = {
@@ -12,6 +13,58 @@ const patterns = {
   password:
     /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/,
 };
+
+// Enhanced phone number validation using the new PhoneValidator
+const validateMobileNumber = (value, helpers) => {
+  const { country_code, number } = value || {};
+
+  if (!country_code && !number) {
+    return helpers.error("mobile_number.required");
+  }
+
+  if (!country_code) {
+    return helpers.error("mobile_number.country_code_required");
+  }
+
+  if (!number) {
+    return helpers.error("mobile_number.number_required");
+  }
+
+  // Use enhanced phone validator
+  const validationResult = PhoneValidator.validateForForm(value, country_code);
+
+  if (!validationResult.valid) {
+    return helpers.error("mobile_number.invalid", {
+      message: validationResult.message,
+    });
+  }
+
+  return value;
+};
+
+// Enhanced mobile number schema with country-specific validation
+const mobileNumberSchema = Joi.object({
+  country_code: Joi.string()
+    .pattern(/^\+\d{1,4}$/)
+    .required()
+    .messages({
+      "string.pattern.base":
+        "Country code must be in format +XX (e.g., +91, +1, +44)",
+      "any.required": "Country code is required",
+    }),
+  number: Joi.string().required().messages({
+    "any.required": "Phone number is required",
+  }),
+  formatted: Joi.string().optional(),
+  is_validated: Joi.boolean().optional(),
+})
+  .custom(validateMobileNumber)
+  .messages({
+    "mobile_number.required": "Mobile number is required",
+    "mobile_number.country_code_required": "Country code is required",
+    "mobile_number.number_required": "Phone number is required",
+    "mobile_number.invalid": "{{#message}}",
+  });
 
 // Base contact information validation
 const contactInfoValidation = Joi.object({
@@ -43,9 +96,8 @@ const contactInfoValidation = Joi.object({
     "any.required": "Email address is required",
   }),
 
-  phone_number: Joi.string().pattern(patterns.phone).messages({
-    "string.pattern.base": "Phone number must be 10 digits",
-  }),
+  // Use enhanced mobile number validation
+  mobile_number: mobileNumberSchema.required(),
 
   country: Joi.string().min(2).max(100),
 
@@ -669,6 +721,42 @@ const validateUniversalForm = (formData) => {
   return schema.validate(formData, { abortEarly: false });
 };
 
+// Enhanced express-validator middleware for phone numbers
+const validatePhoneNumberField = (fieldPath, isRequired = true) => {
+  return body(fieldPath)
+    .custom(async (value, { req }) => {
+      if (
+        !isRequired &&
+        (!value ||
+          (typeof value === "object" && !value.country_code && !value.number))
+      ) {
+        return true; // Skip validation if not required and empty
+      }
+
+      // Extract country code from request if available
+      const countryCode =
+        value?.country_code || req.body?.country_code || "+91";
+
+      // Validate using enhanced phone validator
+      const result = PhoneValidator.validateForForm(value, countryCode);
+
+      if (!result.valid) {
+        throw new Error(result.message);
+      }
+
+      // Update the value with normalized data for further processing
+      req.body[fieldPath.replace("contact_info.", "")] = {
+        country_code: countryCode,
+        number: result.normalized,
+        formatted: result.formatted,
+        is_validated: true,
+      };
+
+      return true;
+    })
+    .withMessage("Please provide a valid mobile number");
+};
+
 // Career Application Form Validation
 export const validateCareerApplication = [
   // Personal Information
@@ -700,11 +788,8 @@ export const validateCareerApplication = [
       return true;
     }),
 
-  body("contact_info.phone_number")
-    .notEmpty()
-    .withMessage("Phone number is required")
-    .isMobilePhone()
-    .withMessage("Please provide a valid mobile phone number"),
+  // Enhanced phone validation
+  validatePhoneNumberField("contact_info.mobile_number", true),
 
   body("contact_info.country")
     .notEmpty()
@@ -830,11 +915,8 @@ export const validatePartnershipInquiry = [
     .withMessage("Please provide a valid email address")
     .normalizeEmail(),
 
-  body("contact_info.phone_number")
-    .notEmpty()
-    .withMessage("Phone number is required")
-    .isMobilePhone()
-    .withMessage("Please provide a valid phone number"),
+  // Enhanced phone validation
+  validatePhoneNumberField("contact_info.mobile_number", true),
 
   body("professional_info.designation")
     .notEmpty()
@@ -959,11 +1041,8 @@ export const validateEducatorApplication = [
     .withMessage("Please provide a valid email address")
     .normalizeEmail(),
 
-  body("contact_info.phone_number")
-    .notEmpty()
-    .withMessage("Phone number is required")
-    .isMobilePhone()
-    .withMessage("Please provide a valid phone number"),
+  // Enhanced phone validation
+  validatePhoneNumberField("contact_info.mobile_number", true),
 
   body("contact_info.city")
     .notEmpty()
@@ -1160,10 +1239,8 @@ export const validateContactForm = [
     .withMessage("Please provide a valid email address")
     .normalizeEmail(),
 
-  body("contact_info.phone_number")
-    .optional()
-    .isMobilePhone()
-    .withMessage("Please provide a valid phone number"),
+  // Enhanced phone validation (optional for contact form)
+  validatePhoneNumberField("contact_info.mobile_number", false),
 
   body("contact_info.company")
     .optional()
@@ -1223,6 +1300,55 @@ export const validateContactForm = [
     .optional()
     .isBoolean()
     .withMessage("Marketing consent must be true or false"),
+];
+
+// Enhanced Corporate Training Validation
+export const validateCorporateTraining = [
+  body("contact_info.full_name")
+    .notEmpty()
+    .withMessage("Full name is required")
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Full name must be between 2 and 100 characters")
+    .matches(patterns.name)
+    .withMessage(
+      "Name can only contain letters, spaces, hyphens, and apostrophes",
+    ),
+
+  body("contact_info.email")
+    .isEmail()
+    .withMessage("Please provide a valid email address")
+    .normalizeEmail(),
+
+  // Enhanced phone validation with country code support
+  validatePhoneNumberField("contact_info.mobile_number", true),
+
+  body("professional_info.company_name")
+    .notEmpty()
+    .withMessage("Company name is required")
+    .isLength({ min: 2, max: 200 })
+    .withMessage("Company name must be between 2 and 200 characters"),
+
+  body("professional_info.designation")
+    .notEmpty()
+    .withMessage("Your designation is required")
+    .isLength({ min: 2, max: 100 })
+    .withMessage("Designation must be between 2 and 100 characters"),
+
+  body("training_requirements.custom_requirements")
+    .notEmpty()
+    .withMessage("Training requirements are required")
+    .isLength({ min: 20, max: 2000 })
+    .withMessage(
+      "Training requirements must be between 20 and 2000 characters",
+    ),
+
+  body("consent.terms_and_privacy")
+    .equals(true)
+    .withMessage("You must accept the terms and privacy policy"),
+
+  body("consent.data_collection_consent")
+    .equals(true)
+    .withMessage("You must consent to data collection"),
 ];
 
 // Generic validation result handler
