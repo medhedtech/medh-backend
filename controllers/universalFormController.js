@@ -7,6 +7,69 @@ import logger from "../utils/logger.js";
 import catchAsync from "../utils/catchAsync.js";
 import { AppError } from "../utils/errorHandler.js";
 import passwordSecurity from "../utils/passwordSecurity.js";
+import { PhoneValidator } from "../utils/phoneValidator.js"; // Import enhanced phone validator
+
+/**
+ * Normalize phone number using enhanced validator
+ * @param {string|object} phoneInput - Phone input from form
+ * @param {string} countryCode - Country code (default +91)
+ * @returns {object} Normalized phone data or original input if normalization fails
+ */
+const normalizePhoneNumber = (phoneInput, countryCode = "+91") => {
+  if (!phoneInput) return null;
+
+  try {
+    // Use enhanced phone validator for normalization
+    const result = PhoneValidator.validateForForm(phoneInput, countryCode);
+
+    if (result.valid) {
+      return {
+        country_code: countryCode,
+        number: result.normalized,
+        formatted: result.formatted,
+        is_validated: true,
+      };
+    } else {
+      // Log validation error but don't fail the form submission
+      logger.warn("Phone number validation failed during normalization", {
+        phoneInput,
+        countryCode,
+        error: result.message,
+      });
+
+      // Return original format for backward compatibility
+      if (
+        typeof phoneInput === "object" &&
+        phoneInput.country_code &&
+        phoneInput.number
+      ) {
+        return phoneInput;
+      } else if (typeof phoneInput === "string") {
+        // Try to extract country code and number from string
+        const extracted = PhoneValidator.extractCountryCode(phoneInput);
+        if (extracted) {
+          return {
+            country_code: extracted,
+            number: phoneInput
+              .replace(/\D/g, "")
+              .replace(extracted.replace("+", ""), ""),
+            formatted: phoneInput,
+            is_validated: false,
+          };
+        }
+      }
+
+      return phoneInput;
+    }
+  } catch (error) {
+    logger.error("Phone number normalization error", {
+      phoneInput,
+      countryCode,
+      error: error.message,
+    });
+    return phoneInput; // Return original input if normalization fails
+  }
+};
 
 /**
  * @desc    Submit a new form
@@ -100,6 +163,40 @@ export const submitForm = catchAsync(async (req, res, next) => {
     ) {
       processedBody.contact_info.full_name =
         `${processedBody.contact_info.first_name} ${processedBody.contact_info.last_name}`.trim();
+    }
+  }
+
+  // ✅ ENHANCED: Normalize phone numbers using enhanced validator
+  if (processedBody.contact_info?.mobile_number) {
+    const countryCode =
+      processedBody.contact_info?.country_code ||
+      processedBody.country_code ||
+      "+91"; // Default to India
+
+    const normalizedPhone = normalizePhoneNumber(
+      processedBody.contact_info.mobile_number,
+      countryCode,
+    );
+
+    if (normalizedPhone) {
+      processedBody.contact_info.mobile_number = normalizedPhone;
+    }
+  }
+
+  // Handle legacy phone_number field (for backward compatibility)
+  if (
+    processedBody.phone_number &&
+    !processedBody.contact_info?.mobile_number
+  ) {
+    const countryCode = processedBody.country_code || "+91";
+    const normalizedPhone = normalizePhoneNumber(
+      processedBody.phone_number,
+      countryCode,
+    );
+
+    if (normalizedPhone) {
+      processedBody.contact_info = processedBody.contact_info || {};
+      processedBody.contact_info.mobile_number = normalizedPhone;
     }
   }
 
@@ -1341,14 +1438,53 @@ export const submitCorporateTraining = catchAsync(async (req, res, next) => {
     specific_skills,
   } = req.body;
 
-  // Parse phone number if it's a string format
-  let formattedPhone = phone_number;
-  if (typeof phone_number === "string") {
-    // Assume it's already formatted like "+919876543210"
-    formattedPhone = {
-      country_code: phone_number.substring(0, phone_number.length - 10),
-      number: phone_number.substring(phone_number.length - 10),
-    };
+  // ✅ ENHANCED: Use enhanced phone validator for normalization
+  let normalizedPhone = null;
+  if (phone_number) {
+    const countryCode =
+      country === "US"
+        ? "+1"
+        : country === "GB" || country === "UK"
+          ? "+44"
+          : "+91"; // Default to India, but detect from country
+
+    const phoneResult = PhoneValidator.validateForForm(
+      phone_number,
+      countryCode,
+    );
+
+    if (phoneResult.valid) {
+      normalizedPhone = {
+        country_code: countryCode,
+        number: phoneResult.normalized,
+        formatted: phoneResult.formatted,
+        is_validated: true,
+      };
+    } else {
+      // If validation fails, try to handle legacy format
+      logger.warn("Phone validation failed, using legacy handling", {
+        phone_number,
+        country,
+        error: phoneResult.message,
+      });
+
+      // Legacy handling for backward compatibility
+      if (typeof phone_number === "string") {
+        // Assume it's already formatted like "+919876543210"
+        const cleanNumber = phone_number.replace(/\D/g, "");
+        if (cleanNumber.length >= 10) {
+          normalizedPhone = {
+            country_code: countryCode,
+            number:
+              cleanNumber.length > 10
+                ? cleanNumber.substring(cleanNumber.length - 10)
+                : cleanNumber,
+            formatted: phone_number,
+            is_validated: false,
+          };
+        }
+      }
+    }
   }
 
   // Create form data structure matching Universal Form Model
@@ -1361,7 +1497,7 @@ export const submitCorporateTraining = catchAsync(async (req, res, next) => {
       last_name: full_name.split(" ").slice(1).join(" ") || "",
       full_name: full_name,
       email: email.toLowerCase().trim(),
-      mobile_number: formattedPhone,
+      mobile_number: normalizedPhone,
       city: "", // Not provided in frontend form
       country: country || "IN",
     },
@@ -1743,15 +1879,15 @@ export const deleteForm = catchAsync(async (req, res, next) => {
  */
 export const getFormsByType = catchAsync(async (req, res, next) => {
   const { formType } = req.params;
-  const { 
-    page = 1, 
-    limit = 20, 
-    status, 
-    priority, 
+  const {
+    page = 1,
+    limit = 20,
+    status,
+    priority,
     search,
     date_from,
     date_to,
-    sort = "-submitted_at"
+    sort = "-submitted_at",
   } = req.query;
 
   // Build filter
@@ -1791,7 +1927,7 @@ export const getFormsByType = catchAsync(async (req, res, next) => {
       .skip(skip)
       .limit(limitNum)
       .lean(),
-    UniversalForm.countDocuments(filter)
+    UniversalForm.countDocuments(filter),
   ]);
 
   // Calculate pagination info
@@ -1803,7 +1939,7 @@ export const getFormsByType = catchAsync(async (req, res, next) => {
   const statusBreakdown = await UniversalForm.aggregate([
     { $match: { form_type: formType, is_deleted: false } },
     { $group: { _id: "$status", count: { $sum: 1 } } },
-    { $sort: { count: -1 } }
+    { $sort: { count: -1 } },
   ]);
 
   res.status(200).json({
@@ -1830,7 +1966,8 @@ export const getFormsByType = catchAsync(async (req, res, next) => {
       status,
       priority,
       search,
-      date_range: date_from || date_to ? { from: date_from, to: date_to } : null,
+      date_range:
+        date_from || date_to ? { from: date_from, to: date_to } : null,
     },
   });
 });
@@ -2419,24 +2556,29 @@ async function sendDemoConfirmationEmail(
   recipientName,
 ) {
   const isUnder16 = form.is_student_under_16;
-  let subject = "";
-  let template = "";
-  let emailData = {};
 
+  // Format demo date with better fallback
   const demoDate = form.demo_session_details?.preferred_date
     ? new Date(form.demo_session_details.preferred_date).toLocaleDateString(
         "en-US",
         { weekday: "long", year: "numeric", month: "long", day: "numeric" },
       )
-    : "N/A";
-  const demoTime = form.demo_session_details?.preferred_time_slot || "N/A";
-  const selectedCourses =
-    form.student_details?.preferred_course?.join(", ") || "N/A";
-  const studentName = form.student_details?.name || "N/A";
-  const studentGrade = form.student_details?.grade || "N/A";
+    : "To be confirmed";
+
+  // Format demo time with better fallback
+  const demoTime =
+    form.demo_session_details?.preferred_time_slot || "To be confirmed";
+
+  // Handle courses - join array or use single course
+  const selectedCourses = Array.isArray(form.student_details?.preferred_course)
+    ? form.student_details.preferred_course.join(", ")
+    : form.student_details?.preferred_course || "Demo Course";
+
+  const studentName = form.student_details?.name || recipientName;
+  const studentGrade = form.student_details?.grade || null;
 
   if (isUnder16) {
-    emailData = {
+    const emailData = {
       parent_name: recipientName,
       student_name: studentName,
       demo_date: demoDate,
@@ -2445,27 +2587,46 @@ async function sendDemoConfirmationEmail(
       grade_level: studentGrade,
       parent_email: recipientEmail,
       temporary_password: temporaryPassword,
+      // Additional context
+      form_id: form.form_id,
+      application_id: form.application_id,
+      submitted_at: form.submitted_at,
     };
+
     await emailService.sendParentDemoConfirmationEmail(
       recipientEmail,
       emailData,
     );
   } else {
-    emailData = {
+    const emailData = {
       name: recipientName,
+      student_name: studentName, // Include for consistency
       demo_date: demoDate,
       demo_time: demoTime,
       course: selectedCourses,
       email: recipientEmail,
       temporary_password: temporaryPassword,
+      // Additional context
+      form_id: form.form_id,
+      application_id: form.application_id,
+      submitted_at: form.submitted_at,
     };
+
     await emailService.sendStudentDemoConfirmationEmail(
       recipientEmail,
       emailData,
     );
   }
+
   logger.info(
     `Demo confirmation email sent to ${recipientEmail} for form ${form.application_id}`,
+    {
+      isUnder16,
+      studentName,
+      demoDate,
+      demoTime,
+      course: selectedCourses,
+    },
   );
 }
 

@@ -2044,14 +2044,30 @@ class EmailService {
    */
   async sendParentDemoConfirmationEmail(email, demoData) {
     try {
+      const baseUrl = process.env.FRONTEND_URL || "https://medh.co";
+
+      // Enhanced template data with better field mapping
       const templateData = {
-        ...demoData,
+        parent_name: demoData.parent_name || demoData.name || "Parent",
+        student_name: demoData.student_name || demoData.name || "Student",
+        demo_date: demoData.demo_date || "To be confirmed",
+        demo_time: demoData.demo_time || "To be confirmed",
+        course: demoData.course || demoData.preferred_course || "Demo Course",
+        grade_level: demoData.grade_level || demoData.grade || null,
+        parent_email: demoData.parent_email || email,
+        temporary_password: demoData.temporary_password || null,
+
+        // URLs and branding
         currentYear: new Date().getFullYear(),
-        dashboard_url: process.env.FRONTEND_URL || "https://app.medh.co",
-        support_url: `${process.env.FRONTEND_URL || "https://app.medh.co"}/support`,
-        privacy_url: `${process.env.FRONTEND_URL || "https://app.medh.co"}/privacy`,
-        terms_url: `${process.env.FRONTEND_URL || "https://app.medh.co"}/terms`,
-        unsubscribe_url: `${process.env.FRONTEND_URL || "https://app.medh.co"}/unsubscribe?email=${encodeURIComponent(email)}`,
+        logo_url: `${baseUrl}/medh_logo-1.png`,
+        dashboard_url: baseUrl,
+        support_url: `${baseUrl}/support`,
+        privacy_url: `${baseUrl}/privacy`,
+        terms_url: `${baseUrl}/terms`,
+        unsubscribe_url: `${baseUrl}/unsubscribe?email=${encodeURIComponent(email)}`,
+
+        // Additional data from original object
+        ...demoData,
       };
 
       return this.sendTemplatedEmail(
@@ -2059,7 +2075,10 @@ class EmailService {
         "parent-demo-confirmation",
         "Your Child's Medh Demo Session is Confirmed!",
         templateData,
-        { priority: "high" },
+        {
+          priority: "high",
+          from: process.env.DEMO_EMAIL || "demo@medh.co",
+        },
       );
     } catch (error) {
       logger.email.error("Failed to send parent demo confirmation email", {
@@ -2078,14 +2097,28 @@ class EmailService {
    */
   async sendStudentDemoConfirmationEmail(email, demoData) {
     try {
+      const baseUrl = process.env.FRONTEND_URL || "https://medh.co";
+
+      // Enhanced template data with better field mapping
       const templateData = {
-        ...demoData,
+        name: demoData.name || demoData.student_name || "Student",
+        demo_date: demoData.demo_date || "To be confirmed",
+        demo_time: demoData.demo_time || "To be confirmed",
+        course: demoData.course || demoData.preferred_course || "Demo Course",
+        email: email,
+        temporary_password: demoData.temporary_password || null,
+
+        // URLs and branding
         currentYear: new Date().getFullYear(),
-        dashboard_url: process.env.FRONTEND_URL || "https://app.medh.co",
-        support_url: `${process.env.FRONTEND_URL || "https://app.medh.co"}/support`,
-        privacy_url: `${process.env.FRONTEND_URL || "https://app.medh.co"}/privacy`,
-        terms_url: `${process.env.FRONTEND_URL || "https://app.medh.co"}/terms`,
-        unsubscribe_url: `${process.env.FRONTEND_URL || "https://app.medh.co"}/unsubscribe?email=${encodeURIComponent(email)}`,
+        logo_url: `${baseUrl}/medh_logo-1.png`,
+        dashboard_url: baseUrl,
+        support_url: `${baseUrl}/support`,
+        privacy_url: `${baseUrl}/privacy`,
+        terms_url: `${baseUrl}/terms`,
+        unsubscribe_url: `${baseUrl}/unsubscribe?email=${encodeURIComponent(email)}`,
+
+        // Additional data from original object
+        ...demoData,
       };
 
       return this.sendTemplatedEmail(
@@ -2093,7 +2126,10 @@ class EmailService {
         "student-demo-confirmation",
         "Your Medh Demo Session is Confirmed!",
         templateData,
-        { priority: "high" },
+        {
+          priority: "high",
+          from: process.env.DEMO_EMAIL || "demo@medh.co",
+        },
       );
     } catch (error) {
       logger.email.error("Failed to send student demo confirmation email", {
