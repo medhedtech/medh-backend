@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const gradeSchema = new mongoose.Schema(
   {
@@ -16,6 +16,9 @@ const gradeSchema = new mongoose.Schema(
           "Grade 7-8",
           "Grade 9-10",
           "Grade 11-12",
+          "Foundation Certificate",
+          "Advance Certificate",
+          "Executive Diploma",
           "UG - Graduate - Professionals",
         ],
         message: "Grade must be one of the predefined grade levels",
@@ -51,7 +54,7 @@ const gradeSchema = new mongoose.Schema(
       },
       difficultyLevel: {
         type: String,
-        enum: ["beginner", "elementary", "intermediate", "advanced", "expert"],
+        enum: ["beginner", "elementary", "intermediate", "advanced", "expert", "foundation", "executive"],
         default: "beginner",
       },
       subjectAreas: [{ type: String, trim: true }],
@@ -67,7 +70,7 @@ const gradeSchema = new mongoose.Schema(
     academicInfo: {
       gradeLevel: {
         type: String,
-        enum: ["preschool", "primary", "middle", "high", "university"],
+        enum: ["preschool", "primary", "middle", "high", "university", "certificate", "diploma"],
         required: true,
       },
       typicalAge: {
@@ -119,6 +122,15 @@ gradeSchema.pre("save", function (next) {
     ) {
       this.academicInfo.gradeLevel = "high";
       this.metadata.difficultyLevel = "advanced";
+    } else if (this.name === "Foundation Certificate") {
+      this.academicInfo.gradeLevel = "certificate";
+      this.metadata.difficultyLevel = "foundation";
+    } else if (this.name === "Advance Certificate") {
+      this.academicInfo.gradeLevel = "certificate";
+      this.metadata.difficultyLevel = "advanced";
+    } else if (this.name === "Executive Diploma") {
+      this.academicInfo.gradeLevel = "diploma";
+      this.metadata.difficultyLevel = "executive";
     } else if (this.name.includes("UG - Graduate - Professionals")) {
       this.academicInfo.gradeLevel = "university";
       this.metadata.difficultyLevel = "expert";

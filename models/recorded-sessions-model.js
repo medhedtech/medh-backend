@@ -29,7 +29,7 @@ const recordedSessionSchema = new mongoose.Schema(
 );
 
 const RecordedSession = mongoose.model(
-  "RecordedSession",
+  'RecordedSession',
   recordedSessionSchema,
 );
 

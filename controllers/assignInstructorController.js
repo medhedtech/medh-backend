@@ -1,6 +1,6 @@
-import InstructorAssignment from "../models/assign-instructor-model.js";
-import Course from "../models/course-model.js";
-import User from "../models/user-modal.js";
+import InstructorAssignment from '../models/assign-instructor-model.js';
+import Course from '../models/course-model.js';
+import User from '../models/user-modal.js';
 
 export const createOrUpdateInstructorAssignment = async (req, res) => {
   try {
@@ -17,7 +17,7 @@ export const createOrUpdateInstructorAssignment = async (req, res) => {
     // Ensure the course exists
     const course = await Course.findOne({ course_title });
     if (!course) {
-      return res.status(404).json({ message: "Course not found" });
+      return res.status(404).json({ message: 'Course not found' });
     }
 
     // Verify the user is an instructor
