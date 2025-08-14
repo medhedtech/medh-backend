@@ -1,18 +1,26 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 const studentSchema = new mongoose.Schema(
   {
     full_name: {
       type: String,
+      required: [true, 'Full name is required'],
+      trim: true,
     },
     age: {
       type: Number,
     },
     email: {
       type: String,
+      required: [true, 'Email is required'],
       unique: true,
       trim: true,
+      lowercase: true,
     },
+    phone_numbers: [{
+      type: String,
+      trim: true,
+    }],
     course_name: {
       type: String,
     },

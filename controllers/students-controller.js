@@ -1,104 +1,153 @@
-import User, { USER_ROLES } from "../models/user-modal.js";
+import Student from "../models/student-model.js";
 import Course from "../models/course-model.js";
 import Wishlist from "../models/wishlist.model.js";
 import logger from "../utils/logger.js";
 
-// Create a new student (stored in User collection)
+// Create a new student (stored in Student collection)
 export const createStudent = async (req, res) => {
   try {
-    const { full_name, email, password, phone_numbers = [], status } = req.body;
-    if (!password) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Password is required" });
+    const { full_name, email, phone_numbers = [], status, age, course_name } = req.body;
+    
+    // Check if student already exists
+    const existingStudent = await Student.findOne({ email });
+    if (existingStudent) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Student with this email already exists" 
+      });
     }
-    // Create user with student role
-    const newUser = new User({
+
+    // Create new student
+    const newStudent = new Student({
       full_name,
       email,
-      password,
+      age,
+      phone_numbers,
+      course_name,
       status: status || "Active",
-      role: [USER_ROLES.STUDENT],
-      email_verified: true,
-      identity_verified: true,
-      password_set: true,
-      first_login_completed: true,
-      is_active: true,
+      meta: {
+        createdBy: "system",
+        updatedBy: "system"
+      }
     });
-    await newUser.save();
-    res
-      .status(201)
-      .json({ message: "Student user created successfully", user: newUser });
+    await newStudent.save();
+    
+    res.status(201).json({ 
+      success: true,
+      message: "Student created successfully", 
+      student: newStudent 
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error creating student user", error });
+    res.status(500).json({ 
+      success: false,
+      message: "Error creating student", 
+      error: error.message 
+    });
   }
 };
 
-// Get all student users
+// Get all students
 export const getAllStudents = async (req, res) => {
   try {
-    const students = await User.find({ role: USER_ROLES.STUDENT });
-    const totalStudents = await User.countDocuments({
-      role: USER_ROLES.STUDENT,
-      is_active: true,
-    });
+    const { search, page = 1, limit = 20 } = req.query;
+    
+    console.log('getAllStudents called with:', { search, page, limit });
+    
+    // Build query
+    const query = { status: "Active" };
+    
+    // Add search functionality
+    if (search) {
+      query.$or = [
+        { full_name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { course_name: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    console.log('Query:', JSON.stringify(query, null, 2));
+    
+    // Calculate pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Fetch students with pagination
+    const students = await Student.find(query)
+      .select('_id full_name email age course_name status meta')
+      .sort({ full_name: 1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+    
+    console.log(`Found ${students.length} students`);
+    
+    // Get total count for pagination
+    const totalStudents = await Student.countDocuments(query);
+    
+    console.log(`Total students in database: ${totalStudents}`);
+    
     res.status(200).json({
+      success: true,
       message: "Students fetched successfully",
-      students,
-      totalStudents,
+      data: {
+        items: students,
+        total: totalStudents,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(totalStudents / parseInt(limit))
+      }
     });
   } catch (error) {
-    res.status(500).json({ message: "Error fetching students", error });
+    console.error('Error fetching students:', error);
+    res.status(500).json({ 
+      success: false,
+      message: "Error fetching students", 
+      error: error.message 
+    });
   }
 };
 
-// Get a student user by ID
+// Get a student by ID
 export const getStudentById = async (req, res) => {
   try {
     const { id } = req.params;
-    const student = await User.findOne({ _id: id, role: USER_ROLES.STUDENT });
+    const student = await Student.findById(id);
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
-    res.status(200).json(student);
+    res.status(200).json({ success: true, data: student });
   } catch (error) {
     res.status(500).json({ message: "Error fetching student", error });
   }
 };
 
-// Update a student user by ID
+// Update a student by ID
 export const updateStudent = async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
-    // Prevent role change
-    delete updateData.role;
-    const updatedStudent = await User.findOneAndUpdate(
-      { _id: id, role: USER_ROLES.STUDENT },
+    
+    const updatedStudent = await Student.findByIdAndUpdate(
+      id,
       updateData,
       { new: true, runValidators: true },
     );
     if (!updatedStudent) {
       return res.status(404).json({ message: "Student not found" });
     }
-    res.status(200).json(updatedStudent);
+    res.status(200).json({ success: true, data: updatedStudent });
   } catch (error) {
     res.status(500).json({ message: "Error updating student", error });
   }
 };
 
-// Delete a student user by ID
+// Delete a student by ID
 export const deleteStudent = async (req, res) => {
   try {
     const { id } = req.params;
-    const deletedStudent = await User.findOneAndDelete({
-      _id: id,
-      role: USER_ROLES.STUDENT,
-    });
+    const deletedStudent = await Student.findByIdAndDelete(id);
     if (!deletedStudent) {
       return res.status(404).json({ message: "Student not found" });
     }
-    res.status(200).json({ message: "Student deleted successfully" });
+    res.status(200).json({ success: true, message: "Student deleted successfully" });
   } catch (error) {
     res.status(500).json({ message: "Error deleting student", error });
   }
@@ -108,25 +157,26 @@ export const deleteStudent = async (req, res) => {
 export const toggleStudentStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const student = await User.findOne({ _id: id, role: USER_ROLES.STUDENT });
+    const student = await Student.findById(id);
     if (!student) {
       return res.status(404).json({ message: "Student not found" });
     }
-    const newStatus = student.is_active ? false : true;
-    student.is_active = newStatus;
+    const newStatus = student.status === "Active" ? "Inactive" : "Active";
+    student.status = newStatus;
     await student.save();
     res.status(200).json({
-      message: `Student status updated to ${newStatus ? 'Active' : 'Inactive'}`,
+      success: true,
+      message: `Student status updated to ${newStatus}`,
       student: {
         id: student._id,
-        is_active: student.is_active,
-        status: student.is_active ? 'Active' : 'Inactive', // For backward compatibility
+        status: student.status,
         full_name: student.full_name,
       },
     });
   } catch (error) {
     console.error("Error toggling student status:", error);
     res.status(500).json({
+      success: false,
       message: "Error toggling student status. Please try again later.",
       error: error.message,
     });

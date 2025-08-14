@@ -16,14 +16,14 @@ const instructorAssignmentSchema = new mongoose.Schema(
     },
     user_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
     },
   },
   { timestamps: true },
 );
 
 const InstructorAssignment = mongoose.model(
-  "AssignedInstructor",
+  'AssignedInstructor',
   instructorAssignmentSchema,
 );
 

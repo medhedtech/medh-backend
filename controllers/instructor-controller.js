@@ -1,10 +1,19 @@
 import bcrypt from "bcryptjs";
-import User from "../models/user-modal.js";
+import Instructor from "../models/instructor-model.js";
 import emailService from "../services/emailService.js";
 
 // Create Instructor
 export const createInstructor = async (req, res) => {
-  const { full_name, email, phone_number, password, domain, meta } = req.body;
+  const { 
+    full_name, 
+    email, 
+    phone_number, 
+    password, 
+    domain, 
+    meta, 
+    experience, 
+    qualifications 
+  } = req.body;
 
   if (!full_name || !email || !password) {
     return res
@@ -16,31 +25,29 @@ export const createInstructor = async (req, res) => {
   }
 
   try {
-    let user = await User.findOne({ $or: [{ email }, { phone_number }] });
-    if (user) {
+    let instructor = await Instructor.findOne({ $or: [{ email }, { phone_number }] });
+    if (instructor) {
       return res.status(400).json({
         success: false,
-        message: "User with this email or phone number already exists",
+        message: "Instructor with this email or phone number already exists",
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
     // Create a new instructor instance
-    const instructor = new User({
+    const newInstructor = new Instructor({
       full_name,
       email,
       phone_number,
-      password: hashedPassword,
-      role: ["instructor"],
+      password, // Password will be hashed by the model middleware
       domain,
       meta,
-      password_set: true,
-      first_login_completed: true,
+      experience,
+      qualifications,
+      status: "Active",
       email_verified: true,
       is_active: true,
     });
-    await instructor.save();
+    await newInstructor.save();
 
     // Prepare email content
     const mailOptions = {
@@ -67,7 +74,7 @@ export const createInstructor = async (req, res) => {
         success: true,
         message:
           "Instructor created successfully, and email sent to the instructor.",
-        instructor,
+        instructor: newInstructor,
         emailResult,
       });
     } catch (emailError) {
@@ -77,7 +84,7 @@ export const createInstructor = async (req, res) => {
         success: true,
         message:
           "Instructor created successfully, but email notification failed to send.",
-        instructor,
+        instructor: newInstructor,
         emailError: emailError.message,
       });
     }
@@ -93,7 +100,7 @@ export const createInstructor = async (req, res) => {
 
 export const getAllInstructors = async (req, res) => {
   try {
-    const instructors = await User.find({ role: "instructor" });
+    const instructors = await Instructor.find({});
     res.status(200).json({ success: true, data: instructors });
   } catch (error) {
     res.status(500).json({ message: "Error fetching instructors", error });
@@ -103,7 +110,7 @@ export const getAllInstructors = async (req, res) => {
 export const getInstructorById = async (req, res) => {
   try {
     const { id } = req.params;
-    const instructor = await User.findOne({ _id: id, role: "instructor" });
+    const instructor = await Instructor.findById(id);
 
     if (!instructor) {
       return res.status(404).json({ message: "Instructor not found" });
@@ -120,8 +127,8 @@ export const updateInstructor = async (req, res) => {
     const { id } = req.params;
     const updates = req.body;
 
-    const updatedInstructor = await User.findOneAndUpdate(
-      { _id: id, role: "instructor" },
+    const updatedInstructor = await Instructor.findByIdAndUpdate(
+      id,
       updates,
       { new: true, runValidators: true },
     );
@@ -139,10 +146,7 @@ export const updateInstructor = async (req, res) => {
 export const deleteInstructor = async (req, res) => {
   try {
     const { id } = req.params;
-    const deletedInstructor = await User.findOneAndDelete({
-      _id: id,
-      role: "instructor",
-    });
+    const deletedInstructor = await Instructor.findByIdAndDelete(id);
 
     if (!deletedInstructor) {
       return res.status(404).json({ message: "Instructor not found" });
@@ -157,18 +161,18 @@ export const deleteInstructor = async (req, res) => {
 export const toggleInstructorStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const instructor = await User.findOne({ _id: id, role: "instructor" });
+    const instructor = await Instructor.findById(id);
 
     if (!instructor) {
       return res.status(404).json({ message: "Instructor not found" });
     }
 
-    const newStatus = instructor.is_active ? false : true;
-    instructor.is_active = newStatus;
+    const newStatus = instructor.status === "Active" ? "Inactive" : "Active";
+    instructor.status = newStatus;
     await instructor.save();
 
     res.status(200).json({
-      message: `Instructor status updated to ${newStatus ? 'Active' : 'Inactive'}`,
+      message: `Instructor status updated to ${newStatus}`,
       data: instructor,
     });
   } catch (error) {
