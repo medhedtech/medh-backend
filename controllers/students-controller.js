@@ -47,47 +47,48 @@ export const createStudent = async (req, res) => {
   }
 };
 
-// Get all students
+// Get all students from Student collection only
 export const getAllStudents = async (req, res) => {
   try {
     const { search, page = 1, limit = 20 } = req.query;
     
     console.log('getAllStudents called with:', { search, page, limit });
     
-    // Build query
-    const query = { status: "Active" };
+    // Build query for Student collection - remove status filter to get ALL students
+    const studentQuery = {};
     
     // Add search functionality
     if (search) {
-      query.$or = [
-        { full_name: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { course_name: { $regex: search, $options: 'i' } }
+      const searchRegex = { $regex: search, $options: 'i' };
+      studentQuery.$or = [
+        { full_name: searchRegex },
+        { email: searchRegex },
+        { course_name: searchRegex }
       ];
     }
     
-    console.log('Query:', JSON.stringify(query, null, 2));
+    console.log('Student Query:', JSON.stringify(studentQuery, null, 2));
     
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
-    // Fetch students with pagination
-    const students = await Student.find(query)
+    // Fetch ALL students from Student collection (no status filter)
+    const students = await Student.find(studentQuery)
       .select('_id full_name email age course_name status meta')
       .sort({ full_name: 1 })
       .skip(skip)
       .limit(parseInt(limit));
     
-    console.log(`Found ${students.length} students`);
+    console.log(`Found ${students.length} students from Student collection`);
     
     // Get total count for pagination
-    const totalStudents = await Student.countDocuments(query);
+    const totalStudents = await Student.countDocuments(studentQuery);
     
-    console.log(`Total students in database: ${totalStudents}`);
+    console.log(`Total students in Student collection: ${totalStudents}`);
     
     res.status(200).json({
       success: true,
-      message: "Students fetched successfully",
+      message: "Students fetched successfully from Student collection",
       data: {
         items: students,
         total: totalStudents,

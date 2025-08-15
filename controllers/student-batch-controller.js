@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import Enrollment from "../models/enrollment-model.js";
 import { Course, Batch } from "../models/course-model.js";
 import User from "../models/user-modal.js"; // Use User model instead of Student
+import { createStudentS3Folder } from "../utils/s3BatchFolderManager.js";
+import logger from "../utils/logger.js";
 
 /**
  * Enroll a student in a course batch
@@ -194,6 +196,31 @@ export const enrollStudentInBatch = async (req, res) => {
     // Update batch enrolled student count
     batch.enrolled_students += 1;
     await batch.save();
+
+    // Create S3 folder for the student within the batch
+    try {
+      const studentName = student.full_name || 
+                         (student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : null) ||
+                         student.first_name ||
+                         student.last_name ||
+                         'Unknown Student';
+      
+      const s3FolderResult = await createStudentS3Folder(
+        batchId,
+        studentId,
+        studentName
+      );
+      
+      if (s3FolderResult.success) {
+        logger.info(`✅ S3 folder created for student: ${studentName} in batch: ${batch.batch_name}`);
+        logger.info(`   - S3 Path: ${s3FolderResult.s3Path}`);
+      } else {
+        logger.warn(`⚠️ Failed to create S3 folder for student: ${studentName}`, s3FolderResult.error);
+      }
+    } catch (s3Error) {
+      logger.error(`❌ Error creating S3 folder for student: ${studentId}`, s3Error);
+      // Don't fail enrollment if S3 folder creation fails
+    }
 
     // Return success response with enrollment details
     res.status(201).json({
