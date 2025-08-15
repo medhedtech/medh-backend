@@ -6,6 +6,7 @@ import Announcement from "../models/announcement-model.js";
 import Blog from "../models/blog-model.js";
 import Category from "../models/category-model.js";
 import mongoose from "mongoose";
+import { createBatchS3Folder } from "../utils/s3BatchFolderManager.js";
 
 /**
  * Bulk operations for users
@@ -351,21 +352,49 @@ export const bulkCourseOperations = async (req, res) => {
 export const createBatch = async (req, res) => {
   try {
     const batchData = req.body;
+    const adminId = req.user.id;
 
     // Add creation metadata
     batchData.createdAt = new Date();
     batchData.updatedAt = new Date();
-    batchData.createdBy = req.user.id;
+    batchData.createdBy = adminId;
 
-    const batch = new Batch(batchData);
-    await batch.save();
+    // Use the Course.createBatch method to ensure instructor details are populated
+    const courseId = batchData.course;
+    if (!courseId) {
+      return res.status(400).json({
+        success: false,
+        message: "Course ID is required for batch creation",
+      });
+    }
+
+    const batch = await Course.createBatch(courseId, batchData, adminId);
+
+    // Create S3 folder for the batch
+    try {
+      const s3FolderResult = await createBatchS3Folder(
+        batch._id.toString(),
+        batch.batch_name || 'New Batch'
+      );
+      
+      if (s3FolderResult.success) {
+        console.log(`✅ S3 folder created for batch: ${batch.batch_name} (${batch._id})`);
+        console.log(`   - S3 Path: ${s3FolderResult.s3Path}`);
+      } else {
+        console.warn(`⚠️ Failed to create S3 folder for batch: ${batch.batch_name}`, s3FolderResult.error);
+      }
+    } catch (s3Error) {
+      console.error(`❌ Error creating S3 folder for batch: ${batch.batch_name}`, s3Error);
+      // Don't fail batch creation if S3 folder creation fails
+    }
 
     const populatedBatch = await Batch.findById(batch._id)
       .populate("course", "title")
       .populate(
         "instructor",
         "personalInfo.firstName personalInfo.lastName email",
-      );
+      )
+      .select("+instructor_details"); // Include instructor_details field
 
     res.status(201).json({
       success: true,
@@ -410,7 +439,8 @@ export const updateBatch = async (req, res) => {
       .populate(
         "instructor",
         "personalInfo.firstName personalInfo.lastName email",
-      );
+      )
+      .select("+instructor_details"); // Include instructor_details field
 
     if (!batch) {
       return res.status(404).json({

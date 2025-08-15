@@ -137,6 +137,30 @@ const batchSchema = new Schema(
       ref: "User",
       default: null,
     },
+    // Store instructor details for easy access without population
+    instructor_details: {
+      _id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      full_name: {
+        type: String,
+        default: null,
+      },
+      email: {
+        type: String,
+        default: null,
+      },
+      phone_number: {
+        type: String,
+        default: null,
+      },
+      assignment_date: {
+        type: Date,
+        default: Date.now,
+      }
+    },
     schedule: [
       {
         // Legacy field for recurring day-based scheduling (kept for backward compatibility)
@@ -1357,6 +1381,25 @@ courseSchema.statics.createBatch = async function (
     batchData.batch_code = `${coursePrefix}-${timestamp}`;
   }
 
+  // If instructor is assigned, fetch instructor details
+  if (batchData.assigned_instructor) {
+    try {
+      const instructor = await mongoose.model("User").findById(batchData.assigned_instructor);
+      if (instructor) {
+        batchData.instructor_details = {
+          _id: instructor._id,
+          full_name: instructor.full_name || `${instructor.first_name || ''} ${instructor.last_name || ''}`.trim(),
+          email: instructor.email,
+          phone_number: instructor.phone_number || instructor.phone || null,
+          assignment_date: new Date()
+        };
+      }
+    } catch (error) {
+      console.error("Error fetching instructor details:", error);
+      // Continue with batch creation even if instructor details fetch fails
+    }
+  }
+
   // Create a new batch with the provided data
   const newBatch = new Batch({
     ...batchData,
@@ -1388,15 +1431,24 @@ courseSchema.statics.assignInstructorToBatch = async function (
     throw new Error("Instructor not found");
   }
 
-  // Update the batch with the instructor
+  // Update the batch with the instructor and instructor details
   batch.assigned_instructor = instructorId;
+  batch.instructor_details = {
+    _id: instructor._id,
+    full_name: instructor.full_name || `${instructor.first_name || ''} ${instructor.last_name || ''}`.trim(),
+    email: instructor.email,
+    phone_number: instructor.phone_number || instructor.phone || null,
+    assignment_date: new Date()
+  };
   batch.updated_by = adminId;
 
   return await batch.save();
 };
 
 courseSchema.statics.getBatchesForCourse = async function (courseId) {
-  return await Batch.find({ course: courseId }).populate("assigned_instructor");
+  return await Batch.find({ course: courseId })
+    .populate("assigned_instructor")
+    .select("+instructor_details"); // Include instructor_details in the response
 };
 
 const Course = mongoose.model("Course", courseSchema);

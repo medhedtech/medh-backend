@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Student from '../models/student-model.js';
 import Instructor from '../models/instructor-model.js';
 import User from '../models/user-modal.js';
@@ -7,15 +8,16 @@ import LiveSession from '../models/liveSession.model.js';
 import Course from '../models/course-model.js';
 import AppError from '../utils/appError.js';
 import catchAsync from '../utils/catchAsync.js';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadBucketCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import crypto from 'crypto';
 
 // Initialize S3 client
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    accessKeyId: process.env.IM_AWS_ACCESS_KEY,
+    secretAccessKey: process.env.IM_AWS_SECRET_KEY,
   },
 });
 
@@ -298,8 +300,8 @@ export const generateUploadUrl = catchAsync(async (req, res, next) => {
     console.log('🔧 AWS Config:', {
       region: process.env.AWS_REGION,
       bucket: process.env.AWS_S3_BUCKET_NAME,
-      hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
-      hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY
+          hasAccessKey: !!process.env.IM_AWS_ACCESS_KEY,
+    hasSecretKey: !!process.env.IM_AWS_SECRET_KEY
     });
 
     // Create the command for S3
@@ -364,6 +366,218 @@ export const uploadFile = catchAsync(async (req, res, next) => {
       size: req.file.size
     }
   });
+});
+
+// Upload multiple videos to S3 with batch and student organization
+export const uploadVideos = catchAsync(async (req, res, next) => {
+  console.log('🔍 uploadVideos called with files:', req.files?.length || 0);
+  console.log('🔍 Request body:', req.body);
+  console.log('🔍 Environment variables check:');
+  console.log('  - AWS_REGION:', process.env.AWS_REGION);
+      console.log('  - IM_AWS_ACCESS_KEY:', process.env.IM_AWS_ACCESS_KEY ? 'SET' : 'NOT SET');
+    console.log('  - IM_AWS_SECRET_KEY:', process.env.IM_AWS_SECRET_KEY ? 'SET' : 'NOT SET');
+  console.log('  - AWS_S3_BUCKET_NAME:', process.env.AWS_S3_BUCKET_NAME);
+  
+  if (!req.files || req.files.length === 0) {
+    return next(new AppError('No video files uploaded', 400));
+  }
+
+  // Get student IDs and batch ID from request body
+  const { studentIds, batchId } = req.body;
+  console.log('👥 Student IDs from request:', studentIds);
+  console.log('📦 Batch ID from request:', batchId);
+
+  // Validate student IDs
+  if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
+    return next(new AppError('Student IDs are required', 400));
+  }
+
+  // Find batch information for each student
+  let batchInfo = null;
+  let studentBatchMapping = {};
+
+  try {
+    const Batch = mongoose.model('Batch');
+    const Enrollment = mongoose.model('Enrollment');
+
+    // If batch ID is provided, validate it
+    if (batchId) {
+      batchInfo = await Batch.findById(batchId).select('_id batch_name batch_code course');
+      if (!batchInfo) {
+        return next(new AppError('Invalid batch ID provided', 400));
+      }
+      console.log('✅ Batch found:', {
+        id: batchInfo._id,
+        name: batchInfo.batch_name,
+        code: batchInfo.batch_code
+      });
+    }
+
+      // If batch ID is provided, use it directly for all students
+  if (batchId && batchInfo) {
+    console.log('📚 Using provided batch ID for all students:', batchInfo._id);
+    
+    // Create student-batch mapping using the provided batch ID
+    for (const studentId of studentIds) {
+      studentBatchMapping[studentId] = {
+        batchId: batchInfo._id,
+        batchName: batchInfo.batch_name,
+        batchCode: batchInfo.batch_code
+      };
+    }
+  } else {
+    // Fallback: Find enrollments for all students to get their batch information
+    const enrollments = await Enrollment.find({
+      student: { $in: studentIds }
+    }).populate('batch', '_id batch_name batch_code');
+
+    console.log('📚 Found enrollments:', enrollments.length);
+
+    // Create student-batch mapping
+    for (const enrollment of enrollments) {
+      if (enrollment.batch) {
+        studentBatchMapping[enrollment.student.toString()] = {
+          batchId: enrollment.batch._id,
+          batchName: enrollment.batch.batch_name,
+          batchCode: enrollment.batch.batch_code
+        };
+      }
+    }
+  }
+
+    console.log('🗺️ Student-Batch Mapping:', studentBatchMapping);
+
+  } catch (error) {
+    console.error('❌ Error finding student-batch relationships:', error);
+    return next(new AppError('Error finding student-batch relationships', 500));
+  }
+
+  // Validate files
+  const allowedTypes = ['video/mp4', 'video/mov', 'video/webm', 'video/avi', 'video/mkv'];
+  const maxSize = 500 * 1024 * 1024; // 500MB per file
+  
+  const invalidFiles = req.files.filter(file => {
+    if (!allowedTypes.includes(file.mimetype)) {
+      return true;
+    }
+    if (file.size > maxSize) {
+      return true;
+    }
+    return false;
+  });
+
+  if (invalidFiles.length > 0) {
+    return next(new AppError(`Invalid files detected. Only MP4, MOV, WebM, AVI, MKV files up to 500MB are allowed`, 400));
+  }
+
+  try {
+    // Initialize S3 client
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION || 'us-east-1',
+      credentials: {
+        accessKeyId: process.env.IM_AWS_ACCESS_KEY,
+        secretAccessKey: process.env.IM_AWS_SECRET_KEY,
+      },
+    });
+
+    const bucketName = process.env.AWS_S3_BUCKET_NAME;
+    if (!bucketName) {
+      return next(new AppError('S3 bucket name not configured', 500));
+    }
+
+    const uploadedVideos = [];
+
+    // Upload each file to S3
+    for (const file of req.files) {
+      console.log(`📁 Processing file: ${file.originalname} (${file.size} bytes)`);
+      
+      const fileExtension = file.originalname.split('.').pop();
+      
+      // Generate S3 key based on student-batch mapping
+      let s3Key;
+      let studentInfo = null;
+      let batchInfoForUpload = null;
+
+      // For each student, create a separate upload
+      for (const studentId of studentIds) {
+        const studentBatchInfo = studentBatchMapping[studentId];
+        
+        if (studentBatchInfo && studentBatchInfo.batchId) {
+          // Student has a batch: videos/{batchObjectId}/{studentId}/{timestamp}-{random}.{extension}
+          const batchObjectId = studentBatchInfo.batchId.toString(); // Ensure it's a string
+          s3Key = `videos/${batchObjectId}/${studentId}/${Date.now()}-${crypto.randomBytes(16).toString('hex')}.${fileExtension}`;
+          studentInfo = { id: studentId, batchInfo: studentBatchInfo };
+          batchInfoForUpload = studentBatchInfo;
+          console.log(`📝 Generated S3 key for student ${studentId} in batch ${batchObjectId}: ${s3Key}`);
+        } else {
+          // Student not enrolled in any batch: videos/no-batch/{studentId}/{timestamp}-{random}.{extension}
+          s3Key = `videos/no-batch/${studentId}/${Date.now()}-${crypto.randomBytes(16).toString('hex')}.${fileExtension}`;
+          studentInfo = { id: studentId, batchInfo: null };
+          batchInfoForUpload = null;
+          console.log(`📝 Generated S3 key for student ${studentId} (no batch): ${s3Key}`);
+        }
+        
+        const uploadParams = {
+          Bucket: bucketName,
+          Key: s3Key,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+          Metadata: {
+            originalName: file.originalname,
+            uploadedAt: new Date().toISOString(),
+            studentId: studentId,
+            batchId: batchInfoForUpload?.batchId?.toString() || 'no-batch',
+            batchName: batchInfoForUpload?.batchName || 'no-batch-name',
+            batchCode: batchInfoForUpload?.batchCode || 'no-batch-code'
+          },
+        };
+
+              console.log(`🚀 Uploading to S3 bucket: ${bucketName}`);
+        const command = new PutObjectCommand(uploadParams);
+        await s3Client.send(command);
+
+        const videoUrl = `https://${bucketName}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${s3Key}`;
+        
+        uploadedVideos.push({
+          fileId: s3Key,
+          name: file.originalname,
+          size: file.size,
+          url: videoUrl,
+          type: file.mimetype,
+          uploadedAt: new Date().toISOString(),
+          studentId: studentId,
+          studentName: studentInfo?.id || null,
+          batchId: batchInfoForUpload?.batchId?.toString() || null,
+          batchName: batchInfoForUpload?.batchName || null,
+          batchCode: batchInfoForUpload?.batchCode || null,
+          s3Path: s3Key
+        });
+
+        console.log(`✅ Successfully uploaded video for student ${studentId}: ${file.originalname} -> ${s3Key}`);
+        console.log(`🔗 Video URL: ${videoUrl}`);
+        console.log(`📁 S3 Path: ${s3Key}`);
+      }
+    }
+
+    res.status(200).json({
+      status: 'success',
+      message: `${uploadedVideos.length} video(s) uploaded successfully`,
+      data: {
+        videos: uploadedVideos,
+        totalSize: uploadedVideos.reduce((sum, video) => sum + video.size, 0),
+        studentBatchMapping: studentBatchMapping,
+        batchInfo: batchInfo ? {
+          id: batchInfo._id,
+          name: batchInfo.batch_name,
+          code: batchInfo.batch_code
+        } : null
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error uploading videos to S3:', error);
+    return next(new AppError('Failed to upload videos to S3', 500));
+  }
 });
 
 // Create new live session
@@ -762,4 +976,205 @@ export const getCourseCategories = catchAsync(async (req, res, next) => {
     status: 'success',
     data: categories
   });
+});
+
+// Get student batch information
+export const getStudentBatchInfo = catchAsync(async (req, res, next) => {
+  const { studentIds } = req.query;
+  
+  if (!studentIds) {
+    return next(new AppError('Student IDs are required', 400));
+  }
+
+  try {
+    const studentIdArray = Array.isArray(studentIds) ? studentIds : [studentIds];
+    const Enrollment = mongoose.model('Enrollment');
+    const Batch = mongoose.model('Batch');
+
+    // Find enrollments for all students
+    const enrollments = await Enrollment.find({
+      student: { $in: studentIdArray }
+    }).populate('batch', '_id batch_name batch_code course');
+
+    // Create student-batch mapping
+    const studentBatchMapping = {};
+    for (const enrollment of enrollments) {
+      if (enrollment.batch) {
+        studentBatchMapping[enrollment.student.toString()] = {
+          batchId: enrollment.batch._id,
+          batchName: enrollment.batch.batch_name,
+          batchCode: enrollment.batch.batch_code,
+          courseId: enrollment.batch.course
+        };
+      }
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        studentBatchMapping,
+        totalStudents: studentIdArray.length,
+        studentsWithBatches: Object.keys(studentBatchMapping).length
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error getting student batch info:', error);
+    return next(new AppError('Error getting student batch information', 500));
+  }
+});
+
+// Test S3 connection and credentials
+export const testS3Connection = catchAsync(async (req, res, next) => {
+  try {
+    console.log('🧪 Testing S3 connection...');
+    
+    // Test S3 client creation
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION,
+      credentials: {
+        accessKeyId: process.env.IM_AWS_ACCESS_KEY,
+        secretAccessKey: process.env.IM_AWS_SECRET_KEY,
+      },
+    });
+
+    // Test bucket access
+    const headBucketCommand = new HeadBucketCommand({
+      Bucket: process.env.AWS_S3_BUCKET_NAME,
+    });
+
+    await s3Client.send(headBucketCommand);
+    
+    console.log('✅ S3 connection test successful');
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        bucketName: process.env.AWS_S3_BUCKET_NAME,
+        region: process.env.AWS_REGION,
+        accessStatus: 'accessible',
+        message: 'S3 bucket is accessible and credentials are valid'
+      }
+    });
+  } catch (error) {
+    console.error('❌ S3 connection test failed:', error);
+    
+    res.status(500).json({
+      status: 'error',
+      message: 'S3 connection test failed',
+      error: error.message,
+      data: {
+        bucketName: process.env.AWS_S3_BUCKET_NAME,
+        region: process.env.AWS_REGION,
+        accessStatus: 'failed',
+        error: error.message
+      }
+    });
+  }
+});
+
+// Verify uploaded videos in S3
+export const verifyS3Videos = catchAsync(async (req, res, next) => {
+  try {
+    const { videos } = req.body;
+    
+    if (!videos || !Array.isArray(videos)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Videos array is required'
+      });
+    }
+
+    console.log('🔍 Verifying videos in S3:', videos.length, 'videos');
+    
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION,
+      credentials: {
+        accessKeyId: process.env.IM_AWS_ACCESS_KEY,
+        secretAccessKey: process.env.IM_AWS_SECRET_KEY,
+      },
+    });
+
+    const verificationResults = {
+      verifiedVideos: [],
+      failedVerifications: []
+    };
+
+    for (const video of videos) {
+      try {
+        const headObjectCommand = new HeadObjectCommand({
+          Bucket: process.env.AWS_S3_BUCKET_NAME,
+          Key: video.s3Key,
+        });
+
+        const result = await s3Client.send(headObjectCommand);
+        
+        verificationResults.verifiedVideos.push({
+          s3Key: video.s3Key,
+          size: result.ContentLength,
+          lastModified: result.LastModified,
+          etag: result.ETag
+        });
+        
+        console.log(`✅ Verified: ${video.s3Key} (${result.ContentLength} bytes)`);
+      } catch (error) {
+        verificationResults.failedVerifications.push({
+          s3Key: video.s3Key,
+          error: error.message
+        });
+        
+        console.log(`❌ Failed to verify: ${video.s3Key} - ${error.message}`);
+      }
+    }
+
+    res.status(200).json({
+      status: 'success',
+      data: verificationResults,
+      message: `Verified ${verificationResults.verifiedVideos.length}/${videos.length} videos`
+    });
+  } catch (error) {
+    console.error('❌ Video verification failed:', error);
+    
+    res.status(500).json({
+      status: 'error',
+      message: 'Video verification failed',
+      error: error.message
+    });
+  }
+});
+
+// Test batch and student organization
+export const testBatchStudentOrg = catchAsync(async (req, res, next) => {
+  try {
+    console.log('🧪 Testing batch and student organization...');
+    
+    // Get test students
+    const students = await Student.find({})
+      .select('_id full_name email')
+      .limit(5);
+    
+    // Get test batches
+    const batches = await Batch.find({})
+      .select('_id name course_details')
+      .limit(3);
+    
+    console.log(`✅ Found ${students.length} students and ${batches.length} batches`);
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        students,
+        batches,
+        message: 'Batch and student organization test successful'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Batch/student organization test failed:', error);
+    
+    res.status(500).json({
+      status: 'error',
+      message: 'Batch/student organization test failed',
+      error: error.message
+    });
+  }
 });

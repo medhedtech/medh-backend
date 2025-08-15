@@ -29,7 +29,10 @@ const storage = multer.diskStorage({
   },
 });
 
-// File filter function
+// Configure memory storage for video uploads (for S3)
+const memoryStorage = multer.memoryStorage();
+
+// File filter function for general uploads
 const fileFilter = (req, file, cb) => {
   // Allow images, PDFs, and videos
   const allowedTypes = [
@@ -47,6 +50,29 @@ const fileFilter = (req, file, cb) => {
     cb(
       new Error(
         "Invalid file type. Only JPEG, PNG, GIF, PDF, MP4, and WEBM files are allowed.",
+      ),
+      false,
+    );
+  }
+};
+
+// File filter function for video uploads
+const videoFileFilter = (req, file, cb) => {
+  // Allow only video files
+  const allowedTypes = [
+    "video/mp4",
+    "video/mov",
+    "video/webm",
+    "video/avi",
+    "video/mkv",
+  ];
+
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(
+      new Error(
+        "Invalid file type. Only MP4, MOV, WebM, AVI, and MKV files are allowed.",
       ),
       false,
     );
@@ -78,6 +104,16 @@ const uploadMultiple = multer({
   limits: multipleUploadLimits,
 });
 
+// Create multer instance for video uploads (memory storage for S3)
+const uploadVideos = multer({
+  storage: memoryStorage,
+  fileFilter: videoFileFilter,
+  limits: {
+    fileSize: 500 * 1024 * 1024, // 500MB per file
+    files: 10, // Maximum 10 files
+  },
+});
+
 // Error handling middleware
 export const handleUploadError = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
@@ -100,4 +136,4 @@ export const handleUploadError = (err, req, res, next) => {
   next();
 };
 
-export { upload, uploadMultiple };
+export { upload, uploadMultiple, uploadVideos };

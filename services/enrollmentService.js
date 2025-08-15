@@ -3,6 +3,7 @@ import Enrollment from "../models/enrollment-model.js";
 import { Course, Batch } from "../models/course-model.js";
 import User from "../models/user-modal.js";
 import logger from "../utils/logger.js";
+import { createStudentS3Folder } from "../utils/s3BatchFolderManager.js";
 
 /**
  * Enrollment Service
@@ -297,6 +298,29 @@ class EnrollmentService {
     // Update batch enrolled students count
     batch.enrolled_students += batchSize;
     await batch.save();
+
+    // Create S3 folder for the student within the batch
+    try {
+      const student = await User.findById(studentId);
+      if (student) {
+        const studentName = student.full_name || `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'Unknown Student';
+        const s3FolderResult = await createStudentS3Folder(
+          batchId,
+          studentId,
+          studentName
+        );
+        
+        if (s3FolderResult.success) {
+          logger.info(`✅ S3 folder created for student: ${studentName} in batch enrollment`);
+          logger.info(`   - S3 Path: ${s3FolderResult.s3Path}`);
+        } else {
+          logger.warn(`⚠️ Failed to create S3 folder for student: ${studentName}`, s3FolderResult.error);
+        }
+      }
+    } catch (s3Error) {
+      logger.error(`❌ Error creating S3 folder for student: ${studentId}`, s3Error);
+      // Don't fail enrollment if S3 folder creation fails
+    }
 
     logger.info('Batch enrollment created', {
       enrollmentId: enrollment._id,

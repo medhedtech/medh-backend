@@ -22,6 +22,7 @@ import mongoose from "mongoose";
  */
 export const getDashboardStats = async (req, res) => {
   try {
+    console.log('🔍 Dashboard stats request received');
     const now = new Date();
 
     // Helper function to get date ranges
@@ -63,6 +64,7 @@ export const getDashboardStats = async (req, res) => {
     const totalStudents = await User.countDocuments({
       role: { $in: ["student", "coorporate-student"] },
     });
+    console.log('📊 Total Students:', totalStudents);
 
     // Students by period
     const studentsThisMonth = await User.countDocuments({
@@ -109,6 +111,7 @@ export const getDashboardStats = async (req, res) => {
     const totalInstructors = await User.countDocuments({
       role: { $in: ["instructor"] },
     });
+    console.log('📊 Total Instructors:', totalInstructors);
 
     // Instructors by period
     const instructorsThisMonth = await User.countDocuments({
@@ -155,6 +158,7 @@ export const getDashboardStats = async (req, res) => {
     const totalActiveEnrollments = await Enrollment.countDocuments({
       status: "active",
     });
+    console.log('📊 Total Active Enrollments:', totalActiveEnrollments);
 
     // Active enrollments by period
     const activeEnrollmentsThisMonth = await Enrollment.countDocuments({
@@ -201,6 +205,7 @@ export const getDashboardStats = async (req, res) => {
     const totalActiveCourses = await Course.countDocuments({
       status: { $in: ["Published", "published", "active"] },
     });
+    console.log('📊 Total Active Courses:', totalActiveCourses);
 
     // Active courses by period
     const activeCoursesThisMonth = await Course.countDocuments({

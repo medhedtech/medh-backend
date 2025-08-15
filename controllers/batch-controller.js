@@ -7,6 +7,8 @@ import zoomService from "../services/zoomService.js";
 import { generateSignedUrl } from "../utils/cloudfrontSigner.js";
 import OnlineMeeting from "../models/online-meeting.js";
 import SessionRating from "../models/session-rating.model.js"; // Import the new SessionRating model
+import { createBatchS3Folder, createStudentS3Folder } from "../utils/s3BatchFolderManager.js";
+import logger from "../utils/logger.js";
 
 /**
  * @typedef {('group'|'individual')} TBatchType
@@ -85,6 +87,24 @@ export const createBatch = async (req, res) => {
       batchDataWithoutStudent,
       adminId,
     );
+
+    // Create S3 folder for the batch
+    try {
+      const s3FolderResult = await createBatchS3Folder(
+        newBatch._id.toString(),
+        newBatch.batch_name || 'New Batch'
+      );
+      
+      if (s3FolderResult.success) {
+        logger.info(`✅ S3 folder created for batch: ${newBatch.batch_name} (${newBatch._id})`);
+        logger.info(`   - S3 Path: ${s3FolderResult.s3Path}`);
+      } else {
+        logger.warn(`⚠️ Failed to create S3 folder for batch: ${newBatch.batch_name}`, s3FolderResult.error);
+      }
+    } catch (s3Error) {
+      logger.error(`❌ Error creating S3 folder for batch: ${newBatch.batch_name}`, s3Error);
+      // Don't fail batch creation if S3 folder creation fails
+    }
 
     // If student_id was provided and batch is individual, automatically enroll the student
     let enrollmentResult = null;
@@ -284,6 +304,7 @@ export const getAllBatches = async (req, res) => {
         "course_title course_image slug course_type course_category",
       )
       .populate("assigned_instructor", "full_name email phone_numbers")
+      .select("+instructor_details") // Include instructor_details field
       .sort(sortObj)
       .skip(skip)
       .limit(parseInt(limit))
@@ -404,6 +425,7 @@ export const getBatchDetails = async (req, res) => {
     const batch = await Batch.findById(batchId)
       .populate("assigned_instructor", "full_name email phone_numbers")
       .populate("course", "course_title course_image slug")
+      .select("+instructor_details") // Include instructor_details field
       .lean();
 
     if (!batch) {
@@ -756,6 +778,26 @@ export const addStudentToBatch = async (req, res) => {
     // Update batch enrolled count
     batch.enrolled_students += 1;
     await batch.save();
+
+    // Create S3 folder for the student within the batch
+    try {
+      const studentName = student.full_name || student.first_name + ' ' + student.last_name || 'Unknown Student';
+      const s3FolderResult = await createStudentS3Folder(
+        batchId,
+        studentId,
+        studentName
+      );
+      
+      if (s3FolderResult.success) {
+        logger.info(`✅ S3 folder created for student: ${studentName} in batch: ${batch.batch_name}`);
+        logger.info(`   - S3 Path: ${s3FolderResult.s3Path}`);
+      } else {
+        logger.warn(`⚠️ Failed to create S3 folder for student: ${studentName}`, s3FolderResult.error);
+      }
+    } catch (s3Error) {
+      logger.error(`❌ Error creating S3 folder for student: ${studentId}`, s3Error);
+      // Don't fail enrollment if S3 folder creation fails
+    }
 
     // Populate the enrollment for response
     await enrollment.populate("student", "full_name email user_image");
