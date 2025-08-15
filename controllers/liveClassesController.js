@@ -5,7 +5,7 @@ import User from '../models/user-modal.js';
 import Grade from '../models/grade-model.js';
 import Dashboard from '../models/dashboard.model.js';
 import LiveSession from '../models/liveSession.model.js';
-import Course from '../models/course-model.js';
+import { Course, Batch } from '../models/course-model.js';
 import AppError from '../utils/appError.js';
 import catchAsync from '../utils/catchAsync.js';
 import { S3Client, PutObjectCommand, HeadBucketCommand, HeadObjectCommand } from '@aws-sdk/client-s3';

@@ -257,22 +257,22 @@ export const createStudentS3Folder = async (batchId, studentId, studentName = 'U
  * @returns {Promise<Object>} Result of folder check
  */
 export const checkStudentS3Folder = async (batchId, studentId, studentName = 'Unknown') => {
+  if (!batchId || !studentId) {
+    throw new Error('Batch ID and Student ID are required to check S3 folder');
+  }
+
+  const bucketName = ENV_VARS.UPLOAD_CONSTANTS.BUCKETS.VIDEOS;
+  
+  // Use student ID with student name in brackets for folder
+  const safeStudentName = studentName
+    .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+    .replace(/\s+/g, '_') // Replace spaces with underscores
+    .toLowerCase()
+    .trim();
+  
+  const folderKey = `videos/${batchId}/${studentId}(${safeStudentName})/`;
+
   try {
-    if (!batchId || !studentId) {
-      throw new Error('Batch ID and Student ID are required to check S3 folder');
-    }
-
-    const bucketName = ENV_VARS.UPLOAD_CONSTANTS.BUCKETS.VIDEOS;
-    
-    // Use student ID with student name in brackets for folder
-    const safeStudentName = studentName
-      .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
-      .replace(/\s+/g, '_') // Replace spaces with underscores
-      .toLowerCase()
-      .trim();
-    
-    const folderKey = `videos/${batchId}/${studentId}(${safeStudentName})/`;
-
     const command = new HeadObjectCommand({
       Bucket: bucketName,
       Key: folderKey
