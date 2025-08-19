@@ -1,203 +1,200 @@
-import { validationResult } from "express-validator";
 import mongoose from "mongoose";
 import Enrollment from "../models/enrollment-model.js";
 import { Course, Batch } from "../models/course-model.js";
-import User from "../models/user-modal.js"; // Use User model instead of Student
+import User from "../models/user-modal.js";
 import { createStudentS3Folder } from "../utils/s3BatchFolderManager.js";
 import logger from "../utils/logger.js";
 
 /**
  * Enroll a student in a course batch
- * @route POST /api/students/:studentId/enroll
+ * @route POST /api/enrollments/students/:studentId/enroll
  * @access Admin and self
  */
 export const enrollStudentInBatch = async (req, res) => {
   try {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
+    console.log('🚀 Starting student enrollment process...');
+    console.log('📋 Request data:', {
+      studentId: req.params.studentId,
+      body: req.body
+    });
 
     const { studentId } = req.params;
-    const { courseId, batchId, paymentDetails } = req.body;
+    const { courseId, course_id, batchId, batch_id, enrollment_type = 'batch', enrollment_source = 'direct' } = req.body;
+    
+    // Support both naming conventions
+    const finalCourseId = courseId || course_id;
+    const finalBatchId = batchId || batch_id;
 
-    // Verify student exists using User model
+    // Validate required fields
+    if (!finalCourseId || !finalBatchId) {
+      console.log('❌ Missing required fields');
+      return res.status(400).json({
+        success: false,
+        message: "Course ID and Batch ID are required"
+      });
+    }
+
+    // 1. Verify student exists
+    console.log('🔍 Step 1: Verifying student...');
     const student = await User.findById(studentId);
     if (!student) {
+      console.log('❌ Student not found:', studentId);
       return res.status(404).json({
         success: false,
-        message: "Student not found",
+        message: "Student not found"
       });
     }
 
-    // Additional check: ensure the user has student role
-    if (!student.role || !student.role.includes("student")) {
-      return res.status(400).json({
-        success: false,
-        message: "User is not a student",
-      });
-    }
-
-    // Check if student is active
+    // Check if student is active and has student role
     if (!student.is_active) {
+      console.log('❌ Student account is inactive');
       return res.status(400).json({
         success: false,
-        message: "Student account is inactive. Please contact administrator.",
+        message: "Student account is inactive"
       });
     }
 
-    // Verify course exists
-    const course = await Course.findById(courseId);
+    if (!student.role || !student.role.includes("student")) {
+      console.log('❌ User is not a student');
+      return res.status(400).json({
+        success: false,
+        message: "User is not a student"
+      });
+    }
+
+    console.log('✅ Student verified:', student.full_name);
+
+    // 2. Verify course exists
+    console.log('🔍 Step 2: Verifying course...');
+    const course = await Course.findById(finalCourseId);
     if (!course) {
+      console.log('❌ Course not found:', finalCourseId);
       return res.status(404).json({
         success: false,
-        message: "Course not found",
+        message: "Course not found"
       });
     }
 
-    // Verify batch exists and has capacity
-    const batch = await Batch.findById(batchId);
+    console.log('✅ Course verified:', course.course_title);
+
+    // 3. Verify batch exists and has capacity
+    console.log('🔍 Step 3: Verifying batch...');
+    const batch = await Batch.findById(finalBatchId);
     if (!batch) {
+      console.log('❌ Batch not found:', finalBatchId);
       return res.status(404).json({
         success: false,
-        message: "Batch not found",
+        message: "Batch not found"
       });
     }
 
     // Check if batch has reached capacity
     if (batch.enrolled_students >= batch.capacity) {
+      console.log('❌ Batch at capacity:', {
+        enrolled: batch.enrolled_students,
+        capacity: batch.capacity
+      });
       return res.status(400).json({
         success: false,
-        message: "Batch has reached maximum capacity",
+        message: "Batch has reached maximum capacity"
       });
     }
 
-    // Check if student is already enrolled in this course/batch
+    console.log('✅ Batch verified:', {
+      name: batch.batch_name,
+      capacity: batch.capacity,
+      enrolled: batch.enrolled_students
+    });
+
+    // 4. Check if student is already enrolled in this batch
+    console.log('🔍 Step 4: Checking existing enrollment...');
     const existingEnrollment = await Enrollment.findOne({
       student: studentId,
-      course: courseId,
-      batch: batchId,
+      course: finalCourseId,
+      batch: finalBatchId,
+      status: { $ne: 'cancelled' }
     });
 
     if (existingEnrollment) {
+      console.log('❌ Student already enrolled:', existingEnrollment._id);
       return res.status(400).json({
         success: false,
-        message: "Student is already enrolled in this batch",
+        message: "Student is already enrolled in this batch"
       });
     }
 
-    // Calculate access expiry date based on batch end date
-    const accessExpiryDate = new Date(batch.end_date);
-    accessExpiryDate.setDate(accessExpiryDate.getDate() + 30); // Add 30 days grace period after batch ends
+    console.log('✅ No existing enrollment found');
 
-    // Get course pricing for the enrollment
+    // 5. Calculate access expiry date
+    const accessExpiryDate = new Date(batch.end_date);
+    accessExpiryDate.setDate(accessExpiryDate.getDate() + 30); // 30 days grace period
+
+    // 6. Get course pricing
     const coursePricing = course.prices?.[0] || {
       batch: 0,
       individual: 0,
-      currency: "INR",
+      currency: "INR"
     };
-    const enrollmentType = req.body.enrollment_type || "batch";
 
-    // Calculate pricing based on enrollment type
-    let originalPrice, finalPrice, pricingType;
-    if (enrollmentType === "individual") {
-      originalPrice = coursePricing.individual || 0;
-      finalPrice = originalPrice;
-      pricingType = "individual";
-    } else {
-      originalPrice = coursePricing.batch || 0;
-      finalPrice = originalPrice;
-      pricingType = "batch";
-    }
-
-    // Apply discount if provided
-    let discountApplied = 0;
-    if (req.body.discount_applied && req.body.discount_applied > 0) {
-      discountApplied = req.body.discount_applied;
-      finalPrice = Math.max(0, finalPrice - discountApplied);
-    }
-
-    // Create new enrollment
+    // 7. Create enrollment record
+    console.log('💾 Step 5: Creating enrollment record...');
     const enrollment = new Enrollment({
       student: studentId,
-      course: courseId,
-      batch: batchId,
+      course: finalCourseId,
+      batch: finalBatchId,
       enrollment_date: new Date(),
       status: "active",
       access_expiry_date: accessExpiryDate,
-      enrollment_type: enrollmentType,
-      enrollment_source: req.body.enrollment_source || "website",
-      created_by: req.user.id,
-      // Required pricing_snapshot fields
+      enrollment_type: enrollment_type,
+      enrollment_source: enrollment_source,
+      created_by: req.user?.id || studentId,
+      
+      // Pricing snapshot
       pricing_snapshot: {
-        original_price: originalPrice,
-        final_price: finalPrice,
+        original_price: coursePricing.batch || 0,
+        final_price: coursePricing.batch || 0,
         currency: coursePricing.currency || "INR",
-        pricing_type: pricingType,
-        discount_applied: discountApplied,
-        discount_code: req.body.discount_code || null,
+        pricing_type: enrollment_type,
+        discount_applied: 0,
+        discount_code: null
       },
-      // Progress tracking initialization
+      
+      // Progress tracking
       progress: {
         overall_percentage: 0,
         lessons_completed: 0,
-        last_activity_date: new Date(),
+        last_activity_date: new Date()
       },
-      // Batch-specific information (required for batch enrollments)
+      
+      // Batch info
       batch_info: {
-        batch_size: enrollmentType === "batch" ? req.body.batch_size || 2 : 1,
-        is_batch_leader: enrollmentType === "batch",
-        batch_members:
-          enrollmentType === "batch" ? req.body.batch_members || [] : [],
-      },
+        batch_size: 1,
+        is_batch_leader: false,
+        batch_members: []
+      }
     });
 
-    // If payment details are provided, add them
-    if (paymentDetails) {
-      enrollment.payments.push({
-        amount: paymentDetails.amount,
-        currency: paymentDetails.currency || "INR",
-        payment_method: paymentDetails.payment_method,
-        transaction_id: paymentDetails.transaction_id,
-        payment_status: paymentDetails.payment_status || "pending",
-        payment_date: new Date(),
-        receipt_url: paymentDetails.receipt_url,
-        metadata: paymentDetails.metadata,
-      });
-
-      // Update total amount paid if payment is completed
-      if (paymentDetails.payment_status === "completed") {
-        enrollment.total_amount_paid = paymentDetails.amount;
-      }
-    }
-
-    // If payment plan details are provided
-    if (req.body.payment_plan) {
-      enrollment.payment_plan = req.body.payment_plan;
-      enrollment.installments_count = req.body.installments_count || 1;
-
-      if (
-        req.body.payment_plan === "installment" &&
-        req.body.next_payment_date
-      ) {
-        enrollment.next_payment_date = new Date(req.body.next_payment_date);
-      }
-    }
-
-    // If discount is applied
-    if (req.body.discount_applied) {
-      enrollment.discount_applied = req.body.discount_applied;
-      enrollment.discount_code = req.body.discount_code;
-    }
-
-    // Save the enrollment
+    // 8. Save enrollment
     await enrollment.save();
+    console.log('✅ Enrollment saved:', enrollment._id);
 
-    // Update batch enrolled student count
+    // 9. Update batch enrolled count and add student to batch
+    console.log('📊 Step 6: Updating batch enrollment count...');
     batch.enrolled_students += 1;
+    
+    // Add student ID to batch's enrolled_student_ids array
+    if (!batch.enrolled_student_ids) {
+      batch.enrolled_student_ids = [];
+    }
+    batch.enrolled_student_ids.push(studentId);
+    
     await batch.save();
+    console.log('✅ Batch updated:', {
+      enrolled_students: batch.enrolled_students,
+      student_ids_count: batch.enrolled_student_ids.length
+    });
 
-    // Create S3 folder for the student within the batch
+    // 10. Create S3 folder for student (optional)
     try {
       const studentName = student.full_name || 
                          (student.first_name && student.last_name ? `${student.first_name} ${student.last_name}` : null) ||
@@ -206,34 +203,52 @@ export const enrollStudentInBatch = async (req, res) => {
                          'Unknown Student';
       
       const s3FolderResult = await createStudentS3Folder(
-        batchId,
+        finalBatchId,
         studentId,
         studentName
       );
       
       if (s3FolderResult.success) {
-        logger.info(`✅ S3 folder created for student: ${studentName} in batch: ${batch.batch_name}`);
-        logger.info(`   - S3 Path: ${s3FolderResult.s3Path}`);
+        console.log('✅ S3 folder created for student');
       } else {
-        logger.warn(`⚠️ Failed to create S3 folder for student: ${studentName}`, s3FolderResult.error);
+        console.log('⚠️ S3 folder creation failed (non-critical)');
       }
     } catch (s3Error) {
-      logger.error(`❌ Error creating S3 folder for student: ${studentId}`, s3Error);
-      // Don't fail enrollment if S3 folder creation fails
+      console.log('⚠️ S3 folder creation error (non-critical):', s3Error.message);
     }
 
-    // Return success response with enrollment details
+    // 11. Populate enrollment for response
+    await enrollment.populate([
+      { path: 'student', select: 'full_name email user_image' },
+      { path: 'course', select: 'course_title' },
+      { path: 'batch', select: 'batch_name batch_code' }
+    ]);
+
+    console.log('✅ Enrollment process completed successfully');
+
+    // 12. Return success response
     res.status(201).json({
       success: true,
       message: "Student successfully enrolled in batch",
-      data: enrollment,
+      data: {
+        enrollment: enrollment,
+        batch: {
+          _id: batch._id,
+          batch_name: batch.batch_name,
+          enrolled_students: batch.enrolled_students,
+          capacity: batch.capacity
+        }
+      }
     });
+
   } catch (error) {
-    console.error("Error enrolling student:", error);
+    console.error('❌ Enrollment error:', error);
+    console.error('Error stack:', error.stack);
+    
     res.status(500).json({
       success: false,
       message: "Server error while enrolling student",
-      error: error.message,
+      error: error.message
     });
   }
 };

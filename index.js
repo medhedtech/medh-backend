@@ -71,13 +71,19 @@ app.use(express.static("public"));
 app.use(express.urlencoded({ extended: true, limit: "10gb" }));
 app.use(bodyParser.json({ limit: "10gb", extended: true }));
 app.use(express.json({ limit: "10gb" }));
-app.use(
-  fileUpload({
+// IMPORTANT: Avoid conflict between express-fileupload and multer on video upload route
+app.use((req, res, next) => {
+  // Skip express-fileupload for the multer-based video upload endpoint
+  if (req.path.startsWith('/api/v1/live-classes/upload-videos')) {
+    return next();
+  }
+
+  return fileUpload({
     limits: { fileSize: 1024 * 1024 * 10 * 1024 }, // 10GB max file size
     useTempFiles: true,
     tempFileDir: "/tmp/",
-  }),
-);
+  })(req, res, next);
+});
 
 // Session configuration for OAuth
 app.use(session({
