@@ -2,7 +2,7 @@ import Wishlist from '../models/wishlist.model.js';
 import Course from '../models/course-model.js';
 import catchAsync from '../utils/catchAsync.js';
 import AppError from '../utils/appError.js';
-import { redisClient } from '../utils/cache.js';
+// import { redisClient } from '../utils/cache.js';
 
 const WISHLIST_CACHE_KEY = 'user:wishlist:';
 const WISHLIST_CACHE_TTL = 3600; // 1 hour
@@ -41,7 +41,7 @@ export const addToWishlist = catchAsync(async (req, res) => {
   await wishlist.save();
 
   // Clear cache
-  await redisClient.del(`${WISHLIST_CACHE_KEY}${userId}`);
+  // await redisClient.del(`${WISHLIST_CACHE_KEY}${userId}`);
 
   res.status(200).json({
     status: 'success',
@@ -67,7 +67,7 @@ export const removeFromWishlist = catchAsync(async (req, res) => {
   await wishlist.save();
 
   // Clear cache
-  await redisClient.del(`${WISHLIST_CACHE_KEY}${userId}`);
+  // await redisClient.del(`${WISHLIST_CACHE_KEY}${userId}`);
 
   res.status(200).json({
     status: 'success',
@@ -80,13 +80,13 @@ export const getWishlist = catchAsync(async (req, res) => {
   const userId = req.user._id;
 
   // Try to get from cache
-  const cachedWishlist = await redisClient.get(`${WISHLIST_CACHE_KEY}${userId}`);
-  if (cachedWishlist) {
-    return res.status(200).json({
-      status: 'success',
-      data: { wishlist: JSON.parse(cachedWishlist) }
-    });
-  }
+  // const cachedWishlist = await redisClient.get(`${WISHLIST_CACHE_KEY}${userId}`);
+  // if (cachedWishlist) {
+  //   return res.status(200).json({
+  //     status: 'success',
+  //     data: { wishlist: JSON.parse(cachedWishlist) }
+  //   });
+  // }
 
   // Get from database with populated courses
   const wishlist = await Wishlist.getDetailedWishlist(userId);
@@ -98,11 +98,11 @@ export const getWishlist = catchAsync(async (req, res) => {
   }
 
   // Cache the result
-  await redisClient.setex(
-    `${WISHLIST_CACHE_KEY}${userId}`,
-    WISHLIST_CACHE_TTL,
-    JSON.stringify(wishlist)
-  );
+  // await redisClient.setex(
+  //   `${WISHLIST_CACHE_KEY}${userId}`,
+  //   WISHLIST_CACHE_TTL,
+  //   JSON.stringify(wishlist)
+  // );
 
   res.status(200).json({
     status: 'success',
@@ -135,7 +135,7 @@ export const updateNotificationPreferences = catchAsync(async (req, res) => {
   await wishlist.save();
 
   // Clear cache
-  await redisClient.del(`${WISHLIST_CACHE_KEY}${userId}`);
+  // await redisClient.del(`${WISHLIST_CACHE_KEY}${userId}`);
 
   res.status(200).json({
     status: 'success',

@@ -391,12 +391,34 @@ enrollmentSchema.pre('save', async function(next) {
   
   // Validate individual enrollment requirements
   if (this.enrollment_type === 'individual') {
+    // Allow batch reference for 1:1 sessions (individual sessions with batch)
     if (this.batch) {
-      return next(new Error('Individual enrollments cannot have batch reference'));
+      // Check if this is a 1:1 session batch
+      const Batch = mongoose.model('Batch');
+      Batch.findById(this.batch).then(batch => {
+        if (batch && batch.is_individual_session) {
+          // This is a 1:1 session, allow batch reference
+          this.batch_info.batch_size = 1;
+          this.batch_info.is_batch_leader = false;
+          this.batch_info.batch_members = [];
+          next();
+        } else {
+          // Regular individual enrollment without batch
+          return next(new Error('Individual enrollments cannot have batch reference unless it\'s a 1:1 session'));
+        }
+      }).catch(err => {
+        return next(new Error('Invalid batch reference for individual enrollment'));
+      });
+      return; // Don't call next() here, it will be called in the promise
+    } else {
+      // No batch reference, regular individual enrollment
+      this.batch_info.batch_size = 1;
+      this.batch_info.is_batch_leader = false;
+      this.batch_info.batch_members = [];
+      next();
     }
-    this.batch_info.batch_size = 1;
-    this.batch_info.is_batch_leader = false;
-    this.batch_info.batch_members = [];
+  } else {
+    next();
   }
   
   next();
