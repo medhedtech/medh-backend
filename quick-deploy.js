@@ -161,8 +161,9 @@ function updateDependencies() {
 function restartServer() {
   logSection('Restarting Live Server');
   
+  const sshCmd = CONFIG.SSH_KEY ? `-i ${CONFIG.SSH_KEY}` : '';
+  
   try {
-    const sshCmd = CONFIG.SSH_KEY ? `-i ${CONFIG.SSH_KEY}` : '';
     const restartCmd = `ssh ${sshCmd} ${CONFIG.LIVE_USER}@${CONFIG.LIVE_SERVER} "pm2 restart ${CONFIG.PM2_APP_NAME}"`;
     
     logInfo('Restarting PM2 application...');

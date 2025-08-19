@@ -141,7 +141,7 @@ app.use((req, res) => {
 });
 */
 
-// ✅ Single 404 Handler (keep only this one)
+// Single 404 Handler (keep only this one)
 app.use((req, res, next) => {
   res.status(404).json({
     status: "error",
@@ -149,20 +149,13 @@ app.use((req, res, next) => {
   });
 });
 
-// ❌ Old custom error handler middleware – commented
+// Old custom error handler middleware – commented
 // app.use(errorHandler);
 
-// ✅ Global Error Handler (always JSON)
-app.use((err, req, res, next) => {Error: ❌ Non-JSON response received: "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Error</title>\n</head>\n<body>\n<pre>Internal Server Error</pre>\n</body>\n</html>\n"
-  at createUnhandledError (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/console-error.js:31:47)
-  at handleClientError (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/react-dev-overlay/internal/helpers/use-error-handler.js:51:56)
-  at console.error (webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/globals/intercept-console-error.js:53:56)
-  at eval (webpack-internal:///(app-pages-browser)/./src/components/Dashboard/admin/online-class/CreateLiveSessionForm.tsx:300:33)
-  at step (webpack-internal:///(app-pages-browser)/./node_modules/tslib/tslib.es6.mjs:183:21)
-  at Object.eval [as next] (webpack-internal:///(app-pages-browser)/./node_modules/tslib/tslib.es6.mjs:164:51)
-  at asyncGeneratorStep (webpack-internal:///(app-pages-browser)/./node_modules/next/node_modules/@swc/helpers/esm/_async_to_generator.js:7:28)
-  at _next (webpack-internal:///(app-pages-browser)/./node_modules/next/node_modules/@swc/helpers/esm/_async_to_generator.js:24:17)
-
+// Global Error Handler (always JSON)
+app.use((err, req, res, next) => {
+  console.error('Error occurred:', err);
+  
   res.status(err.statusCode || 500).json({
     status: "error",
     message: err.message || "Internal Server Error",
