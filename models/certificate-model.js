@@ -155,6 +155,37 @@ const certificateSchema = new mongoose.Schema(
         type: String,
         required: [true, "Certificate template URL is required"],
       },
+      /** @type {string} Instructor name for certificate */
+      instructorName: {
+        type: String,
+        trim: true,
+      },
+      /** @type {string} Coordinator name for certificate */
+      coordinatorName: {
+        type: String,
+        trim: true,
+      },
+      /** @type {string} Session date for certificate */
+      sessionDate: {
+        type: String,
+        trim: true,
+      },
+      /** @type {string} Issued date for certificate */
+      issuedDate: {
+        type: String,
+        trim: true,
+      },
+      /** @type {string} Session type for certificate */
+      sessionType: {
+        type: String,
+        trim: true,
+        default: "Demo Session Attendance",
+      },
+      /** @type {string} QR code data URL */
+      qrCodeDataUrl: {
+        type: String,
+        trim: true,
+      },
     },
     /** @type {string} Reason for revocation (optional) */
     revocationReason: {

@@ -23,6 +23,14 @@ router.post(
   certificateController.generateCertificateIdAPI
 );
 
+// Generate professional certificate PDF
+router.post(
+  "/generate-pdf",
+  authenticateToken,
+  authorize(["admin", "instructor", "super-admin"]),
+  certificateController.generateCertificatePDF
+);
+
 // Create demo student enrollment
 router.post(
   "/demo-enrollment",
