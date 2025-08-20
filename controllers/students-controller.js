@@ -1,6 +1,7 @@
 import Student from "../models/student-model.js";
 import Course from "../models/course-model.js";
 import Wishlist from "../models/wishlist.model.js";
+import User from "../models/user-modal.js";
 import logger from "../utils/logger.js";
 import { USER_ROLES } from "../models/user-modal.js";
 

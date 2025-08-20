@@ -293,6 +293,17 @@ const startServer = async () => {
             port: HTTPS_PORT,
             environment: ENV_VARS.NODE_ENV,
           });
+        }).on('error', (error) => {
+          if (error.code === 'EADDRINUSE') {
+            logger.error(`Port ${HTTPS_PORT} is already in use. Please try a different port or stop the process using this port.`, {
+              error: error.message,
+              port: HTTPS_PORT,
+              suggestion: `Try setting HTTPS_PORT environment variable to a different value (e.g., ${HTTPS_PORT + 1})`
+            });
+          } else {
+            logger.error(`Failed to start HTTPS server on port ${HTTPS_PORT}:`, error);
+          }
+          process.exit(1);
         });
         
         // Also create HTTP server for redirect to HTTPS
@@ -345,6 +356,17 @@ const startServer = async () => {
           port: PORT,
           environment: ENV_VARS.NODE_ENV,
         });
+      }).on('error', (error) => {
+        if (error.code === 'EADDRINUSE') {
+          logger.error(`Port ${PORT} is already in use. Please try a different port or stop the process using this port.`, {
+            error: error.message,
+            port: PORT,
+            suggestion: `Try setting PORT environment variable to a different value (e.g., ${PORT + 1})`
+          });
+        } else {
+          logger.error(`Failed to start HTTP server on port ${PORT}:`, error);
+        }
+        process.exit(1);
       });
     }
 
