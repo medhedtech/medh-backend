@@ -13,6 +13,7 @@ import {
   checkStudentEnrollmentInCourse,
 } from "../controllers/student-batch-controller.js";
 import { authenticateToken, authorize } from "../middleware/auth.js";
+import { validateEnrollment } from "../middleware/validators/enrollmentValidator.js";
 
 const router = express.Router();
 
@@ -22,8 +23,6 @@ const router = express.Router();
 // Enroll a student in a batch
 router.post(
   "/students/:studentId/enroll",
-  authenticateToken,
-  authorize(["admin", "student", "super-admin"]),
   enrollStudentInBatch,
 );
 

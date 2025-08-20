@@ -7,21 +7,21 @@ The video upload system now organizes videos in a structured folder hierarchy ba
 ## Folder Structure
 
 ```
-medh-session/videos/{batch_object_id}/{student_id(student_name)}/{session_no}/
+medh-filess/videos/{batch_object_id}/{student_id(student_name)}/session-{session_no}/
 ```
 
 ### Components
 
-1. **Base Folder**: `medh-session/videos/`
+1. **Base Folder**: `medh-filess/videos/`
 2. **Batch Folder**: `{batch_object_id}` - The MongoDB ObjectId of the selected batch
-3. **Student Folder**: `{student_id(student_name)}` - Student ID with their full name in parentheses
+3. **Student Folder**: `{student_id(student_name)}` - Student ID with their name in parentheses
 4. **Session Folder**: `session-{session_no}` - Session number prefixed with "session-"
 
 ### Examples
 
 ```
-medh-session/videos/507f1f77bcf86cd799439011/507f1f77bcf86cd799439012(John Doe)/session-16/video1.mp4
-medh-session/videos/507f1f77bcf86cd799439011/507f1f77bcf86cd799439013(Jane Smith)/session-16/video2.mp4
+medh-filess/videos/507f1f77bcf86cd799439011/507f1f77bcf86cd799439012(john_doe)/session-16/video1.mp4
+medh-filess/videos/507f1f77bcf86cd799439011/507f1f77bcf86cd799439013(jane_smith)/session-16/video2.mp4
 ```
 
 ## Implementation Details

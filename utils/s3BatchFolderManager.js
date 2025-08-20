@@ -291,6 +291,13 @@ export const checkStudentS3Folder = async (batchId, studentId, studentName = 'Un
 
   } catch (error) {
     if (error.name === 'NotFound') {
+      // Create safeStudentName for the error case
+      const safeStudentName = studentName
+        .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+        .replace(/\s+/g, '_') // Replace spaces with underscores
+        .toLowerCase()
+        .trim();
+        
       return {
         exists: false,
         bucketName: ENV_VARS.UPLOAD_CONSTANTS.BUCKETS.VIDEOS,

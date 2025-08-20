@@ -132,6 +132,12 @@ const batchSchema = new Schema(
       default: 0,
       min: [0, "Enrolled students cannot be negative"],
     },
+    // Store enrolled student IDs directly in batch
+    enrolled_student_ids: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: []
+    }],
     assigned_instructor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

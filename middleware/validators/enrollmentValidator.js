@@ -5,18 +5,43 @@ import { body, validationResult } from "express-validator";
  * @returns {Array} Array of validation middleware functions
  */
 export const validateEnrollment = [
-  // Required fields validation
+  // Required fields validation - support both naming conventions
   body("student_id")
-    .notEmpty()
-    .withMessage("Student ID is required")
+    .optional()
     .isMongoId()
     .withMessage("Invalid Student ID format"),
 
   body("course_id")
-    .notEmpty()
-    .withMessage("Course ID is required")
+    .optional()
     .isMongoId()
     .withMessage("Invalid Course ID format"),
+
+  body("courseId")
+    .optional()
+    .isMongoId()
+    .withMessage("Invalid Course ID format"),
+
+  body("batchId")
+    .optional()
+    .isMongoId()
+    .withMessage("Invalid Batch ID format"),
+
+  // Custom validation to ensure at least one of the required fields is present
+  body()
+    .custom((value, { req }) => {
+      const hasCourseId = value.course_id || value.courseId;
+      const hasBatchId = value.batch_id || value.batchId;
+      
+      if (!hasCourseId) {
+        throw new Error("Course ID is required (course_id or courseId)");
+      }
+      
+      if (!hasBatchId) {
+        throw new Error("Batch ID is required (batch_id or batchId)");
+      }
+      
+      return true;
+    }),
 
   // Optional fields validation
   body("expiry_date")

@@ -260,3 +260,11 @@ tail -f medh-backend/logs/app.log
 **Note**: This fix ensures that the "Create Individual 1:1 Batch" form now properly displays instructor data from the MongoDB instructor collection, providing a better user experience and accurate data representation.
 
 
+
+
+
+
+
+
+
+

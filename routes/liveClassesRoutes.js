@@ -17,6 +17,8 @@ import {
   getCourseCategories,
   uploadVideos,
   getStudentBatchInfo,
+  getBatchesForStudents,
+  getAllBatches,
   testS3Connection,
   verifyS3Videos,
   testBatchStudentOrg
@@ -29,6 +31,7 @@ router.get('/students', getStudents);
 router.get('/grades', getGrades);
 router.get('/dashboards', getDashboards);
 router.get('/instructors', getInstructors);
+router.get('/batches', getAllBatches);
 
 // File upload
 router.post('/files/upload', upload.single('file'), (req, res, next) => {
@@ -44,9 +47,10 @@ router.post('/generate-upload-url', (req, res, next) => {
 });
 
 // Sessions
-router.post('/sessions', (req, res, next) => {
+router.post('/sessions', auth, (req, res, next) => {
   console.log('🔍 Route: createSession called');
   console.log('📝 Request body:', req.body);
+  console.log('👤 User:', req.user);
   createSession(req, res, next);
 });
 router.get('/sessions/previous', getPreviousSession);
@@ -65,11 +69,24 @@ router.get('/course-categories', getCourseCategories);
 router.post('/upload-videos', uploadVideosMiddleware.array('videos', 10), (req, res, next) => {
   console.log('🔍 Route: uploadVideos called');
   console.log('📝 Files received:', req.files?.length || 0);
+  console.log('📝 Request body:', req.body);
+  
+  // Handle multer errors
+  if (req.fileValidationError) {
+    return res.status(400).json({
+      status: 'error',
+      message: req.fileValidationError
+    });
+  }
+  
   uploadVideos(req, res, next);
 });
 
 // Student batch information route
 router.get('/student-batch-info', getStudentBatchInfo);
+
+// Get batches for selected students
+router.get('/batches-for-students', getBatchesForStudents);
 
 // Test endpoints (for development/testing only)
 router.get('/test-s3-connection', testS3Connection);
