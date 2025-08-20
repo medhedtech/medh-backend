@@ -150,4 +150,4 @@ const trackingMiddleware = {
   },
 };
 
-module.exports = trackingMiddleware;
+export default trackingMiddleware;

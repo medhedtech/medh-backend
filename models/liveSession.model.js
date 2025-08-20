@@ -57,9 +57,9 @@ const liveSessionSchema = new mongoose.Schema({
   sessionNo: {
     type: String,
     required: [true, 'Session number is required'],
-    unique: true,
+    unique: false, // Temporarily disabled, handled in controller
     trim: true,
-    match: /^[A-Za-z0-9-]+$/
+    match: /^[A-Za-z0-9-_]+$/
   },
   originalSessionNo: {
     type: String,
