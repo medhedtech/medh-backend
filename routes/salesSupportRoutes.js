@@ -30,8 +30,8 @@ router.post(
       .normalizeEmail()
       .withMessage("Please provide a valid email address"),
     body("password")
-      .isLength({ min: 8 })
-      .withMessage("Password must be at least 8 characters"),
+      .isLength({ min: 6 })
+      .withMessage("Password must be at least 6 characters"),
     body("team_type")
       .isIn(["sales", "support"])
       .withMessage("Team type must be either 'sales' or 'support'"),
@@ -128,8 +128,8 @@ router.post(
       .normalizeEmail()
       .withMessage("Please provide a valid email address"),
     body("password")
-      .isLength({ min: 8 })
-      .withMessage("Password must be at least 8 characters"),
+      .isLength({ min: 6 })
+      .withMessage("Password must be at least 6 characters"),
     body("team_type")
       .isIn(["sales", "support"])
       .withMessage("Team type must be either 'sales' or 'support'"),

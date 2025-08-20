@@ -230,10 +230,10 @@ export const updateProfile = async (req, res) => {
 
     // Handle password update separately
     if (updateData.password) {
-      if (updateData.password.length < 8) {
+      if (updateData.password.length === 0) {
         return res.status(400).json({
           success: false,
-          message: "Password must be at least 8 characters long",
+          message: "Password cannot be empty",
         });
       }
 
@@ -2227,10 +2227,10 @@ export const updateComprehensiveProfile = async (req, res) => {
 
     // Handle password update separately if provided
     if (updateData.password) {
-      if (updateData.password.length < 8) {
+      if (updateData.password.length === 0) {
         return res.status(400).json({
           success: false,
-          message: "Password must be at least 8 characters long",
+          message: "Password cannot be empty",
         });
       }
 
