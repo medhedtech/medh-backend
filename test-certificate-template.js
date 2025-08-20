@@ -38,3 +38,4 @@ console.log('🌐 Open the HTML file in a browser to view the certificate');
 // Log the formatted data
 console.log('\n📋 Formatted Certificate Data:');
 console.log(JSON.stringify(formattedData, null, 2));
+

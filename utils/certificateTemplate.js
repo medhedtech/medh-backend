@@ -559,3 +559,4 @@ export const formatCertificateData = (params) => {
     sessionType: sessionType || 'Demo Session Attendance'
   };
 };
+
