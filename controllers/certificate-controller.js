@@ -8,6 +8,7 @@ import EnrolledCourse from "../models/enrolled-courses-model.js";
 import User from "../models/user-modal.js";
 import { chromeService } from "../utils/chromeService.js";
 import { generatePdfContentForCertificate } from "../utils/htmlTemplate.js";
+import { generateProfessionalCertificateHTML, formatCertificateData } from "../utils/certificateTemplate.js";
 import logger from "../utils/logger.js";
 import { uploadFile } from "../utils/uploadFile.js";
 import {
@@ -221,13 +222,30 @@ export const getCertificatesByStudentId = async (req, res) => {
  */
 export const generateCertificateIdAPI = async (req, res) => {
   try {
-    const { studentId, courseId, enrollmentId, finalScore } = req.body;
+    const { 
+      studentId, 
+      courseId, 
+      enrollmentId, 
+      finalScore,
+      instructorName,
+      coordinatorName,
+      sessionDate,
+      sessionType = "Demo Session Attendance"
+    } = req.body;
 
     // Validate required fields
     if (!studentId || !courseId || !finalScore) {
       return res.status(400).json({
         success: false,
         message: "Student ID, Course ID, and Final Score are required",
+      });
+    }
+
+    // Validate instructor and coordinator names
+    if (!instructorName || !coordinatorName) {
+      return res.status(400).json({
+        success: false,
+        message: "Instructor Name and Coordinator Name are required",
       });
     }
 
@@ -314,8 +332,26 @@ export const generateCertificateIdAPI = async (req, res) => {
       });
     }
 
+    // Generate QR code for certificate verification
+    const qrCodeDataUrl = await generateQRCode(verificationUrl, {
+      width: 256,
+      errorCorrectionLevel: 'H',
+      margin: 2
+    });
+
     // Generate certificate metadata
     const metadata = generateCertificateMetadata(course, student);
+
+    // Format dates for certificate display
+    const formattedSessionDate = sessionDate || completionDate.toLocaleDateString('en-US', { 
+      day: 'numeric', 
+      month: 'long' 
+    }).toUpperCase();
+    
+    const formattedIssuedDate = new Date().toLocaleDateString('en-US', { 
+      day: 'numeric', 
+      month: 'long' 
+    });
 
     // Create certificate record
     const certificate = new Certificate({
@@ -331,7 +367,15 @@ export const generateCertificateIdAPI = async (req, res) => {
       completionDate,
       certificateUrl: `${process.env.FRONTEND_URL || "https://medh.edu.in"}/certificates/${certificateId}`,
       verificationUrl,
-      metadata,
+      metadata: {
+        ...metadata,
+        instructorName,
+        coordinatorName,
+        sessionDate: formattedSessionDate,
+        issuedDate: formattedIssuedDate,
+        sessionType,
+        qrCodeDataUrl
+      },
     });
 
     await certificate.save();
@@ -353,7 +397,7 @@ export const generateCertificateIdAPI = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: "Certificate ID generated successfully",
+      message: "Certificate generated successfully",
       data: {
         certificateId,
         certificateNumber,
@@ -361,6 +405,7 @@ export const generateCertificateIdAPI = async (req, res) => {
         grade,
         finalScore,
         issueDate: certificate.issueDate,
+        qrCodeDataUrl,
         student: {
           id: student._id,
           name: student.full_name,
@@ -371,6 +416,18 @@ export const generateCertificateIdAPI = async (req, res) => {
           title: course.course_title,
           instructor: course.assigned_instructor?.full_name,
         },
+        certificateData: {
+          studentName: student.full_name,
+          courseName: course.course_title,
+          sessionDate: formattedSessionDate,
+          issuedDate: formattedIssuedDate,
+          certificateId,
+          enrollmentId: enrollmentId || `MEDH-CERT-2024-${certificateNumber.split('-')[2]}`,
+          instructorName,
+          coordinatorName,
+          qrCodeDataUrl,
+          sessionType
+        }
       },
     });
   } catch (error) {
@@ -385,6 +442,88 @@ export const generateCertificateIdAPI = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to generate certificate ID",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Generate Professional Certificate PDF API
+ * POST /api/v1/certificates/generate-pdf
+ */
+export const generateCertificatePDF = async (req, res) => {
+  try {
+    const { certificateId } = req.body;
+
+    if (!certificateId) {
+      return res.status(400).json({
+        success: false,
+        message: "Certificate ID is required",
+      });
+    }
+
+    // Find the certificate
+    const certificate = await Certificate.findOne({ id: certificateId })
+      .populate('student')
+      .populate('course')
+      .populate('course.assigned_instructor');
+
+    if (!certificate) {
+      return res.status(404).json({
+        success: false,
+        message: "Certificate not found",
+      });
+    }
+
+    // Prepare certificate data for template
+    const certificateData = formatCertificateData({
+      studentName: certificate.student.full_name,
+      courseName: certificate.course.course_title,
+      sessionDate: certificate.metadata?.sessionDate,
+      issuedDate: certificate.metadata?.issuedDate,
+      certificateId: certificate.id,
+      enrollmentId: certificate.metadata?.enrollmentId || `MEDH-CERT-2024-${certificate.certificateNumber.split('-')[2]}`,
+      instructorName: certificate.metadata?.instructorName || certificate.course.assigned_instructor?.full_name || 'Instructor Name',
+      coordinatorName: certificate.metadata?.coordinatorName || 'Program Coordinator',
+      qrCodeDataUrl: certificate.metadata?.qrCodeDataUrl || '',
+      sessionType: certificate.metadata?.sessionType || 'Demo Session Attendance'
+    });
+
+    // Generate professional certificate HTML
+    const htmlContent = generateProfessionalCertificateHTML(certificateData);
+
+    // Generate PDF using Chrome service
+    const pdfBuffer = await chromeService.generatePDF(htmlContent, {
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '0.5in',
+        bottom: '0.5in',
+        left: '0.5in',
+        right: '0.5in'
+      }
+    });
+
+    // Set response headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="MEDH-Certificate-${certificate.id}.pdf"`);
+    res.setHeader('Content-Length', pdfBuffer.length);
+
+    // Send PDF buffer
+    res.send(pdfBuffer);
+
+  } catch (error) {
+    logger.error("Error generating certificate PDF", {
+      error: {
+        message: error.message,
+        stack: error.stack,
+      },
+      certificateId: req.body.certificateId,
+    });
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate certificate PDF",
       error: error.message,
     });
   }

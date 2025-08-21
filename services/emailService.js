@@ -247,8 +247,18 @@ class EmailService {
    * Create optimized Redis configuration for BullMQ
    */
   createRedisConfig() {
+    // Validate Redis host - ensure it's not set to an invalid value
+    let redisHost = process.env.REDIS_HOST || "localhost";
+    if (redisHost === "api.medh.co" || redisHost.includes("medh.co")) {
+      logger.email.warn("Invalid Redis host detected, falling back to localhost", {
+        invalidHost: redisHost,
+        fallbackHost: "localhost"
+      });
+      redisHost = "localhost";
+    }
+
     const baseConfig = {
-      host: process.env.REDIS_HOST || "localhost",
+      host: redisHost,
       port: parseInt(process.env.REDIS_PORT, 10) || 6379,
       db: parseInt(process.env.REDIS_EMAIL_DB, 10) || 1, // Separate DB for email queue
       maxRetriesPerRequest: 3,
@@ -441,8 +451,11 @@ class EmailService {
       if (process.env.NODE_ENV === "development") {
         // In development, allow fallback to direct email sending
         const redisHost = process.env.REDIS_HOST;
-        if (!redisHost || redisHost === "api.medh.co") {
+        if (!redisHost || redisHost === "api.medh.co" || redisHost.includes("medh.co")) {
           // If Redis host is external and we're in development, likely not available
+          logger.email.info("Redis not available in development, using direct email sending", {
+            redisHost: redisHost || "not set"
+          });
           return false;
         }
       }
@@ -1700,7 +1713,7 @@ class EmailService {
 
       // Advanced job options for BullMQ
       const jobOptions = {
-        priority,
+        priority: this.mapPriorityToNumber(priority),
         attempts,
         delay,
         // Exponential backoff with jitter for retries
