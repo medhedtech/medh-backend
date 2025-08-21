@@ -136,12 +136,9 @@ router.post(
   authenticateToken,
   [
     body("password")
-      .isLength({ min: 8 })
-      .matches(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      )
+      .isLength({ min: 6 })
       .withMessage(
-        "Password must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+        "Password must be at least 6 characters",
       ),
     body("confirm_password").custom((value, { req }) => {
       if (value !== req.body.password) {
@@ -300,14 +297,8 @@ router.post(
       .normalizeEmail()
       .withMessage("Please provide a valid email address"),
     body("newPassword")
-      .isLength({ min: 8, max: 128 })
-      .withMessage("Password must be between 8 and 128 characters")
-      .matches(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/,
-      )
-      .withMessage(
-        "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
-      ),
+      .isLength({ min: 6, max: 128 })
+      .withMessage("Password must be between 6 and 128 characters"),
     body("confirmPassword")
       .notEmpty()
       .withMessage("Confirm password is required")
@@ -2620,14 +2611,8 @@ router.post(
   [
     body("token").notEmpty().withMessage("Reset token is required"),
     body("password")
-      .isLength({ min: 8 })
-      .withMessage("Password must be at least 8 characters")
-      .matches(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
-      )
-      .withMessage(
-        "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
-      ),
+      .isLength({ min: 6 })
+      .withMessage("Password must be at least 6 characters"),
   ],
   async (req, res) => {
     try {

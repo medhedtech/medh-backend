@@ -531,18 +531,7 @@ class AuthController {
         });
       }
 
-      // Enhanced password validation
-      const passwordValidation = this.validatePasswordStrength(newPassword);
-      if (!passwordValidation.isValid) {
-        return res.status(400).json({
-          success: false,
-          message: "Password does not meet security requirements.",
-          errors: {
-            newPassword: passwordValidation.errors,
-          },
-          requirements: passwordValidation.requirements,
-        });
-      }
+      // Password validation removed - any password is allowed
 
       // Find user with retry logic for database issues
       // Use the same method as login to ensure consistency
@@ -675,9 +664,8 @@ class AuthController {
       // Store old password hash for audit purposes (optional security measure)
       const oldPasswordHash = user.password;
 
-      // Hash the new password with stronger salt rounds
-      const salt = await bcrypt.genSalt(12);
-      user.password = await bcrypt.hash(newPassword, salt);
+      // Set the new password - the pre-save hook will hash it automatically
+      user.password = newPassword;
 
       // Reset password change attempts and account lock
       await this.resetLockoutFields(user);
@@ -709,7 +697,7 @@ class AuthController {
         null,
         {
           password_changed_at: new Date(),
-          password_strength: passwordValidation.score,
+          password_strength: "custom",
           invalidate_sessions: invalidateAllSessions,
           change_count: user.password_change_count,
           ip_address: req.ip,
@@ -762,17 +750,14 @@ class AuthController {
         // Don't fail the password change if email fails
       }
 
-      // Generate new JWT if sessions are not invalidated
-      let newToken = null;
-      if (!invalidateAllSessions) {
-        newToken = this.generateJWT(user);
-      }
+      // Generate new JWT token for the current session
+      const newToken = this.generateJWT(user);
 
       logger.info("Password successfully changed", {
         userId: user._id,
         email: user.email,
         sessions_invalidated: invalidateAllSessions,
-        password_strength: passwordValidation.score,
+        password_strength: "custom",
       });
 
       return res.status(200).json({
@@ -782,6 +767,9 @@ class AuthController {
           password_changed_at: user.last_password_change,
           sessions_invalidated: invalidateAllSessions,
           new_token: newToken,
+          message: invalidateAllSessions 
+            ? "All other sessions have been invalidated for security. Please use the new token for future requests."
+            : "Your current session remains active. Use the new token for future requests.",
           security_recommendations: [
             "Use a unique password for each account",
             "Enable two-factor authentication for added security",
@@ -815,7 +803,7 @@ class AuthController {
    */
   validatePasswordStrength(password) {
     const requirements = {
-      minLength: 8,
+              minLength: 6,
       maxLength: 128,
       requireUppercase: true,
       requireLowercase: true,

@@ -66,10 +66,14 @@ class Cache {
       // Determine if we should use cluster mode
       this.isCluster = process.env.REDIS_CLUSTER_ENABLED === "true";
 
+      // Set a shorter timeout for development
+      const connectTimeout = process.env.NODE_ENV === 'development' ? 5000 : 30000;
+      const commandTimeout = process.env.NODE_ENV === 'development' ? 3000 : 10000;
+
       if (this.isCluster) {
-        await this.initCluster();
+        await this.initCluster(connectTimeout, commandTimeout);
       } else {
-        await this.initSingleNode();
+        await this.initSingleNode(connectTimeout, commandTimeout);
       }
 
       // Setup periodic health check and cleanup
@@ -83,7 +87,7 @@ class Cache {
   /**
    * Initialize Redis cluster connection
    */
-  async initCluster() {
+  async initCluster(connectTimeout, commandTimeout) {
     const clusterNodes = this.getClusterNodes();
 
     logger.redis.info(
@@ -95,10 +99,8 @@ class Cache {
       useReplicas: true,
       defaults: {
         socket: {
-          connectTimeout:
-            parseInt(process.env.REDIS_CONNECT_TIMEOUT, 10) || 10000,
-          commandTimeout:
-            parseInt(process.env.REDIS_COMMAND_TIMEOUT, 10) || 5000,
+          connectTimeout: connectTimeout,
+          commandTimeout: commandTimeout,
           keepAlive: true,
           noDelay: true,
         },
@@ -122,7 +124,7 @@ class Cache {
   /**
    * Initialize single Redis node with connection pooling
    */
-  async initSingleNode() {
+  async initSingleNode(connectTimeout, commandTimeout) {
     const redisHost = process.env.REDIS_HOST || "localhost";
     const redisPort = parseInt(process.env.REDIS_PORT, 10) || 6379;
 
@@ -138,10 +140,8 @@ class Cache {
         socket: {
           host: redisHost,
           port: redisPort,
-          connectTimeout:
-            parseInt(process.env.REDIS_CONNECT_TIMEOUT, 10) || 30000,
-          commandTimeout:
-            parseInt(process.env.REDIS_COMMAND_TIMEOUT, 10) || 10000,
+          connectTimeout: connectTimeout,
+          commandTimeout: commandTimeout,
           lazyConnect: false, // Connect immediately for pool
           keepAlive: true,
           noDelay: true,
@@ -300,29 +300,39 @@ class Cache {
       attempts: this.reconnectAttempts,
     });
 
-    // Specific error handling
-    if (errorMessage.includes("WRONGPASS") || errorMessage.includes("AUTH")) {
-      logger.redis.error(
-        "Redis authentication failed - Please check credentials in .env file",
-      );
-    } else if (errorMessage.includes("ECONNREFUSED")) {
-      logger.redis.error("Redis connection refused - Is Redis server running?");
-    } else if (errorMessage.includes("ETIMEDOUT")) {
-      logger.redis.error(
-        "Redis connection timeout - Check network connectivity",
-      );
-    }
-
     this.connected = false;
 
-    // Don't throw error - allow application to continue without Redis
-    logger.redis.warn(
-      "Redis connection failed - application will continue without caching",
+    // If we've exceeded max reconnect attempts, disable Redis
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      logger.redis.warn(
+        `Maximum Redis reconnection attempts (${this.maxReconnectAttempts}) exceeded. Disabling Redis for this session.`,
+      );
+      process.env.REDIS_ENABLED = "false";
+      return;
+    }
+
+    // Attempt reconnection with exponential backoff
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+    logger.redis.info(
+      `Scheduling Redis reconnection attempt ${this.reconnectAttempts + 1} in ${delay}ms`,
     );
+
+    setTimeout(async () => {
+      try {
+        if (this.isCluster) {
+          await this.initCluster();
+        } else {
+          await this.initSingleNode();
+        }
+      } catch (reconnectError) {
+        this.reconnectAttempts++;
+        this.handleConnectionError(reconnectError);
+      }
+    }, delay);
   }
 
   /**
-   * Handle initialization errors
+   * Handle initialization errors gracefully without crashing the server
    */
   handleInitError(error) {
     const errorMessage =
@@ -335,9 +345,16 @@ class Cache {
     });
 
     this.connected = false;
+    
+    // Disable Redis for this session to prevent further connection attempts
+    process.env.REDIS_ENABLED = "false";
+    
     logger.redis.warn(
-      "Redis initialization failed - application will continue without caching",
+      "Redis initialization failed - application will continue without caching. Redis has been disabled for this session.",
     );
+    
+    // Don't throw the error - let the application continue without Redis
+    // This prevents the server from crashing due to Redis connection issues
   }
 
   /**
