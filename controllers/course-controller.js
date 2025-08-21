@@ -12,6 +12,7 @@ import {
 } from "../models/course-types/index.js";
 import EnrolledCourse from "../models/enrolled-courses-model.js";
 import Enrollment from "../models/enrollment-model.js";
+import { Batch } from "../models/course-model.js";
 import Note from "../models/note-model.js";
 import Progress from "../models/progress-model.js";
 import catchAsync from "../utils/catchAsync.js";
@@ -3425,22 +3426,140 @@ const updateRecordedVideos = async (req, res) => {
 const getRecordedVideosForUser = async (req, res) => {
   try {
     const { studentId } = req.params;
+    console.log('🔍 Fetching recorded videos for student:', studentId);
+
+    // Get enrolled courses
     const enrollments = await EnrolledCourse.find({ student_id: studentId })
-      .populate("course_id", "recorded_videos course_title")
+      .populate("course_id", "recorded_videos course_title course_category")
       .lean();
 
-    // Filter out enrollments with null course_id and map the valid ones
-    const videos = enrollments
+    console.log('📚 Found enrollments:', enrollments.length);
+
+    // Get batch enrollments for live session videos
+    const batchEnrollments = await Enrollment.find({ student: studentId })
+      .populate({
+        path: 'batch',
+        populate: {
+          path: 'course',
+          select: 'course_title course_category'
+        }
+      })
+      .lean();
+
+    console.log('🎓 Found batch enrollments:', batchEnrollments.length);
+
+    // Combine course recorded videos
+    const courseVideos = enrollments
       .filter((enrollment) => enrollment.course_id != null)
       .map((enrollment) => ({
         course_id: enrollment.course_id._id,
         course_title: enrollment.course_id.course_title,
+        course_category: enrollment.course_id.course_category,
         videos: enrollment.course_id.recorded_videos || [],
+        source: 'course'
       }));
 
-    res.status(200).json({ success: true, data: videos });
+    // Get live session videos from batches
+    const liveSessionVideos = [];
+    
+    for (const enrollment of batchEnrollments) {
+      if (enrollment.batch && enrollment.batch.schedule) {
+        const batch = enrollment.batch;
+        
+        // Process each session in the batch
+        for (const session of batch.schedule) {
+          if (session.recorded_lessons && session.recorded_lessons.length > 0) {
+            // Add each recorded lesson
+            for (const lesson of session.recorded_lessons) {
+              liveSessionVideos.push({
+                id: lesson._id || `${session._id}_${lesson.title}`,
+                course_id: batch.course?._id,
+                course_title: batch.course?.course_title || 'Live Session',
+                course_category: batch.course?.course_category || 'Live Classes',
+                title: lesson.title || 'Recorded Session',
+                description: `Live session recording from ${session.session_title || 'Live Class'}`,
+                video_url: lesson.url,
+                date: lesson.recorded_date || session.session_date,
+                created_at: lesson.created_at || session.created_at,
+                duration: lesson.duration || session.duration,
+                instructor: session.instructor_name || 'Instructor',
+                session_title: session.session_title,
+                session_date: session.session_date,
+                status: 'available',
+                source: 'live_session',
+                batch_id: batch._id,
+                session_id: session._id
+              });
+            }
+          }
+        }
+      }
+    }
+
+    console.log('🎥 Found live session videos:', liveSessionVideos.length);
+
+    // Combine all videos
+    const allVideos = [
+      ...courseVideos,
+      ...liveSessionVideos.map(video => ({
+        course_id: video.course_id,
+        course_title: video.course_title,
+        course_category: video.course_category,
+        videos: [video],
+        source: 'live_session'
+      }))
+    ];
+
+    // Group by course and merge videos
+    const groupedVideos = {};
+    
+    for (const item of allVideos) {
+      const key = item.course_id?.toString() || 'unknown';
+      
+      if (!groupedVideos[key]) {
+        groupedVideos[key] = {
+          course_id: item.course_id,
+          course_title: item.course_title,
+          course_category: item.course_category,
+          videos: [],
+          sources: new Set()
+        };
+      }
+      
+      groupedVideos[key].videos.push(...item.videos);
+      groupedVideos[key].sources.add(item.source);
+    }
+
+    // Convert to array and add metadata
+    const finalVideos = Object.values(groupedVideos).map(group => ({
+      course_id: group.course_id,
+      course_title: group.course_title,
+      course_category: group.course_category,
+      videos: group.videos,
+      total_videos: group.videos.length,
+      has_live_sessions: group.sources.has('live_session'),
+      has_course_videos: group.sources.has('course')
+    }));
+
+    console.log('✅ Final response:', {
+      total_courses: finalVideos.length,
+      total_videos: finalVideos.reduce((sum, course) => sum + course.total_videos, 0),
+      live_session_videos: liveSessionVideos.length
+    });
+
+    res.status(200).json({ 
+      success: true, 
+      data: finalVideos,
+      recordedVideos: finalVideos.flatMap(course => course.videos), // For compatibility
+      summary: {
+        total_courses: finalVideos.length,
+        total_videos: finalVideos.reduce((sum, course) => sum + course.total_videos, 0),
+        live_session_videos: liveSessionVideos.length,
+        course_videos: courseVideos.reduce((sum, course) => sum + course.videos.length, 0)
+      }
+    });
   } catch (error) {
-    console.error("Error fetching recorded videos:", error);
+    console.error("❌ Error fetching recorded videos:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching recorded videos",

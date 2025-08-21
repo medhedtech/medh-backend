@@ -324,6 +324,18 @@ router.get(
   getRecordedLessonsForStudent,
 );
 
+// Temporary test route without authentication (remove in production)
+router.get(
+  "/test-students/:studentId/recorded-lessons",
+  getRecordedLessonsForStudent,
+);
+
+// Get recorded lessons for a specific batch (test route)
+router.get(
+  "/test-students/:studentId/batch/:batchId/recorded-lessons",
+  getRecordedLessonsForStudent,
+);
+
 // Add route to get upcoming sessions for a batch
 router.get(
   "/:batchId/upcoming-sessions",

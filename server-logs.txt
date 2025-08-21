@@ -1,0 +1,178 @@
+
+> medh-backend@1.0.0 dev
+> nodemon index.js
+
+[33m[nodemon] 3.1.9[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node index.js`[39m
+[cloudfrontSigner] CloudFront private key loaded from file: ./private_key.pem
+✅ Using PRODUCTION AWS credentials
+🔧 AWS S3 Configuration:
+   Region: ap-south-1
+   Bucket: medh-filess
+   Access Key: ***SET***
+[Blockchain] Disabled – missing or invalid RPC_URL, CERTIFICATE_CONTRACT_ADDRESS or BLOCKCHAIN_PRIVATE_KEY. Demo certificate generation will skip on-chain anchoring.
+✅ Using PRODUCTION AWS credentials
+🔧 AWS S3 Configuration:
+   Region: ap-south-1
+   Bucket: medh-filess
+   Access Key: ***SET***
+✅ S3 Client initialized successfully
+(node:22188) [MONGOOSE] Warning: Duplicate schema index on {"application_id":1} found. This is often due to declaring an index using both "index: true" and "schema.index()". Please remove the duplicate index definition.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22188) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+BullMQ: WARNING! Your redis options maxRetriesPerRequest must be null and will be overridden by BullMQ.
+
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ ✅ MONGODB CONNECTED                                     ┃
+┃ medh-shard-00-00.xmifs.mongodb.net:27017                 ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+
+[2025-08-21 15:36:54.935] ❌ [1m[31merror[39m[22m [SYSTEM]    uncaughtException: listen EADDRINUSE: address already in use :::8080
+Error: listen EADDRINUSE: address already in use :::8080
+    at Server.setupListenHandle [as _listen2] (node:net:1907:16)
+    at listenInCluster (node:net:1964:12)
+    at Server.listen (node:net:2066:7)
+    at startServer (file:///C:/Users/akata/Desktop/medh/medh-backend/index.js:348:18)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[2025-08-21 15:36:54.936] ❌ [1m[31merror[39m[22m [SYSTEM]    Uncaught Exception listen EADDRINUSE: address already in use :::8080
+[2025-08-21 15:36:54.937] ❌ [1m[31merror[39m[22m [SYSTEM]    Uncaught exception detected, shutting down gracefully...
+Error: Missing key for job 17. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 16. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 15. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 14. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 13. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 12. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 11. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 10. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 9. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 8. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 7. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 6. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 5. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 4. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 3. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 2. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+Error: Missing key for job 1. moveToFinished
+    at Scripts.finishedErrors (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:1103:24)
+    at Scripts.moveToFinished (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\scripts.js:463:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\job.js:531:26
+    at async Worker.handleFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:545:32)
+    at async C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:495:36
+    at async Worker.retryIfFailed (C:\Users\akata\Desktop\medh\medh-backend\node_modules\bullmq\dist\cjs\classes\worker.js:775:24)
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m

@@ -7,10 +7,12 @@ import {
   getInstructors, 
   uploadFile, 
   generateUploadUrl,
+  generateSignedVideoUrl,
   createSession, 
   getPreviousSession, 
   getSessions, 
   getSession, 
+  getStudentLatestSession,
   updateSession, 
   deleteSession, 
   getCourseStats, 
@@ -25,6 +27,7 @@ import {
 } from '../controllers/liveClassesController.js';
 import { authenticateToken as auth } from '../middleware/auth.js';
 import { upload, uploadVideos as uploadVideosMiddleware } from '../middleware/upload.js';
+import http from 'http';
 
 // Live Classes Routes
 router.get('/students', getStudents);
@@ -56,6 +59,7 @@ router.post('/sessions', auth, (req, res, next) => {
 router.get('/sessions/previous', getPreviousSession);
 router.get('/sessions', getSessions);
 router.get('/sessions/:id', getSession);
+router.get('/students/:studentId/latest-session', getStudentLatestSession);
 router.put('/sessions/:id', updateSession);
 router.delete('/sessions/:id', deleteSession);
 
@@ -66,7 +70,13 @@ router.get('/courses/:category/stats', getCourseStats);
 router.get('/course-categories', getCourseCategories);
 
 // Video upload route
-router.post('/upload-videos', uploadVideosMiddleware.array('videos', 10), (req, res, next) => {
+// Increase timeouts specifically for large video uploads (5GB+)
+router.post('/upload-videos', (req, res, next) => {
+  // Disable request timeout at the route level (Express 5/Node 18+ respects server settings, but ensure no early timeout)
+  req.setTimeout(0);
+  res.setTimeout(0);
+  next();
+}, uploadVideosMiddleware.array('videos', 10), (req, res, next) => {
   console.log('🔍 Route: uploadVideos called');
   console.log('📝 Files received:', req.files?.length || 0);
   console.log('📝 Request body:', req.body);
@@ -81,6 +91,9 @@ router.post('/upload-videos', uploadVideosMiddleware.array('videos', 10), (req, 
   
   uploadVideos(req, res, next);
 });
+
+// Generate signed URL for video access
+router.post('/generate-signed-url', generateSignedVideoUrl);
 
 // Student batch information route
 router.get('/student-batch-info', getStudentBatchInfo);

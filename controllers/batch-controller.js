@@ -7,6 +7,7 @@ import zoomService from "../services/zoomService.js";
 import { generateSignedUrl } from "../utils/cloudfrontSigner.js";
 import OnlineMeeting from "../models/online-meeting.js";
 import SessionRating from "../models/session-rating.model.js"; // Import the new SessionRating model
+import LiveSession from "../models/liveSession.model.js"; // Import LiveSession model
 import { createBatchS3Folder, createStudentS3Folder } from "../utils/s3BatchFolderManager.js";
 import logger from "../utils/logger.js";
 
@@ -1619,10 +1620,14 @@ export const getRecordedLessonsForSession = async (req, res) => {
 // Controller to get recorded lessons for a student across all sessions
 export const getRecordedLessonsForStudent = async (req, res) => {
   try {
-    const { studentId } = req.params;
+    const { studentId, batchId } = req.params;
+    
+    // Check if this is a batch-specific request
+    const isSpecificBatch = !!batchId;
+    console.log(`🎯 Request for ${isSpecificBatch ? 'specific batch' : 'all batches'}:`, { studentId, batchId });
 
     // Authorization: students can only access their own recorded lessons
-    if (req.user.role === "student" && req.user.id !== studentId) {
+    if (req.user && req.user.role === "student" && req.user.id !== studentId) {
       return res.status(403).json({
         success: false,
         message: "Unauthorized to access other student's recorded lessons",
@@ -2054,18 +2059,322 @@ export const getRecordedLessonsForStudent = async (req, res) => {
         );
       }, 0);
 
+    // Get ALL LiveSession data - batch info, instructor info, session details
+    let batchDataMap = {};
+    let liveSessions = [];
+    let allLiveSessionsByBatch = {};
+    
+    try {
+      // Get ALL LiveSessions with populated batch and instructor data
+      liveSessions = await LiveSession.find({
+        batchId: { $exists: true, $ne: null },
+        instructorId: { $exists: true, $ne: null }
+      })
+        .populate({
+          path: 'batchId',
+          select: 'batch_name batch_code _id'
+        })
+        .populate({
+          path: 'instructorId', 
+          select: 'full_name email username _id'
+        })
+        .select('sessionTitle sessionNo sessionNumber sessionDate sessionStartTime sessionEndTime sessionDuration sessionDescription sessionDay batchId instructorId students summary remarks _id')
+        .lean();
+      
+      console.log('📚 LiveSessions with populated data found:', liveSessions.length);
+      console.log('📚 Sample LiveSession:', JSON.stringify(liveSessions[0], null, 2));
+      
+      console.log('📚 Total LiveSessions found:', liveSessions.length);
+      console.log('📚 Sample LiveSession data:', JSON.stringify(liveSessions.slice(0, 2), null, 2));
+      
+      // Create batch data mapping from populated LiveSessions
+      liveSessions.forEach(session => {
+        console.log('📚 Processing LiveSession:', {
+          sessionTitle: session.sessionTitle,
+          batchId: session.batchId,
+          instructorId: session.instructorId
+        });
+        
+        if (session.batchId && session.batchId._id) {
+          const batchId = session.batchId._id.toString();
+          
+          // Store batch info from populated data
+          if (!batchDataMap[batchId]) {
+            batchDataMap[batchId] = {
+              batch_name: session.batchId.batch_name || `Batch ${batchId.substring(0, 8)}...`,
+              batch_code: session.batchId.batch_code || '',
+              instructor: session.instructorId ? {
+                full_name: session.instructorId.full_name || session.instructorId.username || 'Instructor',
+                email: session.instructorId.email || ''
+              } : { full_name: 'Instructor', email: '' }
+            };
+            console.log('📚 Created batch mapping for:', batchId, batchDataMap[batchId]);
+          }
+          
+          // Group LiveSessions by batch for easy lookup
+          if (!allLiveSessionsByBatch[batchId]) {
+            allLiveSessionsByBatch[batchId] = [];
+          }
+          allLiveSessionsByBatch[batchId].push(session);
+        }
+      });
+      
+      console.log('📚 Batch data from LiveSession:', Object.keys(batchDataMap));
+      console.log('📚 LiveSessions grouped by batch:', Object.keys(allLiveSessionsByBatch));
+      console.log('📚 Sample batchDataMap:', Object.values(batchDataMap)[0]);
+    } catch (error) {
+      console.error('Error fetching LiveSession batch data:', error);
+    }
+
+    // Create a mapping of S3 videos to LiveSession data
+    const s3VideoToSessionMap = {};
+    
+    // Map ALL LiveSessions by their batch and session number for easy lookup
+    Object.values(allLiveSessionsByBatch).flat().forEach(session => {
+      if (session.batchId && session.batchId._id) {
+        const batchId = session.batchId._id.toString();
+        // Extract session number from sessionNo field (e.g., "1-1755808700153" -> 1)
+        let sessionNumber = 1;
+        if (session.sessionNo) {
+          const sessionNoMatch = session.sessionNo.match(/^(\d+)/);
+          if (sessionNoMatch) {
+            sessionNumber = parseInt(sessionNoMatch[1]);
+          }
+        }
+        const sessionKey = `${batchId}_${sessionNumber}`;
+        s3VideoToSessionMap[sessionKey] = session;
+        
+        console.log(`🗺️ Mapped LiveSession: ${sessionKey} -> ${session._id} (${session.sessionTitle})`);
+        console.log(`   📋 Session Details:`, {
+          id: session._id,
+          title: session.sessionTitle,
+          sessionNo: session.sessionNo,
+          batchId: batchId,
+          sessionNumber: sessionNumber,
+          hasSummary: !!session.summary,
+          hasRemarks: !!session.remarks
+        });
+      }
+    });
+
+    // Organize S3 videos by batch for batch_sessions
+    const batchGroups = {};
+    const sessionGroups = {}; // Group videos by batch and session
+    
+    s3VideosData.forEach(video => {
+      // Extract batch ID from S3 path
+      let batchId = 'personal';
+      let batchName = 'Personal Sessions';
+      let instructorInfo = { full_name: 'Instructor', email: '' };
+      
+      if (video.fullPath && video.fullPath.includes('/')) {
+        const pathParts = video.fullPath.split('/');
+        if (pathParts.length >= 2 && pathParts[0] === 'videos') {
+          // Check if it's batch structure: videos/{batchId}/{studentId}/...
+          if (pathParts.length >= 3 && pathParts[1].length === 24) { // MongoDB ObjectId length
+            batchId = pathParts[1];
+            
+                    // Use real batch data from LiveSession if available
+        if (batchDataMap[batchId]) {
+          batchName = batchDataMap[batchId].batch_name;
+          instructorInfo = batchDataMap[batchId].instructor;
+          console.log(`📚 Using exact batch data for ${batchId}:`, batchDataMap[batchId]);
+        } else {
+          // No fallback - only use data if exact match exists
+          batchName = `Batch ${batchId.substring(0, 8)}...`;
+          instructorInfo = { full_name: 'Instructor', email: '' };
+          console.log(`📚 No LiveSession data found for batch ${batchId}, using generic name`);
+        }
+          }
+        }
+      }
+      
+      if (!batchGroups[batchId]) {
+        batchGroups[batchId] = {
+          batch_id: batchId,
+          batch_name: batchName,
+          instructor: instructorInfo,
+          sessions: [],
+          total_videos: 0,
+          description: `Recorded sessions from ${batchName}`,
+          source: "s3_upload"
+        };
+      }
+      
+      // Create session structure using extracted session number from S3 path
+      let sessionNumber = 1; // Default fallback
+      
+      // Extract session number from S3 path
+      if (video.fullPath) {
+        // Pattern 1: session-{number} or session_{number}
+        const sessionMatch = video.fullPath.match(/session[-_](\d+)/i);
+        if (sessionMatch) {
+          sessionNumber = parseInt(sessionMatch[1]);
+        }
+        
+        // Pattern 2: Session {number} in folder name
+        const sessionFolderMatch = video.fullPath.match(/Session\s+(\d+)/i);
+        if (sessionFolderMatch) {
+          sessionNumber = parseInt(sessionFolderMatch[1]);
+        }
+      }
+      
+      const sessionKey = `${batchId}_${sessionNumber}`;
+      const liveSessionData = s3VideoToSessionMap[sessionKey];
+      
+      console.log(`🔍 Looking for session: ${sessionKey}`);
+      console.log(`📋 LiveSession found:`, liveSessionData ? `✅ ${liveSessionData._id} (${liveSessionData.sessionTitle})` : '❌ Not found');
+      console.log(`🗂️ Available session keys:`, Object.keys(s3VideoToSessionMap));
+      console.log(`📹 S3 Video Details:`, {
+        videoId: video.id,
+        videoTitle: video.title,
+        fullPath: video.fullPath,
+        extractedBatchId: batchId,
+        extractedSessionNumber: sessionNumber
+      });
+      
+      if (liveSessionData) {
+        console.log(`✅ MATCH FOUND! LiveSession data:`, {
+          id: liveSessionData._id,
+          title: liveSessionData.sessionTitle,
+          summary: liveSessionData.summary?.title,
+          remarks: liveSessionData.remarks
+        });
+      }
+      
+      // Calculate duration - prioritize LiveSession duration, then estimate from video metadata
+      let calculatedDuration = null;
+      
+      console.log(`🕐 Duration calculation for video ${video.id}:`, {
+        hasLiveSessionData: !!liveSessionData,
+        sessionDuration: liveSessionData?.sessionDuration,
+        videoFileSize: video.fileSize,
+        videoTitle: video.title
+      });
+      
+      if (liveSessionData?.sessionDuration) {
+        calculatedDuration = liveSessionData.sessionDuration;
+        console.log(`✅ Using LiveSession duration: ${calculatedDuration}`);
+      } else if (liveSessionData?.video?.size) {
+        // Use LiveSession video size if available
+        const estimatedMinutes = Math.round(liveSessionData.video.size / (1024 * 1024 * 1.5)); 
+        calculatedDuration = estimatedMinutes > 0 ? `${estimatedMinutes} min` : '1 min';
+        console.log(`📊 Using LiveSession video size: ${calculatedDuration} (${liveSessionData.video.size} bytes)`);
+      } else if (video.fileSize) {
+        // Estimate from S3 video file size: 1MB ≈ 0.7 minutes for typical compressed video
+        const fileSizeMB = video.fileSize / (1024 * 1024);
+        let estimatedMinutes;
+        
+        if (fileSizeMB > 100) {
+          // Large files: assume higher quality, longer duration
+          estimatedMinutes = Math.round(fileSizeMB * 0.5); // 100MB ≈ 50 min
+        } else if (fileSizeMB > 10) {
+          // Medium files: standard compression
+          estimatedMinutes = Math.round(fileSizeMB * 0.7); // 10MB ≈ 7 min
+        } else {
+          // Small files: assume short clips
+          estimatedMinutes = Math.round(fileSizeMB * 1); // 1MB ≈ 1 min
+        }
+        
+        calculatedDuration = estimatedMinutes > 0 ? `${estimatedMinutes} min` : '1 min';
+        console.log(`📊 Using S3 file size estimation: ${calculatedDuration} (${fileSizeMB.toFixed(1)} MB)`);
+      } else {
+        calculatedDuration = '30 min'; // More realistic default
+        console.log(`⚠️ Using default duration: ${calculatedDuration}`);
+      }
+
+      // Use existing sessionKey for grouping (already declared above)
+      
+      // Create video data with unique titles for multiple videos in same session
+      const existingVideosInSession = sessionGroups[sessionKey]?.recorded_lessons?.length || 0;
+      let videoTitle = liveSessionData?.sessionTitle || `Session ${sessionNumber}`;
+      
+      // If there are multiple videos in the same session, add part number
+      if (existingVideosInSession > 0) {
+        videoTitle = `${videoTitle} - Part ${existingVideosInSession + 1}`;
+      }
+      
+      const videoData = {
+        _id: video.id,
+        title: videoTitle,
+        video_name: video.title,
+        video_url: video.url,
+        url: video.url,
+        recorded_date: video.lastModified,
+        fileSize: video.fileSize,
+        view_count: 0,
+        student_name: student.full_name || student.username || 'Student',
+        source: "s3_bucket"
+      };
+      
+      // Group videos by session
+      if (!sessionGroups[sessionKey]) {
+        sessionGroups[sessionKey] = {
+          session_id: liveSessionData?._id?.toString() || null,
+          session_number: sessionNumber,
+          session_title: liveSessionData?.sessionTitle || `Session ${sessionNumber}`,
+          session_day: liveSessionData?.sessionDay || null,
+          session_date: liveSessionData?.sessionDate || video.lastModified,
+          session_start_time: liveSessionData?.sessionStartTime || null,
+          session_end_time: liveSessionData?.sessionEndTime || null,
+          session_duration: calculatedDuration,
+          session_description: liveSessionData?.sessionDescription || null,
+          instructor: liveSessionData?.instructorId ? {
+            full_name: liveSessionData.instructorId.full_name || instructorInfo.full_name,
+            email: liveSessionData.instructorId.email || instructorInfo.email
+          } : instructorInfo,
+          recorded_lessons: [],
+          videos_count: 0,
+          source: "s3_upload",
+          batchId: batchId
+        };
+      }
+      
+      // Add video to session
+      sessionGroups[sessionKey].recorded_lessons.push(videoData);
+      sessionGroups[sessionKey].videos_count++;
+      
+      batchGroups[batchId].total_videos++;
+    });
+
+    // Add grouped sessions to batch groups
+    Object.values(sessionGroups).forEach(session => {
+      const batchId = session.batchId;
+      if (batchGroups[batchId]) {
+        batchGroups[batchId].sessions.push(session);
+      }
+    });
+
+    // Filter batches if specific batchId is requested
+    let filteredBatches = Object.values(batchGroups);
+    if (isSpecificBatch && batchId) {
+      filteredBatches = filteredBatches.filter(batch => batch.batch_id === batchId);
+      console.log(`🎯 Filtered to specific batch ${batchId}:`, filteredBatches.length, 'batches found');
+    }
+
     const responseData = {
       personal_sessions: {
-        count: s3VideosData.length,
-        videos: s3VideosData,
+        count: isSpecificBatch ? 0 : s3VideosData.length, // Hide personal sessions for specific batch requests
+        videos: isSpecificBatch ? [] : s3VideosData,
         description: "Personal Sessions • by " + student.full_name,
         type: "personal",
       },
       scheduled_sessions: {
-        count: databaseVideosData.length,
-        sessions: databaseVideosData,
+        count: isSpecificBatch ? 0 : databaseVideosData.length, // Hide scheduled sessions for specific batch requests
+        sessions: isSpecificBatch ? [] : databaseVideosData,
         description: "Videos from your scheduled batch sessions",
         type: "scheduled",
+      },
+      batch_sessions: {
+        count: filteredBatches.length,
+        batches: filteredBatches,
+        total_videos: filteredBatches.reduce((total, batch) => {
+          return total + (batch.total_videos || 0);
+        }, 0),
+        description: isSpecificBatch 
+          ? `Videos from batch ${batchId}` 
+          : "Videos organized by batches you are enrolled in",
+        type: "batch_organized",
       },
     };
 
