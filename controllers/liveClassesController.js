@@ -951,20 +951,30 @@ export const getAllBatches = catchAsync(async (req, res, next) => {
     console.log('🔍 Fetching all batches from batches collection');
     
     const batches = await Batch.find({})
-      .select('_id batch_name batch_code start_date end_date enrolled_students')
+      .select('_id batch_name batch_code start_date end_date enrolled_students enrolled_student_ids')
       .sort({ batch_name: 1 });
 
     console.log('📚 Total batches found:', batches.length);
 
     // Transform to match expected format
-    const formattedBatches = batches.map(batch => ({
-      _id: batch._id,
-      name: batch.batch_name,
-      code: batch.batch_code,
-      startDate: batch.start_date,
-      endDate: batch.end_date,
-      enrolledStudents: batch.enrolled_students || []
-    }));
+    const formattedBatches = batches.map(batch => {
+      const batchData = {
+        _id: batch._id,
+        name: batch.batch_name,
+        code: batch.batch_code,
+        startDate: batch.start_date,
+        endDate: batch.end_date,
+        enrolledStudents: batch.enrolled_students || 0,
+        enrolled_student_ids: batch.enrolled_student_ids || []
+      };
+      
+      // Debug log for batches missing enrolled_student_ids
+      if (!batch.enrolled_student_ids || batch.enrolled_student_ids.length === 0) {
+        console.log(`⚠️ Batch "${batch.batch_name}" missing enrolled_student_ids but has ${batch.enrolled_students || 0} enrolled students`);
+      }
+      
+      return batchData;
+    });
 
     res.status(200).json({
       status: 'success',
@@ -1066,4 +1076,85 @@ export const testBatchStudentOrg = catchAsync(async (req, res, next) => {
   }
 });
 
+// --------------------
+// Get Student Latest Session
+// --------------------
+export const getStudentLatestSession = catchAsync(async (req, res, next) => {
+  const { studentId } = req.params;
+  
+  console.log('🔍 Fetching latest session for student:', studentId);
+  
+  if (!studentId) {
+    return next(new AppError('Student ID is required', 400));
+  }
+
+  try {
+    // Validate and convert string ID to ObjectId for MongoDB query
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      return next(new AppError('Invalid student ID format', 400));
+    }
+    const objectIdStudentId = new mongoose.Types.ObjectId(studentId);
+    
+    // Find the most recent session for this student
+    const latestSession = await LiveSession.findOne({
+      students: objectIdStudentId
+    })
+    .sort({ createdAt: -1, updatedAt: -1 })
+    .populate('grades', 'name')
+    .lean();
+
+    console.log('📊 Latest session found:', latestSession ? 'Yes' : 'No');
+    if (latestSession) {
+      console.log('📊 Session details:', {
+        id: latestSession._id,
+        title: latestSession.sessionTitle,
+        students: latestSession.students,
+        grades: latestSession.grades
+      });
+    }
+
+    if (!latestSession) {
+      return res.status(200).json({
+        status: 'success',
+        message: 'No sessions found for this student',
+        data: null
+      });
+    }
+
+    // Populate students and instructor data
+    const [students, instructor] = await Promise.all([
+      populateStudents(latestSession.students),
+      populateInstructor(latestSession.instructorId)
+    ]);
+
+    // Format the grade field to ensure it's an object
+    let formattedGrades = latestSession.grades;
+    if (typeof latestSession.grades === 'string') {
+      formattedGrades = { name: latestSession.grades };
+    } else if (Array.isArray(latestSession.grades) && latestSession.grades.length > 0) {
+      // If it's an array, take the first grade and ensure it's an object
+      const firstGrade = latestSession.grades[0];
+      formattedGrades = typeof firstGrade === 'string' ? { name: firstGrade } : firstGrade;
+    }
+
+    const formattedSession = {
+      ...latestSession,
+      sessionNo: latestSession.originalSessionNo || latestSession.sessionNo,
+      students,
+      instructorId: instructor,
+      grades: formattedGrades
+    };
+
+    console.log('✅ Formatted session data prepared');
+
+    res.status(200).json({
+      status: 'success',
+      data: formattedSession
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching student latest session:', error);
+    return next(new AppError('Failed to fetch student latest session', 500));
+  }
+});
 

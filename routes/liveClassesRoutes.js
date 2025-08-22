@@ -19,6 +19,7 @@ import {
   getStudentBatchInfo,
   getBatchesForStudents,
   getAllBatches,
+  getStudentLatestSession,
   testS3Connection,
   verifyS3Videos,
   testBatchStudentOrg
@@ -32,6 +33,7 @@ router.get('/grades', getGrades);
 router.get('/dashboards', getDashboards);
 router.get('/instructors', getInstructors);
 router.get('/batches', getAllBatches);
+router.get('/students/:studentId/latest-session', getStudentLatestSession);
 
 // File upload
 router.post('/files/upload', upload.single('file'), (req, res, next) => {
