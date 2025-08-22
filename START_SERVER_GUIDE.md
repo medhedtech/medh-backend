@@ -133,3 +133,4 @@ If server won't start:
 **Status**: 🔧 Manual server restart required  
 **Expected Fix Time**: 2-3 minutes  
 **Next Step**: Start server manually in terminal
+
