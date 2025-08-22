@@ -29,7 +29,23 @@ const storage = multer.diskStorage({
   },
 });
 
-// Configure memory storage for video uploads (for S3)
+// Configure disk storage for video uploads (temporary, for S3 streaming)
+const videoUploadsDir = path.join(uploadDir, "videos");
+if (!fs.existsSync(videoUploadsDir)) {
+  fs.mkdirSync(videoUploadsDir, { recursive: true });
+}
+
+const videoDiskStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, videoUploadsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, `video-${uniqueSuffix}${path.extname(file.originalname)}`);
+  },
+});
+
+// Configure memory storage for smaller video uploads (for S3)
 const memoryStorage = multer.memoryStorage();
 
 // File filter function for general uploads
@@ -104,9 +120,9 @@ const uploadMultiple = multer({
   limits: multipleUploadLimits,
 });
 
-// Create multer instance for video uploads (memory storage for S3)
+// Create multer instance for video uploads (disk storage to avoid RAM usage)
 const uploadVideos = multer({
-  storage: memoryStorage,
+  storage: videoDiskStorage,
   fileFilter: videoFileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024 * 1024, // 5GB per file

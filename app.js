@@ -65,7 +65,7 @@ app.use(
 );
 app.use(
   express.json({
-    limit: "10gb",
+    limit: "10gb", // 10GB for large file uploads
     verify: (req, res, buf, encoding) => {
       if (
         req.headers["content-type"] === "application/json" &&

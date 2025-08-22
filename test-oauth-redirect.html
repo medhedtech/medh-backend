@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Test Google OAuth - MEDH Backend</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 20px;
+        
+        background-color: #f5f5f5;
+      }
+      .container {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      .oauth-button {
+        display: inline-block;
+        background: #4285f4;
+        color: white;
+        padding: 12px 24px;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: bold;
+        margin: 10px 0;
+      }
+      .oauth-button:hover {
+        background: #3367d6;
+      }
+      .info-box {
+        background: #e8f4fd;
+        border: 1px solid #bee5eb;
+        border-radius: 5px;
+        padding: 15px;
+        margin: 15px 0;
+      }
+      .error-box {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 5px;
+        padding: 15px;
+        margin: 15px 0;
+        color: #721c24;
+      }
+      .success-box {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 5px;
+        padding: 15px;
+        margin: 15px 0;
+        color: #155724;
+      }
+      code {
+        background: #f8f9fa;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: monospace;
+      }
+      .test-section {
+        margin: 20px 0;
+        padding: 20px;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🔐 Google OAuth Test - MEDH Backend</h1>
+
+      <div class="info-box">
+        <h3>Current Configuration:</h3>
+        <p><strong>Backend URL:</strong> <code>http://localhost:8080</code></p>
+        <p>
+          <strong>OAuth Endpoint:</strong>
+          <code>/api/v1/auth/oauth/google</code>
+        </p>
+        <p>
+          <strong>Callback URL:</strong>
+          <code>http://localhost:8080/api/v1/auth/oauth/google/callback</code>
+        </p>
+        <p>
+          <strong>Client ID:</strong>
+          <code
+            >319534674928-7dpmmo944cal0v2pkvr9omes7fkfri3r.apps.googleusercontent.com</code
+          >
+        </p>
+      </div>
+
+      <div class="test-section">
+        <h3>🧪 Test OAuth Flow</h3>
+        <p>Click the button below to test Google OAuth:</p>
+        <a
+          href="http://localhost:8080/api/v1/auth/oauth/google"
+          class="oauth-button"
+        >
+          🚀 Test Google OAuth
+        </a>
+
+        <h4>Expected Behavior:</h4>
+        <ul>
+          <li>✅ Should redirect to Google OAuth consent screen</li>
+          <li>✅ Should show "MEDH Learning Platform" (or your app name)</li>
+          <li>✅ Should ask for profile and email permissions</li>
+          <li>❌ Should NOT show "redirect_uri_mismatch" error</li>
+        </ul>
+      </div>
+
+      <div class="test-section">
+        <h3>🔧 Google Cloud Console Setup</h3>
+        <p>Ensure these settings in your Google Cloud Console:</p>
+
+        <h4>Authorized JavaScript Origins:</h4>
+        <code>http://localhost:8080</code>
+
+        <h4>Authorized Redirect URIs:</h4>
+        <code>http://localhost:8080/api/v1/auth/oauth/google/callback</code>
+
+        <div class="error-box" style="margin-top: 15px">
+          <strong>⚠️ Common Issues:</strong>
+          <ul>
+            <li>Missing trailing slash in redirect URI</li>
+            <li>Wrong port number (8080 vs 3000)</li>
+            <li>HTTPS vs HTTP mismatch</li>
+            <li>Changes not propagated (wait 5-10 minutes)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="test-section">
+        <h3>🔍 Debug Information</h3>
+        <p>If OAuth fails, check these endpoints:</p>
+
+        <h4>1. Test OAuth Providers List:</h4>
+        <a
+          href="http://localhost:8080/api/v1/auth/oauth/providers"
+          target="_blank"
+        >
+          http://localhost:8080/api/v1/auth/oauth/providers
+        </a>
+
+        <h4>2. Test OAuth Redirect (will redirect):</h4>
+        <a
+          href="http://localhost:8080/api/v1/auth/oauth/google"
+          target="_blank"
+        >
+          http://localhost:8080/api/v1/auth/oauth/google
+        </a>
+
+        <h4>3. Backend Health Check:</h4>
+        <a href="http://localhost:8080/api/v1/health" target="_blank">
+          http://localhost:8080/api/v1/health
+        </a>
+      </div>
+
+      <div class="success-box">
+        <h3>✅ Success Indicators</h3>
+        <p>OAuth is working correctly when:</p>
+        <ul>
+          <li>Google OAuth consent screen appears</li>
+          <li>After granting permissions, redirects to your callback</li>
+          <li>User is created/updated in your database</li>
+          <li>JWT token is generated and returned</li>
+        </ul>
+      </div>
+
+      <div class="test-section">
+        <h3>📋 Troubleshooting Checklist</h3>
+        <div id="checklist">
+          <label><input type="checkbox" /> Google Cloud project created</label
+          ><br />
+          <label><input type="checkbox" /> OAuth 2.0 Client ID created</label
+          ><br />
+          <label
+            ><input type="checkbox" /> Authorized JavaScript origins
+            added</label
+          ><br />
+          <label><input type="checkbox" /> Authorized redirect URIs added</label
+          ><br />
+          <label
+            ><input type="checkbox" /> Environment variables set
+            (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)</label
+          ><br />
+          <label
+            ><input type="checkbox" /> Backend server running on port
+            8080</label
+          ><br />
+          <label><input type="checkbox" /> SESSION_SECRET configured</label
+          ><br />
+          <label
+            ><input type="checkbox" /> Waited 5-10 minutes after Google Console
+            changes</label
+          ><br />
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Add some interactivity
+      document
+        .querySelectorAll('input[type="checkbox"]')
+        .forEach((checkbox) => {
+          checkbox.addEventListener("change", function () {
+            if (this.checked) {
+              this.parentElement.style.color = "#28a745";
+              this.parentElement.style.fontWeight = "bold";
+            } else {
+              this.parentElement.style.color = "";
+              this.parentElement.style.fontWeight = "";
+            }
+          });
+        });
+
+      // Test backend connectivity
+      fetch("http://localhost:8080/api/v1/auth/oauth/providers")
+        .then((response) => response.json())
+        .then((data) => {
+          if (
+            data.success &&
+            data.data.providers.find((p) => p.provider === "google")
+          ) {
+            const successMsg = document.createElement("div");
+            successMsg.className = "success-box";
+            successMsg.innerHTML =
+              "<strong>✅ Backend OAuth endpoint is working!</strong> Google provider is configured.";
+            document.querySelector(".container").appendChild(successMsg);
+          }
+        })
+        .catch((error) => {
+          const errorMsg = document.createElement("div");
+          errorMsg.className = "error-box";
+          errorMsg.innerHTML =
+            "<strong>❌ Backend connection failed:</strong> " + error.message;
+          document.querySelector(".container").appendChild(errorMsg);
+        });
+    </script>
+  </body>
+</html>
