@@ -951,20 +951,30 @@ export const getAllBatches = catchAsync(async (req, res, next) => {
     console.log('🔍 Fetching all batches from batches collection');
     
     const batches = await Batch.find({})
-      .select('_id batch_name batch_code start_date end_date enrolled_students')
+      .select('_id batch_name batch_code start_date end_date enrolled_students enrolled_student_ids')
       .sort({ batch_name: 1 });
 
     console.log('📚 Total batches found:', batches.length);
 
     // Transform to match expected format
-    const formattedBatches = batches.map(batch => ({
-      _id: batch._id,
-      name: batch.batch_name,
-      code: batch.batch_code,
-      startDate: batch.start_date,
-      endDate: batch.end_date,
-      enrolledStudents: batch.enrolled_students || []
-    }));
+    const formattedBatches = batches.map(batch => {
+      const batchData = {
+        _id: batch._id,
+        name: batch.batch_name,
+        code: batch.batch_code,
+        startDate: batch.start_date,
+        endDate: batch.end_date,
+        enrolledStudents: batch.enrolled_students || 0,
+        enrolled_student_ids: batch.enrolled_student_ids || []
+      };
+      
+      // Debug log for batches missing enrolled_student_ids
+      if (!batch.enrolled_student_ids || batch.enrolled_student_ids.length === 0) {
+        console.log(`⚠️ Batch "${batch.batch_name}" missing enrolled_student_ids but has ${batch.enrolled_students || 0} enrolled students`);
+      }
+      
+      return batchData;
+    });
 
     res.status(200).json({
       status: 'success',
