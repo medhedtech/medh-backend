@@ -4,6 +4,7 @@ import User from './models/user-modal.js';
 
 async function fixExistingBatches() {
   try {
+    
     await mongoose.connect('mongodb://localhost:27017/campus');
     console.log('Connected to MongoDB');
     
