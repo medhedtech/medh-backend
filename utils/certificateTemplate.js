@@ -41,8 +41,20 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>MEDH Certificate - ${studentName}</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Dancing+Script:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
       <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Dancing+Script:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+        
+        /* Ensure fonts are loaded before rendering */
+        @font-face {
+          font-family: 'Dancing Script';
+          font-style: normal;
+          font-weight: 600;
+          font-display: block;
+          src: url('https://fonts.gstatic.com/s/dancingscript/v25/If2cXTr6YS-zF4S-kcSWSVi_sxjsohD9F50Ruu7BMSoHTeB9ptDqpw.woff2') format('woff2');
+        }
         
         * {
           margin: 0;
@@ -292,13 +304,16 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
         }
         
         .student-name {
-          font-family: 'Dancing Script', cursive;
-          font-size: 48px;
-          font-weight: 600;
-          color: #ff6b35;
+          font-family: 'Dancing Script', 'Brush Script MT', 'Lucida Handwriting', cursive !important;
+          font-size: 48px !important;
+          font-weight: 600 !important;
+          color: #ff6b35 !important;
           margin: 20px 0;
           line-height: 1.2;
           text-shadow: 0 2px 4px rgba(255, 107, 53, 0.1);
+          font-display: swap;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
         }
         
         .participation-text {

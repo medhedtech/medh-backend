@@ -9,6 +9,7 @@ import User from "../models/user-modal.js";
 import { chromeService } from "../utils/chromeService.js";
 import { generatePdfContentForCertificate } from "../utils/htmlTemplate.js";
 import { generateProfessionalCertificateHTML, formatCertificateData } from "../utils/certificateTemplate.js";
+import pdfService from "../services/pdfService.js";
 import logger from "../utils/logger.js";
 import { uploadFile } from "../utils/uploadFile.js";
 import {
@@ -492,16 +493,15 @@ export const generateCertificatePDF = async (req, res) => {
     // Generate professional certificate HTML
     const htmlContent = generateProfessionalCertificateHTML(certificateData);
 
-    // Generate PDF using Chrome service
-    const pdfBuffer = await chromeService.generatePDF(htmlContent, {
-      format: 'A4',
+    // Generate PDF using PDF service
+    const pdfBuffer = await pdfService.generatePDF(htmlContent, {
+      landscape: true,
+      format: "A4",
       printBackground: true,
-      margin: {
-        top: '0.5in',
-        bottom: '0.5in',
-        left: '0.5in',
-        right: '0.5in'
-      }
+      marginTop: "0.5in",
+      marginBottom: "0.5in",
+      marginLeft: "0.5in",
+      marginRight: "0.5in"
     });
 
     // Set response headers for PDF download

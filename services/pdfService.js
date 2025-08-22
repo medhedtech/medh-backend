@@ -13,6 +13,16 @@ const options = {
     paperWidth: 8.27, // A4 width in inches
     paperHeight: 11.69, // A4 height in inches
   },
+  completionTrigger: {
+    type: 'timer',
+    timeout: 5000 // Wait 5 seconds for fonts to load
+  },
+  chromeFlags: [
+    '--disable-web-security',
+    '--font-render-hinting=none',
+    '--disable-font-subpixel-positioning',
+    '--disable-features=VizDisplayCompositor'
+  ]
 };
 
 class PDFService {
