@@ -47,8 +47,54 @@ lib-cov
 *.key
 *.crt
 *.cert
-eval "$(ssh-agent -s)"
-eval "$(ssh-agent -s)".pubtest-video-lesson-fix-2.js
+
+# Large files and uploads
+uploads/
+temp/
+tmp/
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+*.flv
+*.webm
+*.m4v
+*.3gp
+*.zip
+*.rar
+*.7z
+*.tar.gz
+*.tar.bz2
+*.iso
+*.dmg
+*.exe
+*.msi
+*.deb
+*.rpm
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.mdb
+
+# Cache and temporary files
+.cache/
+.tmp/
+.temp/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.atom/
 
 # macOS system files
 .DS_Store
@@ -58,3 +104,25 @@ eval "$(ssh-agent -s)".pubtest-video-lesson-fix-2.js
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Windows system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Build artifacts
+dist/
+build/
+*.tgz
+*.tar.gz
+
+# Test coverage
+coverage/
+.nyc_output/
+.coverage
+htmlcov/
+
+# Backup files
+*.bak
+*.backup
+*.old
