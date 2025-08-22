@@ -1622,7 +1622,10 @@ export const getRecordedLessonsForStudent = async (req, res) => {
     const { studentId } = req.params;
 
     // Authorization: students can only access their own recorded lessons
-    if (req.user.role === "student" && req.user.id !== studentId) {
+    const userRole = req.user.admin_role || req.user.role;
+    const userRoles = Array.isArray(userRole) ? userRole : [userRole];
+    
+    if (userRoles.includes("student") && req.user.id !== studentId) {
       return res.status(403).json({
         success: false,
         message: "Unauthorized to access other student's recorded lessons",
@@ -2044,23 +2047,209 @@ export const getRecordedLessonsForStudent = async (req, res) => {
       console.error("Error fetching scheduled sessions for student:", dbError);
     }
 
-    // Step 3: Prepare organized response
-    const totalVideosCount =
-      s3VideosData.length +
-      databaseVideosData.reduce((total, session) => {
-        return (
-          total +
-          (session.recorded_lessons ? session.recorded_lessons.length : 0)
-        );
-      }, 0);
+    // Step 3: Organize S3 videos by batch using LiveSession collection for metadata
+    let batchOrganizedData = {};
+    try {
+      const LiveSession = mongoose.model('LiveSession');
+      
+      console.log(`🔍 Organizing S3 videos by batch using LiveSession metadata for student: ${studentId}`);
+      
+      // Find all LiveSessions for this student
+      const liveSessions = await LiveSession.find({
+        students: new mongoose.Types.ObjectId(studentId)
+      })
+      .populate('students', 'full_name')
+      .populate('instructorId', 'full_name')
+      .populate('grades', 'name')
+      .sort({ createdAt: -1 });
+
+      console.log(`📚 Found ${liveSessions.length} live sessions for student`);
+
+      // Create a map of batch ID to session metadata
+      const batchSessionMap = {};
+      for (const session of liveSessions) {
+        // We'll use the session data to enrich batch information later
+        const sessionData = {
+          id: session._id,
+          sessionTitle: session.sessionTitle || `Session ${session.sessionNo || 'Unknown'}`,
+          sessionNo: session.sessionNo,
+          date: session.date,
+          duration: session.sessionDuration || '60 min',
+          instructor: {
+            name: session.instructorId?.full_name || 'Unknown Instructor'
+          },
+          grade: session.grades ? {
+            name: session.grades.name || session.grades
+          } : null,
+          students: session.students.map(s => ({
+            id: s._id,
+            name: s.full_name
+          })),
+          createdAt: session.createdAt
+        };
+
+        // Store session data for later use
+        if (!batchSessionMap[session._id]) {
+          batchSessionMap[session._id] = sessionData;
+        }
+      }
+
+      // Now organize S3 videos by batch ID extracted from their paths
+      console.log(`🎥 Processing ${s3VideosData.length} S3 videos for batch organization`);
+      
+      for (const video of s3VideosData) {
+        if (!video.fullPath) {
+          console.log(`⚠️ Video has no fullPath:`, video.id);
+          continue;
+        }
+
+        console.log(`🔍 Processing video path: ${video.fullPath}`);
+
+        // Extract batch ID from S3 path (videos/batchId/studentId/...)
+        const pathParts = video.fullPath.split('/');
+        let batchId = 'personal';
+        let batchName = 'Personal Sessions';
+        let batchCode = 'PERSONAL';
+        let instructorName = 'Unknown Instructor';
+
+        console.log(`📂 Path parts:`, pathParts);
+
+        if (pathParts.length >= 2 && pathParts[0] === 'videos') {
+          const potentialBatchId = pathParts[1];
+          console.log(`🔍 Potential batch ID: ${potentialBatchId} (length: ${potentialBatchId.length})`);
+          
+          // Check if this looks like a MongoDB ObjectId (24 hex characters)
+          if (potentialBatchId && potentialBatchId.length === 24 && /^[0-9a-fA-F]+$/.test(potentialBatchId)) {
+            batchId = potentialBatchId;
+            console.log(`✅ Valid batch ID found: ${batchId}`);
+            
+            // Try to get batch information from Batch collection first
+            try {
+              const Batch = mongoose.model('Batch');
+              const batchDoc = await Batch.findById(potentialBatchId).select('name code');
+              
+              if (batchDoc) {
+                batchName = batchDoc.name || `Batch ${potentialBatchId.substring(0, 8)}...`;
+                batchCode = batchDoc.code || `BATCH-${potentialBatchId.substring(0, 6).toUpperCase()}`;
+                console.log(`✅ Found batch in Batch collection: ${batchName} (${batchCode})`);
+              } else {
+                console.log(`⚠️ Batch ${potentialBatchId} not found in Batch collection`);
+              }
+            } catch (batchError) {
+              console.log(`❌ Error fetching batch ${potentialBatchId}:`, batchError.message);
+            }
+
+            // Try to find a matching LiveSession for instructor information
+            const matchingSession = liveSessions.find(session => {
+              // Look for sessions that might belong to this batch
+              return session.sessionTitle && (
+                session.sessionTitle.includes(potentialBatchId.substring(0, 8)) ||
+                session.sessionTitle.toLowerCase().includes('batch')
+              );
+            });
+
+            if (matchingSession && matchingSession.instructorId?.full_name) {
+              instructorName = matchingSession.instructorId.full_name;
+              console.log(`✅ Found instructor from LiveSession: ${instructorName}`);
+            } else {
+              // Try to get instructor from any session for this student
+              const anySession = liveSessions.find(s => s.instructorId?.full_name);
+              if (anySession) {
+                instructorName = anySession.instructorId.full_name;
+                console.log(`✅ Using instructor from any session: ${instructorName}`);
+              }
+            }
+          }
+        }
+
+        // Initialize batch group if not exists
+        if (!batchOrganizedData[batchId]) {
+          batchOrganizedData[batchId] = {
+            batchId: batchId,
+            batchName: batchName,
+            batchCode: batchCode,
+            instructor: {
+              name: instructorName
+            },
+            sessions: [],
+            videos: []
+          };
+        }
+
+        // Enhance video object with batch information
+        const enhancedVideo = {
+          ...video,
+          batch: {
+            batchId: batchId,
+            batchName: batchName,
+            batchCode: batchCode
+          }
+        };
+
+        batchOrganizedData[batchId].videos.push(enhancedVideo);
+        console.log(`✅ Added video to batch: ${batchName} - ${video.displayTitle}`);
+      }
+
+      console.log(`📊 Organized ${s3VideosData.length} videos into ${Object.keys(batchOrganizedData).length} batches`);
+
+    } catch (liveSessionError) {
+      console.error('❌ Error organizing videos by batch:', liveSessionError.message);
+    }
+
+    // Step 4: Prepare batch-organized response using LiveSession data
+    let totalVideosCount = 0;
+    const batchSessions = {};
+    const personalSessions = [];
+
+    // Organize data by batches from LiveSession collection
+    Object.values(batchOrganizedData).forEach(batch => {
+      totalVideosCount += batch.videos.length;
+      
+      if (batch.batchId === 'personal') {
+        // Add to personal sessions
+        personalSessions.push(...batch.videos);
+      } else {
+        // Add to batch sessions
+        batchSessions[batch.batchId] = {
+          batchId: batch.batchId,
+          batchName: batch.batchName,
+          batchCode: batch.batchCode,
+          instructor: batch.instructor,
+          count: batch.videos.length,
+          videos: batch.videos,
+          sessions: batch.sessions,
+          type: "batch"
+        };
+      }
+    });
+
+    // Add any remaining S3 videos that weren't in LiveSession (fallback)
+    const liveSessionVideoPaths = new Set();
+    Object.values(batchOrganizedData).forEach(batch => {
+      batch.videos.forEach(video => {
+        if (video.fullPath) {
+          liveSessionVideoPaths.add(video.fullPath);
+        }
+      });
+    });
+
+    const remainingS3Videos = s3VideosData.filter(video => 
+      !liveSessionVideoPaths.has(video.fullPath)
+    );
+
+    if (remainingS3Videos.length > 0) {
+      personalSessions.push(...remainingS3Videos);
+      totalVideosCount += remainingS3Videos.length;
+    }
 
     const responseData = {
       personal_sessions: {
-        count: s3VideosData.length,
-        videos: s3VideosData,
+        count: personalSessions.length,
+        videos: personalSessions,
         description: "Personal Sessions • by " + student.full_name,
         type: "personal",
       },
+      batch_sessions: batchSessions,
       scheduled_sessions: {
         count: databaseVideosData.length,
         sessions: databaseVideosData,
@@ -2069,13 +2258,24 @@ export const getRecordedLessonsForStudent = async (req, res) => {
       },
     };
 
+    // Add database videos count to total
+    totalVideosCount += databaseVideosData.reduce((total, session) => {
+      return total + (session.recorded_lessons ? session.recorded_lessons.length : 0);
+    }, 0);
+
     // Determine the method used
+    const batchCount = Object.keys(batchSessions).length;
+    const liveSessionCount = Object.keys(batchOrganizedData).length;
+    
     let method;
-    if (s3Available && s3VideosData.length > 0) {
-      method =
-        databaseVideosData.length > 0
-          ? "Combined (S3 + Database)"
-          : "S3 Direct Listing";
+    if (liveSessionCount > 0) {
+      method = s3Available ? 
+        "LiveSession + S3 Batch Organization" : 
+        "LiveSession Batch Organization";
+    } else if (s3Available && s3VideosData.length > 0) {
+      method = databaseVideosData.length > 0 ? 
+        "Combined (S3 + Database)" : 
+        "S3 Direct Listing";
     } else if (databaseVideosData.length > 0) {
       method = "Database Fallback";
     } else {
@@ -2086,9 +2286,16 @@ export const getRecordedLessonsForStudent = async (req, res) => {
       success: true,
       count: totalVideosCount,
       data: responseData,
-      message: `Retrieved ${totalVideosCount} recorded videos for student`,
+      message: `Retrieved ${totalVideosCount} recorded videos organized by batch from LiveSession collection`,
       method: method,
       s3_available: s3Available,
+      summary: {
+        totalVideos: totalVideosCount,
+        batchCount: batchCount,
+        personalVideos: personalSessions.length,
+        liveSessionsFound: liveSessionCount,
+        scheduledSessions: databaseVideosData.length
+      }
     });
   } catch (error) {
     console.error(
@@ -2098,6 +2305,198 @@ export const getRecordedLessonsForStudent = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error while fetching recorded lessons for student",
+      error: error.message,
+    });
+  }
+};
+
+// Get batch-organized recorded videos for a student using LiveSession collection
+export const getBatchOrganizedVideosForStudent = async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    // Authorization: students can only access their own recorded lessons
+    if (req.user.role === "student" && req.user.id !== studentId) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized to access other student's recorded lessons",
+      });
+    }
+
+    // Verify student exists
+    const student = await User.findById(studentId);
+    if (!student) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Student not found" });
+    }
+
+    // Import LiveSession model
+    const LiveSession = mongoose.model('LiveSession');
+    const Batch = mongoose.model('Batch');
+
+    console.log(`🔍 Fetching batch-organized videos for student: ${studentId}`);
+
+    // Step 1: Find all LiveSessions where this student participated
+    const liveSessions = await LiveSession.find({
+      students: new mongoose.Types.ObjectId(studentId)
+    })
+    .populate('students', 'full_name')
+    .populate('instructorId', 'full_name')
+    .populate('grades', 'name')
+    .sort({ createdAt: -1 });
+
+    console.log(`📚 Found ${liveSessions.length} live sessions for student`);
+
+    // Step 2: Group sessions by batch and organize videos
+    const batchGroups = {};
+    const personalSessions = [];
+
+    for (const session of liveSessions) {
+      // Check if session has video data
+      if (!session.video || !session.video.s3Path) {
+        console.log(`⚠️ Session ${session._id} has no video data`);
+        continue;
+      }
+
+      // Try to extract batch ID from video path or session data
+      let batchId = null;
+      let batchName = 'Personal Sessions';
+      
+      // Extract batch ID from S3 path (format: videos/batchId/studentId/...)
+      if (session.video.s3Path) {
+        const pathParts = session.video.s3Path.split('/');
+        if (pathParts.length >= 2 && pathParts[0] === 'videos') {
+          const potentialBatchId = pathParts[1];
+          // Check if this looks like a MongoDB ObjectId (24 characters, hex)
+          if (potentialBatchId && potentialBatchId.length === 24 && /^[0-9a-fA-F]+$/.test(potentialBatchId)) {
+            batchId = potentialBatchId;
+          }
+        }
+      }
+
+      // If we found a batch ID, try to get batch details
+      if (batchId) {
+        try {
+          const batch = await Batch.findById(batchId).select('batch_name batch_code');
+          if (batch) {
+            batchName = batch.batch_name;
+            
+            // Initialize batch group if not exists
+            if (!batchGroups[batchId]) {
+              batchGroups[batchId] = {
+                batchId: batchId,
+                batchName: batch.batch_name,
+                batchCode: batch.batch_code,
+                sessions: []
+              };
+            }
+
+            // Add session to batch group
+            batchGroups[batchId].sessions.push({
+              id: session._id,
+              sessionTitle: session.sessionTitle || `Session ${session.sessionNo || 'Unknown'}`,
+              sessionNo: session.sessionNo,
+              date: session.date,
+              duration: session.sessionDuration || '60 min',
+              video: {
+                url: session.video.url,
+                s3Path: session.video.s3Path,
+                size: session.video.size,
+                duration: session.video.duration
+              },
+              instructor: session.instructorId ? {
+                name: session.instructorId.full_name
+              } : null,
+              grade: session.grades ? {
+                name: session.grades.name || session.grades
+              } : null,
+              students: session.students.map(s => ({
+                id: s._id,
+                name: s.full_name
+              })),
+              createdAt: session.createdAt
+            });
+            
+            console.log(`✅ Added session to batch: ${batch.batch_name}`);
+          } else {
+            // Batch not found, add to personal sessions
+            personalSessions.push(createPersonalSessionObject(session));
+          }
+        } catch (batchError) {
+          console.error(`❌ Error fetching batch ${batchId}:`, batchError.message);
+          // Add to personal sessions if batch lookup fails
+          personalSessions.push(createPersonalSessionObject(session));
+        }
+      } else {
+        // No batch ID found, add to personal sessions
+        personalSessions.push(createPersonalSessionObject(session));
+      }
+    }
+
+    // Helper function to create personal session object
+    function createPersonalSessionObject(session) {
+      return {
+        id: session._id,
+        sessionTitle: session.sessionTitle || `Session ${session.sessionNo || 'Unknown'}`,
+        sessionNo: session.sessionNo,
+        date: session.date,
+        duration: session.sessionDuration || '60 min',
+        video: {
+          url: session.video.url,
+          s3Path: session.video.s3Path,
+          size: session.video.size,
+          duration: session.video.duration
+        },
+        instructor: session.instructorId ? {
+          name: session.instructorId.full_name
+        } : null,
+        grade: session.grades ? {
+          name: session.grades.name || session.grades
+        } : null,
+        students: session.students.map(s => ({
+          id: s._id,
+          name: s.full_name
+        })),
+        createdAt: session.createdAt
+      };
+    }
+
+    // Step 3: Prepare response data
+    const responseData = {
+      batches: Object.values(batchGroups),
+      personalSessions: personalSessions.length > 0 ? {
+        batchId: 'personal',
+        batchName: 'Personal Sessions',
+        batchCode: 'PERSONAL',
+        sessions: personalSessions
+      } : null
+    };
+
+    // Calculate totals
+    const totalBatchSessions = Object.values(batchGroups).reduce((total, batch) => total + batch.sessions.length, 0);
+    const totalSessions = totalBatchSessions + personalSessions.length;
+
+    console.log(`📊 Organized ${totalSessions} sessions into ${Object.keys(batchGroups).length} batches + ${personalSessions.length} personal sessions`);
+
+    res.status(200).json({
+      success: true,
+      count: totalSessions,
+      data: responseData,
+      message: `Retrieved ${totalSessions} recorded videos organized by batch`,
+      summary: {
+        totalSessions,
+        batchSessions: totalBatchSessions,
+        personalSessions: personalSessions.length,
+        batchCount: Object.keys(batchGroups).length
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching batch-organized videos for student:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching batch-organized videos",
       error: error.message,
     });
   }

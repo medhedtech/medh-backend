@@ -19,6 +19,7 @@ import {
   uploadAndAddRecordedLesson,
   getRecordedLessonsForSession,
   getRecordedLessonsForStudent,
+  getBatchOrganizedVideosForStudent,
   addScheduledSessionToBatch,
   createZoomMeetingForSession,
   createZoomMeetingForExistingSession,
@@ -322,6 +323,15 @@ router.get(
   authorize(["admin", "instructor", "super-admin", "student"]),
   validateStudentId,
   getRecordedLessonsForStudent,
+);
+
+// Add route to fetch batch-organized videos for a student using LiveSession collection
+router.get(
+  "/students/:studentId/batch-videos",
+  isAuthenticated,
+  authorize(["admin", "instructor", "super-admin", "student"]),
+  validateStudentId,
+  getBatchOrganizedVideosForStudent,
 );
 
 // Add route to get upcoming sessions for a batch

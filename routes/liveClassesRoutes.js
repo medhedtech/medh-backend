@@ -68,21 +68,7 @@ router.get('/courses/:category/stats', getCourseStats);
 router.get('/course-categories', getCourseCategories);
 
 // Video upload route
-router.post('/upload-videos', uploadVideosMiddleware.array('videos', 10), (req, res, next) => {
-  console.log('🔍 Route: uploadVideos called');
-  console.log('📝 Files received:', req.files?.length || 0);
-  console.log('📝 Request body:', req.body);
-  
-  // Handle multer errors
-  if (req.fileValidationError) {
-    return res.status(400).json({
-      status: 'error',
-      message: req.fileValidationError
-    });
-  }
-  
-  uploadVideos(req, res, next);
-});
+router.post('/upload-videos', uploadVideosMiddleware.array('videos', 10), uploadVideos);
 
 // Student batch information route
 router.get('/student-batch-info', getStudentBatchInfo);

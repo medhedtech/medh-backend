@@ -1,6 +1,7 @@
 import slugify from "slugify";
 
 import BlogsModel from "../models/blog-model.js";
+
 import {
   validateBlog,
   validateBlogUpdate,
