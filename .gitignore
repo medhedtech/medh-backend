@@ -95,8 +95,16 @@ tmp/
 *.sublime-workspace
 .atom/
 
-# Test files and scripts
-test-video-lesson-fix-2.js
+# Test files and scripts (ignore all test files)
+test-*.js
+*test*.js
+debug-*.js
+quick-test.js
+scripts/test-*.js
+scripts/*test*.js
+tests/
+*.test.js
+*.spec.js
 
 # macOS system files
 .DS_Store
