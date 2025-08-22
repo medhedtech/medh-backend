@@ -1,6 +1,6 @@
 /**
  * Professional Certificate Template Generator
- * Creates certificates matching the MEDH certificate design
+ * Creates certificates matching the MEDH certificate design from Canva template
  */
 
 /**
@@ -43,9 +43,9 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
       <title>MEDH Certificate - ${studentName}</title>
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Dancing+Script:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Dancing+Script:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Dancing+Script:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Dancing+Script:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
         
         /* Ensure fonts are loaded before rendering */
         @font-face {
@@ -64,12 +64,7 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
         
         body {
           font-family: 'Inter', sans-serif;
-          background: linear-gradient(45deg, #f8fafc 25%, transparent 25%), 
-                      linear-gradient(-45deg, #f8fafc 25%, transparent 25%), 
-                      linear-gradient(45deg, transparent 75%, #f8fafc 75%), 
-                      linear-gradient(-45deg, transparent 75%, #f8fafc 75%);
-          background-size: 20px 20px;
-          background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+          background: #f8fafc;
           min-height: 100vh;
           display: flex;
           align-items: center;
@@ -78,50 +73,54 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
         }
         
         .certificate-container {
-          width: 100%;
-          max-width: 1200px;
+          width: 1123px;
+          height: 794px;
           background: white;
-          border-radius: 20px;
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
           position: relative;
           overflow: hidden;
-          aspect-ratio: 1.414; /* A4 ratio */
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
         }
         
-        /* Corner accents - Green and Orange as per design */
+        /* Corner accents matching the template */
         .corner-accent {
           position: absolute;
-          width: 120px;
-          height: 120px;
           border-radius: 50%;
         }
         
         .corner-accent.top-left {
-          top: -60px;
-          left: -60px;
-          background: linear-gradient(135deg, #22c55e, #16a34a);
+          top: -100px;
+          left: -100px;
+          width: 200px;
+          height: 200px;
+          background: linear-gradient(135deg, #ff6b35, #ff8c42);
         }
         
         .corner-accent.top-right {
-          top: -60px;
-          right: -60px;
-          background: linear-gradient(135deg, #ff6b35, #f7931e);
-        }
-        
-        .corner-accent.bottom-left {
-          bottom: -60px;
-          left: -60px;
-          background: linear-gradient(135deg, #ff6b35, #f7931e);
-        }
-        
-        .corner-accent.bottom-right {
-          bottom: -60px;
-          right: -60px;
+          top: -100px;
+          right: -100px;
+          width: 200px;
+          height: 200px;
           background: linear-gradient(135deg, #22c55e, #16a34a);
         }
         
+        .corner-accent.bottom-left {
+          bottom: -100px;
+          left: -100px;
+          width: 200px;
+          height: 200px;
+          background: linear-gradient(135deg, #22c55e, #16a34a);
+        }
+        
+        .corner-accent.bottom-right {
+          bottom: -100px;
+          right: -100px;
+          width: 200px;
+          height: 200px;
+          background: linear-gradient(135deg, #ff6b35, #ff8c42);
+        }
+        
         .certificate-content {
-          padding: 80px 60px;
+          padding: 60px;
           position: relative;
           z-index: 1;
           height: 100%;
@@ -256,34 +255,37 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           font-weight: 500;
         }
         
-        /* Main Title */
+        /* Main Title Section */
         .main-title {
           text-align: center;
           margin-bottom: 30px;
         }
         
         .main-title h2 {
-          font-size: 48px;
-          font-weight: 700;
+          font-size: 64px;
+          font-weight: 900;
           color: #1e293b;
           margin: 0;
-          letter-spacing: 4px;
+          letter-spacing: 8px;
           font-family: 'Inter', sans-serif;
+          text-transform: uppercase;
         }
         
         .main-title p {
-          font-size: 18px;
+          font-size: 20px;
           color: #1e293b;
-          margin: 5px 0 0;
-          font-weight: 400;
-          font-family: 'Playfair Display', serif;
+          margin: 8px 0 0;
+          font-weight: 600;
+          font-family: 'Inter', sans-serif;
+          letter-spacing: 4px;
+          text-transform: uppercase;
         }
         
         .session-type {
-          font-size: 20px;
+          font-size: 22px;
           color: #1e293b;
-          margin: 15px 0;
-          font-weight: 600;
+          margin: 25px 0;
+          font-weight: 500;
           font-family: 'Inter', sans-serif;
         }
         
@@ -294,59 +296,76 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           flex-direction: column;
           justify-content: center;
           text-align: center;
-          margin: 20px 0;
+          margin: 30px 0;
         }
         
         .certify-text {
-          font-size: 16px;
-          color: #64748b;
-          margin-bottom: 20px;
+          font-size: 18px;
+          color: #1e293b;
+          margin-bottom: 25px;
+          font-weight: 600;
+          letter-spacing: 2px;
+          text-transform: uppercase;
+          font-family: 'Inter', sans-serif;
         }
         
+        /* CRITICAL: Student name styling matching "Hitika Meratwal" exactly */
         .student-name {
           font-family: 'Dancing Script', 'Brush Script MT', 'Lucida Handwriting', cursive !important;
-          font-size: 48px !important;
-          font-weight: 600 !important;
+          font-size: 56px !important;
+          font-weight: 700 !important;
           color: #ff6b35 !important;
-          margin: 20px 0;
-          line-height: 1.2;
-          text-shadow: 0 2px 4px rgba(255, 107, 53, 0.1);
+          margin: 25px 0 30px 0;
+          line-height: 1.1;
+          text-shadow: 0 2px 4px rgba(255, 107, 53, 0.15);
           font-display: swap;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
+          font-style: italic;
         }
         
         .participation-text {
           font-size: 16px;
-          color: #64748b;
-          margin-bottom: 15px;
-          line-height: 1.5;
+          color: #1e293b;
+          margin-bottom: 20px;
+          line-height: 1.6;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          font-family: 'Inter', sans-serif;
         }
         
         .course-name {
-          font-size: 28px;
+          font-size: 32px;
           font-weight: 700;
-          color: #22c55e;
-          margin: 15px 0;
-          letter-spacing: 1px;
-          text-shadow: 0 2px 4px rgba(34, 197, 94, 0.1);
+          color: #22c55e !important;
+          margin: 20px 0;
+          letter-spacing: 2px;
+          text-shadow: 0 2px 4px rgba(34, 197, 94, 0.15);
+          text-transform: uppercase;
+          font-family: 'Inter', sans-serif;
         }
         
         .session-date {
           font-size: 20px;
           color: #1e293b;
-          margin: 15px 0;
+          margin: 20px 0;
           font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          font-family: 'Inter', sans-serif;
         }
         
         .session-description {
-          font-size: 14px;
-          color: #64748b;
-          margin: 20px 0;
+          font-size: 16px;
+          color: #1e293b;
+          margin: 25px 0;
           line-height: 1.6;
-          max-width: 600px;
+          max-width: 700px;
           margin-left: auto;
           margin-right: auto;
+          font-weight: 400;
+          font-family: 'Inter', sans-serif;
         }
         
         /* Signatures Section */
@@ -354,8 +373,8 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           display: flex;
           justify-content: space-between;
           align-items: flex-end;
-          margin: 40px 0;
-          gap: 40px;
+          margin: 40px 0 30px 0;
+          gap: 100px;
         }
         
         .signature-box {
@@ -375,17 +394,19 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           color: #1e293b;
           margin-bottom: 5px;
           font-weight: 600;
+          font-family: 'Inter', sans-serif;
         }
         
         .signature-title {
           font-size: 12px;
           color: #64748b;
           font-weight: 500;
+          font-family: 'Inter', sans-serif;
         }
         
         .signature-line {
-          width: 200px;
-          height: 2px;
+          width: 180px;
+          height: 1px;
           background: #1e293b;
           margin: 0 auto 10px;
           position: relative;
@@ -395,81 +416,102 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
         .qr-ids-section {
           display: flex;
           justify-content: space-between;
-          align-items: center;
-          margin: 30px 0;
+          align-items: flex-end;
+          margin: 20px 0;
         }
         
         .enrollment-id {
-          font-size: 12px;
+          font-size: 11px;
           color: #64748b;
           font-weight: 500;
+          text-align: left;
+          font-family: 'Inter', sans-serif;
         }
         
         .qr-code-container {
           text-align: center;
+          flex: 0 0 auto;
         }
         
         .qr-code {
-          width: 120px;
-          height: 120px;
-          margin: 0 auto 10px;
-          border: 2px solid #e2e8f0;
-          border-radius: 10px;
-          padding: 10px;
+          width: 100px;
+          height: 100px;
+          margin: 0 auto 8px;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          padding: 5px;
           background: white;
         }
         
         .issued-date {
-          font-size: 14px;
+          font-size: 12px;
           color: #1e293b;
-          font-weight: 500;
+          font-weight: 600;
+          font-family: 'Inter', sans-serif;
         }
         
         .issued-label {
           font-size: 10px;
           color: #64748b;
           margin-top: 2px;
+          font-family: 'Inter', sans-serif;
         }
         
         .certificate-id {
-          font-size: 12px;
+          font-size: 11px;
           color: #64748b;
           font-weight: 500;
           text-align: right;
+          font-family: 'Inter', sans-serif;
         }
         
         /* Footer */
         .footer {
           text-align: center;
-          margin-top: 30px;
+          margin-top: 20px;
         }
         
         .slogan {
           font-family: 'Dancing Script', cursive;
-          font-size: 24px;
+          font-size: 28px;
           color: #22c55e;
           font-weight: 600;
-          margin-bottom: 15px;
-          text-shadow: 0 2px 4px rgba(34, 197, 94, 0.1);
+          margin-bottom: 12px;
+          text-shadow: 0 2px 4px rgba(34, 197, 94, 0.15);
+          font-style: italic;
         }
         
         .verification-note {
           font-size: 10px;
           color: #64748b;
           line-height: 1.4;
+          font-family: 'Inter', sans-serif;
         }
         
-        /* Print styles */
+        /* Responsive adjustments for print */
         @media print {
           body {
             background: none;
             padding: 0;
+            margin: 0;
           }
           
           .certificate-container {
             box-shadow: none;
-            border-radius: 0;
+            width: 100%;
+            height: 100vh;
           }
+          
+          .certificate-content {
+            padding: 40px;
+          }
+        }
+        
+        /* Ensure proper rendering */
+        .certificate-container,
+        .certificate-content {
+          -webkit-print-color-adjust: exact;
+          color-adjust: exact;
         }
       </style>
     </head>
