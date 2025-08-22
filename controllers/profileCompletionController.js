@@ -269,4 +269,3 @@ function getBenefitsForLevel(level) {
 export default {
   getProfileCompletion,
 };
-

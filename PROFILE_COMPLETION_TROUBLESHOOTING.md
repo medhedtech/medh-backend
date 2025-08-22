@@ -157,4 +157,3 @@ If the problem persists:
 **Status**: 🔧 Troubleshooting in progress  
 **Expected Fix Time**: 2-5 minutes (server restart)  
 **Fallback**: Working with estimated progress display
-
