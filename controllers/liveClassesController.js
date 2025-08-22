@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import fs from 'fs';
 import Student from '../models/student-model.js';
 import Instructor from '../models/instructor-model.js';
 import User from '../models/user-modal.js';
@@ -369,10 +370,13 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
       // Create folder structure: videos/batch_object_id/student_object_id(student_name)/session_number/
       const s3Key = `videos/${batchId}/${studentId}(${studentName})/session-${sessionNo}/${Date.now()}-${Math.random().toString(36).substring(2, 10)}.${fileExtension}`;
       
+      // Read file from disk (since we're using diskStorage)
+      const fileBuffer = fs.readFileSync(file.path);
+      
       const uploadParams = {
         Bucket: AWS_CONFIG.BUCKET_NAME,
         Key: s3Key,
-        Body: file.buffer,
+        Body: fileBuffer,
         ContentType: file.mimetype,
         Metadata: { 
           originalName: file.originalname, 
@@ -432,6 +436,15 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
           
           console.log('✅ Successfully uploaded to S3:', s3Key);
         }
+        
+        // Clean up temporary file after upload
+        try {
+          fs.unlinkSync(file.path);
+          console.log('🗑️ Cleaned up temporary file:', file.path);
+        } catch (cleanupError) {
+          console.warn('⚠️ Failed to clean up temporary file:', cleanupError.message);
+        }
+        
       } catch (error) {
         console.error('❌ S3 upload failed:', error);
         console.error('❌ Error details:', {
