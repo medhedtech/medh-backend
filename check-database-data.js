@@ -116,13 +116,3 @@ async function checkDatabaseData() {
 checkDatabaseData();
 
 
-
-
-
-
-
-
-
-
-
-

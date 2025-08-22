@@ -1,41 +1,109 @@
 /**
- * Test script for certificate template generation
- * Run with: node test-certificate-template.js
+ * Test script for certificate generation
+ * This script tests the demo certificate generation endpoint
  */
 
-import { generateProfessionalCertificateHTML, formatCertificateData } from './utils/certificateTemplate.js';
-import fs from 'fs';
-import path from 'path';
+import fetch from 'node-fetch';
 
-// Test certificate data
+const API_BASE_URL = 'http://localhost:8080/api/v1';
+
+// Test data for certificate generation
 const testCertificateData = {
-  studentName: 'Hitika Meratwal',
-  courseName: 'PERSONALITY DEVELOPMENT',
-  sessionDate: '9 JULY',
-  issuedDate: '11 July',
-  certificateId: 'CERT-20241225-CD490534',
-  enrollmentId: 'MEDH-CERT-2024-C971ED24',
-  instructorName: 'Addya Pandey',
-  coordinatorName: 'Neeraj Narain',
-  qrCodeDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', // Placeholder QR code
-  sessionType: 'Demo Session Attendance'
+  student_id: "507f1f77bcf86cd799439011", // Example ObjectId
+  course_id: "507f1f77bcf86cd799439012", // Example ObjectId
+  enrollment_id: "507f1f77bcf86cd799439013", // Example ObjectId
+  course_name: "Advanced Web Development",
+  full_name: "John Doe",
+  instructor_name: "Dr. Jane Smith",
+  date: new Date().toISOString()
 };
 
-// Format the certificate data
-const formattedData = formatCertificateData(testCertificateData);
+async function testCertificateGeneration() {
+  console.log('🧪 Testing Certificate Generation...');
+  console.log('📋 Test Data:', JSON.stringify(testCertificateData, null, 2));
 
-// Generate the HTML
-const htmlContent = generateProfessionalCertificateHTML(formattedData);
+  try {
+    // Test the demo certificate endpoint
+    const response = await fetch(`${API_BASE_URL}/certificates/demo`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Note: You'll need to add a valid Authorization header for testing
+        // 'Authorization': 'Bearer YOUR_JWT_TOKEN'
+      },
+      body: JSON.stringify(testCertificateData)
+    });
 
-// Save to file for testing
-const outputPath = path.join(process.cwd(), 'test-certificate.html');
-fs.writeFileSync(outputPath, htmlContent);
+    const result = await response.json();
+    
+    console.log('📊 Response Status:', response.status);
+    console.log('📄 Response Body:', JSON.stringify(result, null, 2));
 
-console.log('✅ Certificate template test completed!');
-console.log(`📄 HTML file saved to: ${outputPath}`);
-console.log('🌐 Open the HTML file in a browser to view the certificate');
+    if (response.ok && result.success) {
+      console.log('✅ Certificate generation successful!');
+      console.log('🆔 Certificate ID:', result.data?.certificateId);
+      console.log('📎 PDF URL:', result.data?.pdfUrl);
+      console.log('🔗 Verification URL:', result.data?.verificationUrl);
+    } else {
+      console.log('❌ Certificate generation failed!');
+      console.log('🚨 Error:', result.error || result.message);
+    }
 
-// Log the formatted data
-console.log('\n📋 Formatted Certificate Data:');
-console.log(JSON.stringify(formattedData, null, 2));
+  } catch (error) {
+    console.error('💥 Test failed with error:', error.message);
+  }
+}
+
+// Test validation with missing fields
+async function testValidation() {
+  console.log('\n🧪 Testing Validation...');
+  
+  const invalidData = {
+    // Missing required fields
+    course_id: "507f1f77bcf86cd799439012",
+    course_name: "Advanced Web Development"
+  };
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/certificates/demo`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(invalidData)
+    });
+
+    const result = await response.json();
+    
+    console.log('📊 Validation Response Status:', response.status);
+    console.log('📄 Validation Response:', JSON.stringify(result, null, 2));
+
+    if (response.status === 400) {
+      console.log('✅ Validation working correctly!');
+    } else {
+      console.log('❌ Validation not working as expected!');
+    }
+
+  } catch (error) {
+    console.error('💥 Validation test failed:', error.message);
+  }
+}
+
+// Run tests
+async function runTests() {
+  console.log('🚀 Starting Certificate Generation Tests...\n');
+  
+  await testValidation();
+  await testCertificateGeneration();
+  
+  console.log('\n🏁 Tests completed!');
+}
+
+// Run the tests if this file is executed directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runTests().catch(console.error);
+}
+
+export { testCertificateGeneration, testValidation };
+
 

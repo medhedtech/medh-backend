@@ -47,7 +47,6 @@ lib-cov
 *.key
 *.crt
 *.cert
-
 # Large files and uploads
 uploads/
 temp/
@@ -96,6 +95,9 @@ tmp/
 *.sublime-workspace
 .atom/
 
+# Test files and scripts
+test-video-lesson-fix-2.js
+
 # macOS system files
 .DS_Store
 .DS_Store?
@@ -106,15 +108,11 @@ ehthumbs.db
 Thumbs.db
 
 # Windows system files
-Thumbs.db
-ehthumbs.db
 Desktop.ini
 
 # Build artifacts
 dist/
 build/
-*.tgz
-*.tar.gz
 
 # Test coverage
 coverage/

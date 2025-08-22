@@ -697,7 +697,7 @@ const userSchema = new Schema(
         // Password is not required for demo users or OAuth users initially
         return !this.is_demo && !this.oauth;
       },
-      minlength: [8, "Password must be at least 8 characters"],
+      minlength: [6, "Password must be at least 6 characters"],
     },
 
     // Demo User Management

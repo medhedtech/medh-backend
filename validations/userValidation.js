@@ -55,9 +55,9 @@ const userValidation = joi.object({
     "string.empty": "Email is required",
     "string.email": "Please enter a valid email address",
   }),
-  password: joi.string().min(8).required().messages({
+  password: joi.string().min(6).required().messages({
     "string.empty": "Password is required",
-    "string.min": "Password must be at least 8 characters",
+    "string.min": "Password must be at least 6 characters",
   }),
   phone_numbers: joi
     .array()
@@ -303,18 +303,15 @@ const demoUserValidation = joi.object({
     }),
 });
 
-// Demo Password Setup Validation
+// Demo Password Setup Validation - NO RESTRICTIONS
 const demoPasswordValidation = joi.object({
   password: joi
     .string()
-    .min(8)
-    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+    .min(1)
     .required()
     .messages({
       "string.empty": "Password is required",
-      "string.min": "Password must be at least 8 characters",
-      "string.pattern.base":
-        "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+      "string.min": "Password cannot be empty",
     }),
   confirm_password: joi
     .string()

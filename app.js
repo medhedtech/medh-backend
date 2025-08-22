@@ -65,7 +65,7 @@ app.use(
 );
 app.use(
   express.json({
-    limit: "10240mb", // ~10GB for metadata; actual binary is streamed via multer
+    limit: "10gb", // 10GB for large file uploads
     verify: (req, res, buf, encoding) => {
       if (
         req.headers["content-type"] === "application/json" &&
@@ -76,7 +76,7 @@ app.use(
     },
   })
 );
-app.use(express.urlencoded({ extended: true, limit: "10240mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10gb" }));
 app.use(morgan("dev"));
 
 // Session
