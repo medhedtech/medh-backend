@@ -1,6 +1,7 @@
 import express from "express";
 
 import * as certificateController from "../controllers/certificate-controller.js";
+import { createDemoCertificate, downloadDemoCertificate } from "../controllers/demoCertificateController.js";
 import { authenticateToken, authorize } from "../middleware/auth.js";
 
 const router = express.Router();
@@ -37,6 +38,22 @@ router.post(
   authenticateToken,
   authorize(["admin", "super-admin"]),
   certificateController.createDemoEnrollmentAPI
+);
+
+// Create demo certificate
+router.post(
+  "/demo",
+  authenticateToken,
+  authorize(["admin", "super-admin"]),
+  createDemoCertificate
+);
+
+// Download demo certificate PDF
+router.get(
+  "/demo/download/:certificateId",
+  authenticateToken,
+  authorize(["admin", "super-admin"]),
+  downloadDemoCertificate
 );
 
 // Certificate Verification Routes
