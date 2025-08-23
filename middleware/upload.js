@@ -12,6 +12,15 @@ const __dirname = path.dirname(__filename);
 const uploadDir = path.join(__dirname, "../uploads");
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
+  console.log('📁 Created uploads directory:', uploadDir);
+}
+
+// Ensure directory has proper permissions
+try {
+  fs.accessSync(uploadDir, fs.constants.W_OK);
+  console.log('✅ Uploads directory is writable');
+} catch (error) {
+  console.error('❌ Uploads directory is not writable:', error.message);
 }
 
 // Configure storage for single file uploads
@@ -33,15 +42,27 @@ const storage = multer.diskStorage({
 const videoUploadsDir = path.join(uploadDir, "videos");
 if (!fs.existsSync(videoUploadsDir)) {
   fs.mkdirSync(videoUploadsDir, { recursive: true });
+  console.log('📁 Created video uploads directory:', videoUploadsDir);
+}
+
+// Ensure video directory has proper permissions
+try {
+  fs.accessSync(videoUploadsDir, fs.constants.W_OK);
+  console.log('✅ Video uploads directory is writable');
+} catch (error) {
+  console.error('❌ Video uploads directory is not writable:', error.message);
 }
 
 const videoDiskStorage = multer.diskStorage({
   destination: function (req, file, cb) {
+    console.log(`📁 Storing video file: ${file.originalname} in ${videoUploadsDir}`);
     cb(null, videoUploadsDir);
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, `video-${uniqueSuffix}${path.extname(file.originalname)}`);
+    const filename = `video-${uniqueSuffix}${path.extname(file.originalname)}`;
+    console.log(`📝 Generated filename: ${filename}`);
+    cb(null, filename);
   },
 });
 

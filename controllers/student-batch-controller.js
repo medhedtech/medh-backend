@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Enrollment from "../models/enrollment-model.js";
 import { Course, Batch } from "../models/course-model.js";
 import User from "../models/user-modal.js";
+import Student from "../models/student-model.js";
 import { createStudentS3Folder } from "../utils/s3BatchFolderManager.js";
 import logger from "../utils/logger.js";
 
@@ -36,7 +37,7 @@ export const enrollStudentInBatch = async (req, res) => {
 
     // 1. Verify student exists
     console.log('🔍 Step 1: Verifying student...');
-    const student = await User.findById(studentId);
+    const student = await Student.findById(studentId);
     if (!student) {
       console.log('❌ Student not found:', studentId);
       return res.status(404).json({
@@ -45,20 +46,12 @@ export const enrollStudentInBatch = async (req, res) => {
       });
     }
 
-    // Check if student is active and has student role
-    if (!student.is_active) {
+    // Check if student is active
+    if (student.status !== "Active") {
       console.log('❌ Student account is inactive');
       return res.status(400).json({
         success: false,
         message: "Student account is inactive"
-      });
-    }
-
-    if (!student.role || !student.role.includes("student")) {
-      console.log('❌ User is not a student');
-      return res.status(400).json({
-        success: false,
-        message: "User is not a student"
       });
     }
 
