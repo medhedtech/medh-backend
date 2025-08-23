@@ -11,9 +11,9 @@ import catchAsync from '../utils/catchAsync.js';
 import {
   S3Client,
   PutObjectCommand,
-  GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createS3Client, validateAWSConfig, AWS_CONFIG } from '../config/aws-config.js';
@@ -263,52 +263,6 @@ export const generateUploadUrl = catchAsync(async (req, res, next) => {
   }
 });
 
-// ================== Generate Signed URL for Video ==================
-export const generateSignedVideoUrl = catchAsync(async (req, res, next) => {
-  try {
-    const { videoPath } = req.body;
-    
-    if (!videoPath) {
-      return next(new AppError('Video path is required', 400));
-    }
-    
-    // Validate AWS configuration
-    const awsValidation = validateAWSConfig();
-    if (!awsValidation.isValid) {
-      return next(new AppError(`AWS S3 configuration is missing: ${awsValidation.missingVars.join(', ')}`, 500));
-    }
-    
-    if (!s3Client) {
-      return next(new AppError("S3 Client initialization failed", 500));
-    }
-    
-    // Generate signed URL (valid for 1 hour)
-    const command = new GetObjectCommand({
-      Bucket: AWS_CONFIG.BUCKET_NAME,
-      Key: videoPath
-    });
-    
-    const signedUrl = await getSignedUrl(s3Client, command, { 
-      expiresIn: 3600 // 1 hour
-    });
-    
-    console.log('✅ Generated signed URL for video:', videoPath);
-    
-    res.status(200).json({
-      status: 'success',
-      data: {
-        signedUrl,
-        expiresIn: 3600,
-        videoPath
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Error generating signed URL:', error);
-    return next(new AppError(`Failed to generate signed URL: ${error.message}`, 500));
-  }
-});
-
 // ================== Upload Videos ==================
 export const uploadVideos = catchAsync(async (req, res, next) => {
   try {
@@ -426,9 +380,7 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
   
   // Upload each video for each student
   for (const file of req.files) {
-    // Support both memory and disk storage
-    const originalName = file.originalname || file.filename || `video-${Date.now()}.mp4`;
-    const fileExtension = originalName.split(".").pop();
+    const fileExtension = file.originalname.split(".").pop();
     
     // Get actual file size - handle both memory and disk storage
     let actualFileSize = file.size;
@@ -444,7 +396,7 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
       }
     }
     
-    console.log(`📹 Processing file: ${originalName}, Size: ${actualFileSize} bytes, Path: ${file.path || 'memory'}`);
+    console.log(`📹 Processing file: ${file.originalname}, Size: ${actualFileSize} bytes, Path: ${file.path || 'memory'}`);
     
     for (const studentId of parsedStudentIds) {
       const studentName = studentNames[studentId];
@@ -452,27 +404,26 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
       // Create folder structure: videos/batch_object_id/student_object_id(student_name)/session_number/
       const s3Key = `videos/${batchId}/${studentId}(${studentName})/session-${sessionNo}/${Date.now()}-${Math.random().toString(36).substring(2, 10)}.${fileExtension}`;
       
-      // Prepare S3 key and basic params
-      const uploadParamsBase = {
+      const uploadParams = {
         Bucket: AWS_CONFIG.BUCKET_NAME,
         Key: s3Key,
-        ContentType: file.mimetype || 'video/mp4',
-        Metadata: {
-          originalName: originalName,
-          studentId,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+        Metadata: { 
+          originalName: file.originalname, 
+          studentId, 
           sessionNo,
           batchId,
-          uploadedAt: new Date().toISOString(),
+          uploadedAt: new Date().toISOString()
         },
       };
       
       try {
-        // Log intended upload params (avoid referencing undefined variable)
         console.log('🔍 Attempting S3 upload with params:', {
-          bucket: uploadParamsBase.Bucket,
-          key: uploadParamsBase.Key,
-          contentType: uploadParamsBase.ContentType,
-          bodyType: file.path ? 'stream' : (file.buffer ? 'buffer' : 'none')
+          bucket: uploadParams.Bucket,
+          key: uploadParams.Key,
+          contentType: uploadParams.ContentType,
+          hasBody: !!uploadParams.Body
         });
         
         // Check if we're in development mode with test credentials
@@ -518,7 +469,7 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
             const uploader = new Upload({
               client: s3Client,
               params: {
-                ...uploadParamsBase,
+                ...uploadParams,
                 Body: readStream,
               },
               queueSize: 5, // parallel parts
@@ -531,7 +482,6 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
             
             // Clean up temporary file from disk
             try {
-              const fsModule = await import('fs');
               if (fsModule.existsSync(file.path)) {
                 fsModule.unlinkSync(file.path);
                 console.log(`🗑️ Cleaned up temporary file: ${file.path}`);
@@ -545,10 +495,10 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
               throw new Error('File buffer is empty');
             }
             
-            console.log(`📁 Uploading file from memory: ${originalName} (${file.buffer.length} bytes)`);
+            console.log(`📁 Uploading file from memory: ${file.originalname} (${file.buffer.length} bytes)`);
             
             const command = new PutObjectCommand({
-              ...uploadParamsBase,
+              ...uploadParams,
               Body: file.buffer,
             });
             await s3Client.send(command);
@@ -565,7 +515,7 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
           const videoUrl = `https://${AWS_CONFIG.BUCKET_NAME}.s3.${AWS_CONFIG.REGION}.amazonaws.com/${s3Key}`;
           uploadedVideos.push({
             fileId: s3Key,
-            name: originalName,
+            name: file.originalname,
             size: actualFileSize,
             url: signedUrl, // Use signed URL instead of direct URL
             directUrl: videoUrl, // Keep direct URL for reference
@@ -574,8 +524,7 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
             batchId,
             s3Path: s3Key,
             studentName: studentNames[studentId],
-            uploadedAt: new Date().toISOString(),
-            urlExpiresAt: new Date(Date.now() + 3600 * 1000).toISOString() // 1 hour from now
+            uploadedAt: new Date().toISOString()
           });
           
           console.log('✅ Successfully uploaded to S3:', s3Key);
@@ -591,22 +540,11 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
         return next(
           new AppError(`Failed to upload video: ${error.message}`, 500),
         );
-      } finally {
-        // Clean up temp file if exists (disk storage)
-        if (file.path) {
-          try {
-            const fsModule = await import('fs');
-            fsModule.unlink(file.path, () => {});
-          } catch (cleanupErr) {
-            console.warn('⚠️ Failed to delete temp file:', cleanupErr.message);
-          }
-        }
       }
     }
   }
   
     console.log('✅ Upload completed successfully');
-    res.setHeader('Content-Type', 'application/json');
     res.status(200).json({
       status: "success",
       message: `${uploadedVideos.length} video(s) uploaded successfully`,
@@ -635,7 +573,6 @@ export const createSession = catchAsync(async (req, res, next) => {
     grades,
     dashboard,
     instructorId,
-    batchId,
     video,
     date,
     remarks,
@@ -650,7 +587,6 @@ export const createSession = catchAsync(async (req, res, next) => {
     gradesCount: grades?.length,
     dashboard,
     instructorId,
-    batchId,
     hasVideo: !!video,
     date,
     courseCategory
@@ -692,7 +628,6 @@ export const createSession = catchAsync(async (req, res, next) => {
     grades: Array.isArray(grades) ? grades : [],
     dashboard: dashboard,
     instructorId: instructorId,
-    batchId: batchId || null,
     video: video || { fileId: 'no-video', name: 'No video uploaded', size: 0, url: '#' },
     date: new Date(date),
     remarks: remarks?.toString()?.trim() || '',
@@ -702,16 +637,6 @@ export const createSession = catchAsync(async (req, res, next) => {
   };
 
   console.log('📝 Session data to create:', sessionData);
-  console.log('🔍 DEBUG - batchId in sessionData:', sessionData.batchId);
-  
-  // Log video details specifically
-  if (sessionData.video && sessionData.video.fileId !== 'no-video') {
-    console.log('📹 Video data being saved');
-    console.log('   - File size:', sessionData.video.size, 'bytes');
-    console.log('   - Has valid URL:', !!sessionData.video.url && sessionData.video.url !== '#');
-  } else {
-    console.log('📹 No video data - using default placeholder');
-  }
 
   // Only add createdBy if user exists
   if (req.user?.id) {
@@ -720,13 +645,12 @@ export const createSession = catchAsync(async (req, res, next) => {
   }
 
   console.log('💾 Creating session in database...');
-  console.log('📝 Session data prepared for database save');
+  console.log('📝 Final session data to save:', JSON.stringify(sessionData, null, 2));
   
   let newSession;
   try {
     newSession = await LiveSession.create(sessionData);
-    console.log('✅ Session created successfully with ID:', newSession._id);
-    console.log('✅ Video data saved - Has video:', newSession.video && newSession.video.fileId !== 'no-video');
+  console.log('✅ Session created successfully with ID:', newSession._id);
   } catch (error) {
     console.error('❌ Error creating session in database:', error);
     console.error('❌ Error name:', error.name);
@@ -752,9 +676,7 @@ export const createSession = catchAsync(async (req, res, next) => {
     data: {
       sessionId: newSession._id,
       sessionNo: sessionNo, // Return original session number for display
-      success: true,
-      video: newSession.video, // Include video data in response
-      hasVideo: newSession.video && newSession.video.fileId !== 'no-video'
+      success: true
     }
   });
 });
@@ -782,7 +704,6 @@ export const testS3Connection = catchAsync(async (req, res, next) => {
         bucketName: process.env.AWS_S3_BUCKET_NAME,
         region: process.env.AWS_REGION,
         accessStatus: 'accessible',
-        
         message: 'S3 bucket is accessible and credentials are valid'
       }
     });
@@ -911,76 +832,6 @@ export const getSession = catchAsync(async (req, res, next) => {
   res.status(200).json({
     status: 'success',
     data: sessionWithPopulatedData
-  });
-});
-
-// --------------------
-// Get Student's Latest Session
-// --------------------
-export const getStudentLatestSession = catchAsync(async (req, res, next) => {
-  const { studentId } = req.params;
-  
-  console.log('🔍 Fetching latest session for student ID:', studentId);
-  
-  // Validate student ID
-  if (!mongoose.Types.ObjectId.isValid(studentId)) {
-    return next(new AppError('Invalid student ID', 400));
-  }
-  
-  // Find the latest session for this student
-  const latestSession = await LiveSession.findOne({
-    students: studentId
-  })
-    .sort({ createdAt: -1, date: -1 }) // Sort by creation date and session date (latest first)
-    .populate('students', 'full_name email username')
-    .populate('instructorId', 'full_name email username')
-    .populate('grades', 'name')
-    .populate('batchId', 'batch_name batch_code')
-    .lean();
-  
-  if (!latestSession) {
-    return res.status(200).json({
-      status: 'success',
-      data: null,
-      message: 'No previous sessions found for this student'
-    });
-  }
-  
-  // Format the response data
-  const formattedSession = {
-    sessionTitle: latestSession.sessionTitle,
-    sessionNo: latestSession.originalSessionNo || latestSession.sessionNo || '1',
-    status: latestSession.status || 'scheduled',
-    student: latestSession.students?.find(s => s._id.toString() === studentId) || latestSession.students?.[0],
-    instructor: latestSession.instructorId,
-    grade: (() => {
-      const gradeData = latestSession.grades?.[0];
-      // Handle both ObjectId (populated) and string cases
-      if (typeof gradeData === 'string') {
-        return { name: gradeData }; // Convert string to object format
-      } else if (gradeData && gradeData.name) {
-        return gradeData; // Already populated object
-      } else {
-        return { name: gradeData || 'N/A' }; // Fallback
-      }
-    })(),
-    batch: latestSession.batchId,
-    date: latestSession.date,
-    courseCategory: latestSession.courseCategory,
-    remarks: latestSession.remarks,
-    summary: latestSession.summary
-  };
-  
-  console.log('✅ Latest session found:', {
-    sessionTitle: formattedSession.sessionTitle,
-    sessionNo: formattedSession.sessionNo,
-    status: formattedSession.status,
-    studentName: formattedSession.student?.full_name
-  });
-  
-  res.status(200).json({
-    status: 'success',
-    data: formattedSession
   });
 });
 
@@ -1201,29 +1052,26 @@ export const getAllBatches = catchAsync(async (req, res, next) => {
       .sort({ batch_name: 1 });
 
     console.log('📚 Total batches found:', batches.length);
-    
-    // Log batches with missing enrolled_student_ids for debugging
-    const batchesWithMissingData = batches.filter(batch => 
-      !batch.enrolled_student_ids || batch.enrolled_student_ids.length === 0
-    );
-    if (batchesWithMissingData.length > 0) {
-      console.log('⚠️ Batches missing enrolled_student_ids:', 
-        batchesWithMissingData.map(b => ({ id: b._id, name: b.batch_name }))
-      );
-    }
 
     // Transform to match expected format
-    const formattedBatches = batches.map(batch => ({
-      _id: batch._id,
-      name: batch.batch_name,
-      batch_name: batch.batch_name, // Keep both for compatibility
-      code: batch.batch_code,
-      batch_code: batch.batch_code, // Keep both for compatibility
-      startDate: batch.start_date,
-      endDate: batch.end_date,
-      enrolledStudents: batch.enrolled_students || [],
-      enrolled_student_ids: batch.enrolled_student_ids || [] // Add the student IDs array
-    }));
+    const formattedBatches = batches.map(batch => {
+      const batchData = {
+        _id: batch._id,
+        name: batch.batch_name,
+        code: batch.batch_code,
+        startDate: batch.start_date,
+        endDate: batch.end_date,
+        enrolledStudents: batch.enrolled_students || 0,
+        enrolled_student_ids: batch.enrolled_student_ids || []
+      };
+      
+      // Debug log for batches missing enrolled_student_ids
+      if (!batch.enrolled_student_ids || batch.enrolled_student_ids.length === 0) {
+        console.log(`⚠️ Batch "${batch.batch_name}" missing enrolled_student_ids but has ${batch.enrolled_students || 0} enrolled students`);
+      }
+      
+      return batchData;
+    });
 
     res.status(200).json({
       status: 'success',
@@ -1325,4 +1173,85 @@ export const testBatchStudentOrg = catchAsync(async (req, res, next) => {
   }
 });
 
+// --------------------
+// Get Student Latest Session
+// --------------------
+export const getStudentLatestSession = catchAsync(async (req, res, next) => {
+  const { studentId } = req.params;
+  
+  console.log('🔍 Fetching latest session for student:', studentId);
+  
+  if (!studentId) {
+    return next(new AppError('Student ID is required', 400));
+  }
+
+  try {
+    // Validate and convert string ID to ObjectId for MongoDB query
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      return next(new AppError('Invalid student ID format', 400));
+    }
+    const objectIdStudentId = new mongoose.Types.ObjectId(studentId);
+    
+    // Find the most recent session for this student
+    const latestSession = await LiveSession.findOne({
+      students: objectIdStudentId
+    })
+    .sort({ createdAt: -1, updatedAt: -1 })
+    .populate('grades', 'name')
+    .lean();
+
+    console.log('📊 Latest session found:', latestSession ? 'Yes' : 'No');
+    if (latestSession) {
+      console.log('📊 Session details:', {
+        id: latestSession._id,
+        title: latestSession.sessionTitle,
+        students: latestSession.students,
+        grades: latestSession.grades
+      });
+    }
+
+    if (!latestSession) {
+      return res.status(200).json({
+        status: 'success',
+        message: 'No sessions found for this student',
+        data: null
+      });
+    }
+
+    // Populate students and instructor data
+    const [students, instructor] = await Promise.all([
+      populateStudents(latestSession.students),
+      populateInstructor(latestSession.instructorId)
+    ]);
+
+    // Format the grade field to ensure it's an object
+    let formattedGrades = latestSession.grades;
+    if (typeof latestSession.grades === 'string') {
+      formattedGrades = { name: latestSession.grades };
+    } else if (Array.isArray(latestSession.grades) && latestSession.grades.length > 0) {
+      // If it's an array, take the first grade and ensure it's an object
+      const firstGrade = latestSession.grades[0];
+      formattedGrades = typeof firstGrade === 'string' ? { name: firstGrade } : firstGrade;
+    }
+
+    const formattedSession = {
+      ...latestSession,
+      sessionNo: latestSession.originalSessionNo || latestSession.sessionNo,
+      students,
+      instructorId: instructor,
+      grades: formattedGrades
+    };
+
+    console.log('✅ Formatted session data prepared');
+
+    res.status(200).json({
+      status: 'success',
+      data: formattedSession
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching student latest session:', error);
+    return next(new AppError('Failed to fetch student latest session', 500));
+  }
+});
 

@@ -89,11 +89,6 @@ const liveSessionSchema = new mongoose.Schema({
     ref: 'Instructor', // Updated to use Instructor collection
     required: [true, 'Instructor assignment is required']
   },
-  batchId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Batch', // Reference to Batch collection
-    required: false // Made optional for backward compatibility
-  },
   video: {
     type: videoSchema,
     required: false // Made optional since we removed video upload

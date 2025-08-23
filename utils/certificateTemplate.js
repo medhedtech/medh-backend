@@ -29,7 +29,9 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
     instructorName,
     coordinatorName,
     qrCodeDataUrl,
-    sessionType = "Demo Session Attendance"
+    sessionType = "Demo Session Attendance",
+    instructorSignature,
+    coordinatorSignature
   } = certificateData;
 
   return `
@@ -40,7 +42,7 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>MEDH Certificate - ${studentName}</title>
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Dancing+Script:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Dancing+Script:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
         
         * {
           margin: 0;
@@ -74,7 +76,7 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           aspect-ratio: 1.414; /* A4 ratio */
         }
         
-        /* Corner accents */
+        /* Corner accents - Green and Orange as per design */
         .corner-accent {
           position: absolute;
           width: 120px;
@@ -85,25 +87,25 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
         .corner-accent.top-left {
           top: -60px;
           left: -60px;
-          background: linear-gradient(135deg, #ff6b35, #f7931e);
+          background: linear-gradient(135deg, #22c55e, #16a34a);
         }
         
         .corner-accent.top-right {
           top: -60px;
           right: -60px;
-          background: linear-gradient(135deg, #22c55e, #16a34a);
+          background: linear-gradient(135deg, #ff6b35, #f7931e);
         }
         
         .corner-accent.bottom-left {
           bottom: -60px;
           left: -60px;
-          background: linear-gradient(135deg, #22c55e, #16a34a);
+          background: linear-gradient(135deg, #ff6b35, #f7931e);
         }
         
         .corner-accent.bottom-right {
           bottom: -60px;
           right: -60px;
-          background: linear-gradient(135deg, #ff6b35, #f7931e);
+          background: linear-gradient(135deg, #22c55e, #16a34a);
         }
         
         .certificate-content {
@@ -132,12 +134,21 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
         .logo {
           width: 60px;
           height: 60px;
-          background: linear-gradient(135deg, #22c55e, #16a34a);
+          background: #000;
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
           position: relative;
+          border: 2px solid #22c55e;
+        }
+        
+        .logo::before {
+          content: 'M';
+          font-size: 24px;
+          font-weight: 700;
+          color: white;
+          font-family: 'Inter', sans-serif;
         }
         
         .logo::after {
@@ -145,7 +156,7 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           position: absolute;
           width: 40px;
           height: 2px;
-          background: white;
+          background: #22c55e;
           transform: rotate(-45deg);
         }
         
@@ -157,9 +168,13 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
         .logo-text h1 {
           font-size: 28px;
           font-weight: 700;
-          color: #22c55e;
+          color: #000;
           margin: 0;
           letter-spacing: 2px;
+        }
+        
+        .logo-text .edh {
+          color: #22c55e;
         }
         
         .logo-text p {
@@ -174,51 +189,59 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
         }
         
         .stem-shield {
-          width: 80px;
-          height: 80px;
+          width: 60px;
+          height: 70px;
           background: linear-gradient(135deg, #ff6b35, #f7931e);
-          border-radius: 15px;
-          margin: 0 auto 10px;
+          border-radius: 8px;
+          margin: 0 auto 8px;
           position: relative;
           display: flex;
           align-items: center;
           justify-content: center;
+          clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
         }
         
         .stem-shield::before {
           content: '🚀';
-          font-size: 24px;
+          font-size: 16px;
           position: absolute;
-          top: 8px;
+          top: 5px;
         }
         
         .stem-shield::after {
           content: '';
           position: absolute;
           bottom: 8px;
-          width: 40px;
-          height: 6px;
+          width: 30px;
+          height: 4px;
           background: white;
-          border-radius: 3px;
+          border-radius: 2px;
         }
         
         .stem-text {
           font-size: 14px;
-          font-weight: 600;
-          color: #1e293b;
+          font-weight: 700;
+          color: #000;
+          margin: 0;
+        }
+        
+        .stem-org {
+          font-size: 10px;
+          color: #64748b;
           margin: 0;
         }
         
         .stem-accredited {
           font-size: 10px;
-          color: #64748b;
+          font-weight: 700;
+          color: #000;
           margin: 2px 0;
         }
         
         .stem-check {
-          font-size: 12px;
-          color: #22c55e;
-          font-weight: 600;
+          font-size: 10px;
+          color: #64748b;
+          font-weight: 500;
         }
         
         /* Main Title */
@@ -233,13 +256,15 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           color: #1e293b;
           margin: 0;
           letter-spacing: 4px;
+          font-family: 'Inter', sans-serif;
         }
         
         .main-title p {
           font-size: 18px;
-          color: #64748b;
+          color: #1e293b;
           margin: 5px 0 0;
-          font-weight: 500;
+          font-weight: 400;
+          font-family: 'Playfair Display', serif;
         }
         
         .session-type {
@@ -247,6 +272,7 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           color: #1e293b;
           margin: 15px 0;
           font-weight: 600;
+          font-family: 'Inter', sans-serif;
         }
         
         /* Certificate Body */
@@ -272,6 +298,7 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           color: #ff6b35;
           margin: 20px 0;
           line-height: 1.2;
+          text-shadow: 0 2px 4px rgba(255, 107, 53, 0.1);
         }
         
         .participation-text {
@@ -287,6 +314,7 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           color: #22c55e;
           margin: 15px 0;
           letter-spacing: 1px;
+          text-shadow: 0 2px 4px rgba(34, 197, 94, 0.1);
         }
         
         .session-date {
@@ -320,25 +348,32 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           text-align: center;
         }
         
+        .signature-image {
+          width: 120px;
+          height: 60px;
+          margin: 0 auto 10px;
+          object-fit: contain;
+        }
+        
+        .signature-name {
+          font-size: 16px;
+          color: #1e293b;
+          margin-bottom: 5px;
+          font-weight: 600;
+        }
+        
+        .signature-title {
+          font-size: 12px;
+          color: #64748b;
+          font-weight: 500;
+        }
+        
         .signature-line {
           width: 200px;
           height: 2px;
           background: #1e293b;
           margin: 0 auto 10px;
           position: relative;
-        }
-        
-        .signature-name {
-          font-family: 'Dancing Script', cursive;
-          font-size: 24px;
-          color: #1e293b;
-          margin-bottom: 5px;
-        }
-        
-        .signature-title {
-          font-size: 14px;
-          color: #64748b;
-          font-weight: 500;
         }
         
         /* QR Code and IDs Section */
@@ -400,6 +435,7 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           color: #22c55e;
           font-weight: 600;
           margin-bottom: 15px;
+          text-shadow: 0 2px 4px rgba(34, 197, 94, 0.1);
         }
         
         .verification-note {
@@ -436,14 +472,14 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
             <div class="logo-section">
               <div class="logo"></div>
               <div class="logo-text">
-                <h1>MEDH</h1>
+                <h1>M<span class="edh">EDH</span></h1>
                 <p>LEARN. UPSKILL. ELEVATE.</p>
               </div>
             </div>
             
             <div class="stem-logo">
               <div class="stem-shield"></div>
-              <p class="stem-text">STEM.org</p>
+              <p class="stem-text">STEM<span class="stem-org">.org</span></p>
               <p class="stem-accredited">ACCREDITED</p>
               <p class="stem-check">EDUCATIONAL EXPERIENCE ✓</p>
             </div>
@@ -478,13 +514,13 @@ export const generateProfessionalCertificateHTML = (certificateData) => {
           <!-- Signatures -->
           <div class="signatures-section">
             <div class="signature-box">
-              <div class="signature-line"></div>
+              ${instructorSignature ? `<img src="${instructorSignature}" alt="Instructor Signature" class="signature-image" />` : '<div class="signature-line"></div>'}
               <div class="signature-name">${instructorName}</div>
               <div class="signature-title">Instructor</div>
             </div>
             
             <div class="signature-box">
-              <div class="signature-line"></div>
+              ${coordinatorSignature ? `<img src="${coordinatorSignature}" alt="Coordinator Signature" class="signature-image" />` : '<div class="signature-line"></div>'}
               <div class="signature-name">${coordinatorName}</div>
               <div class="signature-title">Program Coordinator</div>
             </div>
@@ -559,4 +595,3 @@ export const formatCertificateData = (params) => {
     sessionType: sessionType || 'Demo Session Attendance'
   };
 };
-

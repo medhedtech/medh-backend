@@ -782,6 +782,9 @@ class AuthController {
           password_changed_at: user.last_password_change,
           sessions_invalidated: invalidateAllSessions,
           new_token: newToken,
+          message: invalidateAllSessions 
+            ? "All other sessions have been invalidated for security. Please use the new token for future requests."
+            : "Your current session remains active. Use the new token for future requests.",
           security_recommendations: [
             "Use a unique password for each account",
             "Enable two-factor authentication for added security",

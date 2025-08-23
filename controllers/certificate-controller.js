@@ -1204,10 +1204,10 @@ export const createDemoEnrollmentAPI = async (req, res) => {
     // Create or find demo student
     let demoStudent = await User.findOne({
       email: studentEmail,
-      is_demo: true,
     });
 
     if (!demoStudent) {
+      // Create new demo student
       demoStudent = new User({
         full_name: studentName,
         email: studentEmail,
@@ -1215,13 +1215,19 @@ export const createDemoEnrollmentAPI = async (req, res) => {
         password: "demo_password_hash", // This should be hashed in production
         role: "student",
         is_demo: true,
-        student_id: `DEMO_${Date.now()}`,
+        student_id: `MED-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 900000) + 100000)}`,
         email_verified: true,
         status: "active",
       });
 
       await demoStudent.save();
       logger.info("Demo student created", { studentId: demoStudent._id });
+    } else {
+      // Use existing student (whether demo or not)
+      logger.info("Using existing student for demo enrollment", { 
+        studentId: demoStudent._id,
+        isDemo: demoStudent.is_demo 
+      });
     }
 
     // Create or find demo course
@@ -1261,10 +1267,26 @@ export const createDemoEnrollmentAPI = async (req, res) => {
       status: "completed",
       completion_date: new Date(completionDate),
       final_score: finalScore,
-      progress: 100,
+      progress: {
+        overall_percentage: 100,
+        lessons_completed: 0,
+        last_activity_date: new Date()
+      },
       certificate_generated: false,
       payment_status: "completed",
       payment_method: "demo",
+      access_expiry_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
+      pricing_snapshot: {
+        original_price: 0,
+        final_price: 0,
+        currency: "INR",
+        pricing_type: "individual",
+        discount_applied: 100,
+        discount_code: "DEMO100"
+      },
+      total_amount_paid: 0,
+      payment_plan: "free",
+      enrollment_type: "individual"
     });
 
     await demoEnrollment.save();

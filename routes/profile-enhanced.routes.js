@@ -12,9 +12,6 @@ import {
   syncEnrollmentProgress,
 } from "../controllers/profileController.js";
 import {
-  getProfileCompletion,
-} from "../controllers/profileCompletionController.js";
-import {
   createProgress,
   getUserProgress,
   updateProgress,
@@ -191,18 +188,6 @@ router.put(
   profileRateLimit,
   authenticate,
   updateComprehensiveProfile,
-);
-
-/**
- * @route   GET /api/v1/profile/me/completion
- * @desc    Get detailed profile completion analysis with recommendations
- * @access  Private
- */
-router.get(
-  "/me/completion",
-  profileRateLimit,
-  authenticate,
-  getProfileCompletion,
 );
 
 // ========================================

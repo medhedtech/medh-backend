@@ -66,6 +66,9 @@ const videoDiskStorage = multer.diskStorage({
   },
 });
 
+// Configure memory storage for smaller video uploads (for S3)
+const memoryStorage = multer.memoryStorage();
+
 // File filter function for general uploads
 const fileFilter = (req, file, cb) => {
   // Allow images, PDFs, and videos
