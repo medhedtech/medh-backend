@@ -23,6 +23,8 @@ const router = express.Router();
 // Enroll a student in a batch
 router.post(
   "/students/:studentId/enroll",
+  // authenticateToken,
+  // authorize(["admin", "instructor"]),
   enrollStudentInBatch,
 );
 
@@ -30,6 +32,7 @@ router.post(
 router.get(
   "/students/:studentId/enrollments",
   authenticateToken,
+  authorize(["student", "admin", "instructor"]),
   getStudentEnrollments,
 );
 
