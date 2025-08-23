@@ -1,73 +1,82 @@
-const fs = require('fs');
-const path = require('path');
-const FormData = require('form-data');
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import crypto from 'crypto';
+import fs from 'fs';
+import dotenv from 'dotenv';
 
-// Test configuration
-const TEST_CONFIG = {
-  backendUrl: 'http://localhost:8080',
-  testVideoPath: path.join(__dirname, 'test-video.mp4'), // You'll need to create this
-  batchId: '68a9703374114d3786af9339', // Use a real batch ID
-  studentIds: ['68a828618ef079505811bf33'], // Use real student IDs
-  sessionNo: 'test-session-001'
-};
+dotenv.config();
 
 async function testVideoUpload() {
-  console.log('🧪 Testing video upload functionality...');
+  console.log('🧪 Testing Video Upload to S3');
+  console.log('================================');
   
-  // Check if test video exists
-  if (!fs.existsSync(TEST_CONFIG.testVideoPath)) {
-    console.log('⚠️ Test video not found. Creating a dummy video file...');
-    
-    // Create a dummy video file for testing
-    const dummyContent = Buffer.alloc(1024 * 1024); // 1MB dummy file
-    fs.writeFileSync(TEST_CONFIG.testVideoPath, dummyContent);
-    console.log('✅ Created dummy test video file');
+  // Check environment variables
+  console.log('📝 Environment variables:');
+  console.log('- AWS_REGION:', process.env.AWS_REGION);
+  console.log('- AWS_ACCESS_KEY_ID:', process.env.AWS_ACCESS_KEY_ID ? 'SET' : 'NOT SET');
+  console.log('- AWS_SECRET_ACCESS_KEY:', process.env.AWS_SECRET_ACCESS_KEY ? 'SET' : 'NOT SET');
+  console.log('- AWS_S3_BUCKET_NAME:', process.env.AWS_S3_BUCKET_NAME);
+  
+  if (!process.env.AWS_S3_BUCKET_NAME) {
+    console.error('❌ AWS_S3_BUCKET_NAME is not set!');
+    return;
   }
   
   try {
-    const formData = new FormData();
-    
-    // Add the video file
-    formData.append('videos', fs.createReadStream(TEST_CONFIG.testVideoPath));
-    
-    // Add required metadata
-    formData.append('studentIds', JSON.stringify(TEST_CONFIG.studentIds));
-    formData.append('batchId', TEST_CONFIG.batchId);
-    formData.append('sessionNo', TEST_CONFIG.sessionNo);
-    
-    console.log('📤 Sending upload request...');
-    console.log('   - Video file:', TEST_CONFIG.testVideoPath);
-    console.log('   - File size:', fs.statSync(TEST_CONFIG.testVideoPath).size, 'bytes');
-    console.log('   - Batch ID:', TEST_CONFIG.batchId);
-    console.log('   - Students:', TEST_CONFIG.studentIds);
-    console.log('   - Session:', TEST_CONFIG.sessionNo);
-    
-    const response = await fetch(`${TEST_CONFIG.backendUrl}/api/v1/live-classes/upload-videos`, {
-      method: 'POST',
-      body: formData,
-      headers: {
-        ...formData.getHeaders(),
-        'Authorization': 'Bearer test-token' // Use a valid token if needed
-      }
+    // Initialize S3 client
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION || 'us-east-1',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      },
     });
     
-    console.log('📥 Response status:', response.status);
-    console.log('📥 Response headers:', Object.fromEntries(response.headers.entries()));
+    const bucketName = process.env.AWS_S3_BUCKET_NAME;
+    console.log(`\n🚀 Testing upload to bucket: ${bucketName}`);
     
-    const responseText = await response.text();
-    console.log('📥 Response body:', responseText.substring(0, 500));
+    // Create a test file content (simulating a video file)
+    const testContent = 'This is a test video file content for S3 upload testing.';
+    const fileExtension = 'mp4';
+    const uniqueFileName = `live-sessions/videos/${Date.now()}-${crypto.randomBytes(16).toString('hex')}.${fileExtension}`;
     
-    if (response.ok) {
-      console.log('✅ Upload test successful!');
-    } else {
-      console.log('❌ Upload test failed!');
-    }
+    console.log(`📝 Generated S3 key: ${uniqueFileName}`);
+    
+    const uploadParams = {
+      Bucket: bucketName,
+      Key: uniqueFileName,
+      Body: testContent,
+      ContentType: 'video/mp4',
+      Metadata: {
+        originalName: 'test-video.mp4',
+        uploadedAt: new Date().toISOString(),
+        test: 'true'
+      },
+    };
+    
+    console.log('📤 Uploading test file to S3...');
+    const command = new PutObjectCommand(uploadParams);
+    await s3Client.send(command);
+    
+    const videoUrl = `https://${bucketName}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${uniqueFileName}`;
+    
+    console.log('✅ Test upload successful!');
+    console.log(`🔗 Test file URL: ${videoUrl}`);
+    console.log(`📁 S3 Path: ${uniqueFileName}`);
+    
+    // Test the actual upload endpoint
+    console.log('\n🌐 Testing actual upload endpoint...');
+    console.log('Make sure your backend server is running on http://localhost:8080');
+    console.log('Then try uploading a video through your frontend form.');
     
   } catch (error) {
-    console.error('❌ Test error:', error.message);
+    console.error('❌ Error during test upload:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.Code,
+      statusCode: error.$metadata?.httpStatusCode
+    });
   }
 }
 
-// Run the test
-testVideoUpload();
+testVideoUpload().catch(console.error);
 

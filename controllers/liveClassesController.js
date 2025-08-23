@@ -322,24 +322,6 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
       return next(new AppError("No video files uploaded", 400));
     }
     
-    // Validate each file
-    for (const file of req.files) {
-      console.log(`📁 File validation: ${file.originalname}`);
-      console.log(`   - Size: ${file.size} bytes`);
-      console.log(`   - Path: ${file.path || 'memory'}`);
-      console.log(`   - Mimetype: ${file.mimetype}`);
-      
-      if (!file.originalname) {
-        console.error('❌ File missing originalname');
-        return next(new AppError("Invalid file: missing filename", 400));
-      }
-      
-      if (!file.mimetype || !file.mimetype.startsWith('video/')) {
-        console.error('❌ Invalid file type:', file.mimetype);
-        return next(new AppError(`Invalid file type: ${file.mimetype}. Only video files are allowed.`, 400));
-      }
-    }
-    
     const { studentIds, batchId, sessionNo } = req.body;
     console.log('📝 Extracted data:', { studentIds, batchId, sessionNo });
     
@@ -430,22 +412,6 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
     const originalName = file.originalname || file.filename || `video-${Date.now()}.mp4`;
     const fileExtension = originalName.split(".").pop();
     
-    // Get actual file size - handle both memory and disk storage
-    let actualFileSize = file.size;
-    if (!actualFileSize && file.path) {
-      try {
-        const fs = await import('fs');
-        const stats = fs.statSync(file.path);
-        actualFileSize = stats.size;
-        console.log(`📁 File size from disk: ${actualFileSize} bytes (${(actualFileSize / (1024 * 1024)).toFixed(2)} MB)`);
-      } catch (error) {
-        console.error('❌ Error getting file size from disk:', error);
-        actualFileSize = 0;
-      }
-    }
-    
-    console.log(`📹 Processing file: ${originalName}, Size: ${actualFileSize} bytes, Path: ${file.path || 'memory'}`);
-    
     for (const studentId of parsedStudentIds) {
       const studentName = studentNames[studentId];
       
@@ -484,7 +450,7 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
           uploadedVideos.push({
             fileId: s3Key,
             name: file.originalname,
-            size: actualFileSize,
+            size: file.size,
             url: videoUrl,
             studentId,
             sessionNo,
@@ -499,20 +465,8 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
           // Real S3 upload
           // Use multipart upload for large files if stored on disk
           if (file.path) {
-            // Verify file exists on disk
-            const fsModule = await import('fs');
-            if (!fsModule.existsSync(file.path)) {
-              throw new Error(`File not found on disk: ${file.path}`);
-            }
-            
-            const stats = fsModule.statSync(file.path);
-            if (stats.size === 0) {
-              throw new Error(`File is empty: ${file.path}`);
-            }
-            
-            console.log(`📁 Uploading file from disk: ${file.path} (${stats.size} bytes)`);
-            
             const { Upload } = await import('@aws-sdk/lib-storage');
+            const fsModule = await import('fs');
             const readStream = fsModule.createReadStream(file.path);
 
             const uploader = new Upload({
@@ -527,32 +481,13 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
             });
 
             await uploader.done();
-            console.log(`✅ S3 upload completed for: ${s3Key}`);
-            
-            // Clean up temporary file from disk
-            try {
-              const fsModule = await import('fs');
-              if (fsModule.existsSync(file.path)) {
-                fsModule.unlinkSync(file.path);
-                console.log(`🗑️ Cleaned up temporary file: ${file.path}`);
-              }
-            } catch (cleanupError) {
-              console.warn('⚠️ Could not clean up temporary file:', cleanupError.message);
-            }
           } else {
             // Fallback to single put for memory uploads (small files)
-            if (!file.buffer || file.buffer.length === 0) {
-              throw new Error('File buffer is empty');
-            }
-            
-            console.log(`📁 Uploading file from memory: ${originalName} (${file.buffer.length} bytes)`);
-            
             const command = new PutObjectCommand({
               ...uploadParamsBase,
               Body: file.buffer,
             });
             await s3Client.send(command);
-            console.log(`✅ S3 upload completed for: ${s3Key}`);
           }
 
           // Generate signed URL for immediate access
@@ -566,7 +501,7 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
           uploadedVideos.push({
             fileId: s3Key,
             name: originalName,
-            size: actualFileSize,
+            size: file.size,
             url: signedUrl, // Use signed URL instead of direct URL
             directUrl: videoUrl, // Keep direct URL for reference
             studentId,

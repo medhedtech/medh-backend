@@ -37,17 +37,28 @@ export const enrollStudentInBatch = async (req, res) => {
 
     // 1. Verify student exists
     console.log('🔍 Step 1: Verifying student...');
-    const student = await Student.findById(studentId);
+    
+    // First try to find in Student collection
+    let student = await Student.findById(studentId);
+    let studentSource = 'Student';
+    
+    // If not found in Student collection, try User collection
     if (!student) {
-      console.log('❌ Student not found:', studentId);
+      console.log('🔍 Student not found in Student collection, checking User collection...');
+      student = await User.findById(studentId);
+      studentSource = 'User';
+    }
+    
+    if (!student) {
+      console.log('❌ Student not found in both Student and User collections:', studentId);
       return res.status(404).json({
         success: false,
         message: "Student not found"
       });
     }
 
-    // Check if student is active
-    if (student.status !== "Active") {
+    // Check if student is active (for User model)
+    if (studentSource === 'User' && !student.is_active) {
       console.log('❌ Student account is inactive');
       return res.status(400).json({
         success: false,
@@ -55,7 +66,16 @@ export const enrollStudentInBatch = async (req, res) => {
       });
     }
 
-    console.log('✅ Student verified:', student.full_name);
+    // Check if user has student role (for User model)
+    if (studentSource === 'User' && (!student.role || !student.role.includes("student"))) {
+      console.log('❌ User is not a student');
+      return res.status(400).json({
+        success: false,
+        message: "User is not a student"
+      });
+    }
+
+    console.log(`✅ Student verified from ${studentSource} collection:`, student.full_name);
 
     // 2. Verify course exists
     console.log('🔍 Step 2: Verifying course...');
