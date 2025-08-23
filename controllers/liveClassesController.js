@@ -14,6 +14,7 @@ import {
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { createS3Client, validateAWSConfig, AWS_CONFIG } from '../config/aws-config.js';
@@ -306,6 +307,116 @@ export const generateSignedVideoUrl = catchAsync(async (req, res, next) => {
   } catch (error) {
     console.error('❌ Error generating signed URL:', error);
     return next(new AppError(`Failed to generate signed URL: ${error.message}`, 500));
+  }
+});
+
+// ================== Get Video by Batch, Student, Session ==================
+export const getVideoByBatchStudentSession = catchAsync(async (req, res, next) => {
+  try {
+    const { batchId, studentId, sessionNo } = req.params;
+    
+    if (!batchId || !studentId || !sessionNo) {
+      return next(new AppError('Batch ID, Student ID, and Session Number are required', 400));
+    }
+    
+    // Validate AWS configuration
+    const awsValidation = validateAWSConfig();
+    if (!awsValidation.isValid) {
+      return next(new AppError(`AWS S3 configuration is missing: ${awsValidation.missingVars.join(', ')}`, 500));
+    }
+    
+    if (!s3Client) {
+      return next(new AppError("S3 Client initialization failed", 500));
+    }
+    
+    console.log(`🔍 Fetching video for Batch: ${batchId}, Student: ${studentId}, Session: ${sessionNo}`);
+    
+    // Get student name for folder structure
+    const Student = (await import('../models/student-model.js')).default;
+    const student = await Student.findById(studentId).select('full_name first_name last_name');
+    
+    if (!student) {
+      return next(new AppError('Student not found', 404));
+    }
+    
+    // Get student name and sanitize it
+    const studentName = (student.full_name || `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'unknown')
+      .replace(/[^a-zA-Z0-9\s]/g, '')
+      .replace(/\s+/g, '_')
+      .toLowerCase()
+      .trim();
+    
+    // Construct S3 folder path: videos/{batchId}/{studentId}({studentName})/session-{sessionNo}/
+    const folderPrefix = `videos/${batchId}/${studentId}(${studentName})/session-${sessionNo}/`;
+    
+    console.log(`📁 Searching in S3 folder: ${folderPrefix}`);
+    
+    // List objects in the S3 folder
+    const listCommand = new ListObjectsV2Command({
+      Bucket: AWS_CONFIG.BUCKET_NAME,
+      Prefix: folderPrefix,
+      MaxKeys: 10 // Limit to first 10 videos
+    });
+    
+    const listResponse = await s3Client.send(listCommand);
+    
+    if (!listResponse.Contents || listResponse.Contents.length === 0) {
+      return next(new AppError('No videos found for this session', 404));
+    }
+    
+    // Filter only video files
+    const videoFiles = listResponse.Contents.filter(obj => {
+      const key = obj.Key || '';
+      return key.match(/\.(mp4|mov|avi|mkv|webm)$/i);
+    });
+    
+    if (videoFiles.length === 0) {
+      return next(new AppError('No video files found for this session', 404));
+    }
+    
+    // Get the first video file (or you can modify this logic)
+    const videoFile = videoFiles[0];
+    const videoPath = videoFile.Key;
+    
+    console.log(`🎬 Found video: ${videoPath}`);
+    
+    // Generate signed URL for the video
+    const command = new GetObjectCommand({
+      Bucket: AWS_CONFIG.BUCKET_NAME,
+      Key: videoPath
+    });
+    
+    const signedUrl = await getSignedUrl(s3Client, command, { 
+      expiresIn: 3600 // 1 hour
+    });
+    
+    // Get video metadata
+    const videoMetadata = {
+      fileName: videoPath.split('/').pop(),
+      fileSize: videoFile.Size || 0,
+      lastModified: videoFile.LastModified || new Date(),
+      s3Key: videoPath,
+      folderPath: folderPrefix
+    };
+    
+    console.log('✅ Generated signed URL for session video:', videoPath);
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        signedUrl,
+        videoMetadata,
+        expiresIn: 3600,
+        batchId,
+        studentId,
+        sessionNo,
+        studentName
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fetching video by batch/student/session:', error);
+    return next(new AppError(`Failed to fetch video: ${error.message}`, 500));
   }
 });
 

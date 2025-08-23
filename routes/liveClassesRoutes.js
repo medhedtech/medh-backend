@@ -8,6 +8,7 @@ import {
   uploadFile, 
   generateUploadUrl,
   generateSignedVideoUrl,
+  getVideoByBatchStudentSession,
   createSession, 
   getPreviousSession, 
   getSessions, 
@@ -94,6 +95,9 @@ router.post('/upload-videos', (req, res, next) => {
 
 // Generate signed URL for video access
 router.post('/generate-signed-url', generateSignedVideoUrl);
+
+// Get video by batch, student, and session
+router.get('/video/:batchId/:studentId/:sessionNo', getVideoByBatchStudentSession);
 
 // Student batch information route
 router.get('/student-batch-info', getStudentBatchInfo);
