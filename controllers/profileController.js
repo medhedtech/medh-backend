@@ -305,19 +305,30 @@ export const updateProfile = async (req, res) => {
       },
     );
 
+    // Calculate new profile completion
+    const { calculateProfileCompletion } = await import("../utils/profileCompletion.js");
+    const newProfileCompletion = calculateProfileCompletion(updatedUser);
+    
+    // Update the user with the new profile completion
+    const finalUpdatedUser = await User.findByIdAndUpdate(
+      userId,
+      { profile_completion: newProfileCompletion },
+      { new: true }
+    );
+
     // Also update the Student collection if the user is a student
-    if (updatedUser && updatedUser.role && updatedUser.role.includes('student')) {
+    if (finalUpdatedUser && finalUpdatedUser.role && finalUpdatedUser.role.includes('student')) {
       try {
         // Prepare student update data
         const studentUpdateData = {
-          full_name: updateData.full_name || updatedUser.full_name,
-          age: updateData.age || updatedUser.age,
-          email: updatedUser.email, // Keep the email from user
+          full_name: updateData.full_name || finalUpdatedUser.full_name,
+          age: updateData.age || finalUpdatedUser.age,
+          email: finalUpdatedUser.email, // Keep the email from user
           phone_numbers: updateData.phone_numbers ? 
             updateData.phone_numbers.map(phone => phone.number) : 
-            updatedUser.phone_numbers?.map(phone => phone.number) || [],
+            finalUpdatedUser.phone_numbers?.map(phone => phone.number) || [],
           meta: {
-            ...updatedUser.meta,
+            ...finalUpdatedUser.meta,
             updatedBy: userId,
             lastProfileUpdate: new Date()
           },
@@ -326,7 +337,7 @@ export const updateProfile = async (req, res) => {
 
         // Find and update the student record
         // First try to find by email (most reliable)
-        let studentRecord = await Student.findOne({ email: updatedUser.email });
+        let studentRecord = await Student.findOne({ email: finalUpdatedUser.email });
         
         if (studentRecord) {
           // Update existing student record
@@ -366,23 +377,31 @@ export const updateProfile = async (req, res) => {
     }
 
     // Log profile update activity
-    updatedUser.logActivity("profile_update", userId, {
+    finalUpdatedUser.logActivity("profile_update", userId, {
       updated_fields: Object.keys(updateData),
+      update_type: "comprehensive_update",
       timestamp: new Date(),
     });
 
-    logger.info("Profile updated successfully", {
+    logger.info("Comprehensive profile updated successfully", {
       userId,
-      requestingUserId,
       updatedFields: Object.keys(updateData),
+      newProfileCompletion: newProfileCompletion,
     });
 
     res.status(200).json({
       success: true,
       message: "Profile updated successfully",
       data: {
-        user: updatedUser,
-        profile_completion: updatedUser.profile_completion,
+        user: {
+          id: finalUpdatedUser._id,
+          full_name: finalUpdatedUser.full_name,
+          username: finalUpdatedUser.username,
+          student_id: finalUpdatedUser.student_id,
+          profile_completion: newProfileCompletion,
+          updated_at: finalUpdatedUser.updated_at,
+        },
+        profile_completion: newProfileCompletion,
         updated_fields: Object.keys(updateData),
       },
     });
@@ -2433,8 +2452,10 @@ export const updateComprehensiveProfile = async (req, res) => {
     ];
 
     socialLinks.forEach((link) => {
-      if (updateData[link] && updateData[link].trim() === "") {
-        updateData[link] = null; // Convert empty strings to null
+      if (updateData[link] !== undefined && updateData[link] !== null) {
+        if (typeof updateData[link] === 'string' && updateData[link].trim() === "") {
+          updateData[link] = null; // Convert empty strings to null
+        }
       }
     });
 
@@ -2454,19 +2475,35 @@ export const updateComprehensiveProfile = async (req, res) => {
       },
     );
 
+    // Calculate new profile completion
+    const { calculateProfileCompletion } = await import("../utils/profileCompletion.js");
+    const newProfileCompletion = calculateProfileCompletion(updatedUser);
+    
+    // Update the user with the new profile completion
+    const finalUpdatedUser = await User.findByIdAndUpdate(
+      userId,
+      { profile_completion: newProfileCompletion },
+      { new: true }
+    );
+
     // Also update the Student collection if the user is a student
-    if (updatedUser && updatedUser.role && updatedUser.role.includes('student')) {
+    if (finalUpdatedUser && finalUpdatedUser.role && finalUpdatedUser.role.includes('student')) {
       try {
         // Prepare student update data
         const studentUpdateData = {
-          full_name: updateData.full_name || updatedUser.full_name,
-          age: updateData.age || updatedUser.age,
-          email: updatedUser.email, // Keep the email from user
+          full_name: updateData.full_name || finalUpdatedUser.full_name,
+          age: updateData.age || finalUpdatedUser.age,
+          email: finalUpdatedUser.email, // Keep the email from user
           phone_numbers: updateData.phone_numbers ? 
             updateData.phone_numbers.map(phone => phone.number) : 
-            updatedUser.phone_numbers?.map(phone => phone.number) || [],
+            finalUpdatedUser.phone_numbers?.map(phone => phone.number) || [],
+          // Education Information
+          education_level: finalUpdatedUser.meta?.education_level || '',
+          institution_name: finalUpdatedUser.meta?.institution_name || '',
+          field_of_study: finalUpdatedUser.meta?.field_of_study || '',
+          graduation_year: finalUpdatedUser.meta?.graduation_year || '',
           meta: {
-            ...updatedUser.meta,
+            ...finalUpdatedUser.meta,
             updatedBy: userId,
             lastProfileUpdate: new Date()
           },
@@ -2475,7 +2512,7 @@ export const updateComprehensiveProfile = async (req, res) => {
 
         // Find and update the student record
         // First try to find by email (most reliable)
-        let studentRecord = await Student.findOne({ email: updatedUser.email });
+        let studentRecord = await Student.findOne({ email: finalUpdatedUser.email });
         
         if (studentRecord) {
           // Update existing student record
@@ -2515,19 +2552,16 @@ export const updateComprehensiveProfile = async (req, res) => {
     }
 
     // Log profile update activity
-    updatedUser.logActivity("profile_update", userId, {
+    finalUpdatedUser.logActivity("profile_update", userId, {
       updated_fields: Object.keys(updateData),
       update_type: "comprehensive_update",
       timestamp: new Date(),
     });
 
-    // Calculate new profile completion
-    const profileCompletion = updatedUser.profile_completion || 0;
-
     logger.info("Comprehensive profile updated successfully", {
       userId,
       updatedFields: Object.keys(updateData),
-      newProfileCompletion: profileCompletion,
+      newProfileCompletion: newProfileCompletion,
     });
 
     res.status(200).json({
@@ -2535,14 +2569,14 @@ export const updateComprehensiveProfile = async (req, res) => {
       message: "Profile updated successfully",
       data: {
         user: {
-          id: updatedUser._id,
-          full_name: updatedUser.full_name,
-          username: updatedUser.username,
-          student_id: updatedUser.student_id,
-          profile_completion: profileCompletion,
-          updated_at: updatedUser.updated_at,
+          id: finalUpdatedUser._id,
+          full_name: finalUpdatedUser.full_name,
+          username: finalUpdatedUser.username,
+          student_id: finalUpdatedUser.student_id,
+          profile_completion: newProfileCompletion,
+          updated_at: finalUpdatedUser.updated_at,
         },
-        profile_completion: profileCompletion,
+        profile_completion: newProfileCompletion,
         updated_fields: Object.keys(updateData),
       },
     });
@@ -2551,6 +2585,8 @@ export const updateComprehensiveProfile = async (req, res) => {
       error: error.message,
       stack: error.stack,
       userId: req.user?.id,
+      updateData: req.body,
+      errorType: error.constructor.name
     });
 
     res.status(500).json({
