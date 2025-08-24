@@ -194,6 +194,18 @@ router.put(
 );
 
 /**
+ * @route   PATCH /api/v1/profile/me/comprehensive
+ * @desc    Partially update comprehensive user profile (preserves existing data for empty fields)
+ * @access  Private
+ */
+router.patch(
+  "/me/comprehensive",
+  profileRateLimit,
+  authenticate,
+  updateComprehensiveProfile,
+);
+
+/**
  * @route   GET /api/v1/profile/me/completion
  * @desc    Get detailed profile completion analysis with recommendations
  * @access  Private

@@ -1,4 +1,5 @@
 import User from "../models/user-modal.js";
+import Student from "../models/student-model.js";
 import EnrolledCourse from "../models/enrolled-courses-model.js";
 import Course from "../models/course-model.js";
 import Quiz from "../models/quiz-model.js";
@@ -303,6 +304,66 @@ export const updateProfile = async (req, res) => {
           "-password -two_factor_secret -backup_codes -password_reset_token -email_verification_token",
       },
     );
+
+    // Also update the Student collection if the user is a student
+    if (updatedUser && updatedUser.role && updatedUser.role.includes('student')) {
+      try {
+        // Prepare student update data
+        const studentUpdateData = {
+          full_name: updateData.full_name || updatedUser.full_name,
+          age: updateData.age || updatedUser.age,
+          email: updatedUser.email, // Keep the email from user
+          phone_numbers: updateData.phone_numbers ? 
+            updateData.phone_numbers.map(phone => phone.number) : 
+            updatedUser.phone_numbers?.map(phone => phone.number) || [],
+          meta: {
+            ...updatedUser.meta,
+            updatedBy: userId,
+            lastProfileUpdate: new Date()
+          },
+          status: "Active"
+        };
+
+        // Find and update the student record
+        // First try to find by email (most reliable)
+        let studentRecord = await Student.findOne({ email: updatedUser.email });
+        
+        if (studentRecord) {
+          // Update existing student record
+          await Student.findByIdAndUpdate(
+            studentRecord._id,
+            studentUpdateData,
+            { new: true, runValidators: true }
+          );
+          logger.info("Student collection updated successfully", {
+            userId,
+            studentId: studentRecord._id,
+            updatedFields: Object.keys(studentUpdateData)
+          });
+        } else {
+          // Create new student record if it doesn't exist
+          const newStudent = new Student({
+            ...studentUpdateData,
+            meta: {
+              ...studentUpdateData.meta,
+              createdBy: userId
+            }
+          });
+          await newStudent.save();
+          logger.info("New student record created in Student collection", {
+            userId,
+            studentId: newStudent._id
+          });
+        }
+      } catch (studentError) {
+        // Log the error but don't fail the main profile update
+        logger.error("Error updating Student collection", {
+          error: studentError.message,
+          userId,
+          stack: studentError.stack
+        });
+      }
+    }
 
     // Log profile update activity
     updatedUser.logActivity("profile_update", userId, {
@@ -2392,6 +2453,66 @@ export const updateComprehensiveProfile = async (req, res) => {
           "-password -two_factor_secret -backup_codes -password_reset_token -email_verification_token",
       },
     );
+
+    // Also update the Student collection if the user is a student
+    if (updatedUser && updatedUser.role && updatedUser.role.includes('student')) {
+      try {
+        // Prepare student update data
+        const studentUpdateData = {
+          full_name: updateData.full_name || updatedUser.full_name,
+          age: updateData.age || updatedUser.age,
+          email: updatedUser.email, // Keep the email from user
+          phone_numbers: updateData.phone_numbers ? 
+            updateData.phone_numbers.map(phone => phone.number) : 
+            updatedUser.phone_numbers?.map(phone => phone.number) || [],
+          meta: {
+            ...updatedUser.meta,
+            updatedBy: userId,
+            lastProfileUpdate: new Date()
+          },
+          status: "Active"
+        };
+
+        // Find and update the student record
+        // First try to find by email (most reliable)
+        let studentRecord = await Student.findOne({ email: updatedUser.email });
+        
+        if (studentRecord) {
+          // Update existing student record
+          await Student.findByIdAndUpdate(
+            studentRecord._id,
+            studentUpdateData,
+            { new: true, runValidators: true }
+          );
+          logger.info("Student collection updated successfully", {
+            userId,
+            studentId: studentRecord._id,
+            updatedFields: Object.keys(studentUpdateData)
+          });
+        } else {
+          // Create new student record if it doesn't exist
+          const newStudent = new Student({
+            ...studentUpdateData,
+            meta: {
+              ...studentUpdateData.meta,
+              createdBy: userId
+            }
+          });
+          await newStudent.save();
+          logger.info("New student record created in Student collection", {
+            userId,
+            studentId: newStudent._id
+          });
+        }
+      } catch (studentError) {
+        // Log the error but don't fail the main profile update
+        logger.error("Error updating Student collection", {
+          error: studentError.message,
+          userId,
+          stack: studentError.stack
+        });
+      }
+    }
 
     // Log profile update activity
     updatedUser.logActivity("profile_update", userId, {

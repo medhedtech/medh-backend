@@ -139,6 +139,7 @@ const userActivitySchema = new Schema(
         "logout_all_devices",
         "profile_update",
         "profile_view",
+        "profile_completion_view",
         "course_view",
         "course_purchase",
         "content_view",

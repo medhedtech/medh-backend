@@ -426,6 +426,8 @@ export const handleMultipleUpload = async (req, res) => {
       throw new UploadError(
         `Too many files. Maximum allowed is ${ENV_VARS.UPLOAD_CONSTANTS.MAX_FILES}`,
         "TOO_MANY_FILES",
+
+        
       );
     }
 

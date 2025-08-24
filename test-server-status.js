@@ -1,8 +1,7 @@
-// Simple script to check if the backend server is running
 import http from 'http';
 
-const checkServer = () => {
-  console.log('🔍 Checking if backend server is running...');
+const testServer = () => {
+  console.log('🔍 Testing if backend server is running...');
   
   const options = {
     hostname: 'localhost',
@@ -33,11 +32,12 @@ const checkServer = () => {
   });
 
   req.on('error', (error) => {
-    console.log('❌ Server is not running');
+    console.log('❌ Server is not running or not accessible');
+    console.log('💡 Error:', error.message);
     console.log('💡 To start the server:');
-    console.log('   1. Open a terminal in the medh-backend directory');
-    console.log('   2. Run: npm run dev');
-    console.log('   3. Or double-click: start-server.bat');
+    console.log('   1. Make sure you are in the medh-backend directory');
+    console.log('   2. Run: npm run dev:local');
+    console.log('   3. Or run: NODE_ENV=development REDIS_ENABLED=false node index.js');
   });
 
   req.on('timeout', () => {
@@ -48,4 +48,4 @@ const checkServer = () => {
   req.end();
 };
 
-checkServer();
+testServer();
