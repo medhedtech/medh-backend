@@ -447,6 +447,12 @@ class EmailService {
    */
   checkRedisAvailability() {
     try {
+      // First check if Redis is explicitly disabled
+      if (process.env.REDIS_ENABLED === "Ture") {
+        logger.email.info("Redis explicitly disabled in environment, using direct email sending");
+        return false;
+      }
+
       // Check if we're in development and Redis might not be available
       if (process.env.NODE_ENV === "development") {
         // In development, allow fallback to direct email sending

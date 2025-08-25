@@ -19,7 +19,7 @@ class PasskeyController {
     // WebAuthn configuration
     this.rpName = "Medh Learning Platform";
     this.rpID = process.env.WEBAUTHN_RP_ID || "localhost";
-    this.origin = process.env.WEBAUTHN_ORIGIN || "http://localhost:8080";
+    this.origin = process.env.WEBAUTHN_ORIGIN || (process.env.NODE_ENV === 'production' ? 'https://api.medh.co' : 'http://localhost:8080');
     this.expectedOrigins = [this.origin];
 
     // Store challenges temporarily (in production, use Redis or similar)
