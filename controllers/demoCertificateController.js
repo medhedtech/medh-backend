@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import PDF from "html-pdf-chrome";
 import QRCode from "qrcode";
 import fetch from "node-fetch";
 import crypto from "crypto";
@@ -8,6 +9,26 @@ import Certificate from "../models/certificate-model.js";
 import { uploadFile } from "../utils/uploadFile.js";
 import { storeHash, verifyHash } from "../services/blockchainService.js";
 import mongoose from "mongoose";
+import { generateProfessionalCertificateHTML, formatCertificateData } from "../utils/certificateTemplate.js";
+import { chromeService } from "../utils/chromeService.js";
+
+// PDF generation options - Exact certificate size
+const pdfOptions = {
+  port: 9222, // Chrome debug port
+  printOptions: {
+    landscape: false,
+    format: "A4",
+    printBackground: true,
+    margin: {
+      top: "0in",
+      bottom: "0in",
+      left: "0in",
+      right: "0in",
+    },
+    scale: 1.0, // Full scale for exact size
+    preferCSSPageSize: true,
+  },
+};
 
 // -----------------------------------------------------------------------------
 // Helper – build the demo certificate PDF using the template and dynamic values
@@ -38,8 +59,22 @@ async function buildCertificatePDF({
     const page = pdfDoc.getPages()[0];
     const { width, height } = page.getSize();
 
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontSizeLarge = 24;
+    // Try to embed a custom font for better styling, fallback to standard font
+    let font;
+    let customFont = false;
+    
+    try {
+      // You can add a custom font file here if needed
+      // const customFontBytes = fs.readFileSync('path/to/custom-font.ttf');
+      // font = await pdfDoc.embedFont(customFontBytes);
+      // customFont = true;
+      font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    } catch (fontError) {
+      console.warn('Custom font embedding failed, using standard font:', fontError.message);
+      font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    }
+    
+    const fontSizeLarge = 28; // Increased for student name
     const fontSizeMedium = 18;
     const fontSizeSmall = 12;
 
@@ -75,7 +110,7 @@ async function buildCertificatePDF({
     // Bottom-meta placeholders block (approx.)
     cover(40, 40, width - 80, 140);
 
-    const center = (text, size, y) => {
+    const center = (text, size, y, color = rgb(0, 0, 0)) => {
       if (!text || typeof text !== 'string') {
         console.warn('Invalid text provided for PDF generation:', text);
         text = 'N/A';
@@ -87,13 +122,14 @@ async function buildCertificatePDF({
         y,
         size,
         font,
-        color: rgb(0, 0, 0),
+        color: color,
       });
     };
 
     // Write dynamic values – coordinates aligned to replace template placeholders
     // Top section – personalise participant name and course/context
-    center(fullName.toUpperCase(), fontSizeLarge, height - 250); // replaces {full name}
+    // Student name in reddish-orange color to match Hitika Meratwal style
+    center(fullName.toUpperCase(), fontSizeLarge, height - 250, rgb(0.91, 0.30, 0.24)); // replaces {full name} - #e74c3c
     center(courseName.toUpperCase(), fontSizeMedium, height - 300); // replaces {COURSE NAME}
     center(dateString, fontSizeMedium, height - 350); // replaces {DATE}
 
@@ -124,6 +160,56 @@ async function buildCertificatePDF({
   } catch (error) {
     console.error('Error building certificate PDF:', error);
     throw new Error(`Failed to generate certificate PDF: ${error.message}`);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Helper – build demo certificate using HTML template (better styling)
+// -----------------------------------------------------------------------------
+export async function buildCertificateHTML({
+  fullName,
+  courseName,
+  dateString,
+  instructorName,
+  enrollmentId,
+  certificateId,
+}) {
+  try {
+    // Generate QR code with certificate ID for verification
+    const verifyUrl = `https://medh.co/verify-certificate/${certificateId}`;
+    const qrDataUrl = await QRCode.toDataURL(verifyUrl, { 
+      margin: 2,
+      width: 200,
+      errorCorrectionLevel: 'H',
+      color: {
+        dark: '#1a365d',
+        light: '#ffffff'
+      }
+    });
+
+    // Format certificate data using the professional template
+    const certificateData = formatCertificateData({
+      studentName: fullName,
+      courseName: courseName,
+      sessionDate: dateString,
+      issuedDate: new Date().toLocaleDateString('en-US', { 
+        day: 'numeric', 
+        month: 'long' 
+      }),
+      certificateId: certificateId,
+      enrollmentId: enrollmentId,
+      instructorName: instructorName || 'Instructor',
+      coordinatorName: 'Program Coordinator',
+      qrCodeDataUrl: qrDataUrl,
+      sessionType: 'Demo Session Attendance'
+    });
+
+    // Generate HTML using the professional template
+    const htmlContent = generateProfessionalCertificateHTML(certificateData);
+    return htmlContent;
+  } catch (error) {
+    console.error('Error building certificate HTML:', error);
+    throw new Error(`Failed to generate certificate HTML: ${error.message}`);
   }
 }
 
@@ -162,8 +248,8 @@ export const createDemoCertificate = async (req, res) => {
     const certificateId = crypto.randomUUID();
     const dateString = date ? new Date(date).toLocaleDateString() : new Date().toLocaleDateString();
 
-    // 1. Build PDF
-    const pdfBuffer = await buildCertificatePDF({
+    // 1. Build HTML certificate with proper styling
+    const htmlContent = await buildCertificateHTML({
       fullName,
       courseName,
       dateString,
@@ -172,14 +258,25 @@ export const createDemoCertificate = async (req, res) => {
       certificateId,
     });
 
-    // 2. Anchor hash on-chain (best effort – non-fatal on failure)
+    // 2. Convert HTML to PDF using html-pdf-chrome
+    let pdfBuffer;
+    try {
+      await chromeService.ensureRunning();
+      const pdf = await PDF.create(htmlContent, pdfOptions);
+      pdfBuffer = await pdf.toBuffer();
+    } catch (pdfError) {
+      console.error('Error generating PDF:', pdfError);
+      throw new Error(`Failed to generate PDF: ${pdfError.message}`);
+    }
+
+    // 3. Anchor hash on-chain (best effort – non-fatal on failure)
     try {
       await storeHash(pdfBuffer, certificateId);
     } catch (chainErr) {
       console.error("[DemoCertificate] Blockchain anchoring skipped:", chainErr.message);
     }
 
-    // 3. Upload PDF to S3
+    // 4. Upload PDF to S3
     const s3Key = `demo-certificates/${studentId}/${certificateId}.pdf`;
     const uploadParams = {
       bucketName: "medhdocuments",
@@ -193,7 +290,7 @@ export const createDemoCertificate = async (req, res) => {
       data: { url: s3Url },
     } = await uploadFile(uploadParams);
 
-    // 4. Persist certificate record (uses existing Certificate model)
+    // 5. Persist certificate record (uses existing Certificate model)
     const verificationUrl = `https://medh.co/certificate-verify/${certificateId}`;
 
     const certificateRecord = await Certificate.create({

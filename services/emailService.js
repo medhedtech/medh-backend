@@ -127,8 +127,13 @@ class EmailService {
     // Initialize the email queue system
     this.initializeQueue();
 
-    // Verify connection with retry logic
-    this.verifyConnection();
+    // Verify connection with retry logic (only if queue is available)
+    if (this.queue) {
+      this.verifyConnection();
+    } else {
+      // If no queue, verify direct connection
+      this.verifyDirectConnection();
+    }
 
     // Create circuit breaker for direct email sending
     this.sendEmailDirectlyWithCircuitBreaker = serviceCircuitBreakers.email(
@@ -217,6 +222,8 @@ class EmailService {
           "Redis not available - Using direct email sending without queuing",
         );
         this.queue = null;
+        this.worker = null;
+        this.isInitialized = false;
         return;
       }
 
@@ -224,12 +231,23 @@ class EmailService {
       const redisConfig = this.createRedisConfig();
 
       // Initialize BullMQ components
-      await this.initializeBullMQComponents(redisConfig);
-
-      logger.email.info(
-        "Advanced email queue system initialized successfully with BullMQ",
-      );
-      this.isInitialized = true;
+      try {
+        await this.initializeBullMQComponents(redisConfig);
+        logger.email.info(
+          "Advanced email queue system initialized successfully with BullMQ",
+        );
+        this.isInitialized = true;
+      } catch (error) {
+        logger.email.error("Failed to initialize BullMQ components", {
+          error: error.message,
+          stack: error.stack,
+        });
+        // Fall back to direct email sending
+        this.queue = null;
+        this.worker = null;
+        this.isInitialized = false;
+        logger.email.info("Email service initialized without queue - using direct sending");
+      }
     } catch (error) {
       logger.email.error("Failed to initialize email queue system", {
         error: error.message,
@@ -240,6 +258,7 @@ class EmailService {
       this.queue = null;
       this.worker = null;
       this.isInitialized = false;
+      logger.email.info("Email service initialized without queue - using direct sending");
     }
   }
 
@@ -446,30 +465,9 @@ class EmailService {
    * @returns {boolean} Whether Redis is available
    */
   checkRedisAvailability() {
-    try {
-      // Check if we're in development and Redis might not be available
-      if (process.env.NODE_ENV === "development") {
-        // In development, allow fallback to direct email sending
-        const redisHost = process.env.REDIS_HOST;
-        if (!redisHost || redisHost === "api.medh.co" || redisHost.includes("medh.co")) {
-          // If Redis host is external and we're in development, likely not available
-          logger.email.info("Redis not available in development, using direct email sending", {
-            redisHost: redisHost || "not set"
-          });
-          return false;
-        }
-      }
-
-      // Check if Redis environment variables are properly set
-      if (!process.env.REDIS_HOST && !process.env.REDIS_URL) {
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      logger.email.error("Error checking Redis availability", { error });
-      return false;
-    }
+    // Temporarily disable Redis for forgot password functionality
+    logger.email.info("Redis disabled for forgot password functionality - using direct email sending");
+    return false;
   }
 
   /**
@@ -776,6 +774,26 @@ class EmailService {
     process.on("SIGTERM", () => shutdown("SIGTERM"));
     process.on("SIGINT", () => shutdown("SIGINT"));
     process.on("SIGUSR2", () => shutdown("SIGUSR2")); // Nodemon restart
+  }
+
+  /**
+   * Verify direct email connection without Redis
+   */
+  verifyDirectConnection() {
+    if (!this.transporter) {
+      logger.email.error("No email transporter available");
+      return;
+    }
+
+    this.transporter.verify((error, success) => {
+      if (error) {
+        logger.email.error("Email connection verification failed", {
+          error: error.message,
+        });
+      } else {
+        logger.email.info("Email server is ready to send messages");
+      }
+    });
   }
 
   /**

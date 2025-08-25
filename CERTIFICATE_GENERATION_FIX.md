@@ -150,3 +150,4 @@ The system now provides specific error messages for each validation failure:
 - Only admin and super-admin roles can generate demo certificates
 - Certificate downloads are restricted to authorized users
 - QR codes link to public verification endpoints
+
