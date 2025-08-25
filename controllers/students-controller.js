@@ -186,9 +186,7 @@ export const toggleStudentStatus = async (req, res) => {
   }
 };
 
-// ===========================
 // WISHLIST MANAGEMENT APIs
-// ===========================
 
 /**
  * Add a course to student's wishlist

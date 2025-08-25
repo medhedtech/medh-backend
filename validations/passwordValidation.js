@@ -74,16 +74,8 @@ export const validateChangePassword = [
     .withMessage("Current password cannot be empty"),
 
   body("newPassword")
-    .isLength({ min: 8, max: 128 })
-    .withMessage("New password must be between 8 and 128 characters")
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/)
-    .withMessage("New password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
-    .custom((value) => {
-      if (!validatePasswordStrength(value)) {
-        throw new Error("Password is too weak or contains common patterns. Please choose a stronger password.");
-      }
-      return true;
-    })
+    .isLength({ min: 1, max: 1000 })
+    .withMessage("New password must be at least 1 character long")
     .custom((value, { req }) => {
       // Ensure new password is different from current password
       if (value === req.body.currentPassword) {

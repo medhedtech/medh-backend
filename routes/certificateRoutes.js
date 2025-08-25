@@ -1,82 +1,112 @@
 import express from "express";
-
-import * as certificateController from "../controllers/certificate-controller.js";
-import { authenticateToken, authorize } from "../middleware/auth.js";
+import multer from "multer";
+import certificateController from "../controllers/certificateController.js";
+import { authenticateToken } from "../middleware/auth.js";
+import { authorize } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// Existing routes
-// Route to create a certificate
-router.post("/create", certificateController.createCertificate);
-router.get("/get", certificateController.getAllCertificates);
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow PDF, HTML, and image files
+    if (file.mimetype === "application/pdf" || 
+        file.mimetype === "text/html" || 
+        file.mimetype === "image/png" || 
+        file.mimetype === "image/jpeg" || 
+        file.mimetype === "image/jpg") {
+      cb(null, true);
+    } else {
+      cb(new Error("Only PDF, HTML, PNG, and JPEG files are allowed"), false);
+    }
+  },
+});
+
+// Template Management Routes
+router.post(
+  "/templates",
+  authenticateToken,
+  authorize(["admin", "super-admin"]),
+  upload.single("template"),
+  certificateController.uploadTemplate
+);
+
 router.get(
-  "/get/:student_id",
-  certificateController.getCertificatesByStudentId,
-);
-
-// New routes for certificate ID generation and demo enrollment
-// Generate certificate ID for completed enrollment
-router.post(
-  "/generate-id",
+  "/templates",
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin"]),
-  certificateController.generateCertificateIdAPI
+  authorize(["admin", "super-admin"]),
+  certificateController.getAllTemplates
 );
 
-// Generate professional certificate PDF
-router.post(
-  "/generate-pdf",
+router.get(
+  "/templates/:id",
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin"]),
-  certificateController.generateCertificatePDF
+  authorize(["admin", "super-admin"]),
+  certificateController.getTemplateById
 );
 
-// Create demo student enrollment
+router.delete(
+  "/templates/:id",
+  authenticateToken,
+  authorize(["admin", "super-admin"]),
+  certificateController.deleteTemplate
+);
+
+// Certificate Generation Routes
+router.post(
+  "/generate",
+  authenticateToken,
+  authorize(["admin", "super-admin"]),
+  certificateController.generateCertificate
+);
+
+// Demo Enrollment Route (for the frontend button)
 router.post(
   "/demo-enrollment",
   authenticateToken,
   authorize(["admin", "super-admin"]),
-  certificateController.createDemoEnrollmentAPI
+  certificateController.generateCertificate
 );
 
-// Certificate Verification Routes
-// Verify single certificate by certificate number
 router.get(
-  "/verify/:certificateNumber",
-  certificateController.verifyCertificate
+  "/",
+  authenticateToken,
+  authorize(["admin", "super-admin"]),
+  certificateController.getAllCertificates
 );
 
-// Bulk certificate verification
+router.get(
+  "/:id",
+  authenticateToken,
+  authorize(["admin", "super-admin"]),
+  certificateController.getCertificateById
+);
+
+router.get(
+  "/:id/download",
+  authenticateToken,
+  authorize(["admin", "super-admin"]),
+  certificateController.downloadCertificate
+);
+
+// Statistics Route
+router.get(
+  "/stats/overview",
+  authenticateToken,
+  authorize(["admin", "super-admin"]),
+  certificateController.getCertificateStats
+);
+
+// Setup Route
 router.post(
-  "/verify-bulk",
+  "/setup",
   authenticateToken,
-  authorize(["admin", "instructor", "super-admin"]),
-  certificateController.verifyBulkCertificates
-);
-
-// QR Code Generation Routes
-// Generate QR code for certificate (GET method)
-router.get(
-  "/:certificateId/qr-code",
-  authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student"]),
-  certificateController.generateCertificateQRCodeAPI
-);
-
-// Generate QR code for certificate (POST method with more options)
-router.post(
-  "/generate-qr-code",
-  authenticateToken,
-  authorize(["admin", "instructor", "super-admin"]),
-  certificateController.generateCertificateQRCodeAPI
-);
-
-// Download QR code as image file
-router.get(
-  "/:certificateId/qr-code/download",
-  authenticateToken,
-  authorize(["admin", "instructor", "super-admin", "student"]),
-  certificateController.downloadCertificateQRCode
+  authorize(["admin", "super-admin"]),
+  certificateController.setupCertificateStructure
 );
 
 export default router;

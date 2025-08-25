@@ -148,7 +148,8 @@ export const getProfile = async (req, res) => {
       userId: req.params.userId,
     });
 
-    res.status(500).json({
+    res.status(500).json({  
+      //@ts-ignore
       success: false,
       message: "Internal server error while retrieving profile",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
@@ -231,10 +232,10 @@ export const updateProfile = async (req, res) => {
 
     // Handle password update separately
     if (updateData.password) {
-      if (updateData.password.length < 8) {
+      if (updateData.password.length < 6) {
         return res.status(400).json({
           success: false,
-          message: "Password must be at least 8 characters long",
+          message: "Password must be at least 6 characters long",
         });
       }
 
@@ -308,6 +309,18 @@ export const updateProfile = async (req, res) => {
     // Calculate new profile completion
     const { calculateProfileCompletion } = await import("../utils/profileCompletion.js");
     const newProfileCompletion = calculateProfileCompletion(updatedUser);
+
+    // Log profile update activity
+    updatedUser.logActivity("profile_update", userId, {
+      updated_fields: Object.keys(updateData),
+      timestamp: new Date(),
+    });
+
+    logger.info("Profile updated successfully", {
+      userId,
+      requestingUserId,
+      updatedFields: Object.keys(updateData),
+    });
     
     // Update the user with the new profile completion
     const finalUpdatedUser = await User.findByIdAndUpdate(

@@ -30,7 +30,6 @@ try {
   s3Client = null;
 }
 
-// ================== Helpers ==================
 const populateStudents = async (studentIds) => {
   if (!studentIds || studentIds.length === 0) return [];
   
@@ -57,7 +56,6 @@ const populateInstructor = async (instructorId) => {
   return instructor;
 };
 
-// ================== Students ==================
 export const getStudents = catchAsync(async (req, res, next) => {
   const { search, page = 1, limit = 20 } = req.query;
   const skip = (page - 1) * limit;
@@ -123,7 +121,6 @@ export const getStudents = catchAsync(async (req, res, next) => {
   }
 });
 
-// ================== Grades ==================
 export const getGrades = catchAsync(async (req, res, next) => {
   const staticGrades = [
     { _id: "preschool", name: "Preschool", level: 1 },
@@ -140,7 +137,6 @@ export const getGrades = catchAsync(async (req, res, next) => {
   res.status(200).json({ status: "success", data: staticGrades });
 });
 
-// ================== Dashboards ==================
 export const getDashboards = catchAsync(async (req, res, next) => {
   const staticDashboards = [
     {
@@ -165,7 +161,6 @@ export const getDashboards = catchAsync(async (req, res, next) => {
   res.status(200).json({ status: "success", data: staticDashboards });
 });
 
-// ================== Instructors ==================
 export const getInstructors = catchAsync(async (req, res, next) => {
   const { search, page = 1, limit = 20 } = req.query;
   const skip = (page - 1) * limit;
@@ -233,7 +228,6 @@ export const getInstructors = catchAsync(async (req, res, next) => {
   }
 });
 
-// ================== Generate S3 presigned URL ==================
 export const generateUploadUrl = catchAsync(async (req, res, next) => {
   const { batchObjectId, studentName, fileName, fileType } = req.body;
   if (!batchObjectId || !studentName || !fileName) {
@@ -264,7 +258,6 @@ export const generateUploadUrl = catchAsync(async (req, res, next) => {
   }
 });
 
-// ================== Generate Signed URL for Video ==================
 export const generateSignedVideoUrl = catchAsync(async (req, res, next) => {
   try {
     const { videoPath } = req.body;
@@ -310,7 +303,6 @@ export const generateSignedVideoUrl = catchAsync(async (req, res, next) => {
   }
 });
 
-// ================== Get Video by Batch, Student, Session ==================
 export const getVideoByBatchStudentSession = catchAsync(async (req, res, next) => {
   try {
     const { batchId, studentId, sessionNo } = req.params;
@@ -420,7 +412,6 @@ export const getVideoByBatchStudentSession = catchAsync(async (req, res, next) =
   }
 });
 
-// ================== Upload Videos ==================
 export const uploadVideos = catchAsync(async (req, res, next) => {
   try {
     console.log('🔍 uploadVideos called');
@@ -670,7 +661,6 @@ export const uploadVideos = catchAsync(async (req, res, next) => {
   }
 });
 
-// ================== Create Session ==================
 export const createSession = catchAsync(async (req, res, next) => {
   console.log('🔍 createSession called with body:', req.body);
   
@@ -805,7 +795,6 @@ export const createSession = catchAsync(async (req, res, next) => {
   });
 });
 
-// ================== Test S3 Connection ==================
 export const testS3Connection = catchAsync(async (req, res, next) => {
   try {
     const testClient = new S3Client({

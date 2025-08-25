@@ -207,9 +207,7 @@ router.patch(
   fixAICompanionHostRequirement,
 );
 
-/* ========================================= */
 /* STUDENT MANAGEMENT ROUTES                 */
-/* ========================================= */
 
 // Get all students in a batch
 router.get(
@@ -262,9 +260,7 @@ router.put(
   updateStudentStatusInBatch,
 );
 
-/* ========================================= */
 /* ANALYTICS AND DASHBOARD ROUTES           */
-/* ========================================= */
 
 // Get comprehensive dashboard analytics
 router.get(
@@ -354,9 +350,7 @@ router.get(
   getUpcomingSessionsForStudent,
 );
 
-/* ========================================= */
 /* ZOOM RECORDING SYNC ROUTES               */
-/* ========================================= */
 
 // Add route to manually sync Zoom recordings for a batch
 router.post(

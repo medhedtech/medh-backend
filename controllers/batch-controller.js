@@ -568,9 +568,7 @@ export const deleteBatch = async (req, res) => {
   }
 };
 
-/* ========================================= */
 /* STUDENT MANAGEMENT FUNCTIONS              */
-/* ========================================= */
 
 /**
  * Get all students in a batch

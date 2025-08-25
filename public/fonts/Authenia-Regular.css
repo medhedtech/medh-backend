@@ -1,0 +1,7 @@
+/* Authenia Font Fallback */
+@font-face {
+  font-family: 'Authenia';
+  src: local('Arial');
+  font-weight: normal;
+  font-style: normal;
+}

@@ -13,9 +13,7 @@ import {
 
 const router = express.Router();
 
-// ============================================================================
 // TEAM AUTHENTICATION ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/team/login
@@ -50,9 +48,7 @@ router.post(
   salesSupportController.teamLogout.bind(salesSupportController),
 );
 
-// ============================================================================
 // SALES TEAM ROUTES
-// ============================================================================
 
 /**
  * @route   GET /api/v1/team/sales/dashboard-stats
@@ -78,9 +74,7 @@ router.get(
   salesSupportController.getTeamMembers.bind(salesSupportController),
 );
 
-// ============================================================================
 // SUPPORT TEAM ROUTES
-// ============================================================================
 
 /**
  * @route   GET /api/v1/team/support/dashboard-stats
@@ -106,9 +100,7 @@ router.get(
   salesSupportController.getTeamMembers.bind(salesSupportController),
 );
 
-// ============================================================================
 // ADMIN MANAGEMENT ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/team/admin/create-member

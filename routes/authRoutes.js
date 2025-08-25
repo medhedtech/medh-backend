@@ -18,16 +18,12 @@ import oauthRoutes from "./oauthRoutes.js";
 
 const router = express.Router();
 
-// ============================================================================
 // OAUTH ROUTES
-// ============================================================================
 
 // Mount OAuth routes
 router.use("/oauth", oauthRoutes);
 
-// ============================================================================
 // DEMO USER ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/auth/demo-register
@@ -174,9 +170,7 @@ router.get(
   authController.downloadCalendarICS.bind(authController),
 );
 
-// ============================================================================
 // REGULAR AUTHENTICATION ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/auth/refresh-token
@@ -3173,9 +3167,7 @@ router.put("/profile", authenticateToken, async (req, res) => {
   }
 });
 
-// ============================================================================
 // PASSWORD SECURITY ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/auth/validate-password-strength
@@ -3230,9 +3222,7 @@ router.get(
   authController.listQuickLoginKeys.bind(authController),
 );
 
-// ============================================================================
 // FRONTEND OAUTH ROUTE
-// ============================================================================
 
 /**
  * @route   POST /api/v1/auth/oauth/frontend
@@ -3259,9 +3249,7 @@ router.post(
   authController.handleFrontendOAuth.bind(authController),
 );
 
-// ============================================================================
 // ENHANCED OAUTH MANAGEMENT ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/auth/oauth/link
@@ -3363,7 +3351,6 @@ router.post(
 );
 
 // ENHANCED OAUTH ACCOUNT MANAGEMENT ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/auth/oauth/link/:provider

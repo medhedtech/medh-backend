@@ -246,6 +246,8 @@ The updated student dropdown integrates seamlessly with:
 
 
 
+<<<<<<< HEAD
+=======
 
 
 
@@ -253,3 +255,4 @@ The updated student dropdown integrates seamlessly with:
 
 
 
+>>>>>>> origin/main

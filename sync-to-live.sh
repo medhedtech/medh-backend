@@ -196,6 +196,8 @@ echo ""
 echo "========== END OF SYNC SCRIPT =========="
 
 
+<<<<<<< HEAD
+=======
 
 
 
@@ -203,3 +205,4 @@ echo "========== END OF SYNC SCRIPT =========="
 
 
 
+>>>>>>> origin/main

@@ -1755,9 +1755,7 @@ const toggleCourseStatus = async (req, res) => {
   }
 };
 
-// =========================================
 // COURSE SECTIONS & LESSONS
-// =========================================
 
 /**
  * @desc    Get all sections for a course with progress tracking
@@ -2632,9 +2630,7 @@ const markLessonComplete = async (req, res) => {
   }
 };
 
-// =========================================
 // COURSE ASSIGNMENTS & QUIZZES
-// =========================================
 
 /**
  * @desc    Get all assignments for a course
@@ -2919,9 +2915,7 @@ const getQuizResults = async (req, res) => {
   }
 };
 
-// =========================================
 // COURSE RESOURCES, NOTES & BOOKMARKS
-// =========================================
 
 /**
  * @desc    Download a resource
@@ -3274,9 +3268,7 @@ const deleteBookmark = async (req, res) => {
   }
 };
 
-// =========================================
 // FILE UPLOAD HANDLERS
-// =========================================
 
 /**
  * @desc    Handle single file upload
@@ -3345,9 +3337,7 @@ const handleMultipleUpload = async (req, res) => {
   }
 };
 
-// =========================================
 // OTHER ENDPOINTS
-// =========================================
 
 /**
  * @desc    Get corporate course by ID

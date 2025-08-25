@@ -169,6 +169,8 @@ The student dropdown issue has been **completely resolved**. The system now:
 
 
 
+<<<<<<< HEAD
+=======
 
 
 
@@ -176,3 +178,4 @@ The student dropdown issue has been **completely resolved**. The system now:
 
 
 
+>>>>>>> origin/main
