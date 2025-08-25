@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 const { Schema } = mongoose;
 
+// Import course models for enrollment creation
+import Course from "./course-model.js";
+import Batch from "./course-model.js";
+
 // Enhanced Payment schema with membership support
 const paymentSchema = new Schema({
   amount: {
@@ -835,7 +839,6 @@ enrollmentSchema.statics.findStudentsInBatch = function(batchId) {
 
 // Enhanced method to create enrollment with proper business logic
 enrollmentSchema.statics.createEnrollment = async function(enrollmentData) {
-  const { Course, Batch } = require('./course-model.js');
   
   // Validate course exists
   const course = await Course.findById(enrollmentData.course);

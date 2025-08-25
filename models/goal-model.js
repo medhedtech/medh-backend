@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const goalSchema = new mongoose.Schema({
   title: {
@@ -277,4 +277,5 @@ goalSchema.methods.completeMilestone = function(milestoneId) {
   return this.save();
 };
 
-module.exports = mongoose.model('Goal', goalSchema); 
+const Goal = mongoose.model('Goal', goalSchema);
+export default Goal; 

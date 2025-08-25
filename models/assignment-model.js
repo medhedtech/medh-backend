@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { v4 as uuidv4 } from 'uuid';
 
 const assignmentResourceSchema = new mongoose.Schema({
   id: {
@@ -144,7 +145,6 @@ assignmentSchema.methods.calculatePenalty = function (submissionDate) {
 assignmentSchema.pre("save", function (next) {
   // Auto-generate assignment ID if not provided
   if (!this.id) {
-    const { v4: uuidv4 } = require('uuid');
     this.id = uuidv4();
   }
   
