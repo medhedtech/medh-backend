@@ -1,4 +1,4 @@
-const Joi = require('joi');
+import Joi from 'joi';
 
 // Goal categories enum
 const GOAL_CATEGORIES = ['course', 'assignment', 'exam', 'quiz', 'project', 'skill', 'career', 'personal'];
@@ -397,7 +397,7 @@ const statsQueryValidation = Joi.object({
     .optional()
 });
 
-module.exports = {
+export {
   createGoalValidation,
   updateGoalValidation,
   getGoalsQueryValidation,

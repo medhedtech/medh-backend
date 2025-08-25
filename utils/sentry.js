@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/node';
 import { ENV_VARS } from '../config/envVars.js';
 import logger from './logger.js';
+import crypto from 'crypto';
 
 /**
  * Initialize Sentry for error tracking
@@ -79,7 +80,6 @@ export const initSentry = () => {
  */
 function hashPII(data) {
   // Create a SHA-256 hash of the data to avoid storing PII
-  const crypto = require('crypto');
   return crypto.createHash('sha256').update(data).digest('hex');
 }
 

@@ -51,7 +51,7 @@ export const createStudent = async (req, res) => {
 // Get all students from Student collection only
 export const getAllStudents = async (req, res) => {
   try {
-    const { search, page = 1, limit = 1000 } = req.query; // Increased limit to get all students
+    const { search, page = 1, limit = 20 } = req.query;
     
     console.log('getAllStudents called with:', { search, page, limit });
     

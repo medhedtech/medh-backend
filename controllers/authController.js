@@ -4506,7 +4506,7 @@ class AuthController {
         {
           id: user._id,
           type: "refresh",
-          token: require("crypto").randomBytes(40).toString("hex"),
+          token: crypto.randomBytes(40).toString("hex"),
         },
         ENV_VARS.JWT_SECRET_KEY,
         { expiresIn: "7d" },

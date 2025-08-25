@@ -1,11 +1,11 @@
-const Goal = require('../models/goal-model');
-const User = require('../models/user-modal');
-const Course = require('../models/course-types/base-course');
-const Assignment = require('../models/assignment-modal');
-const catchAsync = require('../utils/catchAsync');
-const AppError = require('../utils/appError');
-const logger = require('../utils/logger');
-const {
+import Goal from '../models/goal-model.js';
+import User from '../models/user-modal.js';
+import Course from '../models/course-types/base-course.js';
+import Assignment from '../models/assignment-modal.js';
+import catchAsync from '../utils/catchAsync.js';
+import AppError from '../utils/appError.js';
+import logger from '../utils/logger.js';
+import {
   createGoalValidation,
   updateGoalValidation,
   getGoalsQueryValidation,
@@ -14,7 +14,7 @@ const {
   updateMilestoneValidation,
   bulkUpdateValidation,
   statsQueryValidation
-} = require('../validations/goalValidation');
+} from '../validations/goalValidation.js';
 
 /**
  * Get all goals for a student with filtering, sorting, and pagination
@@ -702,7 +702,7 @@ const bulkUpdateGoals = catchAsync(async (req, res, next) => {
   });
 });
 
-module.exports = {
+export {
   getStudentGoals,
   getGoalById,
   createGoal,
