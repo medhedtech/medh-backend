@@ -5,6 +5,7 @@ import { cpus } from 'os';
  * Optimized base64 decoder using parallel processing for large files
  */
 export class Base64Optimizer {
+  //@ts-ignore
   constructor() {
     this.chunkSize = 1024 * 1024; // 1MB chunks
     this.maxWorkers = cpus().length;

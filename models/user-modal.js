@@ -30,40 +30,40 @@ const userActivitySchema = new Schema(
     action: {
       type: String,
       required: true,
-             enum: [
-         "register",
-         "login",
-         "logout",
-         "logout_all_devices",
-         "profile_update",
-         "profile_view",
+      enum: [
+        "register",
+        "login",
+        "logout",
+        "logout_all_devices",
+        "profile_update",
+        "profile_view",
          "profile_completion_view", // This was the missing enum value
-         "course_view",
-         "course_purchase",
-         "content_view",
-         "content_complete",
-         "search",
-         "review_submit",
-         "social_share",
-         "message_send",
-         "notification_read",
-         "setting_change",
-         "feature_use",
-         "error_encounter",
-         "page_view",
-         "api_call",
-         "password_reset",
-         "password_reset_request",
-         "password_change",
-         "temp_password_verified",
-         "admin_action",
-         "profile_restore",
+        "course_view",
+        "course_purchase",
+        "content_view",
+        "content_complete",
+        "search",
+        "review_submit",
+        "social_share",
+        "message_send",
+        "notification_read",
+        "setting_change",
+        "feature_use",
+        "error_encounter",
+        "page_view",
+        "api_call",
+        "password_reset",
+        "password_reset_request",
+        "password_change",
+        "temp_password_verified",
+        "admin_action",
+        "profile_restore",
          "mfa_setup_initiated", // Added missing enum value
          "mfa_setup_completed",
          "mfa_verification_attempted",
          "mfa_verification_successful",
          "mfa_verification_success", // Added missing enum value
-         "mfa_verification_failed",
+        "mfa_verification_failed",
          "mfa_disabled",
          "mfa_enabled",
          "mfa_recovery_requested", // Added missing enum value
@@ -86,7 +86,7 @@ const userActivitySchema = new Schema(
          "temp_password_used",
          "backup_codes_generated",
          "backup_codes_used",
-         "backup_codes_regenerated",
+        "backup_codes_regenerated",
          "profile_delete", // Added missing enum value
          "preferences_updated", // Added missing enum value
          "oauth_unlink", // Added missing enum value
@@ -96,7 +96,7 @@ const userActivitySchema = new Schema(
          "course_wishlist_add", // Added missing enum value
          "course_wishlist_remove", // Added missing enum value
          "wishlist_cleared", // Added missing enum value
-       ],
+      ],
     },
     resource: {
       type: String,
@@ -189,12 +189,12 @@ const userSchema = new Schema(
       },
       minlength: [1, "Password must be at least 1 character"],
     },
-    
+
     // Status & Verification
     email_verified: {
       type: Boolean,
       default: false,
-    },
+      },
     is_active: {
       type: Boolean,
       default: true,
@@ -203,7 +203,7 @@ const userSchema = new Schema(
       type: Boolean,
       default: false,
     },
-    
+
     // Role Management
     role: {
       type: Schema.Types.Mixed,
@@ -231,7 +231,7 @@ const userSchema = new Schema(
       },
     },
     admin_role: {
-      type: String,
+          type: String,
       enum: Object.values(ADMIN_ROLES),
       sparse: true,
     },
@@ -264,7 +264,7 @@ const userSchema = new Schema(
       default: false,
     },
     two_factor_method: {
-      type: String,
+          type: String,
       enum: ["sms", "email", "app"],
     },
     two_factor_phone: String,
@@ -276,9 +276,9 @@ const userSchema = new Schema(
     password_reset_expires: Date,
     last_password_change: Date,
     password_change_count: {
-      type: Number,
-      default: 0,
-    },
+          type: Number,
+          default: 0,
+        },
     password_set: {
       type: Boolean,
       default: false,
@@ -286,9 +286,9 @@ const userSchema = new Schema(
     
     // Temporary Password
     temp_password_verified: {
-      type: Boolean,
-      default: false,
-    },
+          type: Boolean,
+          default: false,
+        },
     temp_password_verification_token: String,
     temp_password_verification_expires: Date,
     
@@ -300,10 +300,10 @@ const userSchema = new Schema(
     quick_login_keys: [{
       key: String,
       name: String,
-      created_at: {
-        type: Date,
-        default: Date.now,
-      },
+        created_at: {
+          type: Date,
+          default: Date.now,
+        },
       last_used: Date,
       is_active: {
         type: Boolean,
@@ -320,15 +320,15 @@ const userSchema = new Schema(
       max: 100,
     },
     account_type: {
-      type: String,
+        type: String,
       enum: ["free", "premium", "corporate", "admin"],
       default: "free",
-    },
+      },
     
     // Permissions
     permissions: [{
-      type: String,
-      enum: [
+        type: String,
+        enum: [
         "view_profile",
         "edit_profile",
         "delete_profile",
@@ -349,26 +349,26 @@ const userSchema = new Schema(
     
     // Admin flags
     is_super_admin: {
-      type: Boolean,
-      default: false,
-    },
+        type: Boolean,
+        default: false,
+      },
     isSuperAdmin: {
-      type: Boolean,
-      default: false,
+        type: Boolean,
+        default: false,
     },
     
     // Preferences
     preferences: {
       timezone: {
-        type: String,
+      type: String,
         default: "UTC",
-      },
+    },
       currency: {
-        type: String,
+      type: String,
         default: "USD",
-      },
+    },
       language: {
-        type: String,
+      type: String,
         default: "en",
       },
       notifications: {
@@ -489,11 +489,11 @@ const userSchema = new Schema(
       created_at: {
         type: Date,
         default: Date.now,
-      },
-      is_active: {
-        type: Boolean,
-        default: true,
-      },
+    },
+    is_active: {
+      type: Boolean,
+      default: true,
+    },
       invalidated_at: Date,
     }],
     
@@ -502,7 +502,7 @@ const userSchema = new Schema(
       device_id: String,
       device_name: String,
       device_type: {
-        type: String,
+      type: String,
         enum: ["desktop", "mobile", "tablet", "web", "unknown"],
         default: "unknown",
       },
@@ -521,30 +521,30 @@ const userSchema = new Schema(
         },
       },
       is_trusted: {
-        type: Boolean,
-        default: false,
-      },
+      type: Boolean,
+      default: false,
+    },
       is_primary: {
-        type: Boolean,
-        default: false,
-      },
+      type: Boolean,
+      default: false,
+    },
       last_used: {
         type: Date,
         default: Date.now,
       },
       created_at: {
-        type: Date,
-        default: Date.now,
-      },
+      type: Date,
+      default: Date.now,
+    },
       fingerprint: String,
       risk_score: {
-        type: Number,
+      type: Number,
         default: 0,
         min: 0,
         max: 100,
       },
     }],
-    
+
     // Timestamps
     created_at: {
       type: Date,
@@ -637,7 +637,7 @@ userSchema.methods.createSession = async function (sessionData) {
   if (this.sessions.length > 10) {
     this.sessions = this.sessions.slice(-10);
   }
-  
+
   return this.save();
 };
 
@@ -686,7 +686,7 @@ userSchema.methods.addOrUpdateDevice = async function (deviceInfo) {
   if (this.devices.length > 20) {
     this.devices = this.devices.slice(-20);
   }
-  
+
   return this.save();
 };
 

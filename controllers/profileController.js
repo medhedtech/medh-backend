@@ -148,7 +148,8 @@ export const getProfile = async (req, res) => {
       userId: req.params.userId,
     });
 
-    res.status(500).json({
+    res.status(500).json({  
+      //@ts-ignore
       success: false,
       message: "Internal server error while retrieving profile",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
