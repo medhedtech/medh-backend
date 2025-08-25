@@ -35,8 +35,10 @@ export const validateProfileUpdate = [
 
   body('password')
     .optional()
-    .isLength({ min: 1 })
-    .withMessage('Password cannot be empty'),
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters long')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+    .withMessage('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character'),
 
   // Contact Information
   body('phone_numbers')
@@ -494,8 +496,8 @@ export const validateComprehensiveProfileUpdate = [
 
   body('password')
     .optional()
-    .isLength({ min: 1 })
-    .withMessage('Password cannot be empty'),
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters long'),
 
   // Contact Information
   body('phone_numbers')
@@ -1005,8 +1007,13 @@ export const validateComprehensiveProfileUpdateConditional = [
   body('password')
     .optional()
     .custom((value) => {
-      if (value && value.length === 0) {
-        throw new Error('Password cannot be empty');
+      if (value && value.length > 0) {
+        if (value.length < 8) {
+          throw new Error('Password must be at least 8 characters long');
+        }
+        if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/.test(value)) {
+          throw new Error('Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character');
+        }
       }
       return true;
     }),

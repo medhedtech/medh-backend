@@ -207,9 +207,7 @@ router.patch(
   fixAICompanionHostRequirement,
 );
 
-/* ========================================= */
 /* STUDENT MANAGEMENT ROUTES                 */
-/* ========================================= */
 
 // Get all students in a batch
 router.get(
@@ -262,9 +260,7 @@ router.put(
   updateStudentStatusInBatch,
 );
 
-/* ========================================= */
 /* ANALYTICS AND DASHBOARD ROUTES           */
-/* ========================================= */
 
 // Get comprehensive dashboard analytics
 router.get(
@@ -324,6 +320,18 @@ router.get(
   getRecordedLessonsForStudent,
 );
 
+// Temporary test route without authentication (remove in production)
+router.get(
+  "/test-students/:studentId/recorded-lessons",
+  getRecordedLessonsForStudent,
+);
+
+// Get recorded lessons for a specific batch (test route)
+router.get(
+  "/test-students/:studentId/batch/:batchId/recorded-lessons",
+  getRecordedLessonsForStudent,
+);
+
 // Add route to get upcoming sessions for a batch
 router.get(
   "/:batchId/upcoming-sessions",
@@ -342,9 +350,7 @@ router.get(
   getUpcomingSessionsForStudent,
 );
 
-/* ========================================= */
 /* ZOOM RECORDING SYNC ROUTES               */
-/* ========================================= */
 
 // Add route to manually sync Zoom recordings for a batch
 router.post(

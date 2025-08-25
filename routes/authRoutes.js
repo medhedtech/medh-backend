@@ -18,16 +18,12 @@ import oauthRoutes from "./oauthRoutes.js";
 
 const router = express.Router();
 
-// ============================================================================
 // OAUTH ROUTES
-// ============================================================================
 
 // Mount OAuth routes
 router.use("/oauth", oauthRoutes);
 
-// ============================================================================
 // DEMO USER ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/auth/demo-register
@@ -136,9 +132,12 @@ router.post(
   authenticateToken,
   [
     body("password")
-      .isLength({ min: 6 })
+      .isLength({ min: 8 })
+      .matches(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+      )
       .withMessage(
-        "Password must be at least 6 characters",
+        "Password must be at least 8 characters and contain at least one uppercase letter, one lowercase letter, one number, and one special character",
       ),
     body("confirm_password").custom((value, { req }) => {
       if (value !== req.body.password) {
@@ -171,9 +170,7 @@ router.get(
   authController.downloadCalendarICS.bind(authController),
 );
 
-// ============================================================================
 // REGULAR AUTHENTICATION ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/auth/refresh-token
@@ -297,8 +294,14 @@ router.post(
       .normalizeEmail()
       .withMessage("Please provide a valid email address"),
     body("newPassword")
-      .isLength({ min: 6, max: 128 })
-      .withMessage("Password must be between 6 and 128 characters"),
+      .isLength({ min: 8, max: 128 })
+      .withMessage("Password must be between 8 and 128 characters")
+      .matches(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/,
+      )
+      .withMessage(
+        "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+      ),
     body("confirmPassword")
       .notEmpty()
       .withMessage("Confirm password is required")
@@ -2611,8 +2614,14 @@ router.post(
   [
     body("token").notEmpty().withMessage("Reset token is required"),
     body("password")
-      .isLength({ min: 6 })
-      .withMessage("Password must be at least 6 characters"),
+      .isLength({ min: 8 })
+      .withMessage("Password must be at least 8 characters")
+      .matches(
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
+      )
+      .withMessage(
+        "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character",
+      ),
   ],
   async (req, res) => {
     try {
@@ -3158,9 +3167,7 @@ router.put("/profile", authenticateToken, async (req, res) => {
   }
 });
 
-// ============================================================================
 // PASSWORD SECURITY ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/auth/validate-password-strength
@@ -3215,9 +3222,7 @@ router.get(
   authController.listQuickLoginKeys.bind(authController),
 );
 
-// ============================================================================
 // FRONTEND OAUTH ROUTE
-// ============================================================================
 
 /**
  * @route   POST /api/v1/auth/oauth/frontend
@@ -3244,9 +3249,7 @@ router.post(
   authController.handleFrontendOAuth.bind(authController),
 );
 
-// ============================================================================
 // ENHANCED OAUTH MANAGEMENT ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/auth/oauth/link
@@ -3348,7 +3351,6 @@ router.post(
 );
 
 // ENHANCED OAUTH ACCOUNT MANAGEMENT ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/auth/oauth/link/:provider

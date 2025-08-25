@@ -12,6 +12,9 @@ import {
   syncEnrollmentProgress,
 } from "../controllers/profileController.js";
 import {
+  getProfileCompletion,
+} from "../controllers/profileCompletionController.js";
+import {
   createProgress,
   getUserProgress,
   updateProgress,
@@ -76,9 +79,7 @@ const progressAnalyticsValidation = [
     .withMessage("Invalid content type"),
 ];
 
-// ========================================
 // STANDARD PROFILE ROUTES (Enhanced)
-// ========================================
 
 /**
  * @route   GET /api/v1/profile/:userId
@@ -162,9 +163,7 @@ router.put(
   updatePreferences,
 );
 
-// ========================================
 // COMPREHENSIVE PROFILE ROUTES
-// ========================================
 
 /**
  * @route   GET /api/v1/profile/me/comprehensive
@@ -190,9 +189,31 @@ router.put(
   updateComprehensiveProfile,
 );
 
-// ========================================
+/**
+ * @route   PATCH /api/v1/profile/me/comprehensive
+ * @desc    Partially update comprehensive user profile (preserves existing data for empty fields)
+ * @access  Private
+ */
+router.patch(
+  "/me/comprehensive",
+  profileRateLimit,
+  authenticate,
+  updateComprehensiveProfile,
+);
+
+/**
+ * @route   GET /api/v1/profile/me/completion
+ * @desc    Get detailed profile completion analysis with recommendations
+ * @access  Private
+ */
+router.get(
+  "/me/completion",
+  profileRateLimit,
+  authenticate,
+  getProfileCompletion,
+);
+
 // ENHANCED PROGRESS INTEGRATION ROUTES
-// ========================================
 
 /**
  * @route   GET /api/v1/profile/:userId/enhanced-progress
@@ -393,9 +414,7 @@ router.post(
   resetProgress,
 );
 
-// ========================================
 // PROGRESS TRACKING ENDPOINTS (Integrated with Profile)
-// ========================================
 
 /**
  * @route   POST /api/v1/profile/:userId/progress
@@ -511,9 +530,7 @@ router.get(
   getProgressLeaderboard,
 );
 
-// ========================================
 // ADMIN PROFILE ROUTES
-// ========================================
 
 /**
  * @route   GET /api/v1/profile/admin/progress-stats
@@ -648,9 +665,7 @@ router.post(
   },
 );
 
-// ========================================
 // HEALTH CHECK ROUTE
-// ========================================
 
 /**
  * @route   GET /api/v1/profile/health

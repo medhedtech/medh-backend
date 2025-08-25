@@ -278,6 +278,10 @@ This will:
 
 The enhanced certificate generation system provides a comprehensive solution for creating professional, verifiable certificates with all the required dynamic fields. The implementation is secure, scalable, and user-friendly, meeting all the specified requirements while maintaining compatibility with existing systems.
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 =======
 >>>>>>> Forgot_Passsowrd
+=======
+
+>>>>>>> origin/main

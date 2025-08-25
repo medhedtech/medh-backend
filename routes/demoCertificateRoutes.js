@@ -3,7 +3,6 @@ import { authenticateToken as isAuthenticated, authorize } from "../middleware/a
 import {
   createDemoCertificate,
   verifyDemoCertificate,
-  downloadDemoCertificate,
 } from "../controllers/demoCertificateController.js";
 
 const router = express.Router();
@@ -23,18 +22,6 @@ router.post(
   isAuthenticated,
   authorize(["admin", "instructor", "super-admin"]),
   createDemoCertificate,
-);
-
-/**
- * @route   GET /api/v1/demo-certificates/download/:certificateId
- * @desc    Download demo certificate PDF
- * @access  Private (instructors & admins)
- */
-router.get(
-  "/download/:certificateId",
-  isAuthenticated,
-  authorize(["admin", "instructor", "super-admin"]),
-  downloadDemoCertificate,
 );
 
 /**

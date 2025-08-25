@@ -328,7 +328,6 @@ async function testStudentAPI() {
 // Main function
 async function main() {
   console.log('🚀 Starting Sample Student Data Addition...');
-  console.log('===========================================');
   
   // Connect to database
   const connected = await connectToDatabase();
@@ -345,7 +344,6 @@ async function main() {
   
   // Summary
   console.log('\n📊 Summary:');
-  console.log('===========');
   console.log(`✅ Database Connection: ${connected ? 'SUCCESS' : 'FAILED'}`);
   console.log(`✅ Sample Students Addition: ${addResult.success ? 'SUCCESS' : 'FAILED'}`);
   console.log(`✅ Student API Test: ${testResult.success ? 'SUCCESS' : 'FAILED'}`);
@@ -373,6 +371,13 @@ main().catch(error => {
   console.error('❌ Script execution failed:', error);
   process.exit(1);
 });
+
+
+
+
+
+
+
 
 
 

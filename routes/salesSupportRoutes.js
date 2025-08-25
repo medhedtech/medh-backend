@@ -13,9 +13,7 @@ import {
 
 const router = express.Router();
 
-// ============================================================================
 // TEAM AUTHENTICATION ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/team/login
@@ -30,8 +28,8 @@ router.post(
       .normalizeEmail()
       .withMessage("Please provide a valid email address"),
     body("password")
-      .isLength({ min: 6 })
-      .withMessage("Password must be at least 6 characters"),
+      .isLength({ min: 8 })
+      .withMessage("Password must be at least 8 characters"),
     body("team_type")
       .isIn(["sales", "support"])
       .withMessage("Team type must be either 'sales' or 'support'"),
@@ -50,9 +48,7 @@ router.post(
   salesSupportController.teamLogout.bind(salesSupportController),
 );
 
-// ============================================================================
 // SALES TEAM ROUTES
-// ============================================================================
 
 /**
  * @route   GET /api/v1/team/sales/dashboard-stats
@@ -78,9 +74,7 @@ router.get(
   salesSupportController.getTeamMembers.bind(salesSupportController),
 );
 
-// ============================================================================
 // SUPPORT TEAM ROUTES
-// ============================================================================
 
 /**
  * @route   GET /api/v1/team/support/dashboard-stats
@@ -106,9 +100,7 @@ router.get(
   salesSupportController.getTeamMembers.bind(salesSupportController),
 );
 
-// ============================================================================
 // ADMIN MANAGEMENT ROUTES
-// ============================================================================
 
 /**
  * @route   POST /api/v1/team/admin/create-member
@@ -128,8 +120,8 @@ router.post(
       .normalizeEmail()
       .withMessage("Please provide a valid email address"),
     body("password")
-      .isLength({ min: 6 })
-      .withMessage("Password must be at least 6 characters"),
+      .isLength({ min: 8 })
+      .withMessage("Password must be at least 8 characters"),
     body("team_type")
       .isIn(["sales", "support"])
       .withMessage("Team type must be either 'sales' or 'support'"),

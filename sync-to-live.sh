@@ -196,3 +196,13 @@ echo ""
 echo "========== END OF SYNC SCRIPT =========="
 
 
+<<<<<<< HEAD
+=======
+
+
+
+
+
+
+
+>>>>>>> origin/main

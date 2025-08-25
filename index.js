@@ -356,6 +356,10 @@ const startServer = async () => {
     } else {
       // Standard HTTP server for development or when HTTPS is not configured
       httpServer = http.createServer(app);
+      // Increase server timeouts for large uploads (up to 5GB multi-hour uploads)
+      httpServer.headersTimeout = 2 * 60 * 60 * 1000; // 2 hours
+      httpServer.keepAliveTimeout = 2 * 60 * 60 * 1000; // 2 hours
+      httpServer.requestTimeout = 0; // Disable request timeout
       httpServer.listen(PORT, () => {
         logger.info(`HTTP Server running on port ${PORT} in ${ENV_VARS.NODE_ENV} mode`);
         logger.connection.success("HTTP Server", {

@@ -35,15 +35,36 @@ const COMMON_PASSWORDS = [
  * @returns {boolean} - True if password is strong enough
  */
 const validatePasswordStrength = (password) => {
-  // For change password, only check if password is not empty
-  if (!password || password.length === 0) {
+  // Check minimum requirements
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasLowercase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  const hasSpecialChars = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+  const isValidLength = password.length >= 8 && password.length <= 128;
+
+  if (!isValidLength || !hasUppercase || !hasLowercase || !hasNumbers || !hasSpecialChars) {
     return false;
   }
+
+  // Check against weak patterns
+  const hasWeakPattern = WEAK_PASSWORD_PATTERNS.some(pattern => pattern.test(password));
+  if (hasWeakPattern) {
+    return false;
+  }
+
+  // Check against common passwords
+  const isCommonPassword = COMMON_PASSWORDS.some(common => 
+    password.toLowerCase().includes(common.toLowerCase())
+  );
+  if (isCommonPassword) {
+    return false;
+  }
+
   return true;
 };
 
 /**
- * Validation for password change requests - NO RESTRICTIONS
+ * Validation for password change requests
  */
 export const validateChangePassword = [
   body("currentPassword")
@@ -53,8 +74,8 @@ export const validateChangePassword = [
     .withMessage("Current password cannot be empty"),
 
   body("newPassword")
-    .notEmpty()
-    .withMessage("New password is required")
+    .isLength({ min: 1, max: 1000 })
+    .withMessage("New password must be at least 1 character long")
     .custom((value, { req }) => {
       // Ensure new password is different from current password
       if (value === req.body.currentPassword) {
@@ -67,9 +88,8 @@ export const validateChangePassword = [
     .notEmpty()
     .withMessage("Password confirmation is required")
     .custom((value, { req }) => {
-      // Ensure password confirmation matches new password
       if (value !== req.body.newPassword) {
-        throw new Error("Password confirmation must match new password");
+        throw new Error("Password confirmation does not match new password");
       }
       return true;
     }),
@@ -92,8 +112,10 @@ export const validateResetPassword = [
     .withMessage("Reset token cannot be empty"),
 
   body("password")
-    .isLength({ min: 6, max: 128 })
-    .withMessage("Password must be between 6 and 128 characters")
+    .isLength({ min: 8, max: 128 })
+    .withMessage("Password must be between 8 and 128 characters")
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/)
+    .withMessage("Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
     .custom((value) => {
       if (!validatePasswordStrength(value)) {
         throw new Error("Password is too weak or contains common patterns. Please choose a stronger password.");
@@ -116,8 +138,10 @@ export const validateResetPassword = [
  */
 export const validateRegistrationPassword = [
   body("password")
-    .isLength({ min: 6, max: 128 })
-    .withMessage("Password must be between 6 and 128 characters")
+    .isLength({ min: 8, max: 128 })
+    .withMessage("Password must be between 8 and 128 characters")
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?])/)
+    .withMessage("Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
     .custom((value) => {
       if (!validatePasswordStrength(value)) {
         throw new Error("Password is too weak or contains common patterns. Please choose a stronger password.");
@@ -153,27 +177,105 @@ export const validateForgotPassword = [
  * @returns {Object} - Password strength analysis
  */
 export const checkPasswordStrength = (password) => {
-  // For change password, always return strong if not empty
-  if (!password || password.length === 0) {
-    return {
-      score: 0,
-      strength: "Very Weak",
-      color: "darkred",
-      isValid: false,
-      requirements: ["Password cannot be empty"],
-      feedback: ["Password is required"],
-      meetsMinimumRequirements: false
-    };
+  let score = 0;
+  const feedback = [];
+  const requirements = [];
+
+  // Length check
+  if (password.length >= 8) {
+    score += 20;
+  } else {
+    requirements.push("At least 8 characters long");
+  }
+
+  if (password.length >= 12) score += 10;
+  if (password.length >= 16) score += 10;
+
+  // Character variety checks
+  if (/[a-z]/.test(password)) {
+    score += 15;
+  } else {
+    requirements.push("At least one lowercase letter");
+  }
+
+  if (/[A-Z]/.test(password)) {
+    score += 15;
+  } else {
+    requirements.push("At least one uppercase letter");
+  }
+
+  if (/\d/.test(password)) {
+    score += 15;
+  } else {
+    requirements.push("At least one number");
+  }
+
+  if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    score += 15;
+  } else {
+    requirements.push("At least one special character");
+  }
+
+  // Bonus points for complexity
+  if (/[a-z].*[a-z]/.test(password)) score += 5; // Multiple lowercase
+  if (/[A-Z].*[A-Z]/.test(password)) score += 5; // Multiple uppercase
+  if (/\d.*\d/.test(password)) score += 5; // Multiple numbers
+  if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?].*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) score += 5; // Multiple special chars
+
+  // Deduct points for weak patterns
+  const hasWeakPattern = WEAK_PASSWORD_PATTERNS.some(pattern => pattern.test(password));
+  if (hasWeakPattern) {
+    score -= 30;
+    feedback.push("Avoid common patterns like '123456', 'password', or repeated characters");
+  }
+
+  // Deduct points for common passwords
+  const isCommonPassword = COMMON_PASSWORDS.some(common => 
+    password.toLowerCase().includes(common.toLowerCase())
+  );
+  if (isCommonPassword) {
+    score -= 25;
+    feedback.push("Avoid using common words like 'password', 'admin', or 'welcome'");
+  }
+
+  // Normalize score
+  score = Math.max(0, Math.min(100, score));
+
+  // Determine strength level
+  let strength;
+  let color;
+  if (score >= 80) {
+    strength = "Very Strong";
+    color = "green";
+  } else if (score >= 60) {
+    strength = "Strong";
+    color = "lightgreen";
+  } else if (score >= 40) {
+    strength = "Medium";
+    color = "orange";
+  } else if (score >= 20) {
+    strength = "Weak";
+    color = "red";
+  } else {
+    strength = "Very Weak";
+    color = "darkred";
+  }
+
+  // Add positive feedback for strong passwords
+  if (score >= 80) {
+    feedback.push("Excellent! This is a very strong password.");
+  } else if (score >= 60) {
+    feedback.push("Good! This password meets security requirements.");
   }
 
   return {
-    score: 100,
-    strength: "Strong",
-    color: "green",
-    isValid: true,
-    requirements: [],
-    feedback: ["Password is valid"],
-    meetsMinimumRequirements: true
+    score,
+    strength,
+    color,
+    isValid: score >= 60 && requirements.length === 0,
+    requirements,
+    feedback,
+    meetsMinimumRequirements: requirements.length === 0
   };
 };
 
@@ -183,4 +285,5 @@ export default {
   validateRegistrationPassword,
   validateForgotPassword,
   checkPasswordStrength,
+  validatePasswordStrength
 }; 
