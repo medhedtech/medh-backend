@@ -162,7 +162,7 @@ export const getDashboards = catchAsync(async (req, res, next) => {
 });
 
 export const getInstructors = catchAsync(async (req, res, next) => {
-  const { search, page = 1, limit = 20 } = req.query;
+  const { search, page = 1, limit = 10000 } = req.query; // Set high default limit for admin views
   const skip = (page - 1) * limit;
   let query = {};
   if (search) {

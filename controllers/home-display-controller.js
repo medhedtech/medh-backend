@@ -1,5 +1,6 @@
 import HomeDisplay from "../models/home-display.js";
 import logger from "../utils/logger.js";
+import mongoose from "mongoose";
 
 /**
  * @desc    Get all home display items
@@ -42,6 +43,16 @@ export const getAllHomeDisplays = async (req, res) => {
  */
 export const getHomeDisplayWithFields = async (req, res) => {
   try {
+    // Check database connection first
+    if (mongoose.connection.readyState !== 1) {
+      console.error("Database not connected. ReadyState:", mongoose.connection.readyState);
+      return res.status(503).json({
+        success: false,
+        message: "Database service temporarily unavailable",
+        error: "Database connection not established"
+      });
+    }
+
     const {
       fields,
       filters = {},
@@ -211,15 +222,25 @@ export const getHomeDisplayWithFields = async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Execute query
-    const [queryResults, totalCount] = await Promise.all([
-      HomeDisplay.find(queryFilters, requestedFields)
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      HomeDisplay.countDocuments(queryFilters),
-    ]);
+    // Execute query with error handling
+    let queryResults = [], totalCount = 0;
+    try {
+      [queryResults, totalCount] = await Promise.all([
+        HomeDisplay.find(queryFilters, requestedFields)
+          .sort(sortOptions)
+          .skip(skip)
+          .limit(limitNum)
+          .lean(),
+        HomeDisplay.countDocuments(queryFilters),
+      ]);
+    } catch (dbError) {
+      console.error("Database error in getHomeDisplayWithFields:", dbError);
+      return res.status(500).json({
+        success: false,
+        message: "Database error occurred",
+        error: dbError.message,
+      });
+    }
 
     // Post-process results if needed
     let processedResults = queryResults;
@@ -259,6 +280,7 @@ export const getHomeDisplayWithFields = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in getHomeDisplayWithFields:", error);
+    console.error("Full error stack:", error.stack);
     res.status(500).json({
       success: false,
       message: "Error getting home display items with fields",

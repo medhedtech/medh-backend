@@ -1,5 +1,6 @@
 import Category from "../models/category-model.js";
 import Course from "../models/course-model.js";
+import mongoose from "mongoose";
 
 // Create a new category
 export const createCategory = async (req, res) => {
@@ -38,19 +39,52 @@ export const createCategory = async (req, res) => {
 
 export const getCategories = async (req, res) => {
   try {
-    const { class_type } = req.query;
+    // Check database connection first
+    if (mongoose.connection.readyState !== 1) {
+      console.error("Database not connected. ReadyState:", mongoose.connection.readyState);
+      return res.status(503).json({
+        success: false,
+        message: "Database service temporarily unavailable",
+        error: "Database connection not established"
+      });
+    }
+
+    const { class_type, status, limit = 100 } = req.query;
     const filter = {};
+    
     if (class_type) {
       filter.class_type = class_type;
     }
-    const categories = await Category.find(filter);
+    
+    // Add status filter if provided
+    if (status) {
+      filter.status = status;
+    }
+
+    let categories;
+    try {
+      if (limit) {
+        categories = await Category.find(filter).limit(parseInt(limit));
+      } else {
+        categories = await Category.find(filter);
+      }
+    } catch (dbError) {
+      console.error("Database error in getCategories:", dbError);
+      return res.status(500).json({
+        success: false,
+        message: "Database error occurred",
+        error: dbError.message,
+      });
+    }
+
     res.status(200).json({
       success: true,
       message: "Categories fetched successfully",
       data: categories,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Error in getCategories:", err);
+    console.error("Full error stack:", err.stack);
     res.status(500).json({
       success: false,
       message: "Server error",

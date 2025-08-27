@@ -1,6 +1,8 @@
 import slugify from "slugify";
 
 import BlogsModel from "../models/blog-model.js";
+import User from "../models/user-modal.js";
+import Category from "../models/category-model.js";
 import {
   validateBlog,
   validateBlogUpdate,
@@ -9,6 +11,7 @@ import {
 } from "../utils/validators.js";
 
 import { handleBase64Upload } from "./upload/uploadController.js";
+import mongoose from "mongoose";
 
 // Create a new blog post
 export const createBlog = async (req, res) => {
@@ -164,6 +167,16 @@ export const createBlog = async (req, res) => {
 // Get all blog posts with pagination and filters
 export const getAllBlogs = async (req, res) => {
   try {
+    // Check database connection first
+    if (mongoose.connection.readyState !== 1) {
+      console.error("Database not connected. ReadyState:", mongoose.connection.readyState);
+      return res.status(503).json({
+        success: false,
+        message: "Database service temporarily unavailable",
+        error: "Database connection not established"
+      });
+    }
+
     const {
       page = 1,
       limit = 10,
@@ -224,30 +237,49 @@ export const getAllBlogs = async (req, res) => {
 
     // If count_only is true, just return the count
     if (count_only === "true") {
-      const total = await BlogsModel.countDocuments(query);
-      return res.status(200).json({
-        success: true,
-        data: [],
-        pagination: {
-          total,
-          page: parseInt(page),
-          pages: Math.ceil(total / limit),
-        },
-      });
+      try {
+        const total = await BlogsModel.countDocuments(query);
+        return res.status(200).json({
+          success: true,
+          data: [],
+          pagination: {
+            total,
+            page: parseInt(page),
+            pages: Math.ceil(total / limit),
+          },
+        });
+      } catch (countError) {
+        console.error("Error counting blogs:", countError);
+        return res.status(500).json({
+          success: false,
+          message: "Error counting blogs",
+          error: countError.message,
+        });
+      }
     }
 
     // Execute the query with proper error handling
-    const [blogs, total] = await Promise.all([
-      BlogsModel.find(query)
-        .select(projection)
-        .populate("author", "name email")
-        .populate("categories", "category_name category_image")
-        .sort(sort)
-        .skip(skip)
-        .limit(parseInt(limit))
-        .lean(), // Use lean() for better performance
-      BlogsModel.countDocuments(query)
-    ]);
+    let blogs, total;
+    try {
+      [blogs, total] = await Promise.all([
+        BlogsModel.find(query)
+          .select(projection)
+          .populate("author", "name email")
+          .populate("categories", "category_name category_image")
+          .sort(sort)
+          .skip(skip)
+          .limit(parseInt(limit))
+          .lean(), // Use lean() for better performance
+        BlogsModel.countDocuments(query)
+      ]);
+    } catch (dbError) {
+      console.error("Database error in getAllBlogs:", dbError);
+      return res.status(500).json({
+        success: false,
+        message: "Database error occurred",
+        error: dbError.message,
+      });
+    }
 
     // Add commentCount virtual to each blog and ensure content availability
     const blogsWithCommentCount = blogs.map(blog => ({
@@ -271,6 +303,7 @@ export const getAllBlogs = async (req, res) => {
     });
   } catch (err) {
     console.error("Error fetching blogs:", err.message);
+    console.error("Full error:", err);
     res.status(500).json({
       success: false,
       message: "Server error",

@@ -1725,9 +1725,68 @@ router.put(
       .trim()
       .isLength({ max: 1000 })
       .withMessage("Bio must be less than 1000 characters"),
+    // Direct field validations for missing fields
+    body("date_of_birth")
+      .optional()
+      .isISO8601()
+      .withMessage("Date of birth must be a valid date"),
+    body("nationality")
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 50 })
+      .withMessage("Nationality must be between 2 and 50 characters"),
+    body("skills")
+      .optional()
+      .isArray()
+      .withMessage("Skills must be an array"),
+    body("interests")
+      .optional()
+      .isArray()
+      .withMessage("Interests must be an array"),
+    body("learning_goals")
+      .optional()
+      .isArray()
+      .withMessage("Learning goals must be an array"),
+    body("certifications")
+      .optional()
+      .isArray()
+      .withMessage("Certifications must be an array"),
+    body("preferred_study_times")
+      .optional()
+      .isArray()
+      .withMessage("Preferred study times must be an array"),
+    body("languages_spoken")
+      .optional()
+      .isArray()
+      .withMessage("Languages spoken must be an array"),
   ],
   async (req, res) => {
     try {
+      // SIMPLE DEBUG: Just to confirm this route is being hit
+      console.log("🚨🚨🚨 CORRECT ROUTE HIT - PUT /auth/profile 🚨🚨🚨");
+      
+      // DEBUG: Log incoming request data
+      console.log("🔥 PROFILE UPDATE REQUEST RECEIVED:");
+      console.log("📤 Request Body:", JSON.stringify(req.body, null, 2));
+      console.log("🔍 Missing Fields Check:", {
+        date_of_birth: req.body.date_of_birth,
+        gender: req.body.gender,
+        nationality: req.body.nationality,
+        skills: req.body.skills,
+        interests: req.body.interests,
+        learning_goals: req.body.learning_goals
+      });
+      
+      console.log("📊 Request Body Analysis:", {
+        totalFields: Object.keys(req.body).length,
+        fieldNames: Object.keys(req.body),
+        hasDateOfBirth: 'date_of_birth' in req.body,
+        hasGender: 'gender' in req.body,
+        hasSkills: 'skills' in req.body,
+        skillsType: typeof req.body.skills,
+        skillsValue: req.body.skills
+      });
+      
       // Import required modules
       const { validationResult } = await import("express-validator");
       const User = (await import("../models/user-modal.js")).default;
@@ -1796,33 +1855,156 @@ router.put(
         }
       }
 
-      // Update user profile
-      const updatedUser = await User.findByIdAndUpdate(
-        userId,
-        { $set: updateData },
-        {
-          new: true,
-          runValidators: true,
-          select:
-            "-password -resetPasswordToken -resetPasswordExpires -emailVerificationOTP -emailVerificationOTPExpires",
-        },
-      );
-
-      if (!updatedUser) {
+      // Get current user data for Students collection update
+      const currentUser = await User.findById(userId);
+      
+      if (!currentUser) {
         return res.status(404).json({
           success: false,
           message: "User not found",
         });
       }
 
-      res.status(200).json({
-        success: true,
-        message: "Profile updated successfully",
-        data: {
-          user: updatedUser,
-          updated_fields: Object.keys(updateData),
-        },
-      });
+      // Only update the Student collection if the user is a student (don't update Users collection)
+      if (currentUser && currentUser.role && currentUser.role.includes('student')) {
+        try {
+          // Import Student model
+          const Student = (await import("../models/student-model.js")).default;
+          
+                  // Prepare student update data - use updateData (new values) with fallback to currentUser (existing values)
+        const studentUpdateData = {
+          full_name: updateData.full_name || currentUser.full_name,
+          age: updateData.age || currentUser.age,
+          email: currentUser.email, // Keep the email from user
+          phone_numbers: updateData.phone_numbers ?
+            updateData.phone_numbers.map(phone => phone.number) :
+            currentUser.phone_numbers?.map(phone => phone.number) || [],
+
+          // Add all the additional fields from updateData
+          bio: updateData.bio || currentUser.bio || '',
+          address: updateData.address || currentUser.address || '',
+          country: updateData.country || currentUser.country || '',
+          timezone: updateData.timezone || currentUser.timezone || '',
+          
+          // Personal details that were missing
+          date_of_birth: updateData.date_of_birth || currentUser.date_of_birth || '',
+          gender: updateData.gender || currentUser.gender || '',
+          nationality: updateData.nationality || currentUser.nationality || '',
+            
+            // Social media links
+            facebook_link: updateData.facebook_link || currentUser.facebook_link || '',
+            instagram_link: updateData.instagram_link || currentUser.instagram_link || '',
+            linkedin_link: updateData.linkedin_link || currentUser.linkedin_link || '',
+            twitter_link: updateData.twitter_link || currentUser.twitter_link || '',
+            youtube_link: updateData.youtube_link || currentUser.youtube_link || '',
+            github_link: updateData.github_link || currentUser.github_link || '',
+            portfolio_link: updateData.portfolio_link || currentUser.portfolio_link || '',
+            
+            // Education and professional details from meta
+            education_level: (updateData.meta?.education_level !== undefined ? updateData.meta.education_level : currentUser.meta?.education_level) || '',
+            institution_name: (updateData.meta?.institution_name !== undefined ? updateData.meta.institution_name : currentUser.meta?.institution_name) || '',
+            field_of_study: (updateData.meta?.field_of_study !== undefined ? updateData.meta.field_of_study : currentUser.meta?.field_of_study) || '',
+            graduation_year: (updateData.meta?.graduation_year !== undefined ? updateData.meta.graduation_year : currentUser.meta?.graduation_year) || null,
+            occupation: updateData.occupation || currentUser.meta?.occupation || '',
+            industry: updateData.industry || currentUser.meta?.industry || '',
+            company: updateData.company || currentUser.meta?.company || '',
+            experience_level: updateData.experience_level || currentUser.meta?.experience_level || '',
+            annual_income_range: updateData.annual_income_range || currentUser.meta?.annual_income_range || '',
+            
+            // Skills and interests - use updateData if provided, otherwise use existing
+            skills: updateData.skills || currentUser.meta?.skills || [],
+            interests: updateData.interests || currentUser.meta?.interests || [],
+            learning_goals: updateData.learning_goals || currentUser.meta?.learning_goals || [],
+            certifications: updateData.certifications || currentUser.meta?.certifications || [],
+            preferred_study_times: updateData.preferred_study_times || currentUser.meta?.preferred_study_times || [],
+            languages_spoken: updateData.languages_spoken || currentUser.meta?.languages_spoken || [],
+            
+            meta: {
+              ...currentUser.meta,
+              ...updateData.meta, // Override with new meta data
+              updatedBy: userId,
+              lastProfileUpdate: new Date()
+            },
+            status: "Active"
+          };
+
+          // Find and update the student record
+          // First try to find by email (most reliable)
+          let studentRecord = await Student.findOne({ email: currentUser.email });
+          
+          if (studentRecord) {
+            // Update existing student record
+            const updatedStudent = await Student.findByIdAndUpdate(
+              studentRecord._id,
+              studentUpdateData,
+              { new: true, runValidators: true }
+            );
+            console.log("✅ Student collection updated successfully", {
+              userId: userId,
+              studentId: studentRecord._id,
+              updatedFields: Object.keys(studentUpdateData),
+              studentData: updatedStudent
+            });
+            
+            // Return success response with student data
+            return res.status(200).json({
+              success: true,
+              message: "Student profile updated successfully",
+              data: {
+                student: updatedStudent,
+                updated_fields: Object.keys(studentUpdateData),
+              },
+            });
+          } else {
+            // Create new student record if it doesn't exist
+            const newStudent = new Student({
+              ...studentUpdateData,
+              meta: {
+                ...studentUpdateData.meta,
+                createdBy: userId
+              }
+            });
+            const savedStudent = await newStudent.save();
+            console.log("✅ New student record created in Student collection", {
+              userId: userId,
+              studentId: savedStudent._id,
+              studentData: savedStudent
+            });
+            
+            // Return success response with new student data
+            return res.status(200).json({
+              success: true,
+              message: "Student profile created successfully",
+              data: {
+                student: savedStudent,
+                updated_fields: Object.keys(studentUpdateData),
+              },
+            });
+          }
+        } catch (studentError) {
+          // Log the error and return error response
+          console.error("❌ Error updating Student collection:", {
+            userId: userId,
+            error: studentError.message,
+            stack: studentError.stack,
+            updateData: studentUpdateData,
+            validationErrors: studentError.errors
+          });
+          
+          return res.status(500).json({
+            success: false,
+            message: "Error updating student profile",
+            error: studentError.message,
+            details: studentError.errors || studentError.message,
+          });
+        }
+      } else {
+        // User is not a student
+        return res.status(400).json({
+          success: false,
+          message: "Only students can update profile using this endpoint",
+        });
+      }
     } catch (error) {
       console.error("Error updating user profile:", error);
 
@@ -3119,53 +3301,8 @@ router.delete(
   authController.revokeQuickLoginKey.bind(authController),
 );
 
-/**
- * @route   PUT /api/v1/auth/profile
- */
-router.put("/profile", authenticateToken, async (req, res) => {
-  try {
-    const User = (await import("../models/user-modal.js")).default;
-
-    const user = await User.findById(req.user.id)
-      .select(
-        "-password -resetPasswordToken -resetPasswordExpires -emailVerificationOTP -emailVerificationOTPExpires",
-      )
-      .populate("assigned_instructor", "full_name email role");
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    // Add computed fields for better frontend experience
-    const userProfile = {
-      ...user.toObject(),
-      profile_completion: calculateProfileCompletion(user),
-      account_insights: {
-        member_since: user.createdAt,
-        login_stats: user.getLoginStats(),
-        is_frequent_user: user.isFrequentUser(),
-        device_preference: user.getDevicePreference(),
-        login_pattern: user.getLoginPattern(),
-      },
-    };
-
-    res.status(200).json({
-      success: true,
-      message: "Profile retrieved successfully",
-      data: userProfile,
-    });
-  } catch (error) {
-    console.error("Error fetching user profile:", error);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching profile",
-      error: error.message,
-    });
-  }
-});
+// REMOVED: Duplicate PUT /profile route that was only fetching data, not updating
+// The correct PUT route with update logic is at line 1515
 
 // PASSWORD SECURITY ROUTES
 

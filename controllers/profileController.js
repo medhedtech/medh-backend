@@ -814,6 +814,116 @@ export const getComprehensiveProfile = async (req, res) => {
       });
     }
 
+    // If user is a student, also fetch data from Student collection and merge it
+    let studentData = null;
+    if (user.role && user.role.includes('student')) {
+      try {
+        const Student = (await import("../models/student-model.js")).default;
+        console.log('🔍 Looking for student with email:', user.email);
+        studentData = await Student.findOne({ email: user.email });
+        console.log('📊 Student data found:', studentData ? 'Yes' : 'No');
+        if (studentData) {
+          console.log('📋 Student record details:', {
+            id: studentData._id,
+            full_name: studentData.full_name,
+            email: studentData.email,
+            phone_numbers: studentData.phone_numbers,
+            date_of_birth: studentData.date_of_birth,
+            gender: studentData.gender,
+            nationality: studentData.nationality,
+            skills: studentData.skills,
+            interests: studentData.interests
+          });
+        } else {
+          console.log('❌ No student record found for email:', user.email);
+          console.log('🔍 Checking all students in collection...');
+          const allStudents = await Student.find({}).limit(5);
+          console.log('📊 Sample students:', allStudents.map(s => ({ email: s.email, name: s.full_name })));
+        }
+        
+        if (studentData) {
+          console.log('🔄 Merging student data with user data...');
+          console.log('📋 Student data fields:', {
+            full_name: studentData.full_name,
+            age: studentData.age,
+            bio: studentData.bio,
+            phone_numbers: studentData.phone_numbers,
+            address: studentData.address,
+            education_level: studentData.education_level
+          });
+          console.log('📋 User data before merge:', {
+            full_name: user.full_name,
+            age: user.age,
+            bio: user.bio,
+            phone_numbers: user.phone_numbers,
+            address: user.address
+          });
+          
+          // Merge student data with user data (student data takes priority for profile fields)
+          user.full_name = studentData.full_name || user.full_name;
+          user.age = studentData.age || user.age;
+          console.log('📱 Phone numbers debug:', {
+            studentPhoneNumbers: studentData.phone_numbers,
+            userPhoneNumbers: user.phone_numbers,
+            studentPhoneType: typeof studentData.phone_numbers,
+            studentPhoneLength: studentData.phone_numbers?.length
+          });
+          
+          user.phone_numbers = studentData.phone_numbers && studentData.phone_numbers.length > 0 ? 
+            studentData.phone_numbers.map(phone => ({ number: phone })) : user.phone_numbers;
+          user.bio = studentData.bio || user.bio;
+          user.address = studentData.address || user.address;
+          user.country = studentData.country || user.country;
+          user.timezone = studentData.timezone || user.timezone;
+          
+          // Personal details from Student collection
+          user.date_of_birth = studentData.date_of_birth || user.date_of_birth;
+          user.gender = studentData.gender || user.gender;
+          user.nationality = studentData.nationality || user.nationality;
+          
+          // Social media links
+          user.facebook_link = studentData.facebook_link || user.facebook_link;
+          user.instagram_link = studentData.instagram_link || user.instagram_link;
+          user.linkedin_link = studentData.linkedin_link || user.linkedin_link;
+          user.twitter_link = studentData.twitter_link || user.twitter_link;
+          user.youtube_link = studentData.youtube_link || user.youtube_link;
+          user.github_link = studentData.github_link || user.github_link;
+          user.portfolio_link = studentData.portfolio_link || user.portfolio_link;
+          
+          // Create/update meta object with student data
+          if (!user.meta) user.meta = {};
+          user.meta.education_level = studentData.education_level || user.meta.education_level;
+          user.meta.institution_name = studentData.institution_name || user.meta.institution_name;
+          user.meta.field_of_study = studentData.field_of_study || user.meta.field_of_study;
+          user.meta.graduation_year = studentData.graduation_year || user.meta.graduation_year;
+          user.meta.occupation = studentData.occupation || user.meta.occupation;
+          user.meta.industry = studentData.industry || user.meta.industry;
+          user.meta.company = studentData.company || user.meta.company;
+          user.meta.experience_level = studentData.experience_level || user.meta.experience_level;
+          user.meta.annual_income_range = studentData.annual_income_range || user.meta.annual_income_range;
+          user.meta.skills = studentData.skills || user.meta.skills;
+          user.meta.interests = studentData.interests || user.meta.interests;
+          user.meta.learning_goals = studentData.learning_goals || user.meta.learning_goals;
+          user.meta.certifications = studentData.certifications || user.meta.certifications;
+          user.meta.preferred_study_times = studentData.preferred_study_times || user.meta.preferred_study_times;
+          user.meta.languages_spoken = studentData.languages_spoken || user.meta.languages_spoken;
+          
+          console.log('✅ Student data merged successfully');
+          console.log('📋 User data after merge:', {
+            full_name: user.full_name,
+            age: user.age,
+            bio: user.bio,
+            phone_numbers: user.phone_numbers,
+            address: user.address,
+            meta: user.meta
+          });
+        }
+      } catch (studentError) {
+        console.error('⚠️ Error fetching student data:', studentError.message);
+        // Continue with user data only if student fetch fails
+      }
+    }
+
     // Get enrollments with comprehensive course details using EnrolledCourse model
     const enrollments = await EnrolledCourse.find({
       student_id: userId,

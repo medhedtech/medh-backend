@@ -48,14 +48,14 @@ export const createStudent = async (req, res) => {
   }
 };
 
-// Get all students from Student collection only
+// Get all students from Student collection with User collection fallback
 export const getAllStudents = async (req, res) => {
   try {
-    const { search, page = 1, limit = 20 } = req.query;
+    const { search, page = 1, limit = 10000 } = req.query; // Set high default limit for admin views
     
     console.log('getAllStudents called with:', { search, page, limit });
     
-    // Build query for Student collection - remove status filter to get ALL students
+    // Build query for Student collection
     const studentQuery = {};
     
     // Add search functionality
@@ -73,20 +73,76 @@ export const getAllStudents = async (req, res) => {
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
-    // Fetch ALL students from Student collection (no status filter)
+    // First try to fetch from Student collection
     const students = await Student.find(studentQuery)
-      .select('_id full_name email age course_name status meta')
+      .select('_id full_name email age course_name status meta created_at')
       .sort({ full_name: 1 })
       .skip(skip)
       .limit(parseInt(limit));
     
-    console.log(`Found ${students.length} students from Student collection`);
-    
-    // Get total count for pagination
     const totalStudents = await Student.countDocuments(studentQuery);
     
-    console.log(`Total students in Student collection: ${totalStudents}`);
+    console.log(`Found ${students.length} students from Student collection`);
     
+    // If no students found in Student collection, fallback to User collection
+    if (students.length === 0) {
+      console.log('No students in Student collection, trying User collection...');
+      
+      // Import User model
+      const User = (await import("../models/user-modal.js")).default;
+      
+      // Build query for User collection
+      const userQuery = { role: { $in: ["student", "coorporate-student"] } };
+      
+      if (search) {
+        const searchRegex = { $regex: search, $options: 'i' };
+        userQuery.$or = [
+          { full_name: searchRegex },
+          { email: searchRegex }
+        ];
+      }
+      
+      // Fetch from User collection
+      const userStudents = await User.find(userQuery)
+        .select('_id full_name email phone_numbers role status user_image created_at')
+        .sort({ full_name: 1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+      
+      const totalUserStudents = await User.countDocuments(userQuery);
+      
+      console.log(`Found ${userStudents.length} students from User collection`);
+      
+      // Transform User data to match Student structure
+      const transformedStudents = userStudents.map(user => ({
+        _id: user._id,
+        full_name: user.full_name,
+        email: user.email,
+        phone_numbers: user.phone_numbers,
+        role: user.role,
+        status: user.status || 'active',
+        user_image: user.user_image,
+        created_at: user.created_at,
+        course_name: '', // User collection doesn't have course_name
+        age: null, // User collection doesn't have age
+        meta: { source: 'user_collection' }
+      }));
+      
+      return res.status(200).json({
+        success: true,
+        message: "Students fetched successfully from User collection (fallback)",
+        data: {
+          items: transformedStudents,
+          total: totalUserStudents,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          pages: Math.ceil(totalUserStudents / parseInt(limit)),
+          source: 'user_collection'
+        }
+      });
+    }
+    
+    // Return Student collection data
     res.status(200).json({
       success: true,
       message: "Students fetched successfully from Student collection",
@@ -95,12 +151,13 @@ export const getAllStudents = async (req, res) => {
         total: totalStudents,
         page: parseInt(page),
         limit: parseInt(limit),
-        pages: Math.ceil(totalStudents / parseInt(limit))
+        pages: Math.ceil(totalStudents / parseInt(limit)),
+        source: 'student_collection'
       }
     });
   } catch (error) {
     console.error('Error fetching students:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: "Error fetching students", 
       error: error.message 

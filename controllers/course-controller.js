@@ -4082,6 +4082,16 @@ const getAllCoursesWithPrices = async (req, res) => {
  */
 const getCoursesWithFields = async (req, res) => {
   try {
+    // Check database connection first
+    if (mongoose.connection.readyState !== 1) {
+      console.error("Database not connected. ReadyState:", mongoose.connection.readyState);
+      return res.status(503).json({
+        success: false,
+        message: "Database service temporarily unavailable",
+        error: "Database connection not established"
+      });
+    }
+
     const { fields, filters = {}, sort = {}, page = 1, limit = 10 } = req.query;
 
     // Parse fields from query parameter
@@ -4428,47 +4438,61 @@ const getCoursesWithFields = async (req, res) => {
       }
     }
 
-    // Execute queries for both legacy and new course models
-    const [legacyResults, legacyCount] = await Promise.all([
-      Course.find(queryFilters, requestedFields)
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      Course.countDocuments(queryFilters),
-    ]);
+    // Execute queries for both legacy and new course models with error handling
+    let legacyResults = [], legacyCount = 0;
+    let blendedResults = [], liveResults = [], freeResults = [];
+    let blendedCount = 0, liveCount = 0, freeCount = 0;
 
-    // Execute queries for new course-types models (with same filters)
-    const [
-      blendedResults,
-      liveResults,
-      freeResults,
-      blendedCount,
-      liveCount,
-      freeCount,
-    ] = await Promise.all([
-      BlendedCourse.find(queryFilters, requestedFields)
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(limitNum)
-        .lean()
-        .catch(() => []),
-      LiveCourse.find(queryFilters, requestedFields)
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(limitNum)
-        .lean()
-        .catch(() => []),
-      FreeCourse.find(queryFilters, requestedFields)
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(limitNum)
-        .lean()
-        .catch(() => []),
-      BlendedCourse.countDocuments(queryFilters).catch(() => 0),
-      LiveCourse.countDocuments(queryFilters).catch(() => 0),
-      FreeCourse.countDocuments(queryFilters).catch(() => 0),
-    ]);
+    try {
+      [legacyResults, legacyCount] = await Promise.all([
+        Course.find(queryFilters, requestedFields)
+          .sort(sortOptions)
+          .skip(skip)
+          .limit(limitNum)
+          .lean(),
+        Course.countDocuments(queryFilters),
+      ]);
+    } catch (legacyError) {
+      console.error("Error querying legacy courses:", legacyError);
+      // Continue with empty results
+    }
+
+    try {
+      // Execute queries for new course-types models (with same filters)
+      [
+        blendedResults,
+        liveResults,
+        freeResults,
+        blendedCount,
+        liveCount,
+        freeCount,
+      ] = await Promise.all([
+        BlendedCourse.find(queryFilters, requestedFields)
+          .sort(sortOptions)
+          .skip(skip)
+          .limit(limitNum)
+          .lean()
+          .catch(() => []),
+        LiveCourse.find(queryFilters, requestedFields)
+          .sort(sortOptions)
+          .skip(skip)
+          .limit(limitNum)
+          .lean()
+          .catch(() => []),
+        FreeCourse.find(queryFilters, requestedFields)
+          .sort(sortOptions)
+          .skip(skip)
+          .limit(limitNum)
+          .lean()
+          .catch(() => []),
+        BlendedCourse.countDocuments(queryFilters).catch(() => 0),
+        LiveCourse.countDocuments(queryFilters).catch(() => 0),
+        FreeCourse.countDocuments(queryFilters).catch(() => 0),
+      ]);
+    } catch (newModelError) {
+      console.error("Error querying new course models:", newModelError);
+      // Continue with empty results
+    }
 
     // Combine results
     const queryResults = [
@@ -4575,6 +4599,7 @@ const getCoursesWithFields = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in getCoursesWithFields:", error);
+    console.error("Full error stack:", error.stack);
     res.status(500).json({
       success: false,
       message: "Error fetching courses",
