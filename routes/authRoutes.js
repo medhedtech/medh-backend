@@ -1867,11 +1867,10 @@ router.put(
 
       // Only update the Student collection if the user is a student (don't update Users collection)
       if (currentUser && currentUser.role && currentUser.role.includes('student')) {
-        try {
-          // Import Student model
-          const Student = (await import("../models/student-model.js")).default;
-          
-                  // Prepare student update data - use updateData (new values) with fallback to currentUser (existing values)
+        // Import Student model
+        const Student = (await import("../models/student-model.js")).default;
+        
+        // Prepare student update data - use updateData (new values) with fallback to currentUser (existing values)
         const studentUpdateData = {
           full_name: updateData.full_name || currentUser.full_name,
           age: updateData.age || currentUser.age,
@@ -1927,6 +1926,8 @@ router.put(
             },
             status: "Active"
           };
+
+        try {
 
           // Find and update the student record
           // First try to find by email (most reliable)
