@@ -11,6 +11,7 @@ import User, {
   USER_ADMIN_ROLES,
 } from "../models/user-modal.js";
 import Student from "../models/student-model.js";
+import TempUser from "../models/temp-user-model.js";
 import emailService from "../services/emailService.js";
 import logger from "../utils/logger.js";
 import userValidation from "../validations/userValidation.js";
@@ -123,9 +124,13 @@ class AuthController {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(tempPassword, salt);
 
-      // Update user password with temporary password
+      // Update user password with temporary password (already hashed)
       user.password = hashedPassword;
+      
+      // Skip pre-save hook for this save since password is already hashed
+      user._skipPasswordHash = true;
       await user.save();
+      delete user._skipPasswordHash;
 
       // Send email with temporary password using the improved email service
       try {
@@ -260,6 +265,9 @@ class AuthController {
    * @param {Object} res - Express response object
    */
   async verifyTempPassword(req, res) {
+    console.log('🚀 VERIFY TEMP PASSWORD FUNCTION CALLED');
+    console.log('📝 Request body:', req.body);
+    
     try {
       const { email, tempPassword } = req.body;
 
@@ -338,8 +346,23 @@ class AuthController {
           : "none",
       });
 
-      // Verify the temporary password
+      // Verify the temporary password against the hashed password stored in user.password
+      // The tempPassword was hashed with bcrypt and stored in user.password during forgot password
+      
+      console.log('🔍 TEMP PASSWORD VERIFICATION DEBUG:');
+      console.log('📧 Email:', normalizedEmail);
+      console.log('🔑 Received tempPassword:', tempPassword);
+      console.log('🔑 Received tempPassword length:', tempPassword.length);
+      console.log('🔑 Received tempPassword type:', typeof tempPassword);
+      console.log('🔑 Stored hashed password:', user.password ? user.password.substring(0, 20) + '...' : 'null');
+      console.log('🔑 Reset token expires:', new Date(user.password_reset_expires));
+      console.log('🔑 Current time:', new Date());
+      console.log('🔑 Token expired?', user.password_reset_expires <= Date.now());
+      
+      // Use bcrypt to compare the temp password with the hashed password
       const isMatch = await bcrypt.compare(tempPassword, user.password);
+
+      console.log('🎯 VERIFICATION RESULT:', isMatch);
 
       logger.auth.debug("Password verification result", {
         email: normalizedEmail,
@@ -348,6 +371,7 @@ class AuthController {
       });
 
       if (!isMatch) {
+        console.log('❌ PASSWORD MISMATCH - Entering error handling...');
         try {
           const attemptResult = await this.incrementFailedAttempts(
             user,
@@ -416,9 +440,18 @@ class AuthController {
                 : "Internal server error",
           });
         }
+        
+        // If we reach here, password was wrong but no error was returned
+        // This should always return an error for wrong password
+        console.log('🚨 FALLBACK ERROR - Wrong password but no error returned');
+        return res.status(401).json({
+          success: false,
+          message: "Incorrect temporary password"
+        });
       }
 
       // Temporary password is correct - reset failed attempts and prepare for password change
+      console.log('✅ PASSWORD MATCH - Entering success handling...');
       await this.resetLockoutFields(user);
 
       // Generate a temporary verification token for password reset
@@ -1025,63 +1058,40 @@ class AuthController {
         userData.student_id = studentId;
       }
 
-      const newUser = new User(userData);
-      await newUser.save();
-
-      // Log registration activity
-      await newUser.logActivity(
-        "register",
-        null,
-        {
-          registration_method: "email",
-          referral_source: req.body.referral_source || "direct",
-        },
-        {
-          ip_address: deviceInfo.ip_address,
-          user_agent: req.headers["user-agent"],
-          device_type: deviceInfo.device_type,
-          geolocation: locationInfo,
-        },
-      );
-
-      // Send verification email with OTP
+      // Generate OTP for email verification
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      newUser.email_verification_token = otp;
-      newUser.email_verification_expires = Date.now() + 10 * 60 * 1000; // 10 minutes
-      await newUser.save();
-
-      await this.sendVerificationEmail(newUser.email, otp);
-
-      // Generate JWT token
-      const token = this.generateJWT(newUser);
-
-      // Track real-time user registration
-      this.trackUserAnalytics("user_registered", {
-        user_id: newUser._id,
-        email: newUser.email,
-        registration_date: new Date(),
+      
+      // Store user data temporarily until email verification
+      const tempUserData = {
+        ...userData,
+        email_verification_token: otp,
+        email_verification_expires: Date.now() + 10 * 60 * 1000, // 10 minutes
         device_info: deviceInfo,
         location_info: locationInfo,
-      });
+        referral_source: req.body.referral_source || "direct",
+      };
+
+      // Remove any existing temp user with same email
+      await TempUser.deleteOne({ email: userData.email });
+      
+      // Create temporary user
+      const tempUser = new TempUser(tempUserData);
+      await tempUser.save();
+
+      // Send verification email with OTP
+      await this.sendVerificationEmail(tempUser.email, otp);
+
+      console.log('📧 Registration initiated for:', tempUser.email);
+      console.log('🔑 Verification code sent:', otp);
+      console.log('⏰ Code expires at:', new Date(tempUser.email_verification_expires));
 
       res.status(201).json({
         success: true,
-        message: "User registered successfully. Please verify your email.",
+        message: "Registration initiated. Please verify your email to complete account creation.",
         data: {
-          user: {
-            id: newUser._id,
-            full_name: newUser.full_name,
-            email: newUser.email,
-            username: newUser.username,
-            role: newUser.role,
-            student_id: newUser.student_id,
-            email_verified: newUser.email_verified,
-            profile_completion: newUser.profile_completion,
-            account_type: newUser.account_type,
-            created_at: newUser.created_at,
-          },
-          token,
-          expires_in: "24h",
+          email: tempUser.email,
+          verification_required: true,
+          expires_in_minutes: 10,
         },
       });
     } catch (error) {
@@ -1500,7 +1510,7 @@ class AuthController {
         sessionId,
         false, // remember_me is false for MFA login
         res,
-        false, // Do not generate quick login key
+        true, // Always generate quick login key
       );
     } catch (error) {
       logger.error("Complete MFA login error:", {
@@ -1535,17 +1545,21 @@ class AuthController {
     const token = this.generateJWT(user, tokenExpiry);
 
     let quickLoginKey = null;
+    let keyId = null;
 
+    // Only generate a quick login key if requested
     if (generateQuickLoginKey) {
       const newQuickLoginKey = crypto.randomBytes(32).toString("hex");
       const hashedQuickLoginKey = bcrypt.hashSync(newQuickLoginKey, 10);
-      const keyId = crypto.randomBytes(16).toString("hex"); // Unique ID for the key
+      keyId = crypto.randomBytes(16).toString("hex"); // Unique ID for the key
 
       user.quick_login_keys.push({
         key_id: keyId,
         hashed_key: hashedQuickLoginKey,
         created_at: new Date(),
         last_used: new Date(),
+        expires_at: null, // No expiration initially - will be set on logout
+        is_active: true,
       });
 
       // Save the user with the new quick login key
@@ -1605,38 +1619,99 @@ class AuthController {
         session_id: sessionId,
         expires_in: remember_me ? "30d" : "24h",
         user_type: user.is_demo ? "demo" : "regular",
-        quick_login_key: quickLoginKey, // Return the unhashed key if generated
+        ...(quickLoginKey && { quick_login_key: quickLoginKey }), // Only include if generated
+        ...(keyId && { quick_login_key_id: keyId }), // Only include if generated
       },
     });
   }
 
-  // Enhanced Logout with Session Cleanup
+  // Enhanced Logout with Session Cleanup and Quick Login Expiration
   async logout(req, res) {
     try {
       const { session_id } = req.body;
       const user = req.user;
 
-      if (session_id) {
-        await user.endSession(session_id);
-        this.sessionStore.delete(session_id);
+      // Check if user exists
+      if (!user) {
+        logger.warn("Logout attempted for non-existent user");
+        return res.status(200).json({
+          success: true,
+          message: "Logout successful (user not found)",
+          data: {
+            quick_login_expires_at: null,
+            quick_login_keys_count: 0
+          }
+        });
+      }
+
+      if (session_id && user.endSession) {
+        try {
+          await user.endSession(session_id);
+          this.sessionStore.delete(session_id);
+        } catch (error) {
+          logger.error("Error ending session:", error);
+        }
+      }
+
+      // Set expiration for all quick login keys (1 minute from now)
+      const expirationTime = new Date(Date.now() + 60 * 1000); // 1 minute from now
+      logger.debug(`Setting quick login key expiration to: ${expirationTime} for user ${user.email}`);
+      
+      if (user.quick_login_keys && user.quick_login_keys.length > 0) {
+        let keysUpdated = 0;
+        user.quick_login_keys.forEach(key => {
+          if (key.is_active) {
+            key.expires_at = expirationTime;
+            keysUpdated++;
+            logger.debug(`Updated key ${key.key_id}: expires_at=${key.expires_at}, is_active=${key.is_active}`);
+          } else {
+            logger.debug(`Skipping inactive key ${key.key_id}: is_active=${key.is_active}`);
+          }
+        });
+        
+        try {
+          await user.save();
+          logger.debug(`Successfully set expiration for ${keysUpdated} active quick login keys for user ${user.email}`);
+        } catch (saveError) {
+          logger.error("Error saving quick login key expiration:", saveError);
+        }
+      } else {
+        logger.debug(`No quick login keys found for user ${user.email}`);
       }
 
       // Log logout activity
-      await user.logActivity("logout", null, {
-        session_id,
-        logout_time: new Date(),
-      });
+      try {
+        await user.logActivity("logout", null, {
+          session_id,
+          logout_time: new Date(),
+          quick_login_keys_expired: user.quick_login_keys?.length || 0,
+        });
+      } catch (error) {
+        logger.error("Error logging logout activity:", error);
+      }
 
       // Remove from active users if no other sessions
-      const activeSessions = user.sessions.filter((s) => s.is_active);
-      if (activeSessions.length === 0) {
-        this.activeUsers.delete(user._id.toString());
-        await user.setOffline();
+      if (user.sessions) {
+        const activeSessions = user.sessions.filter((s) => s.is_active);
+        if (activeSessions.length === 0) {
+          this.activeUsers.delete(user._id.toString());
+          if (user.setOffline) {
+            try {
+              await user.setOffline();
+            } catch (error) {
+              logger.error("Error setting user offline:", error);
+            }
+          }
+        }
       }
 
       res.status(200).json({
         success: true,
         message: "Logout successful",
+        data: {
+          quick_login_expires_at: expirationTime,
+          quick_login_keys_count: user.quick_login_keys?.length || 0
+        }
       });
     } catch (error) {
       console.error("Logout error:", error);
@@ -2399,6 +2474,14 @@ class AuthController {
         `Quick login attempt for email: ${email.toLowerCase()}, User found: ${!!user}`,
       );
 
+      // Debug: Log quick login key details
+      if (user && user.quick_login_keys) {
+        logger.debug(`User has ${user.quick_login_keys.length} quick login keys`);
+        user.quick_login_keys.forEach((key, index) => {
+          logger.debug(`Key ${index}: hashed_key exists: ${!!key.hashed_key}, key_id: ${key.key_id}`);
+        });
+      }
+
       if (!user) {
         return res.status(401).json({
           success: false,
@@ -2428,11 +2511,40 @@ class AuthController {
 
       // Find the quick login key by iterating and comparing hashed values
       let foundKey = null;
+      const currentTime = new Date();
+      logger.debug(`Quick login attempt at: ${currentTime}`);
+      
       for (const key of user.quick_login_keys) {
-        const isValid = await bcrypt.compare(quick_login_key, key.hashed_key);
-        if (isValid) {
-          foundKey = key;
-          break;
+        // Add validation to ensure both values exist before bcrypt comparison
+        if (quick_login_key && key.hashed_key) {
+          // Debug: Log key details
+          logger.debug(`Checking key ${key.key_id}: expires_at=${key.expires_at}, is_active=${key.is_active}`);
+          
+          // Check if the key has expired
+          // If expires_at is undefined, the key has no expiration (not expired)
+          // If expires_at exists and current time is past it, the key has expired
+          if (key.expires_at !== undefined && key.expires_at !== null && currentTime > key.expires_at) {
+            logger.debug(`Quick login key ${key.key_id} has expired at ${key.expires_at} (current time: ${currentTime})`);
+            continue; // Skip expired keys
+          }
+          
+          // Check if key is active
+          if (!key.is_active) {
+            logger.debug(`Quick login key ${key.key_id} is not active`);
+            continue; // Skip inactive keys
+          }
+          
+          try {
+            const isValid = await bcrypt.compare(quick_login_key, key.hashed_key);
+            if (isValid) {
+              foundKey = key;
+              logger.debug(`Found valid quick login key: ${key.key_id}`);
+              break;
+            }
+          } catch (bcryptError) {
+            logger.error("Bcrypt comparison error:", bcryptError);
+            continue; // Skip this key and try the next one
+          }
         }
       }
       logger.debug(
@@ -4262,36 +4374,115 @@ class AuthController {
         });
       }
 
-      const user = await User.findOne({
+      console.log('🔍 Verifying OTP for:', email, 'with code:', otp);
+
+      // Find temp user with valid OTP
+      const tempUser = await TempUser.findOne({
         email: email.toLowerCase(),
         email_verification_token: otp,
         email_verification_expires: { $gt: Date.now() },
       });
 
-      if (!user) {
+      if (!tempUser) {
+        console.log('❌ Invalid or expired OTP for:', email);
         return res.status(400).json({
           success: false,
           message: "Invalid or expired OTP",
         });
       }
 
-      user.email_verified = true;
-      user.email_verification_token = undefined;
-      user.email_verification_expires = undefined;
-      await user.save();
+      console.log('✅ Valid OTP found, creating permanent user account...');
+
+      // Check if user already exists in main database (edge case)
+      const existingUser = await User.findOne({ email: email.toLowerCase() });
+      if (existingUser) {
+        // Clean up temp user and return error
+        await TempUser.deleteOne({ _id: tempUser._id });
+        return res.status(400).json({
+          success: false,
+          message: "User already exists with this email",
+        });
+      }
+
+      // Create permanent user from temp data
+      const userData = {
+        full_name: tempUser.full_name,
+        email: tempUser.email,
+        username: tempUser.username,
+        password: tempUser.password, // Already hashed by temp user pre-save hook
+        role: tempUser.role,
+        account_type: tempUser.account_type,
+        student_id: tempUser.student_id,
+        email_verified: true, // Mark as verified since OTP was correct
+        is_active: true,
+      };
+
+      const newUser = new User(userData);
+      
+      // Skip password hashing since it's already hashed from temp user
+      newUser._skipPasswordHash = true;
+      await newUser.save();
+      delete newUser._skipPasswordHash;
+
+      console.log('✅ Permanent user created:', newUser._id);
+
+      // Log registration activity
+      await newUser.logActivity(
+        "register",
+        null,
+        {
+          registration_method: "email",
+          referral_source: tempUser.referral_source || "direct",
+          verified_at: new Date(),
+        },
+        {
+          ip_address: tempUser.device_info?.ip_address,
+          user_agent: tempUser.device_info?.user_agent,
+          device_type: tempUser.device_info?.device_type,
+          geolocation: tempUser.location_info,
+        },
+      );
+
+      // Track real-time user registration
+      this.trackUserAnalytics("user_registered", {
+        user_id: newUser._id,
+        email: newUser.email,
+        registration_date: new Date(),
+        device_info: tempUser.device_info,
+        location_info: tempUser.location_info,
+        verification_completed: true,
+      });
+
+      // Generate JWT token for the new user
+      const token = this.generateJWT(newUser);
+
+      // Clean up temp user
+      await TempUser.deleteOne({ _id: tempUser._id });
+
+      console.log('🎉 Registration completed successfully for:', newUser.email);
 
       res.status(200).json({
         success: true,
-        message: "Email verified successfully",
+        message: "Email verified successfully! Your account has been created.",
         data: {
           user: {
-            id: user._id,
-            email: user.email,
-            email_verified: user.email_verified,
+            id: newUser._id,
+            full_name: newUser.full_name,
+            email: newUser.email,
+            username: newUser.username,
+            role: newUser.role,
+            student_id: newUser.student_id,
+            email_verified: newUser.email_verified,
+            profile_completion: newUser.profile_completion,
+            account_type: newUser.account_type,
+            created_at: newUser.created_at,
           },
+          token,
+          expires_in: "24h",
         },
       });
     } catch (error) {
+      console.error("❌ Email verification error:", error);
       logger.error("Email verification error:", error);
       res.status(500).json({
         success: false,
@@ -4312,12 +4503,34 @@ class AuthController {
         });
       }
 
+      console.log('🔄 Resending verification OTP for:', email);
+
+      // Check if user is in temp storage (pending verification)
+      const tempUser = await TempUser.findOne({ email: email.toLowerCase() });
+      
+      if (tempUser) {
+        // Generate new 6-digit OTP for temp user
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        tempUser.email_verification_token = otp;
+        tempUser.email_verification_expires = Date.now() + 10 * 60 * 1000; // 10 minutes
+        await tempUser.save();
+
+        await this.sendVerificationEmail(tempUser.email, otp);
+
+        console.log('✅ New OTP sent to temp user:', email);
+        return res.status(200).json({
+          success: true,
+          message: "Verification email sent successfully",
+        });
+      }
+
+      // Check if user exists in main database
       const user = await User.findOne({ email: email.toLowerCase() });
 
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: "User not found",
+          message: "User not found. Please register first.",
         });
       }
 
@@ -4328,7 +4541,7 @@ class AuthController {
         });
       }
 
-      // Generate new 6-digit OTP
+      // This case shouldn't happen with new flow, but handle legacy users
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       user.email_verification_token = otp;
       user.email_verification_expires = Date.now() + 10 * 60 * 1000; // 10 minutes
@@ -4336,11 +4549,13 @@ class AuthController {
 
       await this.sendVerificationEmail(user.email, otp);
 
+      console.log('✅ New OTP sent to existing user:', email);
       res.status(200).json({
         success: true,
         message: "Verification email sent successfully",
       });
     } catch (error) {
+      console.error("❌ Resend verification error:", error);
       logger.error("Resend verification error:", error);
       res.status(500).json({
         success: false,

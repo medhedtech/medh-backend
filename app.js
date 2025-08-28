@@ -38,8 +38,8 @@ sentryUtils.setupSentryRequestHandler(app);
 
 // MongoDB connection
 if (ENV_VARS.NODE_ENV === "development" && !process.env.MONGODB_URL) {
-  process.env.MONGODB_URL = "mongodb://localhost:27017/medh";
-  console.log("Using local MongoDB instance for development:", process.env.MONGODB_URL);
+  process.env.MONGODB_URL = "mongodb+srv://medhupskill:Medh567upskill@medh.xmifs.mongodb.net/MedhDB";
+  console.log("Using cloud MongoDB Atlas for development:", process.env.MONGODB_URL);
 }
 connectDB().catch((error) => {
   console.error("Initial MongoDB connection error:", error);
@@ -49,11 +49,14 @@ connectDB().catch((error) => {
 // Cron jobs
 import initializeSessionReminderCrons from "./cronjob/session-reminder-cron.js";
 import { startZoomRecordingSync } from "./cronjob/zoom-recording-sync.js";
+import { initializeQuickLoginCleanupCron } from "./cronjob/quick-login-cleanup.js";
 mongoose.connection.once("open", () => {
   console.log("MongoDB connected, initializing session reminder cron jobs...");
   initializeSessionReminderCrons();
   console.log("Starting Zoom recording sync cron job...");
   startZoomRecordingSync();
+  console.log("Initializing quick login cleanup cron job...");
+  initializeQuickLoginCleanupCron();
 });
 
 // Middleware

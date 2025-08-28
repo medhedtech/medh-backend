@@ -74,6 +74,11 @@ const userActivitySchema = new Schema(
          "session_invalidated",
          "session_terminated", // Added missing enum value
          "bulk_session_termination", // Added missing enum value
+         "oauth_link", // OAuth account linking
+         "oauth_unlink", // OAuth account unlinking
+         "oauth_email_sync", // OAuth email synchronization
+         "oauth_login", // OAuth login
+         "oauth_register", // OAuth registration
          "account_locked",
          "account_unlocked",
          "password_reset_requested",
@@ -298,13 +303,14 @@ const userSchema = new Schema(
     
     // Quick Login
     quick_login_keys: [{
-      key: String,
-      name: String,
-        created_at: {
-          type: Date,
-          default: Date.now,
-        },
+      key_id: String, // Unique identifier for the key
+      hashed_key: String, // The bcrypt hashed quick login key
+      created_at: {
+        type: Date,
+        default: Date.now,
+      },
       last_used: Date,
+      expires_at: Date, // When the quick login key expires (1 minute after logout)
       is_active: {
         type: Boolean,
         default: true,
@@ -700,6 +706,47 @@ userSchema.methods.getDeviceBreakdown = function () {
   return breakdown;
 };
 
+// Clean up expired quick login keys
+userSchema.methods.cleanupExpiredQuickLoginKeys = function () {
+  if (!this.quick_login_keys) return this;
+  
+  const now = new Date();
+  const originalLength = this.quick_login_keys.length;
+  
+  // Remove expired keys
+  this.quick_login_keys = this.quick_login_keys.filter(key => {
+    // Keep keys that don't have expiration or haven't expired yet
+    return !key.expires_at || key.expires_at > now;
+  });
+  
+  const removedCount = originalLength - this.quick_login_keys.length;
+  if (removedCount > 0) {
+    console.log(`Cleaned up ${removedCount} expired quick login keys for user ${this.email}`);
+  }
+  
+  return this;
+};
+
+// End a specific session
+userSchema.methods.endSession = async function (sessionId) {
+  if (!this.sessions) return this;
+  
+  const sessionIndex = this.sessions.findIndex(session => session.session_id === sessionId);
+  if (sessionIndex !== -1) {
+    this.sessions[sessionIndex].is_active = false;
+    this.sessions[sessionIndex].invalidated_at = new Date();
+  }
+  
+  return this;
+};
+
+// Set user offline
+userSchema.methods.setOffline = async function () {
+  // This method can be used to mark user as offline
+  // For now, we'll just return the user object
+  return this;
+};
+
 // Static methods
 userSchema.statics.findByEmail = function (email) {
   return this.findOne({ email: email.toLowerCase() });
@@ -709,6 +756,52 @@ userSchema.statics.generateStudentId = async function () {
   const count = await this.countDocuments({ role: "student" });
   return `STU${String(count + 1).padStart(6, "0")}`;
 };
+
+// Clean up expired quick login keys for all users
+userSchema.statics.cleanupAllExpiredQuickLoginKeys = async function () {
+  try {
+    const users = await this.find({
+      'quick_login_keys.expires_at': { $lt: new Date() }
+    });
+    
+    let totalCleaned = 0;
+    for (const user of users) {
+      const originalLength = user.quick_login_keys.length;
+      user.cleanupExpiredQuickLoginKeys();
+      await user.save();
+      totalCleaned += originalLength - user.quick_login_keys.length;
+    }
+    
+    console.log(`Cleaned up ${totalCleaned} expired quick login keys across ${users.length} users`);
+    return totalCleaned;
+  } catch (error) {
+    console.error('Error cleaning up expired quick login keys:', error);
+    throw error;
+  }
+};
+
+// Pre-save hook to hash password
+userSchema.pre('save', async function(next) {
+  // Only hash the password if it has been modified (or is new)
+  if (!this.isModified('password')) return next();
+  
+  // Skip hashing if explicitly requested (for already hashed passwords)
+  if (this._skipPasswordHash) return next();
+  
+  try {
+    console.log('🔐 PRE-SAVE HOOK - Hashing password for user:', this.email);
+    
+    // Hash password with cost of 12
+    const salt = await bcrypt.genSalt(12);
+    this.password = await bcrypt.hash(this.password, salt);
+    
+    console.log('✅ PRE-SAVE HOOK - Password hashed successfully');
+    next();
+  } catch (error) {
+    console.error('❌ PRE-SAVE HOOK - Error hashing password:', error);
+    next(error);
+  }
+});
 
 // Create and export the model
 const User = mongoose.model("User", userSchema);

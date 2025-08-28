@@ -247,21 +247,22 @@ class EmailService {
    * Create optimized Redis configuration for BullMQ
    */
   createRedisConfig() {
-    // Validate Redis host - ensure it's not set to an invalid value
+    // Use the configured Redis host from environment
     let redisHost = process.env.REDIS_HOST || "localhost";
-    if (redisHost === "api.medh.co" || redisHost.includes("medh.co")) {
-      logger.email.warn("Invalid Redis host detected, falling back to localhost", {
-        invalidHost: redisHost,
-        fallbackHost: "localhost"
-      });
-      redisHost = "localhost";
-    }
+    let redisPort = parseInt(process.env.REDIS_PORT, 10) || 6379;
+    let redisPassword = process.env.REDIS_PASSWORD;
+    
+    logger.email.info("Redis configuration:", {
+      host: redisHost,
+      port: redisPort,
+      hasPassword: !!redisPassword
+    });
 
     const baseConfig = {
       host: redisHost,
-      port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+      port: redisPort,
       db: parseInt(process.env.REDIS_EMAIL_DB, 10) || 1, // Separate DB for email queue
-      maxRetriesPerRequest: 3,
+      maxRetriesPerRequest: null, // BullMQ requirement
       retryDelayOnFailover: 100,
       connectTimeout: parseInt(process.env.REDIS_CONNECT_TIMEOUT, 10) || 10000,
       commandTimeout: parseInt(process.env.REDIS_COMMAND_TIMEOUT, 10) || 5000,
@@ -273,8 +274,8 @@ class EmailService {
     };
 
     // Add authentication if provided
-    if (process.env.REDIS_PASSWORD) {
-      baseConfig.password = process.env.REDIS_PASSWORD;
+    if (redisPassword) {
+      baseConfig.password = redisPassword;
     }
     if (process.env.REDIS_USERNAME) {
       baseConfig.username = process.env.REDIS_USERNAME;
@@ -314,8 +315,7 @@ class EmailService {
   async initializeBullMQComponents(redisConfig) {
     // Initialize Queue for job management
     this.queue = new Queue(EMAIL_QUEUE_NAME, {
-      connection: redisConfig.cluster ? undefined : redisConfig,
-      ...(redisConfig.cluster && { connection: redisConfig }),
+      connection: redisConfig,
       defaultJobOptions: {
         attempts: EMAIL_RETRY_ATTEMPTS,
         backoff: {
@@ -334,7 +334,7 @@ class EmailService {
         return await this.processEmailJob(job);
       },
       {
-        connection: redisConfig.cluster ? redisConfig : redisConfig,
+        connection: redisConfig,
         concurrency: EMAIL_QUEUE_CONCURRENCY,
         limiter: {
           max: EMAIL_RATE_LIMIT_MAX,
@@ -448,7 +448,7 @@ class EmailService {
   checkRedisAvailability() {
     try {
       // First check if Redis is explicitly disabled
-      if (process.env.REDIS_ENABLED === "Ture") {
+      if (process.env.REDIS_ENABLED === "false") {
         logger.email.info("Redis explicitly disabled in environment, using direct email sending");
         return false;
       }
@@ -465,6 +465,10 @@ class EmailService {
           return false;
         }
       }
+
+      // Temporarily disable Redis to avoid connection timeout issues
+      logger.email.warn("Redis temporarily disabled to avoid connection timeout issues");
+      return false;
 
       // Check if Redis environment variables are properly set
       if (!process.env.REDIS_HOST && !process.env.REDIS_URL) {
@@ -1200,7 +1204,8 @@ class EmailService {
         html,
       };
 
-      return this.sendEmail(mailOptions, { priority: "high" });
+      // Use direct sending to avoid queue issues
+      return this.sendEmailDirectly(mailOptions);
     } catch (error) {
       logger.email.error("Failed to send password reset email", {
         error,
