@@ -63,3 +63,4 @@ console.log(`   Total keys with expiration: ${totalKeysWithExpiration}`);
 
 await mongoose.disconnect();
 console.log('\n🔌 Disconnected from MongoDB Atlas');
+

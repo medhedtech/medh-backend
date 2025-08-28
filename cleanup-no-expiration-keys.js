@@ -53,3 +53,4 @@ if (keysWithoutExpiration.length > 0) {
 
 await mongoose.disconnect();
 console.log('\n🔌 Disconnected from MongoDB Atlas');
+

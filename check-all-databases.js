@@ -77,3 +77,4 @@ for (const collection of collections) {
 
 await mongoose.disconnect();
 console.log('\n🔌 Disconnected from MongoDB');
+

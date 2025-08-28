@@ -103,3 +103,4 @@ for (const dbInfo of databases.databases) {
 
 await mongoose.disconnect();
 console.log('\n🔌 Disconnected from MongoDB');
+

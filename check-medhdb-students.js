@@ -66,3 +66,4 @@ if (medhStudents.length > 0) {
 
 await mongoose.disconnect();
 console.log('\n🔌 Disconnected from MedhDB');
+

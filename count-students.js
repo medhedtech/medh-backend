@@ -58,3 +58,4 @@ console.log(`🔴 Inactive users: ${inactiveUsers}`);
 
 await mongoose.disconnect();
 console.log('\n🔌 Disconnected from MongoDB Atlas');
+

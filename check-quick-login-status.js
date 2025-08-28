@@ -65,3 +65,4 @@ if (studentUser.quick_login_keys && studentUser.quick_login_keys.length > 0) {
 
 await mongoose.disconnect();
 console.log('\n🔌 Disconnected from MongoDB Atlas');
+
