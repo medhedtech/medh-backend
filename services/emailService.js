@@ -57,10 +57,19 @@ class EmailService {
     // Initialize with comprehensive error handling
     try {
       // Log email config for debugging (without credentials)
+      const envSecure = String(process.env.EMAIL_SECURE || "").toLowerCase();
+      const secureFlag = envSecure === "true" || envSecure === "1";
+      const configuredPort = parseInt(process.env.EMAIL_PORT, 10);
+      const port = Number.isFinite(configuredPort)
+        ? configuredPort
+        : secureFlag
+          ? 465 // SMTPS
+          : 587; // STARTTLS
+
       logger.email.debug("Configuring email transport with:", {
         host: process.env.EMAIL_HOST || "email-smtp.us-east-1.amazonaws.com",
-        port: process.env.EMAIL_PORT || 465,
-        secure: process.env.EMAIL_SECURE === "true" || true,
+        port,
+        secure: secureFlag,
         user: process.env.EMAIL_USER ? "Set" : "Not set",
         pass: process.env.EMAIL_PASS ? "Set" : "Not set",
         pooling: true,
@@ -69,8 +78,8 @@ class EmailService {
       // Initialize high-performance SMTP transporter with connection pooling
       this.transporter = nodemailer.createTransport({
         host: process.env.EMAIL_HOST || "email-smtp.us-east-1.amazonaws.com",
-        port: parseInt(process.env.EMAIL_PORT, 10) || 465,
-        secure: process.env.EMAIL_SECURE === "true" || true,
+        port,
+        secure: secureFlag,
         auth: {
           user: process.env.EMAIL_USER,
           pass: process.env.EMAIL_PASS,
@@ -87,7 +96,8 @@ class EmailService {
           parseInt(process.env.EMAIL_GREETING_TIMEOUT, 10) || 30000,
         socketTimeout: parseInt(process.env.EMAIL_SOCKET_TIMEOUT, 10) || 60000,
         // Enhanced TLS settings for better compatibility
-        requireTLS: true,
+        // Use STARTTLS (requireTLS) only when not using implicit TLS
+        requireTLS: !secureFlag,
         tls: {
           rejectUnauthorized: process.env.NODE_ENV === "production",
           minVersion: "TLSv1.2",

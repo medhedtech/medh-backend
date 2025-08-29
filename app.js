@@ -27,6 +27,7 @@ import courseMaterialRoutes from "./routes/courseMaterialRoutes.js";
 import sessionRatingRoutes from "./routes/sessionRatingRoutes.js";
 import emailManagementRoutes from "./routes/emailManagementRoutes.js";
 import healthRoutes from "./routes/healthRoutes.js";
+import adminAuthRoutes from "./routes/adminAuthRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -121,6 +122,7 @@ app.use("/api/v1/student", studentProgressRoutes);
 app.use("/api/v1/materials", courseMaterialRoutes);
 app.use("/api/v1/sessions", sessionRatingRoutes);
 app.use("/api/v1/email-management", emailManagementRoutes);
+app.use("/api/v1/admin-auth", adminAuthRoutes);
 
 // Debug CORS endpoint
 app.use("/api/cors-debug", (req, res) => {

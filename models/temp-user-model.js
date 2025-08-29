@@ -106,11 +106,11 @@ tempUserSchema.pre('save', async function(next) {
   try {
     console.log('🔐 TEMP USER PRE-SAVE HOOK - Hashing password for user:', this.email);
     
-    // Hash password with cost of 12
-    const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(this.password, salt);
+    // Use passwordSecurity utility for consistent hashing with pepper
+    const passwordSecurity = (await import('../utils/passwordSecurity.js')).default;
+    this.password = await passwordSecurity.hashPassword(this.password);
     
-    console.log('✅ TEMP USER PRE-SAVE HOOK - Password hashed successfully');
+    console.log('✅ TEMP USER PRE-SAVE HOOK - Password hashed successfully with passwordSecurity');
     next();
   } catch (error) {
     console.error('❌ TEMP USER PRE-SAVE HOOK - Error hashing password:', error);

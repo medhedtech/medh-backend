@@ -580,10 +580,32 @@ const userSchema = new Schema(
 
 // Instance methods
 userSchema.methods.comparePassword = async function (candidatePassword) {
-  return await passwordSecurity.comparePassword(
-    candidatePassword,
-    this.password,
-  );
+  try {
+    // For backward compatibility: Try old method first (direct bcrypt without pepper)
+    // This preserves original user passwords without modification
+    const oldMethodResult = await bcrypt.compare(candidatePassword, this.password);
+    
+    if (oldMethodResult) {
+      console.log('✅ Login successful with original password method for:', this.email);
+      return true;
+    }
+    
+    // If old method fails, try new method (with pepper) for newly created users
+    const newMethodResult = await passwordSecurity.comparePassword(
+      candidatePassword,
+      this.password,
+    );
+    
+    if (newMethodResult) {
+      console.log('✅ Login successful with new password method for:', this.email);
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('❌ Error in comparePassword:', error);
+    return false;
+  }
 };
 
 userSchema.methods.logActivity = async function (
@@ -791,11 +813,10 @@ userSchema.pre('save', async function(next) {
   try {
     console.log('🔐 PRE-SAVE HOOK - Hashing password for user:', this.email);
     
-    // Hash password with cost of 12
-    const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(this.password, salt);
+    // Use passwordSecurity utility for consistent hashing with pepper
+    this.password = await passwordSecurity.hashPassword(this.password);
     
-    console.log('✅ PRE-SAVE HOOK - Password hashed successfully');
+    console.log('✅ PRE-SAVE HOOK - Password hashed successfully with passwordSecurity');
     next();
   } catch (error) {
     console.error('❌ PRE-SAVE HOOK - Error hashing password:', error);
