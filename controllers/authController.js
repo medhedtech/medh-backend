@@ -132,32 +132,26 @@ class AuthController {
       await user.save();
       delete user._skipPasswordHash;
 
-      // Send email with temporary password using the improved email service
-      try {
-        await emailService.sendPasswordResetEmail(
-          normalizedEmail,
-          user.full_name,
-          tempPassword,
-        );
+      // Send email with temporary password asynchronously to avoid blocking the response
+      emailService
+        .sendPasswordResetEmail(normalizedEmail, user.full_name, tempPassword)
+        .then(() => {
+          logger.auth.info("Password reset email sent", {
+            email: normalizedEmail,
+          });
+        })
+        .catch((emailError) => {
+          logger.auth.error("Failed to send password reset email", {
+            error: emailError,
+            email: normalizedEmail,
+          });
+        });
 
-        logger.auth.info("Password reset email sent", {
-          email: normalizedEmail,
-        });
-        return res.status(200).json({
-          success: true,
-          message: "Password reset email sent",
-        });
-      } catch (emailError) {
-        logger.auth.error("Failed to send password reset email", {
-          error: emailError,
-          email: normalizedEmail,
-        });
-        return res.status(500).json({
-          success: false,
-          message: "Failed to send password reset email",
-          error: emailError.message,
-        });
-      }
+      // Respond immediately so the client doesn't time out if SMTP is slow
+      return res.status(200).json({
+        success: true,
+        message: "If an account exists, a reset email will be sent shortly.",
+      });
     } catch (err) {
       logger.auth.error("Forgot password process failed", {
         error: err,
