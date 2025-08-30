@@ -178,7 +178,28 @@ export const authenticateToken = async (req, res, next) => {
     if (user.id && (!user.email || !user.role || user.role === 'student' || (!decoded.role && decoded.userId))) {
       try {
         logger.debug('Fetching user details from database', { userId: user.id });
-        const fullUser = await dbUtils.findById(User, user.id, { select: '-password' });
+        let fullUser = await dbUtils.findById(User, user.id, { select: '-password' });
+        let isAdminUser = false;
+        
+        // If user not found in users collection, check admins collection
+        if (!fullUser) {
+          try {
+            const Admin = (await import('../models/admin-model.js')).default;
+            const admin = await Admin.findById(user.id).select('-password');
+            
+            if (admin) {
+              logger.debug('Admin found in admins collection for token', { adminId: admin._id, email: admin.email });
+              fullUser = admin;
+              isAdminUser = true;
+            }
+          } catch (adminError) {
+            logger.error('Error checking admins collection during token validation', { 
+              error: adminError.message,
+              userId: user.id 
+            });
+          }
+        }
+        
         if (fullUser) {
           // Use admin_role if present, otherwise use role
           // Handle both array and string formats for role
@@ -195,13 +216,15 @@ export const authenticateToken = async (req, res, next) => {
             id: fullUser._id.toString(),
             email: fullUser.email,
             role: userRole,
-            _id: fullUser._id
+            _id: fullUser._id,
+            isAdmin: isAdminUser
           };
           logger.debug('Enhanced token with full user data', { 
             userId: user.id, 
             role: user.role,
             originalRole: fullUser.role,
-            adminRole: fullUser.admin_role 
+            adminRole: fullUser.admin_role,
+            isAdmin: isAdminUser
           });
         } else {
           logger.warn('User not found in database', { userId: user.id });
@@ -368,7 +391,25 @@ export const verifyToken = async (req, res, next) => {
     const decoded = jwt.verify(token, ENV_VARS.JWT_SECRET_KEY);
 
     // Get user from database
-    const user = await dbUtils.findById(User, decoded.id, { select: "-password" });
+    let user = await dbUtils.findById(User, decoded.id, { select: "-password" });
+
+    // If user not found in users collection, check admins collection
+    if (!user) {
+      try {
+        const Admin = (await import('../models/admin-model.js')).default;
+        const admin = await Admin.findById(decoded.id).select('-password');
+        
+        if (admin) {
+          logger.debug('Admin found in admins collection for verifyToken', { adminId: admin._id, email: admin.email });
+          user = admin;
+        }
+      } catch (adminError) {
+        logger.error('Error checking admins collection during token verification', { 
+          error: adminError.message,
+          userId: decoded.id 
+        });
+      }
+    }
 
     if (!user) {
       return next(new AppError("User not found", 401));

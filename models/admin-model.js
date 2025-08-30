@@ -56,6 +56,11 @@ const adminSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Add alias for compatibility with user login system
+    email_verified: {
+      type: Boolean,
+      default: false,
+    },
     last_login: {
       type: Date,
     },
@@ -64,6 +69,14 @@ const adminSchema = new mongoose.Schema(
       default: 0,
     },
     lock_until: {
+      type: Date,
+    },
+    
+    // Password Reset Fields
+    password_reset_token: {
+      type: String,
+    },
+    password_reset_expires: {
       type: Date,
     },
     
@@ -106,6 +119,74 @@ const adminSchema = new mongoose.Schema(
         default: true,
       },
       invalidated_at: Date,
+    }],
+
+    // Add compatibility fields for login system
+    statistics: {
+      engagement: {
+        total_logins: { type: Number, default: 0 },
+        total_session_time: { type: Number, default: 0 },
+        avg_session_duration: { type: Number, default: 0 },
+        last_active_date: { type: Date, default: Date.now },
+        consecutive_active_days: { type: Number, default: 0 },
+        total_page_views: { type: Number, default: 0 },
+        feature_usage_count: { type: Object, default: {} }
+      },
+      learning: {
+        total_courses_enrolled: { type: Number, default: 0 },
+        total_courses_completed: { type: Number, default: 0 },
+        total_learning_time: { type: Number, default: 0 },
+        current_streak: { type: Number, default: 0 },
+        longest_streak: { type: Number, default: 0 },
+        certificates_earned: { type: Number, default: 0 },
+        skill_points: { type: Number, default: 0 },
+        achievements_unlocked: { type: Number, default: 0 }
+      },
+      social: {
+        reviews_written: { type: Number, default: 0 },
+        discussions_participated: { type: Number, default: 0 },
+        content_shared: { type: Number, default: 0 },
+        followers_count: { type: Number, default: 0 },
+        following_count: { type: Number, default: 0 },
+        community_reputation: { type: Number, default: 0 }
+      },
+      financial: {
+        total_spent: { type: Number, default: 0 },
+        total_courses_purchased: { type: Number, default: 0 },
+        subscription_months: { type: Number, default: 0 },
+        refunds_requested: { type: Number, default: 0 },
+        lifetime_value: { type: Number, default: 0 }
+      }
+    },
+
+    preferences: {
+      notifications: {
+        email: { type: Boolean, default: true },
+        push: { type: Boolean, default: true },
+        sms: { type: Boolean, default: false }
+      },
+      currency: { type: String, default: "USD" },
+      language: { type: String, default: "en" },
+      timezone: { type: String, default: "UTC" }
+    },
+
+    // Device tracking for compatibility
+    devices: [{
+      device_id: String,
+      device_name: String,
+      device_type: {
+        type: String,
+        enum: ["desktop", "mobile", "tablet", "web", "unknown"],
+        default: "unknown"
+      },
+      browser: String,
+      operating_system: String,
+      ip_address: String,
+      user_agent: String,
+      is_trusted: { type: Boolean, default: false },
+      is_primary: { type: Boolean, default: false },
+      last_used: { type: Date, default: Date.now },
+      created_at: { type: Date, default: Date.now }
     }],
   },
   {
@@ -251,6 +332,69 @@ adminSchema.methods.invalidateAllSessions = async function () {
   return this.save();
 };
 
+// Add missing methods for login compatibility
+adminSchema.methods.logActivity = async function (activityData = {}) {
+  // Simple activity logging for admin
+  console.log(`📊 Admin Activity: ${this.email} - ${activityData.action || 'login'}`);
+  this.last_activity = new Date();
+  return this.save();
+};
+
+adminSchema.methods.updateStatistics = async function (statsData = {}) {
+  // Mock statistics update for admin compatibility
+  console.log(`📈 Admin Stats Update: ${this.email}`);
+  return Promise.resolve(this);
+};
+
+adminSchema.methods.trackEngagement = async function (engagementData = {}) {
+  // Mock engagement tracking for admin compatibility
+  console.log(`🎯 Admin Engagement: ${this.email}`);
+  return Promise.resolve(this);
+};
+
+adminSchema.methods.addDevice = async function (deviceData = {}) {
+  // Initialize devices array if it doesn't exist
+  if (!this.devices) {
+    this.devices = [];
+  }
+  
+  // Check if device already exists
+  const existingDeviceIndex = this.devices.findIndex(
+    device => device.device_id === deviceData.device_id
+  );
+  
+  if (existingDeviceIndex !== -1) {
+    // Update existing device
+    this.devices[existingDeviceIndex] = {
+      ...this.devices[existingDeviceIndex],
+      ...deviceData,
+      last_used: new Date(),
+    };
+    console.log(`📱 Admin Device Updated: ${this.email} - ${deviceData.device_id}`);
+  } else {
+    // Add new device
+    this.devices.push({
+      ...deviceData,
+      created_at: new Date(),
+      last_used: new Date(),
+    });
+    console.log(`📱 Admin Device Added: ${this.email} - ${deviceData.device_id}`);
+  }
+  
+  // Keep only the last 10 devices for admins
+  if (this.devices.length > 10) {
+    this.devices = this.devices.slice(-10);
+  }
+
+  return this.save();
+};
+
+adminSchema.methods.updatePreferences = async function (preferences = {}) {
+  // Mock preferences update for admin compatibility
+  console.log(`⚙️ Admin Preferences Updated: ${this.email}`);
+  return Promise.resolve(this);
+};
+
 // Static methods
 adminSchema.statics.findByEmail = function (email) {
   return this.findOne({ email: email.toLowerCase() });
@@ -265,5 +409,6 @@ adminSchema.statics.generateAdminId = async function () {
 const Admin = mongoose.model("Admin", adminSchema);
 
 export default Admin;
+
 
 

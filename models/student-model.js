@@ -5,7 +5,7 @@ const studentSchema = new mongoose.Schema(
     // Basic Information
     full_name: {
       type: String,
-      required: [true, 'Full name is required'],
+      required: false, // Completely optional - user can leave it empty
       trim: true,
     },
     age: {

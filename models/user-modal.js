@@ -155,7 +155,7 @@ const userSchema = new Schema(
     // Basic Information
     full_name: {
       type: String,
-      required: [true, "Full name is required"],
+      required: false, // Completely optional - user can leave it empty
       trim: true,
       maxlength: [100, "Full name cannot exceed 100 characters"],
       index: true,
@@ -190,7 +190,7 @@ const userSchema = new Schema(
     password: {
       type: String,
       required: function () {
-        return !this.is_demo && !this.oauth;
+        return !this.is_demo && (!this.oauth || Object.keys(this.oauth).length === 0);
       },
       minlength: [1, "Password must be at least 1 character"],
     },
@@ -207,6 +207,10 @@ const userSchema = new Schema(
     is_demo: {
       type: Boolean,
       default: false,
+    },
+    oauth: {
+      type: Schema.Types.Mixed,
+      default: {},
     },
 
     // Role Management
@@ -239,6 +243,33 @@ const userSchema = new Schema(
           type: String,
       enum: Object.values(ADMIN_ROLES),
       sparse: true,
+    },
+    
+    // Admin-specific fields
+    user_type: {
+      type: String,
+      enum: ["admin", "student", "instructor", "corporate", "parent"],
+      sparse: true,
+    },
+    department: {
+      type: String,
+      trim: true,
+      maxlength: [100, "Department cannot exceed 100 characters"],
+    },
+    designation: {
+      type: String,
+      trim: true,
+      maxlength: [100, "Designation cannot exceed 100 characters"],
+    },
+    phone: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: function (v) {
+          return !v || /^[\+]?[0-9\-\s\(\)]{7,20}$/.test(v);
+        },
+        message: "Please enter a valid phone number",
+      },
     },
     
     // Security & Privacy
@@ -550,6 +581,141 @@ const userSchema = new Schema(
         max: 100,
       },
     }],
+
+    // Personal Details (Direct fields like name, address)
+    date_of_birth: {
+      type: Date,
+      default: null,
+    },
+    gender: {
+      type: String,
+      enum: ['male', 'female', 'non-binary', 'prefer-not-to-say', 'other', ''],
+      default: '',
+    },
+    nationality: {
+      type: String,
+      default: '',
+    },
+    skills: {
+      type: [String],
+      default: [],
+    },
+    interests: {
+      type: [String],
+      default: [],
+    },
+    learning_goals: {
+      type: [String],
+      default: [],
+    },
+    certifications: {
+      type: [String],
+      default: [],
+    },
+    languages_spoken: {
+      type: [String],
+      default: [],
+    },
+    preferred_study_times: {
+      type: [String],
+      default: [],
+    },
+    experience_level: {
+      type: String,
+      enum: ['beginner', 'intermediate', 'advanced', 'expert', ''],
+      default: '',
+    },
+    current_occupation: {
+      type: String,
+      default: '',
+    },
+    company_name: {
+      type: String,
+      default: '',
+    },
+    preferred_language: {
+      type: String,
+      default: 'English',
+    },
+    preferred_learning_style: {
+      type: String,
+      enum: ['visual', 'auditory', 'kinesthetic', 'reading', 'mixed', ''],
+      default: '',
+    },
+    availability: {
+      type: String,
+      default: '',
+    },
+    emergency_contact_name: {
+      type: String,
+      default: '',
+    },
+    emergency_contact_phone: {
+      type: String,
+      default: '',
+    },
+    emergency_contact_relationship: {
+      type: String,
+      default: '',
+    },
+    how_did_you_hear: {
+      type: String,
+      default: '',
+    },
+    referral_code: {
+      type: String,
+      default: '',
+    },
+    special_requirements: {
+      type: String,
+      default: '',
+    },
+    education_level: {
+      type: String,
+      default: '',
+    },
+    institution_name: {
+      type: String,
+      default: '',
+    },
+    field_of_study: {
+      type: String,
+      default: '',
+    },
+    graduation_year: {
+      type: Number,
+      default: null,
+    },
+
+    // Social Media Links
+    linkedin_link: {
+      type: String,
+      default: '',
+    },
+    github_link: {
+      type: String,
+      default: '',
+    },
+    portfolio_link: {
+      type: String,
+      default: '',
+    },
+    facebook_link: {
+      type: String,
+      default: '',
+    },
+    instagram_link: {
+      type: String,
+      default: '',
+    },
+    twitter_link: {
+      type: String,
+      default: '',
+    },
+    youtube_link: {
+      type: String,
+      default: '',
+    },
 
     // Timestamps
     created_at: {

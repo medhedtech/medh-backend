@@ -1,0 +1,68 @@
+# MEDH Backend Environment Variables
+# Copy this content to a new .env file in medh-backend folder
+
+# Database Configuration
+MONGODB_URL=mongodb://localhost:27017/medhdb
+
+# JWT Configuration
+JWT_SECRET_KEY=your-super-secret-jwt-key-here
+JWT_EXPIRE=24h
+
+# Server Configuration
+PORT=8080
+NODE_ENV=development
+
+# 🔐 Admin Security Configuration - IMPORTANT!
+ADMIN_SECRET_KEY=MEDH_ADMIN_SECRET_2025
+
+# Password Security
+BCRYPT_WORK_FACTOR=12
+PASSWORD_PEPPER=your-password-pepper-here
+
+# AWS Configuration
+IM_AWS_ACCESS_KEY=your-aws-access-key
+IM_AWS_SECRET_KEY=your-aws-secret-key
+AWS_S3_BUCKET_NAME=medh-files
+AWS_REGION=ap-south-1
+
+# Email Configuration (AWS SES)
+EMAIL_HOST=email-smtp.us-east-1.amazonaws.com
+EMAIL_PORT=465
+EMAIL_SECURE=true
+EMAIL_USER=your-ses-smtp-username
+EMAIL_PASS=your-ses-smtp-password
+EMAIL_FROM=noreply@medh.co
+EMAIL_SERVICE=SES
+
+# Redis Configuration (Optional)
+REDIS_ENABLED=false
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+# OAuth Configuration
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+SESSION_SECRET=your-session-secret
+
+# CloudFront Configuration
+CLOUDFRONT_KEY_PAIR_ID=your-cloudfront-key-pair-id
+CLOUDFRONT_PRIVATE_KEY_PATH=./private_key.pem
+CLOUDFRONT_DEFAULT_EXPIRES_IN=300
+
+# Razorpay Configuration
+RAZORPAY_KEY_ID=your-razorpay-key-id
+RAZORPAY_KEY_SECRET=your-razorpay-key-secret
+
+# CORS Configuration
+ALLOWED_ORIGINS=http://localhost:3000,https://medh.co
+
+# TLS Configuration (Production)
+USE_HTTPS=false
+TLS_CERT_PATH=
+HTTPS_PORT=443
+
+# Monitoring Configuration
+SENTRY_DSN=your-sentry-dsn
+SENTRY_ENVIRONMENT=development
+SENTRY_TRACES_SAMPLE_RATE=0.1

@@ -100,4 +100,7 @@ export const ENV_VARS = {
   APPLE_KEY_ID: process.env.APPLE_KEY_ID,
   APPLE_PRIVATE_KEY_PATH: process.env.APPLE_PRIVATE_KEY_PATH,
   SESSION_SECRET: process.env.SESSION_SECRET,
+  
+  // Admin Security Configuration
+  ADMIN_SECRET_KEY: process.env.ADMIN_SECRET_KEY || "MEDH_ADMIN_SECRET_2025",
 };

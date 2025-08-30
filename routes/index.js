@@ -79,6 +79,7 @@ import oauthAnalyticsRoutes from "./oauthAnalyticsRoutes.js";
 import twoFactorRoutes from "./twoFactorRoutes.js";
 import liveClassesRoutes from "./liveClassesRoutes.js";
 import passkeyRoutes from "./passkeyRoutes.js";
+import adminAuthRoutes from "./adminAuthRoutes.js";
 
 const router = express.Router();
 
@@ -382,6 +383,10 @@ const moduleRoutes = [
   {
     path: "/live-classes",
     route: liveClassesRoutes,
+  },
+  {
+    path: "/admin-auth",
+    route: adminAuthRoutes,
   },
 ];
 

@@ -1239,6 +1239,7 @@ class EmailService {
         email,
         otp,
         expiryMinutes: process.env.OTP_EXPIRY_MINUTES || 10,
+        currentYear: new Date().getFullYear(),
       });
 
       const mailOptions = {
@@ -1250,6 +1251,151 @@ class EmailService {
       return this.sendEmail(mailOptions, { priority: "high" });
     } catch (error) {
       logger.email.error("Failed to send OTP verification email", {
+        error,
+        email,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Send Admin OTP verification email with enhanced template
+   * @param {string} email - Recipient email
+   * @param {string} name - Recipient name
+   * @param {string} otp - One-time password
+   * @param {Object} adminData - Additional admin data
+   * @returns {Promise} Email sending result
+   */
+  async sendAdminOTPVerificationEmail(email, name, otp, adminData = {}) {
+    try {
+      const templateData = {
+        name,
+        email,
+        otp,
+        expiryMinutes: process.env.OTP_EXPIRY_MINUTES || 10,
+        currentYear: new Date().getFullYear(),
+        department: adminData.department,
+        designation: adminData.designation,
+        admin_role: adminData.admin_role,
+        phone: adminData.phone,
+      };
+
+      const html = await this.renderTemplate("admin-email-verification", templateData);
+
+      const mailOptions = {
+        to: email,
+        subject: "🔐 Admin Account Verification - MEDH Foundation",
+        html,
+      };
+
+      return this.sendEmail(mailOptions, { priority: "high" });
+    } catch (error) {
+      logger.email.error("Failed to send admin OTP verification email", {
+        error,
+        email,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Send Admin Login Notification Email with high-security template
+   * @param {string} email - Recipient email
+   * @param {string} userName - Admin's name
+   * @param {Object} loginDetails - Login details object
+   * @param {Object} options - Additional options
+   * @returns {Promise} Email sending result
+   */
+  async sendAdminLoginNotificationEmail(
+    email,
+    userName,
+    loginDetails,
+    options = {},
+  ) {
+    try {
+      const templateData = {
+        user_name: userName,
+        email,
+        details: {
+          Login_Time: loginDetails["Login Time"],
+          Location: loginDetails.Location,
+          Device: loginDetails.Device,
+          Browser: loginDetails.Browser,
+          Operating_System: loginDetails["Operating System"],
+          IP_Address: loginDetails["IP Address"],
+        },
+        admin_info: options.adminInfo || null,
+        recent_activity: options.recentActivity || null,
+        actionUrl: options.actionUrl || `${process.env.FRONTEND_URL || "https://app.medh.co"}/admin/security`,
+        logoutAllUrl: options.logoutAllUrl || `${process.env.FRONTEND_URL || "https://app.medh.co"}/admin/logout-all-devices`,
+        helpUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/admin/help`,
+        securityUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/admin/security-guide`,
+        privacyUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/privacy`,
+        contactUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/admin/emergency-contact`,
+        currentYear: new Date().getFullYear(),
+        isNewDevice: options.isNewDevice || false,
+        riskLevel: "critical", // Admin logins are always high priority
+      };
+
+      const html = await this.renderTemplate("admin-login-notification", templateData);
+
+      const mailOptions = {
+        to: email,
+        subject: "🚨 CRITICAL: Admin Login Detected - MEDH Foundation",
+        html,
+      };
+
+      return this.sendEmail(mailOptions, { priority: "urgent" });
+    } catch (error) {
+      logger.email.error("Failed to send admin login notification email", {
+        error,
+        email,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Send Admin Password Reset Email with secure template
+   * @param {string} email - Recipient email
+   * @param {string} name - Admin's name
+   * @param {string} tempPassword - Temporary password
+   * @param {Object} adminData - Additional admin data
+   * @returns {Promise} Email sending result
+   */
+  async sendAdminPasswordResetEmail(email, name, tempPassword, adminData = {}) {
+    try {
+      const templateData = {
+        name,
+        email,
+        tempPassword,
+        expiryTime: process.env.PASSWORD_RESET_EXPIRY || "1 hour",
+        currentYear: new Date().getFullYear(),
+        admin_info: {
+          name: adminData.name || name,
+          email: adminData.email || email,
+          department: adminData.department,
+          designation: adminData.designation,
+          admin_role: adminData.admin_role,
+        },
+        loginUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/admin-secure-login`,
+        helpUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/admin/help`,
+        securityUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/admin/security-guide`,
+        privacyUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/privacy`,
+        contactUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/admin/emergency-contact`,
+      };
+
+      const html = await this.renderTemplate("admin-password-reset", templateData);
+
+      const mailOptions = {
+        to: email,
+        subject: "🔑 URGENT: Admin Password Reset - MEDH Foundation",
+        html,
+      };
+
+      return this.sendEmail(mailOptions, { priority: "urgent" });
+    } catch (error) {
+      logger.email.error("Failed to send admin password reset email", {
         error,
         email,
       });

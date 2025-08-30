@@ -58,6 +58,30 @@ const tempUserSchema = new Schema(
       trim: true,
     },
 
+    // Admin-specific fields for temp storage
+    user_type: {
+      type: String,
+      enum: ["admin", "student", "instructor", "corporate", "parent"],
+      sparse: true,
+    },
+    admin_role: {
+      type: String,
+      enum: ["super-admin", "admin", "moderator"],
+      sparse: true,
+    },
+    department: {
+      type: String,
+      trim: true,
+    },
+    designation: {
+      type: String,
+      trim: true,
+    },
+    phone: {
+      type: String,
+      trim: true,
+    },
+
     // Email Verification
     email_verification_token: {
       type: String,

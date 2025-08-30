@@ -1,6 +1,7 @@
 import Admin from "../models/admin-model.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from "uuid";
 
 class AdminAuthController {
@@ -10,6 +11,9 @@ class AdminAuthController {
     this.logout = this.logout.bind(this);
     this.getProfile = this.getProfile.bind(this);
     this.updateProfile = this.updateProfile.bind(this);
+    this.forgotPassword = this.forgotPassword.bind(this);
+    this.verifyTempPassword = this.verifyTempPassword.bind(this);
+    this.resetPassword = this.resetPassword.bind(this);
   }
 
   // Generate JWT token for admin
@@ -49,7 +53,8 @@ class AdminAuthController {
       }
 
       // Super secure check - only allow registration with secret key
-      const ADMIN_SECRET_KEY = process.env.ADMIN_SECRET_KEY || "MEDH_ADMIN_SECRET_2024";
+      const { ENV_VARS } = await import('../config/envVars.js');
+      const ADMIN_SECRET_KEY = ENV_VARS.ADMIN_SECRET_KEY;
       if (secret_key !== ADMIN_SECRET_KEY) {
         return res.status(403).json({
           success: false,
@@ -214,8 +219,49 @@ class AdminAuthController {
 
       await admin.createSession(sessionData);
 
+      // Track device for admin login notifications
+      const deviceInfo = {
+        device_id: sessionData.device_id,
+        ip_address: sessionData.ip_address,
+        device_name: req.headers["user-agent"] || "Unknown Device",
+        browser: this.extractBrowser(req.headers["user-agent"]),
+        operating_system: this.extractOS(req.headers["user-agent"]),
+        device_type: this.extractDeviceType(req.headers["user-agent"]),
+        user_agent: req.headers["user-agent"],
+      };
+      
+      // Add/update device tracking
+      await admin.addDevice(deviceInfo);
+
       // Log admin login
       console.log(`🔐 ADMIN LOGIN: ${admin.email} (${admin.admin_role}) from ${sessionData.ip_address}`);
+
+      // Send admin login notification email
+      try {
+        const authController = (await import('./authController.js')).default;
+        const authInstance = new authController();
+        
+        const locationInfo = {
+          city: "Unknown", // You can integrate with IP geolocation service
+          country: "Unknown",
+        };
+        
+        // Send notification for admin logins (high security)
+        // Only send if it's a new device or first login in 24 hours
+        const shouldNotify = authInstance.isNewDevice(admin, deviceInfo) || 
+                           !admin.last_login || 
+                           (Date.now() - admin.last_login.getTime()) > 24 * 60 * 60 * 1000;
+        
+        if (shouldNotify) {
+          await authInstance.sendAdminLoginNotification(admin, deviceInfo, locationInfo);
+          console.log('🚨 Admin login notification sent to:', admin.email);
+        } else {
+          console.log('📱 Admin login from known device, notification skipped:', admin.email);
+        }
+      } catch (notificationError) {
+        console.log('❌ Admin login notification failed:', notificationError.message);
+        // Don't block login if notification fails
+      }
 
       res.status(200).json({
         success: true,
@@ -381,8 +427,383 @@ class AdminAuthController {
       });
     }
   }
+
+  // Admin Forgot Password
+  async forgotPassword(req, res) {
+    try {
+      const { email } = req.body;
+
+      // Validate required fields
+      if (!email) {
+        return res.status(400).json({
+          success: false,
+          message: "Email is required",
+        });
+      }
+
+      // Normalize email to lowercase for case-insensitive handling
+      const normalizedEmail = email.toLowerCase().trim();
+
+      // Find admin by email
+      const admin = await Admin.findByEmail(normalizedEmail);
+      if (!admin) {
+        return res.status(404).json({
+          success: false,
+          message: "Admin not found with this email address",
+        });
+      }
+
+      // Check if admin account is active
+      if (!admin.is_active) {
+        return res.status(403).json({
+          success: false,
+          message: "Admin account is deactivated",
+        });
+      }
+
+      // Generate reset token
+      const resetToken = crypto.randomBytes(20).toString("hex");
+      const resetPasswordToken = crypto
+        .createHash("sha256")
+        .update(resetToken)
+        .digest("hex");
+
+      // Set token expiry time (1 hour)
+      const resetPasswordExpires = Date.now() + 3600000; // 1 hour
+
+      // Update admin with reset token info
+      admin.password_reset_token = resetPasswordToken;
+      admin.password_reset_expires = resetPasswordExpires;
+
+      // Generate temporary password
+      const tempPassword = crypto.randomBytes(6).toString("hex").toUpperCase();
+
+      // Hash the temporary password
+      const salt = await bcrypt.genSalt(12);
+      const hashedPassword = await bcrypt.hash(tempPassword, salt);
+
+      // Update admin password with temporary password (already hashed)
+      admin.password = hashedPassword;
+      
+      // Skip pre-save hook for this save since password is already hashed
+      admin._skipPasswordHash = true;
+      await admin.save();
+      delete admin._skipPasswordHash;
+
+      // Send admin password reset email
+      try {
+        const emailService = (await import("../services/emailService.js")).default;
+        
+        const adminData = {
+          name: admin.full_name,
+          email: admin.email,
+          department: admin.department,
+          designation: admin.designation,
+          admin_role: admin.admin_role,
+        };
+
+        await emailService.sendAdminPasswordResetEmail(
+          admin.email,
+          admin.full_name,
+          tempPassword,
+          adminData
+        );
+
+        console.log(`🔑 Admin password reset email sent to: ${admin.email}`);
+        console.log(`🔐 Temporary password: ${tempPassword}`);
+      } catch (emailError) {
+        console.error("Failed to send admin password reset email:", emailError);
+        // Continue with success response even if email fails
+      }
+
+      // Log admin password reset activity
+      console.log(`🔐 ADMIN PASSWORD RESET: ${admin.email} (${admin.admin_role})`);
+
+      res.status(200).json({
+        success: true,
+        message: "Admin password reset successful. Check your email for the temporary password.",
+        data: {
+          email: admin.email,
+          expires_in: "1 hour",
+          admin_role: admin.admin_role,
+        },
+      });
+    } catch (error) {
+      console.error("❌ Admin forgot password error:", error);
+      
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during admin password reset",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  // Admin Verify Temporary Password
+  async verifyTempPassword(req, res) {
+    try {
+      const { email, tempPassword } = req.body;
+
+      // Validate input
+      if (!email || !tempPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Email and temporary password are required.",
+          errors: {
+            email: !email ? "Email is required" : null,
+            tempPassword: !tempPassword
+              ? "Temporary password is required"
+              : null,
+          },
+        });
+      }
+
+      // Normalize email to lowercase for case-insensitive handling
+      const normalizedEmail = email.toLowerCase().trim();
+
+      // Find admin by email
+      const admin = await Admin.findByEmail(normalizedEmail);
+      if (!admin) {
+        return res.status(404).json({
+          success: false,
+          message: "Admin not found with this email address",
+        });
+      }
+
+      // Check if admin has an active reset token (indicating they requested password reset)
+      if (
+        !admin.password_reset_token ||
+        !admin.password_reset_expires ||
+        admin.password_reset_expires <= Date.now()
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "No valid password reset request found. Please request a new password reset.",
+        });
+      }
+
+      // Check if admin account is active
+      if (!admin.is_active) {
+        return res.status(403).json({
+          success: false,
+          message: "Admin account is deactivated",
+        });
+      }
+
+      // Verify the temporary password against the hashed password stored in admin.password
+      const isMatch = await bcrypt.compare(tempPassword, admin.password);
+
+      if (!isMatch) {
+        // Increment failed attempts
+        admin.failed_login_attempts = (admin.failed_login_attempts || 0) + 1;
+        admin.last_failed_login = new Date();
+        
+        // Lock account after 5 failed attempts
+        if (admin.failed_login_attempts >= 5) {
+          admin.account_locked_until = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+        }
+        
+        await admin.save();
+
+        return res.status(400).json({
+          success: false,
+          message: "Incorrect temporary password. Please check your email for the correct temporary password.",
+          attempts_remaining: Math.max(0, 5 - admin.failed_login_attempts),
+        });
+      }
+
+      // Reset failed attempts on successful verification
+      admin.failed_login_attempts = 0;
+      admin.last_failed_login = null;
+      admin.account_locked_until = null;
+      await admin.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Temporary password verified successfully. You can now set a new password.",
+        data: {
+          email: normalizedEmail,
+          admin_role: admin.admin_role,
+          verified: true,
+        },
+      });
+    } catch (error) {
+      console.error("❌ Admin verify temp password error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error during temporary password verification",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  // Admin Reset Password (requires temp password verification first)
+  async resetPassword(req, res) {
+    try {
+      const { email, tempPassword, newPassword, confirmPassword } = req.body;
+
+      // Validate input
+      if (!email || !tempPassword || !newPassword || !confirmPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "Email, temporary password, new password, and confirm password are required",
+          errors: {
+            email: !email ? "Email is required" : null,
+            tempPassword: !tempPassword ? "Temporary password is required" : null,
+            newPassword: !newPassword ? "New password is required" : null,
+            confirmPassword: !confirmPassword ? "Confirm password is required" : null,
+          },
+        });
+      }
+
+      // Check if passwords match
+      if (newPassword !== confirmPassword) {
+        return res.status(400).json({
+          success: false,
+          message: "New password and confirm password do not match",
+        });
+      }
+
+      // Password strength validation for admin accounts
+      if (newPassword.length < 8) {
+        return res.status(400).json({
+          success: false,
+          message: "Admin password must be at least 8 characters long",
+        });
+      }
+
+      // Find admin by email
+      const admin = await Admin.findByEmail(email.toLowerCase());
+      if (!admin) {
+        return res.status(404).json({
+          success: false,
+          message: "Admin not found with this email address",
+        });
+      }
+
+      // Check if admin has an active reset token (indicating they requested password reset)
+      if (
+        !admin.password_reset_token ||
+        !admin.password_reset_expires ||
+        admin.password_reset_expires <= Date.now()
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "No valid password reset request found. Please request a new password reset.",
+        });
+      }
+
+      // Check if admin account is active
+      if (!admin.is_active) {
+        return res.status(403).json({
+          success: false,
+          message: "Admin account is deactivated",
+        });
+      }
+
+      // Verify the temporary password first
+      const isMatch = await bcrypt.compare(tempPassword, admin.password);
+      if (!isMatch) {
+        // Increment failed attempts
+        admin.failed_login_attempts = (admin.failed_login_attempts || 0) + 1;
+        admin.last_failed_login = new Date();
+        
+        // Lock account after 5 failed attempts
+        if (admin.failed_login_attempts >= 5) {
+          admin.account_locked_until = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+        }
+        
+        await admin.save();
+
+        return res.status(400).json({
+          success: false,
+          message: "Incorrect temporary password. Please check your email for the correct temporary password.",
+          attempts_remaining: Math.max(0, 5 - admin.failed_login_attempts),
+        });
+      }
+
+      // Set the new password (will be hashed by the pre-save hook)
+      admin.password = newPassword;
+
+      // Clear reset token fields
+      admin.password_reset_token = undefined;
+      admin.password_reset_expires = undefined;
+
+      // Reset failed login attempts and unlock account
+      admin.failed_login_attempts = 0;
+      admin.lock_until = undefined;
+
+      // Update last activity
+      admin.last_activity = new Date();
+
+      await admin.save();
+
+      // End all active sessions for security
+      await admin.invalidateAllSessions();
+
+      // Log admin password reset completion
+      console.log(`🔐 ADMIN PASSWORD RESET COMPLETED: ${admin.email} (${admin.admin_role})`);
+
+      res.status(200).json({
+        success: true,
+        message: "Admin password reset successfully. Please login with your new password.",
+        data: {
+          admin: {
+            id: admin._id,
+            email: admin.email,
+            admin_role: admin.admin_role,
+          },
+        },
+      });
+    } catch (error) {
+      console.error("❌ Admin reset password error:", error);
+      
+      res.status(500).json({
+        success: false,
+        message: "Internal server error during admin password reset",
+        error: process.env.NODE_ENV === "development" ? error.message : undefined,
+      });
+    }
+  }
+
+  // Helper methods for device info extraction
+  extractBrowser(userAgent) {
+    if (!userAgent) return "Unknown Browser";
+    
+    if (userAgent.includes("Chrome")) return "Chrome";
+    if (userAgent.includes("Firefox")) return "Firefox";
+    if (userAgent.includes("Safari")) return "Safari";
+    if (userAgent.includes("Edge")) return "Edge";
+    if (userAgent.includes("Opera")) return "Opera";
+    
+    return "Unknown Browser";
+  }
+
+  extractOS(userAgent) {
+    if (!userAgent) return "Unknown OS";
+    
+    if (userAgent.includes("Windows")) return "Windows";
+    if (userAgent.includes("Mac OS")) return "macOS";
+    if (userAgent.includes("Linux")) return "Linux";
+    if (userAgent.includes("Android")) return "Android";
+    if (userAgent.includes("iOS")) return "iOS";
+    
+    return "Unknown OS";
+  }
+
+  extractDeviceType(userAgent) {
+    if (!userAgent) return "Unknown Device";
+    
+    if (userAgent.includes("Mobile")) return "Mobile";
+    if (userAgent.includes("Tablet")) return "Tablet";
+    
+    return "Desktop";
+  }
 }
 
 export default new AdminAuthController();
+
 
 

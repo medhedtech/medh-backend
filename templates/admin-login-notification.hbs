@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🔐 Admin Login Alert - MEDH Foundation</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    .email-wrapper {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 650px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #e53e3e 0%, #c53030 100%);
+      color: white;
+      padding: 40px 30px;
+      text-align: center;
+      position: relative;
+    }
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><defs><radialGradient id="a" cx=".66" cy=".30" r=".7"><stop offset="0" stop-color="%23ffffff" stop-opacity=".2"/><stop offset=".5" stop-color="%23ffffff" stop-opacity=".05"/><stop offset="1" stop-color="%23ffffff" stop-opacity="0"/></radialGradient></defs><rect width="100" height="20" fill="url(%23a)"/></svg>');
+      opacity: 0.3;
+    }
+    .header-content {
+      position: relative;
+      z-index: 1;
+    }
+    .logo {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      letter-spacing: -0.5px;
+    }
+    .header-subtitle {
+      font-size: 16px;
+      opacity: 0.9;
+      font-weight: 300;
+    }
+    .admin-badge {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 15px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+    }
+    .security-icon {
+      display: inline-block;
+      width: 80px;
+      height: 80px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      margin: 20px 0;
+      line-height: 80px;
+      font-size: 36px;
+    }
+    .content {
+      padding: 40px 30px;
+    }
+    .critical-alert {
+      background: linear-gradient(135deg, #fed7d7, #feb2b2);
+      border: 2px solid #e53e3e;
+      color: #742a2a;
+      padding: 25px;
+      border-radius: 12px;
+      margin: 25px 0;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .critical-alert::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 20"><defs><radialGradient id="b" cx=".66" cy=".30" r=".7"><stop offset="0" stop-color="%23ffffff" stop-opacity=".15"/><stop offset=".5" stop-color="%23ffffff" stop-opacity=".05"/><stop offset="1" stop-color="%23ffffff" stop-opacity="0"/></radialGradient></defs><rect width="100" height="20" fill="url(%23b)"/></svg>');
+    }
+    .alert-content {
+      position: relative;
+      z-index: 1;
+    }
+    .alert-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .alert-message {
+      font-size: 16px;
+      line-height: 1.5;
+      opacity: 0.95;
+    }
+    .greeting {
+      font-size: 20px;
+      font-weight: 600;
+      color: #2d3748;
+      margin-bottom: 20px;
+    }
+    .main-message {
+      font-size: 16px;
+      line-height: 1.7;
+      color: #4a5568;
+      margin-bottom: 30px;
+    }
+    .admin-info {
+      background: linear-gradient(135deg, #e6fffa 0%, #b2f5ea 100%);
+      border-left: 4px solid #38b2ac;
+      padding: 20px;
+      margin: 25px 0;
+      border-radius: 8px;
+    }
+    .admin-info h3 {
+      margin: 0 0 10px 0;
+      color: #2c7a7b;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .admin-details {
+      font-size: 14px;
+      color: #2d3748;
+    }
+    .admin-details div {
+      margin: 5px 0;
+    }
+    .login-details {
+      background: linear-gradient(135deg, #f7fafc, #edf2f7);
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 25px;
+      margin: 25px 0;
+      position: relative;
+    }
+    .details-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      font-weight: 600;
+      color: #2d3748;
+      font-size: 18px;
+    }
+    .details-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .detail-item {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      border-left: 4px solid #e53e3e;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+    .detail-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #718096;
+      margin-bottom: 5px;
+    }
+    .detail-value {
+      font-size: 15px;
+      font-weight: 600;
+      color: #2d3748;
+      word-break: break-all;
+    }
+    .device-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .security-section {
+      background: linear-gradient(135deg, #fed7d7, #feb2b2);
+      border: 2px solid #e53e3e;
+      border-radius: 12px;
+      padding: 25px;
+      margin: 25px 0;
+    }
+    .security-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 700;
+      color: #742a2a;
+      margin-bottom: 15px;
+    }
+    .security-tips {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .security-tips li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 12px;
+      color: #742a2a;
+      font-size: 14px;
+      line-height: 1.5;
+      font-weight: 500;
+    }
+    .security-tips li::before {
+      content: '🚨';
+      font-size: 16px;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .action-buttons {
+      display: flex;
+      gap: 15px;
+      margin: 30px 0;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 15px;
+      transition: all 0.3s ease;
+      text-align: center;
+      flex: 1;
+      justify-content: center;
+      min-width: 160px;
+    }
+    .btn-danger {
+      background: linear-gradient(135deg, #e53e3e, #c53030);
+      color: white;
+      box-shadow: 0 4px 12px rgba(229, 62, 62, 0.3);
+    }
+    .btn-secondary {
+      background: white;
+      color: #e53e3e;
+      border: 2px solid #e53e3e;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(229, 62, 62, 0.4);
+    }
+    .risk-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .risk-critical {
+      background: #fed7d7;
+      color: #742a2a;
+      border: 1px solid #e53e3e;
+    }
+    .footer {
+      background: #f8fafc;
+      padding: 30px;
+      text-align: center;
+      border-top: 1px solid #e2e8f0;
+    }
+    .footer-content {
+      font-size: 13px;
+      color: #718096;
+      line-height: 1.6;
+    }
+    .footer-links {
+      margin: 15px 0;
+    }
+    .footer-links a {
+      color: #e53e3e;
+      text-decoration: none;
+      margin: 0 10px;
+      font-weight: 500;
+    }
+    .timestamp {
+      background: #e53e3e;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      display: inline-block;
+    }
+    
+    @media (max-width: 600px) {
+      .email-wrapper {
+        padding: 20px 10px;
+      }
+      .container {
+        border-radius: 8px;
+      }
+      .header, .content {
+        padding: 30px 20px;
+      }
+      .details-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+      }
+      .action-buttons {
+        flex-direction: column;
+      }
+      .btn {
+        min-width: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-wrapper">
+    <div class="container">
+      <div class="header">
+        <div class="header-content">
+          <div class="logo">🔐 MEDH Foundation</div>
+          <div class="header-subtitle">Admin Security Alert</div>
+          <div class="admin-badge">👑 ADMIN PORTAL ACCESS</div>
+          <div class="security-icon">🚨</div>
+        </div>
+      </div>
+      
+      <div class="content">
+        <div class="critical-alert">
+          <div class="alert-content">
+            <div class="alert-title">
+              <span>🚨</span>
+              ADMIN LOGIN DETECTED
+              <span class="risk-indicator risk-critical">🔴 HIGH PRIORITY</span>
+            </div>
+            <div class="alert-message">
+              A new admin login was detected on your MEDH Foundation admin account. Immediate review required.
+            </div>
+          </div>
+        </div>
+
+        <div class="greeting">Hello {{user_name}},</div>
+        
+        <div class="main-message">
+          We detected a new login to your <strong>MEDH Foundation Admin Portal</strong>. Due to the sensitive nature of admin access, this requires immediate verification. If this was not you, <strong>take action immediately</strong> using the emergency buttons below.
+        </div>
+
+        {{#if admin_info}}
+        <div class="admin-info">
+          <h3>👑 Admin Account Information</h3>
+          <div class="admin-details">
+            <div><strong>Admin Name:</strong> {{admin_info.name}}</div>
+            <div><strong>Email:</strong> {{admin_info.email}}</div>
+            {{#if admin_info.department}}<div><strong>Department:</strong> {{admin_info.department}}</div>{{/if}}
+            {{#if admin_info.designation}}<div><strong>Designation:</strong> {{admin_info.designation}}</div>{{/if}}
+            {{#if admin_info.admin_role}}<div><strong>Admin Role:</strong> {{admin_info.admin_role}}</div>{{/if}}
+          </div>
+        </div>
+        {{/if}}
+
+        <div class="login-details">
+          <div class="details-header">
+            <span>🔍</span>
+            Admin Login Details
+            <span class="risk-indicator risk-critical">
+              🚨 ADMIN ACCESS
+            </span>
+          </div>
+          
+          <div class="details-grid">
+            <div class="detail-item">
+              <div class="detail-label">🕒 Login Time</div>
+              <div class="detail-value">
+                <div class="timestamp">{{details.Login_Time}}</div>
+              </div>
+            </div>
+            
+            <div class="detail-item">
+              <div class="detail-label">📍 Location</div>
+              <div class="detail-value device-info">
+                <span>🌍</span>
+                {{details.Location}}
+              </div>
+            </div>
+            
+            <div class="detail-item">
+              <div class="detail-label">💻 Device</div>
+              <div class="detail-value device-info">
+                <span>📱</span>
+                {{details.Device}}
+              </div>
+            </div>
+            
+            <div class="detail-item">
+              <div class="detail-label">🌐 Browser</div>
+              <div class="detail-value device-info">
+                <span>🔍</span>
+                {{details.Browser}}
+              </div>
+            </div>
+            
+            <div class="detail-item">
+              <div class="detail-label">⚙️ Operating System</div>
+              <div class="detail-value device-info">
+                <span>💽</span>
+                {{details.Operating_System}}
+              </div>
+            </div>
+            
+            <div class="detail-item">
+              <div class="detail-label">🌐 IP Address</div>
+              <div class="detail-value">
+                <code style="background: #fed7d7; padding: 4px 8px; border-radius: 4px; font-size: 13px; color: #742a2a;">{{details.IP_Address}}</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-buttons">
+          <a href="{{actionUrl}}" class="btn btn-danger">
+            <span>🔒</span>
+            Emergency Security Review
+          </a>
+          <a href="{{logoutAllUrl}}" class="btn btn-secondary">
+            <span>🚪</span>
+            Logout All Admin Sessions
+          </a>
+        </div>
+
+        <div class="security-section">
+          <div class="security-title">
+            <span>🛡️</span>
+            Critical Admin Security Protocols
+          </div>
+          <ul class="security-tips">
+            <li>Never access admin portal from public or shared computers</li>
+            <li>Always use secure, private networks for admin access</li>
+            <li>Enable two-factor authentication on your admin account</li>
+            <li>Report any suspicious admin activity immediately</li>
+            <li>Use strong, unique passwords for admin accounts</li>
+            <li>Regularly audit admin access logs and permissions</li>
+            <li>Contact security team immediately if login was unauthorized</li>
+          </ul>
+        </div>
+
+        {{#if recent_activity}}
+        <div class="login-details">
+          <div class="details-header">
+            <span>📊</span>
+            Recent Admin Activity
+          </div>
+          <div class="details-grid">
+            <div class="detail-item">
+              <div class="detail-label">📈 Admin Logins (Last 7 Days)</div>
+              <div class="detail-value">{{recent_activity.total_logins}}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">🌍 Unique Locations</div>
+              <div class="detail-value">{{recent_activity.unique_locations}}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">📱 Different Devices</div>
+              <div class="detail-value">{{recent_activity.unique_devices}}</div>
+            </div>
+            <div class="detail-item">
+              <div class="detail-label">⏰ Last Admin Login</div>
+              <div class="detail-value">{{recent_activity.last_login}}</div>
+            </div>
+          </div>
+        </div>
+        {{/if}}
+
+        <p style="margin-top: 30px; padding: 20px; background: #fed7d7; border-radius: 8px; border-left: 4px solid #e53e3e; color: #742a2a;">
+          <strong>🚨 CRITICAL:</strong> Admin access is highly sensitive. If you did not perform this login, contact our security team immediately at <strong>security@medh.co</strong> or call our emergency hotline.
+        </p>
+
+        <div style="margin-top: 30px; text-align: center; color: #718096;">
+          <p><strong>This is an automated security alert for admin account protection.</strong></p>
+          <p style="font-weight: 600;">Emergency Contact: <a href="mailto:security@medh.co" style="color: #e53e3e;">security@medh.co</a> | Hotline: +91-XXX-XXX-XXXX</p>
+        </div>
+      </div>
+      
+      <div class="footer">
+        <div class="footer-content">
+          <div style="font-weight: 600; margin-bottom: 10px;">MEDH Foundation - Admin Security</div>
+          <div>Protecting educational excellence through secure administration</div>
+          
+          <div class="footer-links">
+            <a href="{{helpUrl}}">Admin Help</a>
+            <a href="{{securityUrl}}">Security Protocols</a>
+            <a href="{{privacyUrl}}">Privacy Policy</a>
+            <a href="{{contactUrl}}">Emergency Contact</a>
+          </div>
+          
+          <div>© {{currentYear}} MEDH Foundation. All rights reserved.</div>
+          <div style="margin-top: 10px;">This security alert was sent to <strong>{{email}}</strong></div>
+          
+          <div style="font-size: 11px; color: #a0aec0; margin-top: 15px;">
+            Admin security notifications cannot be disabled and are mandatory for account protection.<br>
+            This email contains sensitive information - please handle with appropriate security measures.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

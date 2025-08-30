@@ -1047,6 +1047,17 @@ class AuthController {
         },
       };
 
+      // Handle admin-specific fields if user_type is admin
+      if (req.body.user_type === 'admin') {
+        userData.user_type = 'admin';
+        userData.admin_role = req.body.admin_role || 'admin';
+        userData.role = 'admin'; // Ensure role is also set to admin
+        userData.department = req.body.department;
+        userData.designation = req.body.designation;
+        userData.phone = req.body.phone; // Single phone for admin
+        console.log('🔧 Admin registration detected - adding admin fields');
+      }
+
       // Only add student_id if it's not null/undefined
       if (studentId) {
         userData.student_id = studentId;
@@ -1064,6 +1075,56 @@ class AuthController {
         location_info: locationInfo,
         referral_source: req.body.referral_source || "direct",
       };
+
+      // For admin registrations, use email verification process
+      if (req.body.user_type === 'admin') {
+        console.log('🔧 Admin registration detected - using email verification process');
+        
+        // 🔐 VALIDATE SECRET KEY FOR ADMIN REGISTRATION
+        const { ENV_VARS } = await import('../config/envVars.js');
+        const ADMIN_SECRET_KEY = ENV_VARS.ADMIN_SECRET_KEY;
+        if (req.body.secret_key !== ADMIN_SECRET_KEY) {
+          return res.status(403).json({
+            success: false,
+            message: "Unauthorized admin registration attempt",
+          });
+        }
+        
+        // Create admin-specific temp user data
+        const adminTempData = {
+          ...tempUserData,
+          user_type: 'admin',
+          admin_role: userData.admin_role || 'admin',
+          department: userData.department,
+          designation: userData.designation,
+          phone: userData.phone,
+        };
+        
+        // Remove any existing temp user with same email
+        await TempUser.deleteOne({ email: userData.email });
+        
+        // Create temporary admin user
+        const tempAdmin = new TempUser(adminTempData);
+        await tempAdmin.save();
+        
+        // Send verification email with OTP
+        await this.sendVerificationEmail(tempAdmin.email, otp);
+        
+        console.log('📧 Admin registration initiated for:', tempAdmin.email);
+        console.log('🔑 Admin verification code sent:', otp);
+        console.log('⏰ Code expires at:', new Date(tempAdmin.email_verification_expires));
+        
+        return res.status(201).json({
+          success: true,
+          message: "Admin registration initiated. Please verify your email to complete account creation.",
+          data: {
+            email: tempAdmin.email,
+            verification_required: true,
+            expires_in_minutes: 10,
+            user_type: 'admin',
+          },
+        });
+      }
 
       // Remove any existing temp user with same email
       await TempUser.deleteOne({ email: userData.email });
@@ -1121,6 +1182,8 @@ class AuthController {
 
       // Find user by email with retry logic (includes both regular and demo users)
       let user;
+      let isAdminUser = false;
+      
       try {
         user = await dbUtils.findOne(User, { email: email.toLowerCase() });
       } catch (dbError) {
@@ -1135,6 +1198,23 @@ class AuthController {
           message: "Internal server error during login",
           error: "Database connection issue. Please try again in a moment.",
         });
+      }
+
+      // If user not found in users collection, check admins collection
+      if (!user) {
+        try {
+          const Admin = (await import('../models/admin-model.js')).default;
+          const admin = await Admin.findByEmail(email.toLowerCase());
+          
+          if (admin) {
+            console.log('🔧 Admin found in admins collection:', admin.email);
+            // Use admin object directly (now has all required methods and fields)
+            user = admin;
+            isAdminUser = true;
+          }
+        } catch (adminError) {
+          console.error('Error checking admins collection:', adminError.message);
+        }
       }
 
       if (!user) {
@@ -1582,7 +1662,14 @@ class AuthController {
 
     // Send login notification email if from new device
     if (this.isNewDevice(user, deviceInfo)) {
-      this.sendLoginNotification(user, deviceInfo, locationInfo);
+      // Check if this is an admin user (has admin_role field)
+      if (user.admin_role || user.user_type === 'admin') {
+        console.log('🚨 Sending admin login notification for:', user.email);
+        this.sendAdminLoginNotification(user, deviceInfo, locationInfo);
+      } else {
+        console.log('📧 Sending regular user login notification for:', user.email);
+        this.sendLoginNotification(user, deviceInfo, locationInfo);
+      }
     }
 
     return res.status(200).json({
@@ -1941,6 +2028,35 @@ class AuthController {
             timezone: user.timezone,
             address: user.address,
           },
+          personal_details: {
+            date_of_birth: user.date_of_birth,
+            gender: user.gender,
+            nationality: user.nationality,
+            skills: user.skills,
+            interests: user.interests,
+            learning_goals: user.learning_goals,
+            certifications: user.certifications,
+            languages_spoken: user.languages_spoken,
+            preferred_study_times: user.preferred_study_times,
+            experience_level: user.experience_level,
+            current_occupation: user.current_occupation,
+            company_name: user.company_name,
+            preferred_language: user.preferred_language,
+            preferred_learning_style: user.preferred_learning_style,
+            availability: user.availability,
+            emergency_contact: {
+              name: user.emergency_contact_name,
+              phone: user.emergency_contact_phone,
+              relationship: user.emergency_contact_relationship,
+            },
+            how_did_you_hear: user.how_did_you_hear,
+            referral_code: user.referral_code,
+            special_requirements: user.special_requirements,
+            education_level: user.education_level,
+            institution_name: user.institution_name,
+            field_of_study: user.field_of_study,
+            graduation_year: user.graduation_year,
+          },
           meta: user.meta,
           preferences: user.preferences,
           statistics: realStats, // Use real calculated statistics
@@ -2189,11 +2305,28 @@ class AuthController {
         delete updateData.preferences;
       }
 
-      // Update user fields
+      // Update user fields directly (same level as name, address, etc.)
       Object.keys(updateData).forEach((key) => {
         if (updateData[key] !== undefined) {
           user[key] = updateData[key];
         }
+      });
+
+      console.log('🔄 Saving user data directly...');
+      console.log('📋 Personal details being saved:', {
+        date_of_birth: updateData.date_of_birth,
+        gender: updateData.gender,
+        nationality: updateData.nationality,
+        skills: updateData.skills,
+        interests: updateData.interests
+      });
+      
+      console.log('📊 User object after save:', {
+        date_of_birth: user.date_of_birth,
+        gender: user.gender,
+        nationality: user.nationality,
+        skills: user.skills,
+        interests: user.interests
       });
 
       await user.save();
@@ -2209,6 +2342,40 @@ class AuthController {
             phone_numbers: updateData.phone_numbers ? 
               updateData.phone_numbers.map(phone => phone.number) : 
               user.phone_numbers?.map(phone => phone.number) || [],
+            bio: updateData.bio || user.bio,
+            address: updateData.address || user.address,
+            country: updateData.country || user.country,
+            timezone: updateData.timezone || user.timezone,
+            
+            // Personal details fields
+            date_of_birth: updateData.date_of_birth || user.date_of_birth,
+            gender: updateData.gender || user.gender,
+            nationality: updateData.nationality || user.nationality,
+            skills: updateData.skills || user.skills || [],
+            interests: updateData.interests || user.interests || [],
+            learning_goals: updateData.learning_goals || user.learning_goals || [],
+            certifications: updateData.certifications || user.certifications || [],
+            languages_spoken: updateData.languages_spoken || user.languages_spoken || [],
+            preferred_study_times: updateData.preferred_study_times || user.preferred_study_times || [],
+            experience_level: updateData.experience_level || user.experience_level,
+            current_occupation: updateData.current_occupation || user.current_occupation,
+            company_name: updateData.company_name || user.company_name,
+            
+            // Social media links
+            facebook_link: updateData.facebook_link || user.facebook_link,
+            instagram_link: updateData.instagram_link || user.instagram_link,
+            linkedin_link: updateData.linkedin_link || user.linkedin_link,
+            twitter_link: updateData.twitter_link || user.twitter_link,
+            youtube_link: updateData.youtube_link || user.youtube_link,
+            github_link: updateData.github_link || user.github_link,
+            portfolio_link: updateData.portfolio_link || user.portfolio_link,
+            
+            // Education details
+            education_level: updateData.education_level || user.education_level || user.meta?.education_level,
+            institution_name: updateData.institution_name || user.institution_name || user.meta?.institution_name,
+            field_of_study: updateData.field_of_study || user.field_of_study || user.meta?.field_of_study,
+            graduation_year: updateData.graduation_year || user.graduation_year || user.meta?.graduation_year,
+            
             meta: {
               ...user.meta,
               updatedBy: user._id,
@@ -2216,6 +2383,14 @@ class AuthController {
             },
             status: "Active"
           };
+          
+          console.log('🔄 Syncing personal details to Student collection:', {
+            date_of_birth: studentUpdateData.date_of_birth,
+            gender: studentUpdateData.gender,
+            nationality: studentUpdateData.nationality,
+            skills: studentUpdateData.skills,
+            interests: studentUpdateData.interests
+          });
 
           // Find and update the student record
           // First try to find by email (most reliable)
@@ -3690,20 +3865,47 @@ class AuthController {
       const emailService = (await import("../services/emailService.js"))
         .default;
 
-      // Find user to get their name
-      const user = await User.findOne({ email: email.toLowerCase() });
-      const userName = user ? user.full_name : "User";
+      // Find user in both User and TempUser collections to get their name
+      let userName = "User";
+      let isAdmin = false;
+      let adminData = {};
+      
+      // First check TempUser collection (for new registrations)
+      const TempUser = (await import("../models/temp-user-model.js")).default;
+      const tempUser = await TempUser.findOne({ email: email.toLowerCase() });
+      
+      if (tempUser) {
+        userName = tempUser.full_name;
+        isAdmin = tempUser.user_type === 'admin';
+        
+        if (isAdmin) {
+          adminData = {
+            department: tempUser.department,
+            designation: tempUser.designation,
+            admin_role: tempUser.admin_role,
+            phone: tempUser.phone,
+          };
+          console.log('📧 Found temp ADMIN for email:', tempUser.full_name, '- Department:', tempUser.department);
+        } else {
+          console.log('📧 Found temp user for email:', tempUser.full_name);
+        }
+      } else {
+        // Fallback to User collection
+        const user = await User.findOne({ email: email.toLowerCase() });
+        userName = user ? user.full_name : "User";
+      }
 
-      await emailService.sendOTPVerificationEmail(email, userName, otp);
+      // Send appropriate email template based on user type
+      if (isAdmin) {
+        await emailService.sendAdminOTPVerificationEmail(email, userName, otp, adminData);
+        console.log("✅ Admin verification email sent successfully to:", email, "for admin:", userName);
+      } else {
+        await emailService.sendOTPVerificationEmail(email, userName, otp);
+        console.log("✅ User verification email sent successfully to:", email, "for user:", userName);
+      }
 
-      console.log(
-        "Verification email sent successfully to:",
-        email,
-        "with OTP:",
-        otp,
-      );
     } catch (error) {
-      console.log("Verification email failed, but continuing:", error.message);
+      console.log("❌ Verification email failed:", error.message);
       throw error; // Re-throw so calling code can handle it
     }
   }
@@ -3760,6 +3962,62 @@ class AuthController {
       console.log("Login notification sent successfully to:", user.email);
     } catch (error) {
       console.log("Login notification failed, but continuing:", error.message);
+    }
+  }
+
+  async sendAdminLoginNotification(admin, deviceInfo, locationInfo) {
+    try {
+      // Use the existing emailService for admin login notifications
+      const emailService = (await import("../services/emailService.js"))
+        .default;
+
+      const loginDetails = {
+        "Login Time": new Date().toLocaleString("en-US", {
+          timeZone: admin.preferences?.timezone || "UTC",
+          dateStyle: "full",
+          timeStyle: "medium",
+        }),
+        Device: deviceInfo.device_name || "Unknown Device",
+        Browser: deviceInfo.browser || "Unknown Browser",
+        "Operating System": deviceInfo.operating_system || "Unknown OS",
+        Location: `${locationInfo.city || "Unknown"}, ${locationInfo.country || "Unknown"}`,
+        "IP Address": deviceInfo.ip_address || "Unknown",
+      };
+
+      // Prepare admin-specific information
+      const adminInfo = {
+        name: admin.full_name,
+        email: admin.email,
+        department: admin.department,
+        designation: admin.designation,
+        admin_role: admin.admin_role,
+      };
+
+      // Use the dedicated admin login notification email method
+      await emailService.sendAdminLoginNotificationEmail(
+        admin.email,
+        admin.full_name,
+        loginDetails,
+        {
+          adminInfo,
+          isNewDevice: this.isNewDevice(admin, deviceInfo),
+          actionUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/admin/security`,
+          logoutAllUrl: `${process.env.FRONTEND_URL || "https://app.medh.co"}/admin/logout-all-devices`,
+          recentActivity: {
+            total_logins: admin.statistics?.engagement?.total_logins || 0,
+            unique_locations: admin.sessions?.length || 0,
+            unique_devices: admin.devices?.length || 0,
+            last_login: admin.last_login
+              ? admin.last_login.toLocaleDateString()
+              : "First admin login",
+          },
+        },
+      );
+
+      console.log("🚨 ADMIN login notification sent successfully to:", admin.email);
+    } catch (error) {
+      console.log("❌ Admin login notification failed:", error.message);
+      // Don't throw error - login notification failure shouldn't block login
     }
   }
 
@@ -4398,7 +4656,66 @@ class AuthController {
         });
       }
 
-      // Create permanent user from temp data
+      // Check if this is admin registration
+      if (tempUser.user_type === 'admin') {
+        console.log('🔧 Creating admin account after email verification');
+        
+        // Import Admin model
+        const Admin = (await import('../models/admin-model.js')).default;
+        
+        // Check if admin already exists
+        const existingAdmin = await Admin.findOne({ email: email.toLowerCase() });
+        if (existingAdmin) {
+          await TempUser.deleteOne({ _id: tempUser._id });
+          return res.status(400).json({
+            success: false,
+            message: "Admin already exists with this email",
+          });
+        }
+        
+        // Create permanent admin from temp data
+        const adminData = {
+          full_name: tempUser.full_name,
+          email: tempUser.email,
+          password: tempUser.password, // Already hashed by temp user pre-save hook
+          admin_role: tempUser.admin_role || 'admin',
+          department: tempUser.department,
+          designation: tempUser.designation,
+          phone: tempUser.phone,
+          is_active: true,
+          is_verified: true, // Mark as verified since OTP was correct
+          email_verified: true, // Compatibility field
+        };
+        
+        const newAdmin = new Admin(adminData);
+        
+        // Skip password hashing since it's already hashed from temp user
+        newAdmin._skipPasswordHash = true;
+        await newAdmin.save();
+        delete newAdmin._skipPasswordHash;
+        
+        console.log('✅ Permanent admin created:', newAdmin._id);
+        
+        // Clean up temp user
+        await TempUser.deleteOne({ _id: tempUser._id });
+        
+        return res.status(201).json({
+          success: true,
+          message: "Admin email verified successfully! You can now login.",
+          data: {
+            admin: {
+              id: newAdmin._id,
+              full_name: newAdmin.full_name,
+              email: newAdmin.email,
+              admin_role: newAdmin.admin_role,
+              department: newAdmin.department,
+              designation: newAdmin.designation,
+            },
+          },
+        });
+      }
+
+      // Create permanent user from temp data (for regular users)
       const userData = {
         full_name: tempUser.full_name,
         email: tempUser.email,
